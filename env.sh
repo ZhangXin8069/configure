@@ -11,6 +11,13 @@ work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
 
 # source
+## mkdir
+mkdir ${_HOME}/bin
+mkdir ${_HOME}/include
+mkdir ${_HOME}/lib
+mkdir ${_HOME}/scripts
+mkdir ${_HOME}/test
+mkdir ${_HOME}/tmp
 source ${_HOME}/tmp/scripts.sh
 source ${_HOME}/include/.bashrc
 
