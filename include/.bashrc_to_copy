@@ -1,0 +1,4 @@
+pushd /home/zhangxin/configure/
+source ./env.sh
+popd
+clear
