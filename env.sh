@@ -19,7 +19,7 @@ mkdir ${_HOME}/scripts
 mkdir ${_HOME}/test
 mkdir ${_HOME}/tmp
 source ${_HOME}/tmp/scripts.sh
-source ${_HOME}/include/.bashrc
+source ${_HOME}/lib/.bashrc
 
 # do
 ## export
