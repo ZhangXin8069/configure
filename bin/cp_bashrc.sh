@@ -6,7 +6,7 @@ popd
 
 # init
 _NAME=`basename "$0"`
-work_name="include"
+work_name="lib"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
