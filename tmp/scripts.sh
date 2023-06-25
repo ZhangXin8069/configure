@@ -1,4 +1,4 @@
-# >>> alias:2023-06-19-02-07-27 >>>
+# >>> alias:2023-06-25-15-24-50 >>>
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
 alias work2.sh='bash /home/zhangxin/configure/tmp/work2.sh'
 alias work0.sh='bash /home/zhangxin/configure/tmp/work0.sh'
@@ -25,5 +25,6 @@ alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
 alias ipy.sh='bash /home/zhangxin/configure/bin/ipy.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias julab.sh='bash /home/zhangxin/configure/bin/julab.sh'
+alias off.sh='bash /home/zhangxin/configure/bin/off.sh'
 alias conda_init.sh='bash /home/zhangxin/configure/bin/conda_init.sh'
-# <<< alias:2023-06-19-02-07-27 <<<
+# <<< alias:2023-06-25-15-24-50 <<<
