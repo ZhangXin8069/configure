@@ -10,27 +10,28 @@ tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
 
+# mkdir
+mkdir ${_HOME}/bin -p
+mkdir ${_HOME}/include -p
+mkdir ${_HOME}/lib -p
+mkdir ${_HOME}/scripts -p
+mkdir ${_HOME}/test -p
+mkdir ${_HOME}/tmp -p
 # source
-## mkdir
-mkdir ${_HOME}/bin
-mkdir ${_HOME}/include
-mkdir ${_HOME}/lib
-mkdir ${_HOME}/scripts
-mkdir ${_HOME}/test
-mkdir ${_HOME}/tmp
 source ${_HOME}/tmp/scripts.sh
 source ${_HOME}/lib/.bashrc
 
 # do
 ## export
-export CPATH=$CPATH:$HOME/lib/
-export CPATH=$CPATH:$HOME/lib/eigen-3.4.0/
-export CPATH=$CPATH:$HOME/lib/openmpi-4.1.2/
-export PATH=$PATH:$HOME/cling/bin/
-# export PYTHONPATH=/home/aistudio/external-libraries:$PYTHONPATH
-# export LD_LIBRARY_PATH=/home/aistudio/external-libraries/quda/build/lib/libquda.so:$LD_LIBRARY_PATH
+#eport CPATH=$CPATH:$HOME/lib/
+#eport CPATH=$CPATH:$HOME/lib/eigen-3.4.0/
+#eport CPATH=$CPATH:$HOME/lib/openmpi-4.1.2/
+#eport PATH=$PATH:$HOME/cling/bin/
+#eport PYTHONPATH=/home/aistudio/external-libraries:$PYTHONPATH
+#eport LD_LIBRARY_PATH=/home/aistudio/external-libraries/quda/build/lib/libquda.so:$LD_LIBRARY_PATH
+export TERM=xterm-256color
 
-## add alias
+##alias
 alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
 alias dwarf="pushd /home/zhangxin/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
 alias rain="pushd /home/zhangxin/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
