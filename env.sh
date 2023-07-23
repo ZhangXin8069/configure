@@ -36,9 +36,9 @@ alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && pop
 alias dwarf="pushd /home/zhangxin/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
 alias rain="pushd /home/zhangxin/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
 alias oriwotw="pushd /home/zhangxin/Game/Ori\ and\ the\ Will\ of\ the\ Wisps && wine oriwotw.exe && popd"
-alias deadcells="pushd /home/zhangxin/Game/Dead\ Cells && wine deadcells.exe  && popd"
+alias deadcells="pushd /home/zhangxin/Game/Dead\ Cells2 && wine deadcells.exe  && popd"
 alias space="pushd /home/zhangxin/Packages && wine SpaceSniffer.exe  && popd"
 alias winrar="pushd /home/zhangxin/Packages/WinRARPortable && wine WinRARPortable.exe && popd"
-alias matlab="pushd /home/zhangxin/MATLAB/R2023b/bin && bash matlab && popd"
+alias matlab="pushd /home/zhangxin/Packages/MATLAB/R2023b/bin && bash matlab && popd"
 
 # done
