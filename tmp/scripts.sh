@@ -1,4 +1,4 @@
-# >>> alias:2023-07-22-02-27-29 >>>
+# >>> alias:2023-07-22-12-46-51 >>>
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
 alias work9.sh='bash /home/zhangxin/configure/tmp/work9.sh'
 alias work0.sh='bash /home/zhangxin/configure/tmp/work0.sh'
@@ -17,6 +17,7 @@ alias up.sh='bash /home/zhangxin/configure/bin/up.sh'
 alias pip_install.sh='bash /home/zhangxin/configure/bin/pip_install.sh'
 alias conda_init.sh='bash /home/zhangxin/configure/bin/conda_init.sh'
 alias off.sh='bash /home/zhangxin/configure/bin/off.sh'
+alias rebt.sh='bash /home/zhangxin/configure/bin/rebt.sh'
 alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias git_init.sh='bash /home/zhangxin/configure/bin/git_init.sh'
 alias powersave.sh='bash /home/zhangxin/configure/bin/powersave.sh'
@@ -27,4 +28,4 @@ alias gcomm.sh='bash /home/zhangxin/configure/bin/gcomm.sh'
 alias gpull.sh='bash /home/zhangxin/configure/bin/gpull.sh'
 alias gpush.sh='bash /home/zhangxin/configure/bin/gpush.sh'
 alias ondemand.sh='bash /home/zhangxin/configure/bin/ondemand.sh'
-# <<< alias:2023-07-22-02-27-29 <<<
+# <<< alias:2023-07-22-12-46-52 <<<

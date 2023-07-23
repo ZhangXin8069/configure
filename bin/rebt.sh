@@ -1,0 +1,3 @@
+systemctl reboot -i
+
+

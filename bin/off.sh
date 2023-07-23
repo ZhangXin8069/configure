@@ -1,1 +1,3 @@
-poweroff
+systemctl poweroff -i
+
+
