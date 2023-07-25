@@ -1,7 +1,5 @@
 # init
-_HOME=$(
-    pwd
-)
+_HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo 'HOME:'${_HOME}
 _NAME=$(basename "$0")
 name='test'

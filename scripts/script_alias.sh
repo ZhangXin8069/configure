@@ -1,8 +1,5 @@
 # source
-_PATH=$(
-    cd "$(dirname "$0")"
-    pwd
-)
+_PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "PATH:"$_PATH
 pushd ${_PATH}/../
 source ./env.sh
@@ -10,6 +7,7 @@ popd
 
 # init
 _NAME=$(basename "$0")
+name='work'
 work_name="bin"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
@@ -22,18 +20,16 @@ echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 echo "# >>> alias:$(date "+%Y-%m-%d-%H-%M-%S") >>>" >scripts.sh
 for i in $(find ${tmp_path} -type f -name "*.sh"); do
     i=$(basename ${i})
-    if [ ${i} = "scripts.sh" ];
-    then
-    continue
+    if [ ${i} = "scripts.sh" ]; then
+        continue
     fi
     echo "alias ${i}='bash ${tmp_path}/${i}' >>scripts.sh"
     echo "alias ${i}='bash ${tmp_path}/${i}'" >>scripts.sh
 done
 for i in $(find ${work_path} -type f -name "*.sh"); do
     i=$(basename ${i})
-    if [ ${i} = "scripts.sh" ];
-    then
-    continue
+    if [ ${i} = "scripts.sh" ]; then
+        continue
     fi
     echo "alias ${i}='bash ${work_path}/${i}' >>scripts.sh"
     echo "alias ${i}='bash ${work_path}/${i}'" >>scripts.sh
