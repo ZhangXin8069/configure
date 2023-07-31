@@ -7,7 +7,7 @@ popd
 
 # init
 _NAME=$(basename "$0")
-name='work'
+name='test'
 work_name="test"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
