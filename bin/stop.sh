@@ -1,2 +1,2 @@
 scancel --user zhangxin
-killall --user zhangxin
+# killall --user zhangxin
