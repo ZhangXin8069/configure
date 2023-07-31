@@ -1,4 +1,4 @@
-# >>> alias:2023-07-31-11-33-39 >>>
+# >>> alias:2023-07-31-11-37-16 >>>
 alias test9.sh='bash /public/home/zhangxin/configure/tmp/test9.sh'
 alias test3.sh='bash /public/home/zhangxin/configure/tmp/test3.sh'
 alias test1.sh='bash /public/home/zhangxin/configure/tmp/test1.sh'
@@ -28,4 +28,4 @@ alias stop.sh='bash /public/home/zhangxin/configure/bin/stop.sh'
 alias gpush.sh='bash /public/home/zhangxin/configure/bin/gpush.sh'
 alias gcomm.sh='bash /public/home/zhangxin/configure/bin/gcomm.sh'
 alias submit_cpu.sh='bash /public/home/zhangxin/configure/bin/submit_cpu.sh'
-# <<< alias:2023-07-31-11-33-39 <<<
+# <<< alias:2023-07-31-11-37-16 <<<
