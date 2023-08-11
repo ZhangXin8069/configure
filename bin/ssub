@@ -10,7 +10,7 @@ echo "#!/bin/bash
 # # SBATCH --ntasks-per-node=48
 # #SBATCH --nodelist=node[3,4]
 # #SBATCH --exclude=node[1,5-6]
-#SBATCH --time=00-00:05:00
+#SBATCH --time=00-00:30:00
 #SBATCH --output=ssub.out
 #SBATCH --error=ssub.err
 #SBATCH --mail-type=ALL
