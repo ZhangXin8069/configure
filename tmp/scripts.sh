@@ -1,4 +1,4 @@
-# >>> alias:2023-07-31-11-37-16 >>>
+# >>> alias:2023-08-04-17-38-21 >>>
 alias test9.sh='bash /public/home/zhangxin/configure/tmp/test9.sh'
 alias test3.sh='bash /public/home/zhangxin/configure/tmp/test3.sh'
 alias test1.sh='bash /public/home/zhangxin/configure/tmp/test1.sh'
@@ -24,8 +24,9 @@ alias conda_init.sh='bash /public/home/zhangxin/configure/bin/conda_init.sh'
 alias performance.sh='bash /public/home/zhangxin/configure/bin/performance.sh'
 alias cp_bashrc.sh='bash /public/home/zhangxin/configure/bin/cp_bashrc.sh'
 alias julab.sh='bash /public/home/zhangxin/configure/bin/julab.sh'
+alias ssqueue.sh='bash /public/home/zhangxin/configure/bin/ssqueue.sh'
 alias stop.sh='bash /public/home/zhangxin/configure/bin/stop.sh'
 alias gpush.sh='bash /public/home/zhangxin/configure/bin/gpush.sh'
 alias gcomm.sh='bash /public/home/zhangxin/configure/bin/gcomm.sh'
 alias submit_cpu.sh='bash /public/home/zhangxin/configure/bin/submit_cpu.sh'
-# <<< alias:2023-07-31-11-37-16 <<<
+# <<< alias:2023-08-04-17-38-21 <<<
