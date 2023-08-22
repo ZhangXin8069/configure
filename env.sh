@@ -28,6 +28,7 @@ source ${_HOME}/lib/.bashrc
 #eport PYTHONPATH=/home/aistudio/external-libraries:$PYTHONPATH
 #eport LD_LIBRARY_PATH=/home/aistudio/external-libraries/quda/build/lib/libquda.so:$LD_LIBRARY_PATH
 export TERM=xterm-256color
+export PATH=$PATH:${_HOME}/bin
 
 ##alias
 alias noita="pushd /home/zhangxin/Games/Noita\ v20230311 && wine noita.exe && popd"
