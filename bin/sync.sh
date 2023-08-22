@@ -12,8 +12,8 @@ _NAME=$(basename "$0")
 
 # do
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-echo "ssh 222.200.137.16 -p 10023 -l zhangxin"
-ssh 222.200.137.16 -p 10023 -l zhangxin
+echo "nohup alisync >/dev/null 2>&1 &"
+nohup alisync >/dev/null 2>&1 &
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 # done
