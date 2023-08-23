@@ -1,4 +1,4 @@
-# >>> alias:2023-08-23-09-22-35 >>>
+# >>> alias:2023-08-23-20-02-46 >>>
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
 alias work8.sh='bash /home/zhangxin/configure/tmp/work8.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
@@ -14,6 +14,7 @@ alias cp_bashrc.sh='bash /home/zhangxin/configure/bin/cp_bashrc.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias conda_init.sh='bash /home/zhangxin/configure/bin/conda_init.sh'
 alias gpush.sh='bash /home/zhangxin/configure/bin/gpush.sh'
+alias ssqueue.sh='bash /home/zhangxin/configure/bin/ssqueue.sh'
 alias gcomm.sh='bash /home/zhangxin/configure/bin/gcomm.sh'
 alias slogin.sh='bash /home/zhangxin/configure/bin/slogin.sh'
 alias rebt.sh='bash /home/zhangxin/configure/bin/rebt.sh'
@@ -32,4 +33,4 @@ alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias pip_install.sh='bash /home/zhangxin/configure/bin/pip_install.sh'
 alias aria2c.sh='bash /home/zhangxin/configure/bin/aria2c.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-08-23-09-22-35 <<<
+# <<< alias:2023-08-23-20-02-46 <<<
