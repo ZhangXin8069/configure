@@ -1,5 +1,5 @@
 # export
-export ALIYUNPAN_CONFIG_DIR=${HOME}/tools/aliyunpan/config
+export ALIYUNPAN_CONFIG_DIR=/home/zhangxin/tools/aliyunpan/config
 
 # run
 # 上传下载链接类型：1-默认 2-阿里ECS环境
@@ -8,4 +8,5 @@ aliyunpan-go config set -transfer_url_type 1
 # 指定配置参数并进行启动
 # 支持的模式：upload(备份本地文件到云盘),download(备份云盘文件到本地),sync(双向同步备份)
 mkdir -p ${HOME}/sync
-aliyunpan-go sync start -ldir "${HOME}/sync" -pdir "/备份盘/sync" -mode "sync"
+sudo aliyunpan-go sync start -step scan
+sudo aliyunpan-go sync start -ldir "${HOME}/sync" -pdir "/sync" -mode "sync"
