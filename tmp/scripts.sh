@@ -1,4 +1,4 @@
-# >>> alias:2023-08-23-02-41-32 >>>
+# >>> alias:2023-08-23-09-22-35 >>>
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
 alias work8.sh='bash /home/zhangxin/configure/tmp/work8.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
@@ -30,5 +30,6 @@ alias git_init.sh='bash /home/zhangxin/configure/bin/git_init.sh'
 alias performance.sh='bash /home/zhangxin/configure/bin/performance.sh'
 alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias pip_install.sh='bash /home/zhangxin/configure/bin/pip_install.sh'
+alias aria2c.sh='bash /home/zhangxin/configure/bin/aria2c.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-08-23-02-41-32 <<<
+# <<< alias:2023-08-23-09-22-35 <<<
