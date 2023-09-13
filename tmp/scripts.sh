@@ -1,4 +1,4 @@
-# >>> alias:2023-08-23-20-05-42 >>>
+# >>> alias:2023-09-13-23-22-11 >>>
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
 alias work8.sh='bash /home/zhangxin/configure/tmp/work8.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
@@ -28,10 +28,11 @@ alias powersave.sh='bash /home/zhangxin/configure/bin/powersave.sh'
 alias julab.sh='bash /home/zhangxin/configure/bin/julab.sh'
 alias off.sh='bash /home/zhangxin/configure/bin/off.sh'
 alias apt_install.sh='bash /home/zhangxin/configure/bin/apt_install.sh'
+alias aistudio.sh='bash /home/zhangxin/configure/bin/aistudio.sh'
 alias git_init.sh='bash /home/zhangxin/configure/bin/git_init.sh'
 alias performance.sh='bash /home/zhangxin/configure/bin/performance.sh'
 alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias pip_install.sh='bash /home/zhangxin/configure/bin/pip_install.sh'
 alias aria2c.sh='bash /home/zhangxin/configure/bin/aria2c.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-08-23-20-05-42 <<<
+# <<< alias:2023-09-13-23-22-11 <<<
