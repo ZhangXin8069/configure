@@ -17,7 +17,7 @@ mkdir ${_HOME}/test -p
 mkdir ${_HOME}/tmp -p
 # source
 source ${_HOME}/tmp/scripts.sh
-source ${_HOME}/lib/.bashrc
+# source ${_HOME}/lib/.bashrc
 
 # do
 ## export
