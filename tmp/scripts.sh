@@ -1,4 +1,4 @@
-# >>> alias:2023-09-21-18-42-43 >>>
+# >>> alias:2023-09-23-12-21-16 >>>
 alias work5.sh='bash /home/zhangxin/configure/tmp/work5.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
@@ -25,6 +25,7 @@ alias gitee.sh='bash /home/zhangxin/configure/bin/gitee.sh'
 alias cp_bashrc.sh='bash /home/zhangxin/configure/bin/cp_bashrc.sh'
 alias performance.sh='bash /home/zhangxin/configure/bin/performance.sh'
 alias github.sh='bash /home/zhangxin/configure/bin/github.sh'
+alias chat.sh='bash /home/zhangxin/configure/bin/chat.sh'
 alias conda_init.sh='bash /home/zhangxin/configure/bin/conda_init.sh'
 alias bilibili.sh='bash /home/zhangxin/configure/bin/bilibili.sh'
 alias aria2c.sh='bash /home/zhangxin/configure/bin/aria2c.sh'
@@ -42,4 +43,4 @@ alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias swap.sh='bash /home/zhangxin/configure/bin/swap.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-09-21-18-42-43 <<<
+# <<< alias:2023-09-23-12-21-16 <<<
