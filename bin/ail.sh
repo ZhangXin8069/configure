@@ -1,1 +1,1 @@
-./ailearnmap.sh
+ailearnmap.sh
