@@ -1,4 +1,4 @@
-# >>> alias:2023-09-23-12-21-16 >>>
+# >>> alias:2023-10-05-23-49-29 >>>
 alias work5.sh='bash /home/zhangxin/configure/tmp/work5.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
@@ -9,6 +9,7 @@ alias work0.sh='bash /home/zhangxin/configure/tmp/work0.sh'
 alias work6.sh='bash /home/zhangxin/configure/tmp/work6.sh'
 alias work9.sh='bash /home/zhangxin/configure/tmp/work9.sh'
 alias work2.sh='bash /home/zhangxin/configure/tmp/work2.sh'
+alias ailearnmap.sh='bash /home/zhangxin/configure/bin/ailearnmap.sh'
 alias ssqueue.sh='bash /home/zhangxin/configure/bin/ssqueue.sh'
 alias web.sh='bash /home/zhangxin/configure/bin/web.sh'
 alias up.sh='bash /home/zhangxin/configure/bin/up.sh'
@@ -43,4 +44,4 @@ alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias swap.sh='bash /home/zhangxin/configure/bin/swap.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-09-23-12-21-16 <<<
+# <<< alias:2023-10-05-23-49-29 <<<
