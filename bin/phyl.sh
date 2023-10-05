@@ -1,1 +1,1 @@
-./youtubelearn.sh
+youtubelearn.sh
