@@ -1,1 +1,1 @@
-firefox --new-window https://aistudio.baidu.com/learnmap 
+firefox --new-window https://aistudio.baidu.com/learnmap
