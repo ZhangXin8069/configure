@@ -1,4 +1,4 @@
-# >>> alias:2023-10-05-23-49-29 >>>
+# >>> alias:2023-10-06-00-11-53 >>>
 alias work5.sh='bash /home/zhangxin/configure/tmp/work5.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
@@ -16,6 +16,7 @@ alias up.sh='bash /home/zhangxin/configure/bin/up.sh'
 alias home.sh='bash /home/zhangxin/configure/bin/home.sh'
 alias powersave.sh='bash /home/zhangxin/configure/bin/powersave.sh'
 alias git_init.sh='bash /home/zhangxin/configure/bin/git_init.sh'
+alias youtubelearn.sh='bash /home/zhangxin/configure/bin/youtubelearn.sh'
 alias ondemand.sh='bash /home/zhangxin/configure/bin/ondemand.sh'
 alias gpull.sh='bash /home/zhangxin/configure/bin/gpull.sh'
 alias aliyundrive.sh='bash /home/zhangxin/configure/bin/aliyundrive.sh'
@@ -44,4 +45,4 @@ alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias swap.sh='bash /home/zhangxin/configure/bin/swap.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-10-05-23-49-29 <<<
+# <<< alias:2023-10-06-00-11-53 <<<
