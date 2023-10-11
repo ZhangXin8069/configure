@@ -1,4 +1,4 @@
-# >>> alias:2023-10-06-00-18-47 >>>
+# >>> alias:2023-10-12-03-48-18 >>>
 alias work5.sh='bash /home/zhangxin/configure/tmp/work5.sh'
 alias work7.sh='bash /home/zhangxin/configure/tmp/work7.sh'
 alias work3.sh='bash /home/zhangxin/configure/tmp/work3.sh'
@@ -42,9 +42,10 @@ alias gcomm.sh='bash /home/zhangxin/configure/bin/gcomm.sh'
 alias ail.sh='bash /home/zhangxin/configure/bin/ail.sh'
 alias sync.sh='bash /home/zhangxin/configure/bin/sync.sh'
 alias webdav.sh='bash /home/zhangxin/configure/bin/webdav.sh'
+alias colab.sh='bash /home/zhangxin/configure/bin/colab.sh'
 alias gpush.sh='bash /home/zhangxin/configure/bin/gpush.sh'
 alias submit_cpu.sh='bash /home/zhangxin/configure/bin/submit_cpu.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias swap.sh='bash /home/zhangxin/configure/bin/swap.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
-# <<< alias:2023-10-06-00-18-47 <<<
+# <<< alias:2023-10-12-03-48-18 <<<
