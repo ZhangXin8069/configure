@@ -42,10 +42,10 @@ alias space="pushd /home/zhangxin/Package && wine SpaceSniffer.exe  && popd"
 
 ## alisync
 #!/bin/bash
-flag_file=${_HOME}/.alisync
-if [ ! -f ${flag_file} ]; then
-  touch ${flag_file}
-  bash ${_HOME}/bin/alisync
-fi
+#flag_file=${_HOME}/.alisync
+#if [ ! -f ${flag_file} ]; then
+#  touch ${flag_file}
+#  bash ${_HOME}/bin/alisync
+#fi
 
 # done
