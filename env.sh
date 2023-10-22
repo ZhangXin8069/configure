@@ -40,4 +40,12 @@ alias space="pushd /home/zhangxin/Package && wine SpaceSniffer.exe  && popd"
 # alias winrar="pushd /home/zhangxin/Package/WinRARPortable && wine WinRARPortable.exe && popd"
 # alias matlab="pushd /home/zhangxin/Package/MATLAB/R2023b/bin && bash matlab && popd"
 
+## alisync
+#!/bin/bash
+flag_file=${_HOME}/.alisync
+if [ ! -f ${flag_file} ]; then
+  touch ${flag_file}
+  bash ${_HOME}/bin/alisync
+fi
+
 # done
