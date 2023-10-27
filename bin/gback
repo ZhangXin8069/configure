@@ -1,5 +1,4 @@
 #!/bin/bash
 command=$@
 echo "command:${command}"
-clear
 git checkout HEAD ${command}
