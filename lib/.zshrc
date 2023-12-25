@@ -124,3 +124,5 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 
+export MODULAR_HOME="/home/zhangxin/.modular"
+export PATH="/home/zhangxin/.modular/pkg/packages.modular.com_mojo/bin:$PATH"
