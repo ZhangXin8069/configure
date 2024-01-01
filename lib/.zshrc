@@ -111,9 +111,9 @@ popd
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/home/zhangxin/anaconda3/bin/conda' 'shell.zsh' 'hook' 2> /dev/null)"
+__conda_setup="$('/home/zhangxin/anaconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
+    eval "$__conda_setup"   
 else
     if [ -f "/home/zhangxin/anaconda3/etc/profile.d/conda.sh" ]; then
         . "/home/zhangxin/anaconda3/etc/profile.d/conda.sh"
@@ -124,5 +124,8 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 
-export MODULAR_HOME="/home/zhangxin/.modular"
-export PATH="/home/zhangxin/.modular/pkg/packages.modular.com_mojo/bin:$PATH"
+# zhangxin
+pushd ~/configure
+source env.sh
+popd
+conda activate computer-nv-qcu
