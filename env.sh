@@ -21,13 +21,14 @@ source ${_HOME}/tmp/scripts.sh
 
 # do
 ## export
-#export CPATH=$CPATH:$HOME/lib/
-#export CPATH=$CPATH:$HOME/lib/eigen-3.4.0/
-#export CPATH=$CPATH:$HOME/lib/openmpi-4.1.2/
-#export PYTHONPATH=/home/aistudio/external-libraries:$PYTHONPATH
-#export PATH=$PATH:$HOME/cling/bin/
-#export LD_LIBRARY_PATH=/home/aistudio/external-libraries/quda/build/lib/libquda.so:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-12.3/lib64:$LD_LIBRARY_PATH
+MPI_HOME=/usr/local/openmpi
+export PATH=${MPI_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+export MANPATH=${MPI_HOME}/share/man:$MANPATH
+CUDA_HOME=/usr/local/cuda
+export PATH=${CUDA_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
+export MANPATH=${CUDA_HOME}/share/man:$MANPATH
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
 
@@ -50,3 +51,19 @@ export PATH=$PATH:${_HOME}/bin
 #fi
 
 # done
+
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+# __conda_setup="$('/home/zhangxin/anaconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+# if [ $? -eq 0 ]; then
+#     eval "$__conda_setup"   
+# else
+#     if [ -f "/home/zhangxin/anaconda3/etc/profile.d/conda.sh" ]; then
+#         . "/home/zhangxin/anaconda3/etc/profile.d/conda.sh"
+#     else
+#         export PATH="/home/zhangxin/anaconda3/bin:$PATH"
+#     fi
+# fi
+# unset __conda_setup
+# conda activate computer-nv-qcu
+# <<< conda initialize <<<
