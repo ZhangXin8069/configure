@@ -32,3 +32,4 @@ export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
 export MANPATH=${CUDA_HOME}/share/man:$MANPATH
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
+export PATH=$PATH:/home/zhangxin/.local/bin
