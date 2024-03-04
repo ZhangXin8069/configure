@@ -38,5 +38,7 @@ export PATH=$PATH:${_HOME}/bin
 #alias space="pushd /home/zhangxin/Packages && wine SpaceSniffer.exe  && popd"
 #alias winrar="pushd /home/zhangxin/Packages/WinRARPortable && wine WinRARPortable.exe && popd"
 #alias matlab="pushd /home/zhangxin/Packages/MATLAB/R2023b/bin && bash matlab && popd"
-
+## add
+export LC_ALL=C
+perl -e exit
 # done
