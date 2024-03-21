@@ -1,1 +1,0 @@
-./configure/lib/.zshrc
