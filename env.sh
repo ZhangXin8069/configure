@@ -21,31 +21,22 @@ source ${_HOME}/tmp/scripts.sh
 
 # do
 ## export
-#eport CPATH=$CPATH:$HOME/lib/
-#eport CPATH=$CPATH:$HOME/lib/eigen-3.4.0/
-#eport CPATH=$CPATH:$HOME/lib/openmpi-4.1.2/
-#eport PATH=$PATH:$HOME/cling/bin/
-#eport PYTHONPATH=/home/aistudio/external-libraries:$PYTHONPATH
-#eport LD_LIBRARY_PATH=/home/aistudio/external-libraries/quda/build/lib/libquda.so:$LD_LIBRARY_PATH
+### zx
+export LD_LIBRARY_PATH=${HOME}/lib:$LD_LIBRARY_PATH # if any
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
+export PATH=$PATH:/home/zhangxin/.local/bin
+### openmpi
+MPI_HOME=/usr/local/openmpi
+export PATH=${MPI_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+export MANPATH=${MPI_HOME}/share/man:$MANPATH
+### cuda
+CUDA_HOME=/usr/local/cuda
+export PATH=${CUDA_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
+export MANPATH=${CUDA_HOME}/share/man:$MANPATH
+export LD_LIBRARY_PATH="/usr/lib/wsl/lib:${LD_LIBRARY_PATH}" # wsl
 
-##alias
-alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
-alias dwarf="pushd /home/zhangxin/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
-alias rain="pushd /home/zhangxin/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
-alias oriwotw="pushd /home/zhangxin/Game/Ori\ and\ the\ Will\ of\ the\ Wisps && wine oriwotw.exe && popd"
-alias deadcells="pushd /home/zhangxin/Game/Dead\ Cells2 && wine deadcells.exe  && popd"
-alias space="pushd /home/zhangxin/Package && wine SpaceSniffer.exe  && popd"
-# alias winrar="pushd /home/zhangxin/Package/WinRARPortable && wine WinRARPortable.exe && popd"
-# alias matlab="pushd /home/zhangxin/Package/MATLAB/R2023b/bin && bash matlab && popd"
 
-## alisync
-#!/bin/bash
-#flag_file=${_HOME}/.alisync
-#if [ ! -f ${flag_file} ]; then
-#  touch ${flag_file}
-#  bash ${_HOME}/bin/alisync
-#fi
 
-# done
