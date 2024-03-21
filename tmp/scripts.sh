@@ -1,4 +1,4 @@
-# >>> alias:2023-12-31-15-07-34 >>>
+# >>> alias:2024-03-21-12-55-39 >>>
 alias work5.sh='bash /home/zhangxin/configure/tmp/work5.sh'
 alias work1.sh='bash /home/zhangxin/configure/tmp/work1.sh'
 alias work9.sh='bash /home/zhangxin/configure/tmp/work9.sh'
@@ -30,6 +30,7 @@ alias web.sh='bash /home/zhangxin/configure/bin/web.sh'
 alias ipy.sh='bash /home/zhangxin/configure/bin/ipy.sh'
 alias git_init.sh='bash /home/zhangxin/configure/bin/git_init.sh'
 alias rebt.sh='bash /home/zhangxin/configure/bin/rebt.sh'
+alias sh_init.sh='bash /home/zhangxin/configure/bin/sh_init.sh'
 alias ondemand.sh='bash /home/zhangxin/configure/bin/ondemand.sh'
 alias github.sh='bash /home/zhangxin/configure/bin/github.sh'
 alias gpush.sh='bash /home/zhangxin/configure/bin/gpush.sh'
@@ -46,6 +47,7 @@ alias apt_install.sh='bash /home/zhangxin/configure/bin/apt_install.sh'
 alias sync.sh='bash /home/zhangxin/configure/bin/sync.sh'
 alias stop.sh='bash /home/zhangxin/configure/bin/stop.sh'
 alias chat.sh='bash /home/zhangxin/configure/bin/chat.sh'
+alias cp_zshrc.sh='bash /home/zhangxin/configure/bin/cp_zshrc.sh'
 alias conservative.sh='bash /home/zhangxin/configure/bin/conservative.sh'
 alias ail.sh='bash /home/zhangxin/configure/bin/ail.sh'
-# <<< alias:2023-12-31-15-07-34 <<<
+# <<< alias:2024-03-21-12-55-39 <<<
