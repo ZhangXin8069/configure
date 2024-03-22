@@ -17,26 +17,21 @@ mkdir ${_HOME}/test -p
 mkdir ${_HOME}/tmp -p
 # source
 source ${_HOME}/tmp/scripts.sh
-# source ${_HOME}/lib/.bashrc
 
 # do
 ## export
 ### zx
-export LD_LIBRARY_PATH=${HOME}/lib:$LD_LIBRARY_PATH # if any
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
-export PATH=$PATH:/home/zhangxin/.local/bin
-### openmpi
-MPI_HOME=/usr/local/openmpi
-export PATH=${MPI_HOME}/bin:$PATH
-export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
-export MANPATH=${MPI_HOME}/share/man:$MANPATH
-### cuda
-CUDA_HOME=/usr/local/cuda
-export PATH=${CUDA_HOME}/bin:$PATH
-export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
-export MANPATH=${CUDA_HOME}/share/man:$MANPATH
-export LD_LIBRARY_PATH="/usr/lib/wsl/lib:${LD_LIBRARY_PATH}" # wsl
+## alias
+alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
+alias dwarf="pushd /home/zhangxin/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
+alias rain="pushd /home/zhangxin/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
+alias oriwotw="pushd /home/zhangxin/Game/Ori\ and\ the\ Will\ of\ the\ Wisps && wine oriwotw.exe && popd"
+alias deadcells="pushd /home/zhangxin/Game/Dead\ Cells2 && wine deadcells.exe  && popd"
+alias space="pushd /home/zhangxin/Packages && wine SpaceSniffer.exe  && popd"
+# alias winrar="pushd /home/zhangxin/Packages/WinRARPortable && wine WinRARPortable.exe && popd"
+# alias matlab="pushd /home/zhangxin/Packages/MATLAB/R2023b/bin && bash matlab && popd"
 
 
 
