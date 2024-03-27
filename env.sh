@@ -23,6 +23,10 @@ source ${_HOME}/tmp/scripts.sh
 ### zx
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
+#### refer to https://blog.csdn.net/qq_46753404/article/details/116240081
+export MANPATH=${MANPATH}:/usr/local/texlive/2024/texmf-dist/doc/man
+export INFOPATH=${INFOPATH}:/usr/local/texlive/2024/texmf-dist/doc/info
+export PATH=${PATH}:/usr/local/texlive/2024/bin/x86_64-linux
 ## alias
 alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
 alias dwarf="pushd /home/zhangxin/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
