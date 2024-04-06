@@ -1,4 +1,4 @@
-# init
+cy# init
 _HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo 'HOME:'${_HOME}
 _NAME=$(basename "$0")
@@ -31,7 +31,9 @@ alias rain="pushd /home/zhangxin/Game/Rain\ World\ v1.9.07b && wine RainWorld.ex
 alias oriwotw="pushd /home/zhangxin/Game/Ori\ and\ the\ Will\ of\ the\ Wisps && wine oriwotw.exe && popd"
 alias deadcells="pushd /home/zhangxin/Game/Dead\ Cells2 && wine deadcells.exe  && popd"
 alias space="pushd /home/zhangxin/Package && wine SpaceSniffer.exe  && popd"
-alias clash="pushd /home/zhangxin/Package/Clash\ for\ Windows-0.20.35-x64-linux && ./cfw && popd"
+alias clash="pushd /home/zhangxin/Package/Clash\ for\ Windows && ./cfw && popd"
+alias joplin="pushd /home/zhangxin/Package/Joplin && ./Joplin.AppImage && popd"
+alias krita="pushd /home/zhangxin/Package/Joplin && ./krita.appimage && popd"
 # alias winrar="pushd /home/zhangxin/Package/WinRARPortable && wine WinRARPortable.exe && popd"
 # alias matlab="pushd /home/zhangxin/Package/MATLAB/R2023b/bin && bash matlab && popd"
 
