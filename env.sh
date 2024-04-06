@@ -33,7 +33,7 @@ alias deadcells="pushd /home/zhangxin/Game/Dead\ Cells2 && wine deadcells.exe  &
 alias space="pushd /home/zhangxin/Package && wine SpaceSniffer.exe  && popd"
 alias clash="pushd /home/zhangxin/Package/Clash\ for\ Windows && ./cfw && popd"
 alias joplin="pushd /home/zhangxin/Package/Joplin && ./Joplin.AppImage && popd"
-alias krita="pushd /home/zhangxin/Package/Joplin && ./krita.appimage && popd"
+alias krita="pushd /home/zhangxin/Package/Krita && ./krita.appimage && popd"
 # alias winrar="pushd /home/zhangxin/Package/WinRARPortable && wine WinRARPortable.exe && popd"
 # alias matlab="pushd /home/zhangxin/Package/MATLAB/R2023b/bin && bash matlab && popd"
 
