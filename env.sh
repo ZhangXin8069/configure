@@ -25,6 +25,7 @@ export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
 #### refer to https://blog.csdn.net/qq_46753404/article/details/116240081
 ## alias
+alias python="python3"
 alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
 alias dwarf="pushd /home/zhangxin/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
 alias rain="pushd /home/zhangxin/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
