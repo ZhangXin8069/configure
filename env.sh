@@ -23,6 +23,7 @@ source ${_HOME}/tmp/scripts.sh
 ### zx
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
+export PATH=$PATH:${HOME}/.local/bin
 #### refer to https://blog.csdn.net/qq_46753404/article/details/116240081
 ## alias
 alias python="python3"
