@@ -127,6 +127,7 @@ alias ohmyzsh="mate ~/.oh-my-zsh"
 prompt_context() {} 
 pushd ${HOME}/configure
 source ./env.sh
+popd
 ## mojo
-popdexport MODULAR_HOME="/home/zhangxin/.modular"
+export MODULAR_HOME="/home/zhangxin/.modular"
 export PATH="/home/zhangxin/.modular/pkg/packages.modular.com_mojo/bin:$PATH"
