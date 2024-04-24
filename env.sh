@@ -24,7 +24,12 @@ source ${_HOME}/tmp/scripts.sh
 export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
 export PATH=$PATH:${HOME}/.local/bin
-#### refer to https://blog.csdn.net/qq_46753404/article/details/116240081
+### openmpi
+MPI_HOME=/home/zhangxin/openmpi-4.1.5
+export PATH=${MPI_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
+export MANPATH=${MPI_HOME}/share/man:$MANPATH
 ## alias
 alias python="python3"
 alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
