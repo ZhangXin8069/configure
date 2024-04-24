@@ -130,4 +130,4 @@ source ./env.sh
 popd
 ## mojo
 export MODULAR_HOME="/home/zhangxin/.modular"
-export PATH="/home/zhangxin/.modular/pkg/packages.modular.com_mojo/bin:$PATH"
+export PATH="/home/zhangxin/.modular/pkg/packages.modular.com_max/bin:$PATH"
