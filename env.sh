@@ -25,7 +25,7 @@ export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
 export PATH=$PATH:${HOME}/.local/bin
 ### openmpi
-MPI_HOME=/home/zhangxin/openmpi-4.1.5
+MPI_HOME=/home/zhangxin/openmpi #4.1.5
 export PATH=${MPI_HOME}/bin:$PATH
 export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
 export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
