@@ -1,4 +1,4 @@
-# >>> alias:2024-04-27-21-18-28 >>>
+# >>> alias:2024-04-27-22-28-48 >>>
 alias work7.sh='bash /home/kfutfd/configure/tmp/work7.sh'
 alias work2.sh='bash /home/kfutfd/configure/tmp/work2.sh'
 alias work1.sh='bash /home/kfutfd/configure/tmp/work1.sh'
@@ -51,4 +51,4 @@ alias ssqueue.sh='bash /home/kfutfd/configure/bin/ssqueue.sh'
 alias slogin.sh='bash /home/kfutfd/configure/bin/slogin.sh'
 alias web.sh='bash /home/kfutfd/configure/bin/web.sh'
 alias qwerty.sh='bash /home/kfutfd/configure/bin/qwerty.sh'
-# <<< alias:2024-04-27-21-18-28 <<<
+# <<< alias:2024-04-27-22-28-48 <<<
