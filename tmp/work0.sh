@@ -1,3 +1,3 @@
-pushd /home/zhangxin/configure/tmp
-nvcc -o work0 /home/zhangxin/configure/test/work0.cu && ./work0
+pushd /home/kfutfd/configure/tmp
+nvcc -o work0 /home/kfutfd/configure/test/work0.cu && ./work0
 popd
