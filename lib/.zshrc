@@ -124,7 +124,5 @@ alias zshconfig="mate ~/.zshrc"
 alias ohmyzsh="mate ~/.oh-my-zsh"
 
 # zhangxin
-prompt_context() {} 
-pushd ${HOME}/configure
-source ./env.sh
-popd
+prompt_context() {}
+source ${HOME}/env.sh
