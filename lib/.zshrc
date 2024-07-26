@@ -128,6 +128,6 @@ prompt_context() {}
 pushd ${HOME}/configure
 source ./env.sh
 popd
-## mojo
-export MODULAR_HOME="/home/zhangxin/.modular"
-export PATH="/home/zhangxin/.modular/pkg/packages.modular.com_max/bin:$PATH"
+pushd ${HOME}/qcu
+source ./env.sh
+popd
