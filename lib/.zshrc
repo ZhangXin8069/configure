@@ -124,6 +124,7 @@ alias zshconfig="mate ~/.zshrc"
 alias ohmyzsh="mate ~/.oh-my-zsh"
 
 # zhangxin
+export DONT_PROMPT_WSL_INSTALL=1
 prompt_context() {}
 pushd ${HOME}/qcu
 source ./env.sh
