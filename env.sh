@@ -36,6 +36,7 @@ export PATH=${CUDA_HOME}/bin:$PATH
 export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
 export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
 export MANPATH=${CUDA_HOME}/share/man:$MANPATH
+alias nvvp="nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java" # strange, never mind.
 ## alias
 alias python="python3"
 # alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"
