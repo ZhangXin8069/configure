@@ -125,4 +125,24 @@ alias ohmyzsh="mate ~/.oh-my-zsh"
 
 # zhangxin
 prompt_context() {}
-source ${HOME}/env.sh
+pushd ${HOME}/configure
+source ./env.sh
+popd
+# export
+## quda
+export LD_LIBRARY_PATH="${HOME}/external-libraries/quda-develop/build/lib":$LD_LIBRARY_PATH
+## cuda
+CUDA_HOME=/usr/local/cuda
+export PATH=${CUDA_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
+export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
+export MANPATH=${CUDA_HOME}/share/man:$MANPATH
+## openmpi
+MPI_HOME=/usr/local/openmpi
+export PATH=${MPI_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
+export MANPATH=${MPI_HOME}/share/man:$MANPATH
+## python
+export PYTHONPATH=${HOME}/external-libraries # x99
+export PYTHONPATH=${HOME}/qcu/lib:${PYTHONPATH}
