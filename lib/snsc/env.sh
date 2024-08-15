@@ -1,0 +1,1 @@
+./env_snsc.sh
