@@ -146,3 +146,4 @@ export MANPATH=${MPI_HOME}/share/man:$MANPATH
 ## python
 export PYTHONPATH=${HOME}/external-libraries # x99
 export PYTHONPATH=${HOME}/qcu/lib:${PYTHONPATH}
+
