@@ -1,9 +1,9 @@
 # zhangxin
 export DONT_PROMPT_WSL_INSTALL=1
-pushd ${HOME}
+pushd ${HOME}/configure
 source ./env.sh
 popd
-pushd ${HOME}/configure
+pushd ${HOME}
 source ./env.sh
 popd
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
