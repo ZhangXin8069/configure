@@ -1,12 +1,5 @@
 # BASH
-unset
-PYTHONPATH=
-LD_LIBRARY_PATH=
-pushd /public/home/zhangxin
-pushd ./configure
-source ./env.sh
-popd
-popd
+# unset
 
 # MODULE
 module purge
@@ -15,22 +8,6 @@ module load compiler/dtk-23.04
 module load compiler/gcc/7.3.1
 module load hpcx/gcc-7.3.1
 module list
-
-# CONDA
-# >>> conda initialize >>>
-# !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$("/public/home/zhangxin/dcu/miniconda3/bin/conda" 'shell.bash' 'hook' 2>/dev/null)"
-if [ $? -eq 0 ]; then
-    eval "$__conda_setup"
-else
-    if [ -f "/public/home/zhangxin/dcu/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/public/home/zhangxin/dcu/miniconda3/etc/profile.d/conda.sh"
-    else
-        export PATH="/public/home/zhangxin/dcu/miniconda3/bin:$PATH"
-    fi
-fi
-unset __conda_setup
-# <<< conda initialize <<<
 
 # EXPORT
 export PATH=/public/home/zhangxin/dcu/sbin:$PATH
@@ -48,6 +25,6 @@ export CC=hipcc
 export CXX=hipcc
 export HCC_AMDGPU_TARGET=gfx906
 export LD_LIBRARY_PATH=/public/home/zhangxin/dcu/lib:$LD_LIBRARY_PATH
-# DO
-conda deactivate
+
+# CONDA
 conda activate snsc-dcu-qcu
