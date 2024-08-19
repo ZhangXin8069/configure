@@ -6,7 +6,7 @@ echo "#!/bin/bash
 #SBATCH --partition=gpu-debug
 #SBATCH --nodes=1
 # #SBATCH --cpus-per-task=1
-#SBATCH -n 1
+#SBATCH -n 2
 # # SBATCH --ntasks-per-node=48
 # #SBATCH --nodelist=node[3,4]
 # #SBATCH --exclude=node[1,5-6]
