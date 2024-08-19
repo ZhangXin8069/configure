@@ -15,7 +15,7 @@ echo "#!/bin/bash
 #SBATCH --error=ssub.err
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=zhangxin8069@qq.com
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:2
 source ${HOME}/env.sh
 " >.ssub.sh
 echo ${command} >>.ssub.sh
