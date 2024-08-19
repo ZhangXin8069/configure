@@ -1,7 +1,7 @@
 # init
 _HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo 'HOME:'${_HOME}
-#_NAME=$(basename "$0")
+_NAME=$(basename "$0")
 name='test'
 work_name="test"
 tmp_name="tmp"
@@ -16,25 +16,24 @@ mkdir ${_HOME}/test -p
 mkdir ${_HOME}/tmp -p
 # source
 source ${_HOME}/tmp/scripts.sh
-# do
-## export
-### zx
-export TERM=xterm-256color
+# export
+## zhangxin
+# export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
-export PATH=$PATH:${HOME}/.local/bin
-## openmpi
-MPI_HOME=/usr/local/openmpi
-export PATH=${MPI_HOME}/bin:$PATH
-export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
-export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
-export MANPATH=${MPI_HOME}/share/man:$MANPATH
-## cuda
-CUDA_HOME=/usr/local/cuda
-export PATH=${CUDA_HOME}/bin:$PATH
-export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
-export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
-export MANPATH=${CUDA_HOME}/share/man:$MANPATH
-## alias
+# export PATH=$PATH:${HOME}/.local/bin
+# openmpi
+# MPI_HOME=/usr/local/openmpi
+# # export PATH=${MPI_HOME}/bin:$PATH
+# # # export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+# # export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
+# export MANPATH=${MPI_HOME}/share/man:$MANPATH
+# cuda
+# CUDA_HOME=/usr/local/cuda
+# export PATH=${CUDA_HOME}/bin:$PATH
+# export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
+# export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
+# export MANPATH=${CUDA_HOME}/share/man:$MANPATH
+# alias
 alias python="python3"
 alias pip="pip3"
 # alias noita="pushd /home/zhangxin/Game/Noita\ v20230311 && wine noita.exe && popd"

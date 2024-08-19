@@ -25,6 +25,3 @@ export CC=hipcc
 export CXX=hipcc
 export HCC_AMDGPU_TARGET=gfx906
 export LD_LIBRARY_PATH=/public/home/zhangxin/dcu/lib:$LD_LIBRARY_PATH
-
-# CONDA
-conda activate snsc-dcu-qcu
