@@ -14,6 +14,7 @@ _NAME=$(basename "$0")
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 echo "git add * && git commit -m $(date "+%Y-%m-%d-%H-%M-%S") && git push"
 git add .gitignore
+git push origin --tags
 git add * && git commit -m $(date "+%Y-%m-%d-%H-%M-%S") && git push
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
