@@ -2,6 +2,6 @@
 # unset
 
 # SOURCE
-pushd /public/home/zhangxin/qcu
+pushd /home/kfutfd/qcu
 source ./x99-env.sh
 popd
