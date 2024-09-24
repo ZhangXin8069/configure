@@ -2,7 +2,9 @@
 # unset
 
 # EXPORT
+export PATH=/usr/local/python/bin:$PATH
 export PATH=${HOME}/sbin:$PATH
+export PATH=${HOME}/.local/bin:$PATH
 export LD_LIBRARY_PATH=${HOME}/slib:$LD_LIBRARY_PATH
 
 # ALIAS
@@ -18,8 +20,9 @@ export LD_LIBRARY_PATH=${HOME}/slib:$LD_LIBRARY_PATH
 alias wechat="flatpak run com.tencent.WeChat"
 alias wemeet="flatpak run com.tencent.wemeet"
 alias qq="flatpak run com.qq.QQ"
+alias qqmusic="flatpak run com.qq.QQmusic"
 alias joplin="flatpak run net.cozic.joplin_desktop"
-alias code="flatpak run com.visualstudio.code --no-sandbox"
+# alias code="flatpak run com.visualstudio.code"
 alias krita="flatpak run org.kde.krita"
 alias firefox="flatpak run org.mozilla.firefox"
 alias goldendict="flatpak run io.github.xiaoyifang.goldendict_ng"
