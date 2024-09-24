@@ -34,8 +34,6 @@ export PATH=$PATH:${_HOME}/bin
 # export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
 # export MANPATH=${CUDA_HOME}/share/man:$MANPATH
 # alias
-alias python="python3"
-alias pip="pip3"
 # alias noita="pushd ${HOME}/Game/Noita\ v20230311 && wine noita.exe && popd"
 # alias dwarf="pushd ${HOME}/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
 # alias rain="pushd ${HOME}/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
@@ -314,9 +312,9 @@ alias ll='ls -lh'
 alias ls='ls --color=tty'
 alias lsa='ls -lah'
 alias md='mkdir -p'
-alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
+# alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
 alias ohmyzsh='mate ~/.oh-my-zsh'
-alias python=python3
+# alias python=python3
 alias rd=rmdir
 alias which-command=whence
 alias zshconfig='mate ~/.zshrc'
