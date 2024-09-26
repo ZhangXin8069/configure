@@ -6,6 +6,7 @@ export PATH=/usr/local/python/bin:$PATH
 export PATH=${HOME}/sbin:$PATH
 export PATH=${HOME}/.local/bin:$PATH
 export LD_LIBRARY_PATH=${HOME}/slib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 
 # ALIAS
 #########
