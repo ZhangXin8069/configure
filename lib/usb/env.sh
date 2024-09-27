@@ -18,6 +18,9 @@ export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
 # in ${HOME}/.local/share/flatpak/exports/bin
 # in /var/lib/flatpak/exports/bin
 #########
+# TIPS
+# flatpak install flatseal # flatpak settings
+#########
 alias wechat="flatpak run com.tencent.WeChat"
 alias wemeet="flatpak run com.tencent.wemeet"
 alias qq="flatpak run com.qq.QQ"
@@ -30,7 +33,7 @@ alias goldendict="flatpak run io.github.xiaoyifang.goldendict_ng"
 alias media_writer="flatpak run org.fedoraproject.MediaWriter"
 #########
 # EXAMPLE
-# http://dict.youdao.com/search?q=%GDWORD%&ue=utf8
+# http://dict.youdao.com/search?q=%GDWORD%&ue=utf8 # goldendict settings
 #########
 
 # SOURCE
