@@ -28,9 +28,10 @@ alias qqmusic="flatpak run com.qq.QQmusic"
 alias joplin="flatpak run net.cozic.joplin_desktop"
 # alias code="flatpak run com.visualstudio.code" # recommend to install by dpkg(deb format).
 alias krita="flatpak run org.kde.krita"
-alias firefox="flatpak run org.mozilla.firefox"
+# alias firefox="flatpak run org.mozilla.firefox" # recommend to install with 'sudo apt install firefox'
 alias goldendict="flatpak run io.github.xiaoyifang.goldendict_ng"
 alias media_writer="flatpak run org.fedoraproject.MediaWriter"
+# steam # recommend to install with 'sudo apt install steam-installer' first, then 'steam'
 #########
 # EXAMPLE
 # http://dict.youdao.com/search?q=%GDWORD%&ue=utf8 # goldendict settings
