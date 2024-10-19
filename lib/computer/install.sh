@@ -5,17 +5,14 @@ wget https://developer.download.nvidia.com/compute/cuda/12.4.0/local_installers/
 ./Miniconda3-latest-Linux-x86_64.sh
 popd
 ######
-conda create --no-default-packages --name qcu 
+conda create --no-default-packages --name qcu
 conda activate qcu
-conda install conda-forge::gcc=11.4
-conda install conda-forge::make=4.4.1
-conda install conda-forge::cmake=3.28
-conda install conda-forge::python=3.10.12
-conda install conda-forge::openmpi=4.1.5
-conda install conda-forge::mpi4py=3.1.4
 conda install conda-forge::cuda-toolkit=12.4
-conda install conda-forge::cupy=13.3.0
+conda install conda-forge::openmpi=4.1.5
+conda install conda-forge::python=3.10.12
 conda install conda-forge::nccl=2.23.4
+conda install conda-forge::cupy=13.3.0
+conda install conda-forge::mpi4py=3.1.4
 conda install conda-forge::Cython=3.0.11
 pushd ~/miniconda3/envs/qcu
 wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
