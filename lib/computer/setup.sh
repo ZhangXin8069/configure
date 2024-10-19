@@ -1,9 +1,12 @@
 ######
 sudo apt update
 ######
+sudo apt install htop btop nvtop
+sudo apt install wine32 wine
 sudo apt install firefox
 sudo apt install vim
 sudo apt install git
+sudo apt install wine
 sudo apt install libreoffice
 # sudo apt install steam-installer
 ######
