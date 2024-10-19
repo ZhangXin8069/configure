@@ -9,7 +9,6 @@ conda create --no-default-packages --name qcu
 conda activate qcu
 conda install conda-forge::cuda-toolkit=12.4
 conda install conda-forge::openmpi=4.1.5
-conda install conda-forge::python=3.10.12
 conda install conda-forge::nccl=2.23.4
 conda install conda-forge::cupy=13.3.0
 conda install conda-forge::mpi4py=3.1.4
