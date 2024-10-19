@@ -17,7 +17,6 @@ conda install conda-forge::cuda-toolkit=12.4
 conda install conda-forge::cupy=13.3.0
 conda install conda-forge::nccl=2.23.4
 conda install conda-forge::Cython=3.0.11
-conda install conda-forge::git=2.47.0
 pushd ~/miniconda3/envs/qcu
 wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
 tar -xzf quda-develop.tar.gz
