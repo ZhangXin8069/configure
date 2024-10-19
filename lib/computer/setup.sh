@@ -6,7 +6,7 @@ sudo apt install wine32 wine
 sudo apt install firefox
 sudo apt install vim
 sudo apt install git
-sudo apt install wine
+sudo apt install tree
 sudo apt install libreoffice
 # sudo apt install steam-installer
 ######
