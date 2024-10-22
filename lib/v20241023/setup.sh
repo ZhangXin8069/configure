@@ -15,19 +15,19 @@ apt install openmpi-bin openmpi-common libopenmpi-dev
 # dpkg --configure -a 
 ######
 pushd ~
-# apt install zsh wget
-# sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
+apt install zsh wget
+sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
 # git clone https://gitee.com/zhangxin8069/configure.git
 pushd ./configure
 bash ./scripts/script_alias.sh
 cp ./lib/v20241023/env.sh ~/env.sh
 popd
-mv ./.bashrc .bashrc.bak
-mv ./.zshrc .zshrc.bak
-mv ./.oh-my-zsh .oh-my-zsh.bak
-ln -s ${work_path}/_bashrc .bashrc
-ln -s ${work_path}/v20241023/_zshrc .zshrc
-ln -s ${work_path}/_oh-my-zsh .oh-my-zsh
+# mv ./.bashrc .bashrc.bak
+# mv ./.zshrc .zshrc.bak
+# mv ./.oh-my-zsh .oh-my-zsh.bak
+# ln -s ./configure/_bashrc .bashrc
+# ln -s ./configure/v20241023/_zshrc .zshrc
+# ln -s ./configure/_oh-my-zsh .oh-my-zsh
 # ######
 # wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.0-1_all.deb
 # dpkg -i cuda-keyring_1.0-1_all.deb
