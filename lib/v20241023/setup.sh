@@ -1,22 +1,24 @@
 ######
-# DOCKER - Linux 4665a126ebff 5.15.153.1-microsoft-standard-WSL2 #1 SMP Fri Mar 29 23:14:13 UTC 2024 x86_64 x86_64 x86_64 GNU/Linux
-# UBUNTU22.04 - JAMMY
+# computer:
+## docker run -itd --gpus all --name v20241023 -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all -v /c/Users/zhang/v20241023:/home/vscode/v20241023 mcr.microsoft.com/devcontainers/base:noble
+# laptop:
+## docker run -itd --name v20241023 -v /c/Users/zhangxin/v20241023:/home/vscode/v20241023 mcr.microsoft.com/devcontainers/base:noble
 ######
 sudo apt update
 ######
 sudo apt install htop btop nvtop
-sudo apt install python3 pip 
+sudo apt install python3-dev
 sudo apt install cmake 
 sudo apt install openmpi-bin openmpi-common libopenmpi-dev
 sudo apt install nvidia-cuda-toolkit
 ######
-pushd ~
-git clone https://gitee.com/zhangxin8069/configure.git
-pushd ./configure
-bash ./scripts/script_alias.sh
-bash ./bin/sh_init.sh
-cp ./lib/v20241023/env.sh ~/env.sh
-popd
+# pushd ~
+# git clone https://gitee.com/zhangxin8069/configure.git
+# pushd ./configure
+# bash ./scripts/script_alias.sh
+# bash ./bin/sh_init.sh
+# cp ./lib/v20241023/env.sh ~/env.sh
+# popd
 ######
 git clone https://github.com/NVIDIA/nccl.git
 pushd ./nccl
