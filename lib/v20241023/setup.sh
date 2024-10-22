@@ -41,4 +41,7 @@ popd
 popd
 popd
 ######
-
+# apt install apt-file
+# apt-file update
+# apt-file search mpi.h
+######
