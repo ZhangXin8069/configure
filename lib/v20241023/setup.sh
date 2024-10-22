@@ -8,7 +8,7 @@ apt update
 ######
 apt install vim
 apt install htop btop nvtop
-apt install python3-dev
+apt install python3-dev pip
 apt install cmake
 apt install openmpi-bin openmpi-common libopenmpi-dev
 # apt --fix-broken install
