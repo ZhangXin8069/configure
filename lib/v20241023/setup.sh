@@ -10,7 +10,7 @@ sudo apt install htop btop nvtop
 sudo apt install python3-dev
 sudo apt install cmake 
 sudo apt install openmpi-bin openmpi-common libopenmpi-dev
-sudo apt install nvidia-cuda-toolkit
+sudo apt install nvidia-cuda-dev
 ######
 # pushd ~
 # git clone https://gitee.com/zhangxin8069/configure.git
