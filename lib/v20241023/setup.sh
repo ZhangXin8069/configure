@@ -6,7 +6,7 @@
 ######
 apt update
 ######
-apt install vim
+apt install vim tree
 apt install htop btop nvtop
 apt install python3-dev pip
 apt install cmake
