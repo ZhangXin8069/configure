@@ -44,14 +44,13 @@ alias krita="flatpak run org.kde.krita"
 alias goldendict="flatpak run io.github.xiaoyifang.goldendict_ng"
 alias media_writer="flatpak run org.fedoraproject.MediaWriter"
 # steam # recommend to install with 'sudo apt install steam-installer' first, then 'steam'
+alias clash="flatpak run io.github.Fndroid.clash_for_windows"
 #########
 # EXAMPLE
 # http://dict.youdao.com/search?q=%GDWORD%&ue=utf8 # goldendict settings
 #########
-# sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
-#########
 
 # SOURCE
 pushd ${HOME}/qcu
-source ./computer-env.sh
+source ./usb-env.sh
 popd
