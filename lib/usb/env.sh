@@ -36,6 +36,8 @@ alias media_writer="flatpak run org.fedoraproject.MediaWriter"
 # EXAMPLE
 # http://dict.youdao.com/search?q=%GDWORD%&ue=utf8 # goldendict settings
 #########
+# sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+#########
 
 # SOURCE
 pushd ${HOME}/qcu
