@@ -7,6 +7,18 @@ export PATH=${HOME}/sbin:$PATH
 export PATH=${HOME}/.local/bin:$PATH
 export LD_LIBRARY_PATH=${HOME}/slib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
+## openmpi
+MPI_HOME=/usr/local/openmpi
+export PATH=${MPI_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
+export MANPATH=${MPI_HOME}/share/man:$MANPATH
+## cuda
+CUDA_HOME=/usr/local/cuda
+export PATH=${CUDA_HOME}/bin:$PATH
+export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
+export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
+export MANPATH=${CUDA_HOME}/share/man:$MANPATH
 
 # ALIAS
 #########
