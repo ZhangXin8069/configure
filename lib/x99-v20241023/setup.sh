@@ -1,6 +1,7 @@
 ######
 # x99:
-docker run -itd --gpus all --name x99-v20241023 -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all -v /c/Users/kfutfd/x99-v20241023:/root/x99-v20241023 docker.io/nvidia/cuda:11.8.0-devel-ubuntu20.04
+# docker run -itd --gpus all --ipc=host --name x99-v20241023 -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all -v /c/Users/kfutfd/x99-v20241023:/root/x99-v20241023 docker.io/nvidia/cuda:11.8.0-devel-ubuntu20.04
+# zhangxin8069/x99-v20241023-image:ubuntu-20.04_gcc-9.4.0_cuda-11.8.0_-python-3.8.10_quda-1.1.0-sm60_pyquda-0.3.2_qcu-dev10
 ######
 apt update
 ######
@@ -10,12 +11,28 @@ apt install htop # btop nvtop
 apt install python3-dev pip
 # apt install cmake
 wget  https://github.com/Kitware/CMake/releases/download/v3.31.0/cmake-3.31.0-linux-x86_64.sh
-mv cmake-3.31.0-linux-x86_64.sh /usr/local
-pushd /usr/local/bin
-ln -s /usr/local/cmake-3.31.0-linux-x86_64/bin/* .
-popd
+wget https://github.com/Syllo/nvtop/releases/download/3.1.0/nvtop-x86_64.AppImage
+wget https://github.com/aristocratos/btop/releases/download/v1.4.0/btop-x86_64-linux-musl.tbz
+mv cmake-3.31.0-linux-x86_64.sh nvtop-x86_64.AppImage btop-x86_64-linux-musl.tbz /usr/local
+pushd /usr/local
 sh cmake-3.31.0-linux-x86_64.sh
+mv cmake-3.31.0-linux-x86_64 cmake
+chmod +x nvtop-x86_64.AppImage
+./nvtop-x86_64.AppImage --appimage-extract
+mkdir nvtop
+mv squashfs-root nvtop
+tar -xf btop-x86_64-linux-musl.tbz
+pushd ./bin
+ln -s /usr/local/cmake/bin/* .
+ln -s /usr/local/btop/bin/* .
+ln -s /usr/local/nvtop/squashfs-root/usr/bin/* .
+popd
+popd
+pushd /usr/bin 
+ln -s ./python3 python
+popd
 apt install openmpi-bin openmpi-common libopenmpi-dev
+apt install libnccl2 libnccl-dev
 # apt --fix-broken install
 # dpkg --configure -a 
 ######
@@ -42,12 +59,6 @@ pushd ./configure
 bash ./scripts/script_alias.sh
 cp ./lib/x99-v20241023/env.sh ~/env.sh
 popd
-# ######
-# wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2004/x86_64/cuda-keyring_1.0-1_all.deb
-# dpkg -i cuda-keyring_1.0-1_all.deb
-# apt update 
-apt install libnccl2=2.16.5-1+cuda11.8 libnccl-dev=2.16.5-1+cuda11.8
-# apt install cuda-nsight-systems-11-8
 ######
 wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
 tar -xzf quda-develop.tar.gz
