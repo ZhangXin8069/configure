@@ -1,1 +1,0 @@
-bash: test.nccl.cg-np1.sh: No such file or directory
