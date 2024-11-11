@@ -1,7 +1,7 @@
 ######
 # x99:
 # docker run -itd --gpus all --ipc=host --name x99-v20241023 -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all -v /c/Users/kfutfd/x99-v20241023:/root/x99-v20241023 docker.io/nvidia/cuda:11.8.0-devel-ubuntu20.04
-# zhangxin8069/x99-v20241023-image:ubuntu-20.04_gcc-9.4.0_cuda-11.8.0_-python-3.8.10_quda-1.1.0-sm60_pyquda-0.3.2_qcu-dev10
+# zhangxin8069/x99-v20241023-image:ubuntu-20.04_gcc-9.4.0_-python-3.8.10_cuda-11.8.0_quda-1.1.0-sm60_pyquda-0.3.2_qcu-dev10
 ######
 apt update
 ######
