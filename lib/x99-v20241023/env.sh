@@ -1,4 +1,4 @@
 # SOURCE
-pushd ~/qcu
-source ./x99_docker-env.sh
+pushd ~/PyQCU
+source ./env.sh
 popd
