@@ -22,6 +22,9 @@ alias python="python3.9"
 alias pip="pip3.9"
 
 # SOURCE
-pushd /public/home/zhangxin/qcu
-source ./snsc-env.sh
+# pushd /public/home/zhangxin/qcu
+# source ./snsc-env.sh
+# popd
+pushd /public/home/zhangxin/PyQCU
+source ./env.sh
 popd
