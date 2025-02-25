@@ -16,6 +16,7 @@ module list
 # EXPORT
 export PATH=/public/home/zhangxin/sbin:$PATH
 export LD_LIBRARY_PATH=/public/home/zhangxin/slib:$LD_LIBRARY_PATH
+export PYTHONPATH=/public/home/zhangxin/.local/lib/python3.9/site-packages:$PYTHONPATH
 
 # ALIAS
 alias python="python3.9"
