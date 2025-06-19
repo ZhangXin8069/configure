@@ -324,3 +324,4 @@ alias ohmyzsh='mate ~/.oh-my-zsh'
 alias rd=rmdir
 alias which-command=whence
 alias zshconfig='mate ~/.zshrc'
+alias gsize='git count-objects -vH'
