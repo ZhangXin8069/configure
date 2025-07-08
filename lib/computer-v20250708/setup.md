@@ -5,5 +5,5 @@
 4. docker push  zhangxin8069/computer-v20250708:ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17
 > or:
 0.  docker ps -a
-1.  docker export 5a32ac2ef017 > computer-v20250708_ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17.tar
+1.  docker export a64e923a81b1 > computer-v20250708_ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17.tar
 2.  update 'computer-v20250708_ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17.tar' to aliyundrive.
