@@ -325,3 +325,4 @@ alias rd=rmdir
 alias which-command=whence
 alias zshconfig='mate ~/.zshrc'
 alias gsize='git count-objects -vH'
+alias py='python'
