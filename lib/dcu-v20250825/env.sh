@@ -23,4 +23,4 @@ module list
 # export HIPCC=hipcc
 # export CC=hipcc
 # export CXX=hipcc
-#export HCC_AMDGPU_TARGET=gfx906                
+# export HCC_AMDGPU_TARGET=gfx906                
