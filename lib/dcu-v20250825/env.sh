@@ -18,11 +18,9 @@ module list
 # source ./env.sh
 # pushd ./cuda
 # source ./env.sh
-popd
-popd
-export HIPCC=hipcc
-export CC=hipcc
-export CXX=hipcc
-#export HCC_AMDGPU_TARGET=gfx906
-~                                                                                                                                                                                   
-~                     
+# popd
+# popd
+# export HIPCC=hipcc
+# export CC=hipcc
+# export CXX=hipcc
+#export HCC_AMDGPU_TARGET=gfx906                
