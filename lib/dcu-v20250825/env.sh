@@ -1,23 +1,17 @@
 # BASH
 # unset
-pushd ~/configure
-source ./env.sh
-popd
-clear
 # MODULE
 module purge
+module load compiler/dtk/25.04.1
 module load sghpc-mpi-gcc-mlnx/25.6
-module load compiler/cmake/3.25.3
-module load compiler/dtk/25.04
 module load sghpcdas/25.6
 module list
 
 # EXPORT
 export CUPY_INSTALL_USE_HIP=1
 export OMPI_MCA_opal_cuda_support=0
-export ROCM_HOME=/opt/dtk-25.04
+export ROCM_HOME=$ROCM_PATH
 pushd ${ROCM_HOME}
-source ./env.sh
 pushd ./cuda
 source ./env.sh
 popd
@@ -25,7 +19,7 @@ popd
 export HIPCC=hipcc
 export CC=hipcc
 export CXX=hipcc
-export HCC_AMDGPU_TARGET=gfx906
+export HCC_AMDGPU_TARGET=gfx936
 
 # CONDA
 # conda init bash
