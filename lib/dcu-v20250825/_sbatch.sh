@@ -10,5 +10,5 @@
 module purge #清空module
 source env.sh
 pushd ~/PyQCU/test
-bash test.wilson.bistabcg-npX-test6.sh
+bash test.clover.bistabcg-npX-test7.sh
 popd
