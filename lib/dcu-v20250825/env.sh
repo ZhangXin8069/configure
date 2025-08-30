@@ -9,8 +9,8 @@ module load sghpc-mpi-gcc-mlnx/25.6
 module list
 
 # EXPORT
-export PATH=/public/home/hpc_test/zhanghl3/hdf5-hdf5-1_12_2/build/hdf5-mpi/bin/:$PATH
-export LD_LIBRARY_PATH=/public/home/hpc_test/zhanghl3/hdf5-hdf5-1_12_2/build/hdf5-mpi/lib/:$LD_LIBRARY_PATH
+export PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/bin:$PATH
+export LD_LIBRARY_PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/public/home/zhangxin80699/PyQCU:${PYTHONPATH}
 export LD_LIBRARY_PATH=/public/home/zhangxin80699/PyQCU/lib:${LD_LIBRARY_PATH}
 export CUPY_INSTALL_USE_HIP=1
@@ -41,6 +41,6 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
-pushd /public/home/hpc_test/HPC_APPS/conda-env/
+pushd /public/home/zhangxin80699
 conda activate cupy-env/ 
 popd
