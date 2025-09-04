@@ -1,1 +1,1 @@
-salloc -p newlarge -N 1 -n 16 --gres=dcu:1 --exclusive -J IMP_ZHANGXIN
+salloc -p newlarge -N 1 -n 128 --gres=dcu:8 --exclusive -J IMP_ZHANGXIN
