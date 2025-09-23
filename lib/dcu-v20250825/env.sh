@@ -43,5 +43,8 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 pushd /public/home/zhangxin80699
-conda activate cupy-env/ 
+conda activate cupy-env/
 popd
+
+# add torch
+export PYTHONPATH="/public/home/zhangxin80699/torch-env":${PYTHONPATH}
