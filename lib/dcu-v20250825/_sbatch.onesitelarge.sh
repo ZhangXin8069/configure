@@ -5,6 +5,7 @@
 #SBATCH --ntasks-per-node=8 #单节点多少个rank
 #SBATCH --cpus-per-task=16 #每个rank 需要多少个cpu核
 #SBATCH --gres=dcu:8 #单节点多少张dcu卡
+#SBATCH --time=00-01:00:00
 #SBATCH -o %j #输出日志
 #SBATCH -e %j #错误日志
 module purge #清空module

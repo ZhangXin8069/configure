@@ -5,8 +5,8 @@ module use /public/software/modules
 module use /opt/hpc/software/modules
 module use /public/home/sghpc_sdk/modulefiles
 module purge
-# module load sghpc-mpi-gcc-mlnx/25.6
-module load sghpc-mpi-gcc/25.6
+module load sghpc-mpi-gcc-mlnx/25.6
+# module load sghpc-mpi-gcc/25.6
 module list
 
 # EXPORT
