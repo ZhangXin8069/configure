@@ -47,4 +47,4 @@ conda activate cupy-env/
 popd
 
 # add torch
-export PYTHONPATH="/public/home/zhangxin80699/torch-env":${PYTHONPATH}
+export PYTHONPATH="/public/home/zhangxin80699/.local/lib/python3.10/site-packages/":${PYTHONPATH}
