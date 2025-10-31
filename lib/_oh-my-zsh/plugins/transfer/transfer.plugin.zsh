@@ -7,7 +7,7 @@
 transfer() {
   # check arguments
   if [[ $# -eq 0 ]]; then
-  cat <<EOF
+    cat <<EOF
 Error: no arguments specified.
 
 Usage: transfer [file/folder] [options]
@@ -21,10 +21,10 @@ Examples:
 Options:
   -ca  Encrypt file with symmetric cipher and create ASCII armored output
 EOF
-  return 1
+    return 1
   fi
 
-  if (( ! $+commands[curl] )); then
+  if ((!$ + commands[curl])); then
     echo "Error: curl is not installed"
     return 1
   fi
@@ -41,7 +41,7 @@ EOF
   local crypt=0
   if [[ "$2" = -ca ]]; then
     crypt=1
-    if (( ! $+commands[gpg] )); then
+    if ((!$ + commands[gpg])); then
       echo "Error: gpg is not installed"
       return 1
     fi
@@ -49,10 +49,10 @@ EOF
 
   if ! tty -s; then
     # transfer from pipe
-    if (( crypt )); then
-      gpg -aco - | curl -X PUT --progress-bar -T - "https://transfer.sh/$item" >> $tmpfile
+    if ((crypt)); then
+      gpg -aco - | curl -X PUT --progress-bar -T - "https://transfer.sh/$item" >>$tmpfile
     else
-      curl --progress-bar --upload-file - "https://transfer.sh/$item" >> $tmpfile
+      curl --progress-bar --upload-file - "https://transfer.sh/$item" >>$tmpfile
     fi
   else
     basename=$(basename "$item" | sed -e 's/[^a-zA-Z0-9._-]/-/g')
@@ -71,18 +71,18 @@ EOF
       }
 
       tar -czf $tarfile $(basename $item)
-      if (( crypt )); then
-        gpg -cao - "$tarfile" | curl --progress-bar -T "-" "https://transfer.sh/$basename.tar.gz.gpg" >> $tmpfile
+      if ((crypt)); then
+        gpg -cao - "$tarfile" | curl --progress-bar -T "-" "https://transfer.sh/$basename.tar.gz.gpg" >>$tmpfile
       else
-        curl --progress-bar --upload-file "$tarfile" "https://transfer.sh/$basename.tar.gz" >> $tmpfile
+        curl --progress-bar --upload-file "$tarfile" "https://transfer.sh/$basename.tar.gz" >>$tmpfile
       fi
       rm -f $tarfile
     else
       # transfer file
-      if (( crypt )); then
-        gpg -cao - "$item" | curl --progress-bar -T "-" "https://transfer.sh/$basename.gpg" >> $tmpfile
+      if ((crypt)); then
+        gpg -cao - "$item" | curl --progress-bar -T "-" "https://transfer.sh/$basename.gpg" >>$tmpfile
       else
-        curl --progress-bar --upload-file "$item" "https://transfer.sh/$basename" >> $tmpfile
+        curl --progress-bar --upload-file "$item" "https://transfer.sh/$basename" >>$tmpfile
       fi
     fi
   fi

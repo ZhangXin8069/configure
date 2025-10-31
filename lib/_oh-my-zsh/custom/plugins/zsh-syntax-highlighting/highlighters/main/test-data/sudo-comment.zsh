@@ -27,13 +27,13 @@
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
 
-sudo(){}
+sudo() {}
 
 setopt interactive_comments
 BUFFER='sudo -u # comment'
 
 expected_region_highlight=(
-  "1 4 precommand" # sudo
+  "1 4 precommand"           # sudo
   "6 7 single-hyphen-option" # -u
-  "9 17 unknown-token" # "# comment" - error because argument missed
+  "9 17 unknown-token"       # "# comment" - error because argument missed
 )

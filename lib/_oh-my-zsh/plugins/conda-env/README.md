@@ -3,6 +3,7 @@
 The plugin displays information of the created virtual container of conda and allows background theming.
 
 To use it, add `conda-env` to the plugins array of your zshrc file:
+
 ```
 plugins=(... conda-env)
 ```
@@ -40,5 +41,5 @@ sourced.
 
 References:
 
-- https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#determining-your-current-environment
-- https://conda.io/projects/conda/en/latest/user-guide/configuration/use-condarc.html#precedence
+- <https://conda.io/projects/conda/en/latest/user-guide/tasks/manage-environments.html#determining-your-current-environment>
+- <https://conda.io/projects/conda/en/latest/user-guide/configuration/use-condarc.html#precedence>

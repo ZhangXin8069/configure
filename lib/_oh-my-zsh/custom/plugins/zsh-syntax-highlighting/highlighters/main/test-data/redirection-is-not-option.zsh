@@ -30,9 +30,9 @@
 BUFFER=$': > -x >> --yy'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
+  '1 1 builtin'     # :
   '3 3 redirection' # >
-  '5 6 default' # -x
+  '5 6 default'     # -x
   '8 9 redirection' # >>
-  '11 14 default' # --yy
+  '11 14 default'   # --yy
 )

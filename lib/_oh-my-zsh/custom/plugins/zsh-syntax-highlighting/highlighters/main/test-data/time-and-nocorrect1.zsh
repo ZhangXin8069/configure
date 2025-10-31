@@ -31,9 +31,9 @@
 BUFFER=$'time ls; nocorrect ls'
 
 expected_region_highlight=(
-  '1 4 reserved-word' # time
-  '6 7 command' # ls
+  '1 4 reserved-word'    # time
+  '6 7 command'          # ls
   '8 8 commandseparator' # ;
-  '10 18 reserved-word' # nocorrect
-  '20 21 command' # ls
+  '10 18 reserved-word'  # nocorrect
+  '20 21 command'        # ls
 )

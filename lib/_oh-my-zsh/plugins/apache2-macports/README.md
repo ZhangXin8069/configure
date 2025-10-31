@@ -18,4 +18,4 @@ plugins=(... apache2-macports)
 
 ## Contributors
 
-- Alexander Rinass (alex@rinass.net)
+- Alexander Rinass (<alex@rinass.net>)

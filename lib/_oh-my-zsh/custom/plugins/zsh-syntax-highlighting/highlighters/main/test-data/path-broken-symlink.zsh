@@ -36,6 +36,6 @@ else
 
   expected_region_highlight=(
     "1 1 builtin" # :
-    "3 16 path" # broken-symlink
+    "3 16 path"   # broken-symlink
   )
 fi

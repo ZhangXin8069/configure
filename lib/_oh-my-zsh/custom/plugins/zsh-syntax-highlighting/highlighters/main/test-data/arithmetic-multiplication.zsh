@@ -31,9 +31,9 @@
 BUFFER=$': foo*$(( 42 * 1729 ))*bar'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 26 default' # foo*$(( 42 * 1729 ))*bar
-  '6 6 globbing' # *
+  '1 1 builtin'               # :
+  '3 26 default'              # foo*$(( 42 * 1729 ))*bar
+  '6 6 globbing'              # *
   '7 22 arithmetic-expansion' # $(( 42 * 1729 ))
-  '23 23 globbing' # *
+  '23 23 globbing'            # *
 )

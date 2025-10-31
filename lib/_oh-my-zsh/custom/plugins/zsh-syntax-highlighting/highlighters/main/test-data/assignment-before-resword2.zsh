@@ -31,10 +31,10 @@
 BUFFER=$'foo=bar ( :; )'
 
 expected_region_highlight=(
-  '1 7 assign' # foo=bar
-  '5 7 default' # bar
-  '9 9 unknown-token' # (
-  '11 11 builtin' # :
+  '1 7 assign'             # foo=bar
+  '5 7 default'            # bar
+  '9 9 unknown-token'      # (
+  '11 11 builtin'          # :
   '12 12 commandseparator' # ;
-  '14 14 unknown-token' # )
+  '14 14 unknown-token'    # )
 )

@@ -31,8 +31,8 @@
 BUFFER='echo "foo !bar"'
 
 expected_region_highlight=(
-  '1 4 builtin' # echo
-  '6 15 default' # "foo !bar"
+  '1 4 builtin'                 # echo
+  '6 15 default'                # "foo !bar"
   '6 15 double-quoted-argument' # "foo !bar"
-  '11 11 history-expansion' # !
+  '11 11 history-expansion'     # !
 )

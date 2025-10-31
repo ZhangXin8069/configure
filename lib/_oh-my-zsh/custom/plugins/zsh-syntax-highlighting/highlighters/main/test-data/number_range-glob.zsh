@@ -31,12 +31,12 @@
 BUFFER='print <-> x<->y <foo2-3>'
 
 expected_region_highlight=(
-  '1 5 builtin' # print
-  '7 9 default' # <->
-  '7 9 globbing' # <->
-  '11 15 default' # x<->y
-  '12 14 globbing' # <->
+  '1 5 builtin'       # print
+  '7 9 default'       # <->
+  '7 9 globbing'      # <->
+  '11 15 default'     # x<->y
+  '12 14 globbing'    # <->
   '17 17 redirection' # <
-  '18 23 default' # foo2-3 (the filename)
+  '18 23 default'     # foo2-3 (the filename)
   '24 24 redirection' # >
 )

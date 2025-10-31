@@ -32,7 +32,7 @@ alias x=''
 BUFFER='x echo foo'
 
 expected_region_highlight=(
-  '1 1 alias' # x
-  '3 6 builtin' # echo
+  '1 1 alias'    # x
+  '3 6 builtin'  # echo
   '8 10 default' # foo
 )

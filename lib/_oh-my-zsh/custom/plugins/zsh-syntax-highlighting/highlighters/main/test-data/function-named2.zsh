@@ -34,6 +34,6 @@ expected_region_highlight=(
   '1 1 TBD "issue #223"' # f
   '3 3 TBD "issue #223"' # g
   '5 5 TBD "issue #223"' # h
-  '7 8 reserved-word' # ()
-  '10 12 builtin' # pwd
+  '7 8 reserved-word'    # ()
+  '10 12 builtin'        # pwd
 )

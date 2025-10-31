@@ -29,9 +29,9 @@
 
 unsorted=1
 
-ZSH_HIGHLIGHT_STYLES[bracket-level-1]=
-ZSH_HIGHLIGHT_STYLES[bracket-level-2]=
-ZSH_HIGHLIGHT_STYLES[bracket-level-3]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 1]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 2]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 3]=
 
 BUFFER='echo $(echo ${(z)array})'
 

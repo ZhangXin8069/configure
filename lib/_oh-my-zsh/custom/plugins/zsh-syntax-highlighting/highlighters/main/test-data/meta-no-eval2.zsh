@@ -33,8 +33,8 @@
 BUFFER=$': /(e*exit 42*)'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 15 default' # /(e*exit 42*)
-  '6 6 globbing' # *
+  '1 1 builtin'    # :
+  '3 15 default'   # /(e*exit 42*)
+  '6 6 globbing'   # *
   '14 14 globbing' # *
 )

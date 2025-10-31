@@ -3,7 +3,6 @@ zsh-syntax-highlighting / highlighters / pattern
 
 This is the `pattern` highlighter, that highlights user-defined patterns.
 
-
 ### How to tweak it
 
 To use this highlighter, associate patterns with styles in the

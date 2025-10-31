@@ -33,11 +33,11 @@ alias a=: b='a < <(a)'
 BUFFER='b < <(b)'
 
 expected_region_highlight=(
-  '1 1 alias' # b
-  '3 3 redirection' # <
-  '5 8 default' # <(b)
-  '5 8 process-substitution' # <(b)
+  '1 1 alias'                          # b
+  '3 3 redirection'                    # <
+  '5 8 default'                        # <(b)
+  '5 8 process-substitution'           # <(b)
   '5 6 process-substitution-delimiter' # <(
-  '7 7 alias' # b
+  '7 7 alias'                          # b
   '8 8 process-substitution-delimiter' # )
 )

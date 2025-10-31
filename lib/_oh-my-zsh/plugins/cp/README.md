@@ -17,16 +17,16 @@ The enabled options for rsync are:
 
 - `-o`: preserves owner.
 
-* `-g`: preserves group.
+- `-g`: preserves group.
 
-* `-b`: make a backup of the original file instead of overwriting it, if it exists.
+- `-b`: make a backup of the original file instead of overwriting it, if it exists.
 
-* `-r`: recurse directories.
+- `-r`: recurse directories.
 
-* `-hhh`: outputs numbers in human-readable format, in units of 1024 (K, M, G, T).
+- `-hhh`: outputs numbers in human-readable format, in units of 1024 (K, M, G, T).
 
-* `--backup-dir="/tmp/rsync-$USERNAME"`: move backup copies to "/tmp/rsync-$USERNAME".
+- `--backup-dir="/tmp/rsync-$USERNAME"`: move backup copies to "/tmp/rsync-$USERNAME".
 
-* `-e /dev/null`: only work on local files (disable remote shells).
+- `-e /dev/null`: only work on local files (disable remote shells).
 
-* `--progress`: display progress.
+- `--progress`: display progress.

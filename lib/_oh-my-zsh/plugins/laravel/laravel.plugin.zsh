@@ -30,7 +30,6 @@ alias pamen='php artisan make:enum'
 alias pami='php artisan make:interface'
 alias pamtr='php artisan make:trait'
 
-
 # Clears
 alias pacac='php artisan cache:clear'
 alias pacoc='php artisan config:clear'

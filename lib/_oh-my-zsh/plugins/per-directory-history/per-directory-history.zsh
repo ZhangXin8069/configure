@@ -118,17 +118,17 @@ function _per-directory-history-change-directory() {
 function _per-directory-history-addhistory() {
   # respect hist_ignore_space
   if [[ -o hist_ignore_space ]] && [[ "$1" == \ * ]]; then
-      true
+    true
   else
-      print -Sr -- "${1%%$'\n'}"
-      # instantly write history if set options require it.
-      if [[ -o share_history ]] || \
-         [[ -o inc_append_history ]] || \
-         [[ -o inc_append_history_time ]]; then
-          fc -AI $HISTFILE
-          fc -AI $_per_directory_history_directory
-      fi
-      fc -p $_per_directory_history_directory
+    print -Sr -- "${1%%$'\n'}"
+    # instantly write history if set options require it.
+    if [[ -o share_history ]] ||
+      [[ -o inc_append_history ]] ||
+      [[ -o inc_append_history_time ]]; then
+      fc -AI $HISTFILE
+      fc -AI $_per_directory_history_directory
+    fi
+    fc -p $_per_directory_history_directory
   fi
 }
 

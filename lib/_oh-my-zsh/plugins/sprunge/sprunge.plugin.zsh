@@ -1,6 +1,6 @@
 sprunge() {
   if [[ "$1" = --help ]]; then
-    fmt -s >&2 << EOF
+    fmt -s >&2 <<EOF
 
 DESCRIPTION
   Upload data and fetch URL from the pastebin http://sprunge.us

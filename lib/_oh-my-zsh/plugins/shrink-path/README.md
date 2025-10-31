@@ -11,6 +11,7 @@ plugins=(... shrink-path)
 ## Examples
 
 For this directory tree:
+
 ```
 /home/
   me/
@@ -21,7 +22,9 @@ For this directory tree:
     f i g/
       baz/
 ```
+
 here are the results of calling `shrink_path <option> /home/me/foo/bar/quux`:
+
 ```
 Option        Result
 <none>        /h/m/f o/ba/q
@@ -65,13 +68,13 @@ The following options are available:
 ```
 
 The long options can also be set via zstyle, like
+
 ```zsh
 zstyle :prompt:shrink_path fish yes
 ```
 
 Note: Directory names containing two or more consecutive spaces are not yet
 supported.
-
 
 ## Trick: toggle shrinking with a keyboard shortcut
 
@@ -107,9 +110,8 @@ Copyright (C) 2018-2020 by Pavel N. Krivitsky
 
 License: WTFPL <http://www.wtfpl.net>
 
-Ref: https://www.zsh.org/mla/workers/2009/msg00415.html
-     https://www.zsh.org/mla/workers/2009/msg00419.html
-
+Ref: <https://www.zsh.org/mla/workers/2009/msg00415.html>
+     <https://www.zsh.org/mla/workers/2009/msg00419.html>
 
 ## Misc
 

@@ -4,13 +4,13 @@ alias-finder() {
   # build command and options
   for c in "$@"; do
     case $c in
-      # TODO: Remove backward compatibility (other than zstyle form)
-      # set options if exist
-      -e|--exact) exact=true;;
-      -l|--longer) longer=true;;
-      -c|--cheaper) cheaper=true;;
-      # concatenate cmd
-      *) cmd="$cmd$c " ;;
+    # TODO: Remove backward compatibility (other than zstyle form)
+    # set options if exist
+    -e | --exact) exact=true ;;
+    -l | --longer) longer=true ;;
+    -c | --cheaper) cheaper=true ;;
+    # concatenate cmd
+    *) cmd="$cmd$c " ;;
     esac
   done
 
@@ -47,7 +47,7 @@ alias-finder() {
       break # because above grep command already found every longer aliases during first cycle
     fi
 
-    cmd=$(sed -E 's/ {0,}[^ ]*$//' <<< "$cmd") # remove last word
+    cmd=$(sed -E 's/ {0,}[^ ]*$//' <<<"$cmd") # remove last word
   done
 }
 

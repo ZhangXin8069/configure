@@ -32,8 +32,8 @@ setopt RC_QUOTES
 BUFFER=": 'foo''bar'baz"
 
 expected_region_highlight=(
-  "1 1 builtin" # :
-  "3 15 default" # 'foo''bar'baz
+  "1 1 builtin"                 # :
+  "3 15 default"                # 'foo''bar'baz
   "3 12 single-quoted-argument" # 'foo''bar'
-  "7 8 rc-quote" # ''
+  "7 8 rc-quote"                # ''
 )

@@ -31,11 +31,11 @@
 BUFFER=$'foo=(\nbar) env'
 
 expected_region_highlight=(
-  '1 5 assign' # foo=(
-  '5 5 reserved-word' # (
+  '1 5 assign'           # foo=(
+  '5 5 reserved-word'    # (
   '6 6 commandseparator' # \n
-  '7 9 default' # bar
-  '10 10 assign' # )
-  '10 10 reserved-word' # )
-  '12 14 precommand' # env
+  '7 9 default'          # bar
+  '10 10 assign'         # )
+  '10 10 reserved-word'  # )
+  '12 14 precommand'     # env
 )

@@ -33,7 +33,7 @@ hash sudo=false
 BUFFER='sudo -e /does/not/exist'
 
 expected_region_highlight=(
-  '1 4 precommand' # sudo
+  '1 4 precommand'           # sudo
   '6 7 single-hyphen-option' # -e
-  '9 23 default' # /does/not/exist
+  '9 23 default'             # /does/not/exist
 )

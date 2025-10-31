@@ -13,16 +13,19 @@ plugins=(... dash)
 ## Usage
 
 - Open and switch to the dash application.
+
 ```
 dash
 ```
 
 - Query for something in dash app: `dash query`
+
 ```
 dash golang
 ```
 
 - You can optionally provide a keyword: `dash [keyword:]query`
+
 ```
 dash python:tuple
 ```
