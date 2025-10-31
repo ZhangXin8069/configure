@@ -1,6 +1,5 @@
 #compdef ipfs
 #autoload
-
 local -a _1st_arguments
 _1st_arguments=(
   'add:Add a file or directory to ipfs.'
@@ -39,7 +38,6 @@ _1st_arguments=(
   'update:Download and apply go-ipfs updates'
   'version:Show ipfs version information.'
 )
-
 _ipfs_subcommand(){
   local curcontext="$curcontext" state line
   typeset -A opt_args
@@ -431,9 +429,7 @@ _ipfs_subcommand(){
     ;;
   esac
 }
-
 local expl
-
 _arguments \
   '(-c --config)'{-c,--config}'[Path to the configuration file to use.]' \
   '(-D --debug)'{-D,--debug}'[Operate in debug mode.]' \
@@ -448,12 +444,10 @@ _arguments \
   '(--stream-channels)--stream-channels[Stream channel output.]' \
   '(--timeout)--timeout[Set a global timeout on the command.]' \
   '*:: :->subcmds' && return 0
-
 if (( CURRENT == 1 )); then
   _describe -t commands "ipfs subcommand" _1st_arguments
   return
 fi
-
 MAIN_SUBCOMMAND="$words[1]"
 case $MAIN_SUBCOMMAND in
   (add)

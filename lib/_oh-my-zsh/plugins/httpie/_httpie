@@ -42,37 +42,28 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # ------------------------------------------------------------------------------
-
 _httpie_params () {
-
     local ret=1 expl
-
     # or a url
     if (( CURRENT <= NORMARG+1 )) && [[ $words[NORMARG] != *:* ]] ; then
         _httpie_urls && ret=0
-
     # regular param, if we already have a url
     elif (( CURRENT > NORMARG )); then
-
         # if the suffix is precisely : this is shorthand for a header
         if [[ -prefix ':' ]]; then
             PREFIX=
             SUFFIX=:
         fi
-
         # if we are in front of a : (possibly due to the PREFIX move before)
         if [[ -suffix ':' ]]; then
-
             # this is rather buggy with normal tab behavior :\
             compstate[insert]=menu
             _wanted http_header expl 'HTTP Header' \
                 compadd -s ':' -S '' -- Content-Type Cookie && return 0
         fi
-
         # ignore all prefix stuff
         compset -P '(#b)([^:@=]#)'
         local name=$match[1]
-
         if compset -P '='; then
             _message "$name data field value"
         elif compset -P '@'; then
@@ -97,24 +88,16 @@ _httpie_params () {
             )
             _describe -t httpparams "parameter types" ops -Q -S ''
         fi
-
         ret=0
-
     fi
-
     # first arg may be a request method
     (( CURRENT == NORMARG )) &&
         _wanted http_method expl 'Request Method' \
             compadd GET POST PUT DELETE HEAD OPTIONS TRACE CONNECT PATCH LINK UNLINK && ret=0
-
     return $ret
-
 }
-
 _httpie_urls() {
-
   local ret=1
-
   if ! [[ -prefix [-+.a-z0-9]#:// ]]; then
     local expl
     compset -S '[^:/]*' && compstate[to_end]=''
@@ -122,34 +105,22 @@ _httpie_urls() {
   else
     _urls && ret=0
   fi
-
   return $ret
-
 }
-
 _httpie_printflags () {
-
     local ret=1
-
     # not sure why this is necessary, but it will complete "-pH" style without it
     [[ $IPREFIX == "-p" ]] && IPREFIX+=" "
-
     compset -P '(#b)([a-zA-Z]#)'
-
     local -a flags
     [[ $match[1] != *H* ]] && flags+=( "H:request headers" )
     [[ $match[1] != *B* ]] && flags+=( "B:request body" )
     [[ $match[1] != *h* ]] && flags+=( "h:response headers" )
     [[ $match[1] != *b* ]] && flags+=( "b:response body" )
-
     _describe -t printflags "print flags" flags -S '' && ret=0
-
     return $ret
-
 }
-
 integer NORMARG
-
 _arguments -n -C -s \
   '(-j --json -f)'{-j,--json}'[Data items from the command line are serialized as a JSON object.]' \
   '(-f --form -j)'{-f,--form}'[Data items from the command line are serialized as form fields.]' \

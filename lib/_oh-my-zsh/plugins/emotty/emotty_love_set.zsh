@@ -1,6 +1,5 @@
 #!/usr/bin/env zsh
 # vim:ft=zsh ts=2 sw=2 sts=2
-
 # Note: The heavy_black_heart emoji requires $emoji2[emoji_style]
 # to be rendered as the emoji red heart.
 _emotty_sets[love]="

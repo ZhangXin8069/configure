@@ -6,7 +6,6 @@ alias rnland='react-native log-android'
 alias rnlios='react-native log-ios'
 alias rnand='react-native run-android'
 alias rnios='react-native run-ios'
-
 # iPhone
 alias rnios4s='react-native run-ios --simulator "iPhone 4s"'
 alias rnios5='react-native run-ios --simulator "iPhone 5"'
@@ -43,7 +42,6 @@ alias rnios15='react-native run-ios --simulator "iPhone 15"'
 alias rnios15pl='react-native run-ios --simulator "iPhone 15 Plus"'
 alias rnios15p='react-native run-ios --simulator "iPhone 15 Pro"'
 alias rnios15pm='react-native run-ios --simulator "iPhone 15 Pro Max"'
-
 # iPad
 alias rnipad2='react-native run-ios --simulator "iPad 2"'
 alias rnipad5='react-native run-ios --simulator "iPad (5th generation)"'
@@ -62,12 +60,10 @@ alias rnipadp122='react-native run-ios --simulator "iPad Pro (12.9-inch) (2nd ge
 alias rnipadp10='react-native run-ios --simulator "iPad Pro (10.5-inch)"'
 alias rnipad11='react-native run-ios --simulator "iPad Pro (11-inch)"'
 alias rnipad123='react-native run-ios --simulator "iPad Pro (12.9-inch) (3rd generation)"'
-
 # Apple TV
 alias rnatv='react-native run-ios --simulator "Apple TV"'
 alias rnatv4k='react-native run-ios --simulator "Apple TV 4K"'
 alias rnatv4k1080='react-native run-ios --simulator "Apple TV 4K (at 1080p)"'
-
 # Apple Watch
 alias rnaw38='react-native run-ios --simulator "Apple Watch - 38mm"'
 alias rnaw42='react-native run-ios --simulator "Apple Watch - 42mm"'

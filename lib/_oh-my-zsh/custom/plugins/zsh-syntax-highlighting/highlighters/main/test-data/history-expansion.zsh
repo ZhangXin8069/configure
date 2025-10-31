@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='!foo bar !baz ! ; !'
-
 expected_region_highlight=(
   "1 4 history-expansion"   # !foo
   "6 8 default"             # bar

@@ -1,18 +1,13 @@
 # Sublime Text aliases
-
 alias st=subl
 alias stt='subl .'
-
 # Define sst only if sudo exists
 (($ + commands[sudo])) && alias sst='sudo -EH subl'
-
 alias stp=find_project
 alias stn=create_project
-
 # Search for the Sublime Text command if not found
 (($ + commands[subl])) || {
   declare -a _sublime_paths
-
   if [[ "$OSTYPE" == linux* ]]; then
     if [[ "$(uname -r)" = *icrosoft* ]]; then
       _sublime_paths=(
@@ -57,7 +52,6 @@ alias stn=create_project
       "/c/Program Files/Sublime Text 3/subl.exe"
     )
   fi
-
   for _sublime_path in $_sublime_paths; do
     if [[ -e $_sublime_path ]]; then
       alias subl="'$_sublime_path'"
@@ -65,51 +59,39 @@ alias stn=create_project
       break
     fi
   done
-
   unset _sublime_paths _sublime_path
 }
-
 function find_project() {
   local PROJECT_ROOT="${PWD}"
   local FINAL_DEST="."
-
   while [[ $PROJECT_ROOT != "/" && ! -d "$PROJECT_ROOT/.git" ]]; do
     PROJECT_ROOT=$(dirname $PROJECT_ROOT)
   done
-
   if [[ $PROJECT_ROOT != "/" ]]; then
     local PROJECT_NAME="${PROJECT_ROOT##*/}"
-
     local SUBL_DIR=$PROJECT_ROOT
     while [[ $SUBL_DIR != "/" && ! -f "$SUBL_DIR/$PROJECT_NAME.sublime-project" ]]; do
       SUBL_DIR=$(dirname $SUBL_DIR)
     done
-
     if [[ $SUBL_DIR != "/" ]]; then
       FINAL_DEST="$SUBL_DIR/$PROJECT_NAME.sublime-project"
     else
       FINAL_DEST=$PROJECT_ROOT
     fi
   fi
-
   subl $FINAL_DEST
 }
-
 function create_project() {
   local _target=$1
-
   if [[ "${_target}" == "" ]]; then
     _target=$(pwd)
   elif [[ ! -d ${_target} ]]; then
     echo "${_target} is not a valid directory"
     return 1
   fi
-
   local _sublime_project_file=$_target/$(basename $_target).sublime-project
-
   if [[ ! -f $_sublime_project_file ]]; then
     touch $_sublime_project_file
-
     echo -e "{" >>$_sublime_project_file
     echo -e "\t\"folders\":" >>$_sublime_project_file
     echo -e "\t\t[{" >>$_sublime_project_file
@@ -117,7 +99,6 @@ function create_project() {
     echo -e "\t\t\t\"file_exclude_patterns\": []" >>$_sublime_project_file
     echo -e "\t\t}]" >>$_sublime_project_file
     echo -e "}" >>$_sublime_project_file
-
     echo -e "New Sublime Text project created:\n\t${_sublime_project_file}"
   fi
 }

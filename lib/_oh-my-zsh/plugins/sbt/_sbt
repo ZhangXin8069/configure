@@ -1,6 +1,5 @@
 #compdef sbt
 #autoload
-
 local -a _sbt_commands
 _sbt_commands=(
   'clean:delete files produced by the build'
@@ -25,9 +24,7 @@ _sbt_commands=(
   'testQuick:execute previously failed tests'
   'update:resolve and optionally retrieve dependencies'
 )
-
 local expl
-
 _arguments \
   '(-help)-h[prints an help message]' \
   '(-h)-help[prints an help message]' \
@@ -51,6 +48,5 @@ _arguments \
   '(-sbt-rc)-sbt-snapshot[use a snapshot version of sbt]' \
   '-java-home[alternate JAVA_HOME]' \
   '*:: :->subcmds' && return 0
-
 _describe -t commands "sbt subcommand" _sbt_commands
 return

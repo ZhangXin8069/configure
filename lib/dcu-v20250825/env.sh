@@ -8,7 +8,6 @@ module purge
 # module load sghpc-mpi-gcc-mlnx/25.6
 module load sghpc-mpi-gcc/25.6
 module list
-
 # EXPORT
 export PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/bin:$PATH
 export LD_LIBRARY_PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/lib:$LD_LIBRARY_PATH
@@ -26,7 +25,6 @@ export HIPCC=hipcc
 export CC=hipcc
 export CXX=hipcc
 export HCC_AMDGPU_TARGET=gfx936
-
 # CONDA
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
@@ -45,6 +43,5 @@ unset __conda_setup
 pushd /public/home/zhangxin80699
 conda activate cupy-env/
 popd
-
 # add torch
 export PYTHONPATH="/public/home/zhangxin80699/.local/lib/python3.10/site-packages/":${PYTHONPATH}

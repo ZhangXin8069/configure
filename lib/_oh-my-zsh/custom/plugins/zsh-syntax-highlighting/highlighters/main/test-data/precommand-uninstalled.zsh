@@ -27,17 +27,13 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Simulate sudo not being installed.
 #
 # The 'hash' step is because, if sudo _really_ isn't installed, 'unhash sudo'
 # would error out and break the test.
 hash sudo=/usr/bin/env && unhash sudo
-
 local PATH
-
 BUFFER=$'sudo ls'
-
 expected_region_highlight=(
   '1 4 unknown-token' # sudo
   '6 7 default'       # ls - not 'command', since sudo isn't installed

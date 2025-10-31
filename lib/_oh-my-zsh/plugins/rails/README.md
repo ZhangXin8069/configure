@@ -1,18 +1,12 @@
 # Rails
-
 This plugin adds completion for [Ruby On Rails Framework](https://rubyonrails.org/) and
 [Rake](https://ruby.github.io/rake/) commands, as well as some aliases for logs and environment variables.
-
 To use it, add `rails` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... rails)
 ```
-
 ## List of Aliases
-
 ### Rails aliases
-
 | Alias   | Command                          | Description                                            |
 | ------- | -------------------------------- | ------------------------------------------------------ |
 | `rc`    | `rails console`                  | Interact with your Rails app from the CLI              |
@@ -52,41 +46,29 @@ plugins=(... rails)
 | `rt`    | `rails test`                     | Run Rails tests                                        |
 | `rta`   | `rails test:all`                 | Runs all Rails tests, including system tests           |
 | `ru`    | `rails runner`                   | Run Ruby code in the context of Rails                  |
-
 ### Foreman
-
 | Alias  | Command         | Description                               |
 | ------ | --------------- | ----------------------------------------- |
 | `fmns` | `foreman start` | Interact with your Rails app from the CLI |
-
 ### Utility aliases
-
 | Alias     | Command                       | Description                                    |
 | --------- | ----------------------------- | ---------------------------------------------- |
 | `devlog`  | `tail -f log/development.log` | Show and follow changes to the development log |
 | `prodlog` | `tail -f log/production.log`  | Show and follow changes to the production log  |
 | `testlog` | `tail -f log/test.log`        | Show and follow changes to the test log        |
-
 ### Environment settings
-
 | Alias | Command                 | Description                     |
 | ----- | ----------------------- | ------------------------------- |
 | `RED` | `RAILS_ENV=development` | Sets `RAILS_ENV` to development |
 | `REP` | `RAILS_ENV=production`  | Sets `RAILS_ENV` to production  |
 | `RET` | `RAILS_ENV=test`        | Sets `RAILS_ENV` to test        |
-
 These are global aliases. Use in combination with a command or just run them
 separately. For example: `REP rake db:migrate` will migrate the production db.
-
 ## Legacy
-
 ### Rake aliases
-
 The following commands are run [using `rails` instead of `rake` since Rails v5][1], but are preserved under the
 prefix `rk` for backwards compatibility.
-
 [1]: https://guides.rubyonrails.org/v5.2/command_line.html#bin-rails
-
 | Alias    | Command                         | Description                                            |
 | -------- | ------------------------------- | ------------------------------------------------------ |
 | `rkdc`   | `rake db:create`                | Create the database                                    |
@@ -105,9 +87,7 @@ prefix `rk` for backwards compatibility.
 | `rkn`    | `rake notes`                    | Search for notes (`FIXME`, `TODO`) in code comments    |
 | `rksts`  | `rake stats`                    | Print code statistics                                  |
 | `rkt`    | `rake test`                     | Run Rails tests                                        |
-
 ### Other
-
 | Alias   | Command                            |
 | ------- | ---------------------------------- |
 | `sc`    | `ruby script/console`              |
@@ -118,5 +98,4 @@ prefix `rk` for backwards compatibility.
 | `sr`    | `ruby script/runner`               |
 | `ssp`   | `ruby script/spec`                 |
 | `sstat` | `thin --stats "/thin/stats" start` |
-
 - `remote_console <server> <directory>`: runs `ruby script/console production` on a remote server.

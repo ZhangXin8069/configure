@@ -1,14 +1,10 @@
 #compdef codeclimate
-
 _codeclimate_all_engines() {
   engines_all=(`codeclimate engines:list | tail -n +2 | gawk '{ print $2 }' | gawk -F: '{ print $1 }'`)
 }
-
 _codeclimate_installed_engines() {
   _codeclimate_all_engines
-
   engines_installed=()
-
   if [ -e .codeclimate.yml ]
   then
     for engine in $engines_all
@@ -20,12 +16,9 @@ _codeclimate_installed_engines() {
     done
   fi
 }
-
 _codeclimate_not_installed_engines() {
   _codeclimate_all_engines
-
   engines_not_installed=()
-
   if [ -e .codeclimate.yml ]
   then
     for engine in $engines_all
@@ -37,15 +30,12 @@ _codeclimate_not_installed_engines() {
     done
   fi
 }
-
 local curcontext="$curcontext" state line ret=1
 local expl
 local -a engines_all engines_installed engines_not_installed
-
 _arguments \
   '1: :->cmds' \
   '*:: :->args' && ret=0
-
 case $state in
   cmds)
     _values "bundle command" \
@@ -78,5 +68,4 @@ case $state in
     esac
     ;;
 esac
-
 return ret

@@ -1,15 +1,10 @@
 # Systemadmin plugin
-
 This plugin adds a series of aliases and functions which make a System Administrator's life easier.
-
 To use it, add `systemadmin` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... systemadmin)
 ```
-
 ## Aliases
-
 | Alias   | Command                                                                    | Description                                                        |
 |---------|----------------------------------------------------------------------------|--------------------------------------------------------------------|
 | ping    | `ping -c 5`                                                                | Sends only 5 ICMP Messages                                         |
@@ -21,9 +16,7 @@ plugins=(... systemadmin)
 | pscpu   | `ps -e -o pcpu,cpu,nice,state,cputime,args \|sort -k1 -nr`                 | Display the top processes using the most CPU                       |
 | pscpu10 | `ps -e -o pcpu,cpu,nice,state,cputime,args \|sort -k1 -nr \| head -n 10`   | Display the top 10 processes using the most CPU                    |
 | hist10  | `print -l ${(o)history%% *} \| uniq -c \| sort -nr \| head -n 10`          | Display the top 10 most used commands in the history               |
-
 ## Functions
-
 | Function    |  Description                                                                                                          |
 |-------------|-----------------------------------------------------------------------------------------------------------------------|
 | dls         | List only directories in the current directory                                                                        |

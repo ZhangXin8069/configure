@@ -1,34 +1,21 @@
 ## Introduction
-
 > Searches for your frontend web development made easier
-
 ## Installation
-
 Open your `~/.zshrc` file and enable the `frontend-search` plugin:
-
 ```zsh
-
 plugins=( ... frontend-search)
-
 ```
-
 ## Usage
-
 You can use the frontend-search plugin in these two forms:
-
 - `frontend <context> <term> [more terms if you want]`
 - `<context> <term> [more terms if you want]`
-
 For example, these two are equivalent:
-
 ```zsh
 $ angular dependency injection
 # Will turn into ...
 $ frontend angular dependency injection
 ```
-
 Available search contexts are:
-
 | context       | URL                                                                         |
 | ------------- | --------------------------------------------------------------------------- |
 | angular       | `https://angular.io/?search=`                                               |
@@ -61,25 +48,17 @@ Available search contexts are:
 | unheap        | `http://www.unheap.com/?s=`                                                 |
 | vuejs         | `https://www.google.com/search?as_sitesearch=vuejs.org&as_q=`               |
 | nextjs        | `https://www.google.com/search?as_sitesearch=nextjs.org&as_q=`              |
-
 If you want to have another context, open an Issue and tell us!
-
 ## Fallback search behaviour
-
 The plugin will use Google as a fallback if the docs site for a search context does not have a search
 function. You can set the fallback search engine to DuckDuckGo by setting
 `FRONTEND_SEARCH_FALLBACK='duckduckgo'` in your `~/.zshrc` file before Oh My Zsh is sourced.
-
 ## DuckDuckGo Lucky Search
-
 Enable DuckDuckGo's "ducky" (lucky) search feature to automatically access the top search result. This feature
 is optimized for DuckDuckGo, as Google redirects to an intermediate page. The FRONTEND_SEARCH_FALLBACK_LUCKY
 environment variable triggers the use of DuckDuckGo's lucky search, rendering the FRONTEND_SEARCH_FALLBACK
 setting unnecessary in this context.
-
 ## Author
-
 **Wilson Mendes (willmendesneto)**
-
 - <https://twitter.com/willmendesneto>
 - <https://github.com/willmendesneto>

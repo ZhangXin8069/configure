@@ -27,15 +27,12 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Test elision of some, but not all of the words
 # See issue #667 for the case of eliding all words
 local -a x
 x=(sudo "")
-
 sudo() {}
 BUFFER=$'$x -u phy1729 ls'
-
 expected_region_highlight=(
   '1 2 precommand' # $x
   # The "" is elided.  If it weren't elided, the «ls» would be highlighted as an ordinary argument.

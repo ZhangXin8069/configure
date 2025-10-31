@@ -1,6 +1,5 @@
 #!/usr/bin/env zsh
 # vim:ft=zsh ts=2 sw=2 sts=2
-
 _emotty_sets[emoji]="
   crystal_ball
   ghost

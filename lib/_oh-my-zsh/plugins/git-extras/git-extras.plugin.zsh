@@ -23,11 +23,8 @@
 #  * git-flow-completion (https://github.com/bobthecow/git-flow-completion)
 #
 # ------------------------------------------------------------------------------
-
-
 # Internal functions
 # These are a lot like their __git_* equivalents inside _git
-
 __gitex_command_successful () {
   if (( ${#*:#0} > 0 )); then
     _message 'not a git repository'
@@ -35,7 +32,6 @@ __gitex_command_successful () {
   fi
   return 0
 }
-
 __gitex_commits() {
     declare -A commits
     git log --oneline -15 | sed 's/\([[:alnum:]]\{7\}\) /\1:/' | while read commit
@@ -46,7 +42,6 @@ __gitex_commits() {
     local ret=1
     _describe -t commits commit commits && ret=0
 }
-
 __gitex_remote_names() {
     local expl
     declare -a remote_names
@@ -54,7 +49,6 @@ __gitex_remote_names() {
     __gitex_command_successful || return
     _wanted remote-names expl remote-name compadd $* - $remote_names
 }
-
 __gitex_tag_names() {
     local expl
     declare -a tag_names
@@ -62,8 +56,6 @@ __gitex_tag_names() {
     __gitex_command_successful || return
     _wanted tag-names expl tag-name compadd $* - $tag_names
 }
-
-
 __gitex_branch_names() {
     local expl
     declare -a branch_names
@@ -71,7 +63,6 @@ __gitex_branch_names() {
     __gitex_command_successful || return
     _wanted branch-names expl branch-name compadd $* - $branch_names
 }
-
 __gitex_specific_branch_names() {
     local expl
     declare -a branch_names
@@ -79,11 +70,9 @@ __gitex_specific_branch_names() {
     __gitex_command_successful || return
     _wanted branch-names expl branch-name compadd - $branch_names
 }
-
 __gitex_feature_branch_names() {
     __gitex_specific_branch_names 'feature'
 }
-
 __gitex_submodule_names() {
     local expl
     declare -a submodule_names
@@ -91,8 +80,6 @@ __gitex_submodule_names() {
     __gitex_command_successful || return
     _wanted submodule-names expl submodule-name compadd $* - $submodule_names
 }
-
-
 __gitex_author_names() {
     local expl
     declare -a author_names
@@ -100,7 +87,6 @@ __gitex_author_names() {
     __gitex_command_successful || return
     _wanted author-names expl author-name compadd $* - $author_names
 }
-
 # subcommands
 # new subcommand should be added in alphabetical order
 _git-authors() {
@@ -108,41 +94,33 @@ _git-authors() {
         '(--list -l)'{--list,-l}'[show authors]' \
         '--no-email[without email]' \
 }
-
 _git-changelog() {
     _arguments \
         '(-l --list)'{-l,--list}'[list commits]' \
 }
-
 _git-clear() {
     _arguments \
         '(-f --force)'{-f,--force}'[force clear]' \
         '(-h --help)'{-h,--help}'[help message]' \
 }
-
 _git-coauthor() {
     _arguments \
         ':co-author[co-author to add]' \
         ':co-author-email[email address of co-author to add]'
 }
-
 _git-contrib() {
     _arguments \
         ':author:__gitex_author_names'
 }
-
-
 _git-count() {
     _arguments \
         '--all[detailed commit count]'
 }
-
 _git-create-branch() {
     local curcontext=$curcontext state line
     _arguments -C \
         ': :->command' \
         '*:: :->option-or-argument'
-
     case "$state" in
         (command)
             _arguments \
@@ -158,44 +136,32 @@ _git-create-branch() {
             esac
     esac
 }
-
 _git-delete-branch() {
     _arguments \
         ':branch-name:__gitex_branch_names'
 }
-
 _git-delete-squashed-branches() {
     _arguments \
         ':branch-name:__gitex_branch_names'
 }
-
-
 _git-delete-submodule() {
     _arguments \
         ':submodule-name:__gitex_submodule_names'
 }
-
-
 _git-delete-tag() {
     _arguments \
         ':tag-name:__gitex_tag_names'
 }
-
-
 _git-effort() {
     _arguments \
         '--above[ignore file with less than x commits]'
 }
-
-
 _git-extras() {
     local curcontext=$curcontext state line ret=1
     declare -A opt_args
-
     _arguments -C \
         ': :->command' \
         '*:: :->option-or-argument' && ret=0
-
     case $state in
         (command)
             declare -a commands
@@ -205,20 +171,15 @@ _git-extras() {
             _describe -t commands command commands && ret=0
             ;;
     esac
-
     _arguments \
         '(-v --version)'{-v,--version}'[show current version]'
 }
-
-
 _git-feature() {
     local curcontext=$curcontext state line ret=1
     declare -A opt_args
-
     _arguments -C \
         ': :->command' \
         '*:: :->option-or-argument' && ret=0
-
     case $state in
         (command)
             declare -a commands
@@ -242,17 +203,14 @@ _git-feature() {
             esac
             return 0
     esac
-
     _arguments \
         '(--remote -r)'{--remote,-r}'[setup remote tracking branch]'
 }
-
 _git-graft() {
     _arguments \
         ':src-branch-name:__gitex_branch_names' \
         ':dest-branch-name:__gitex_branch_names'
 }
-
 _git-guilt() {
     _arguments -C \
         '(--email -e)'{--email,-e}'[display author emails instead of names]' \
@@ -260,35 +218,28 @@ _git-guilt() {
         '(--debug -d)'{--debug,-d}'[output debug information]' \
         '-h[output usage information]'
 }
-
 _git-ignore() {
     _arguments -C \
         '(--local -l)'{--local,-l}'[show local gitignore]' \
         '(--global -g)'{--global,-g}'[show global gitignore]' \
         '(--private -p)'{--private,-p}'[show repo gitignore]'
 }
-
-
 _git-info() {
     _arguments -C \
         '(--color -c)'{--color,-c}'[use color for information titles]' \
         '--no-config[do not show list all variables set in config file, along with their values]'
 }
-
-
 _git-merge-into() {
     _arguments '--ff-only[merge only fast-forward]'
     _arguments \
         ':src:__gitex_branch_names' \
         ':dest:__gitex_branch_names'
 }
-
 _git-missing() {
     _arguments \
         ':first-branch-name:__gitex_branch_names' \
         ':second-branch-name:__gitex_branch_names'
 }
-
 _git-release() {
     _arguments -C \
         '-c[Generates/populates the changelog with all commit message since the last tag.]' \
@@ -301,18 +252,15 @@ _git-release() {
         '--no-empty-commit[Avoid creating empty commit if nothing could be committed.]' \
         '--[The arguments listed after "--" separator will be passed to pre/post-release hook.]'
 }
-
 _git-squash() {
     _arguments '--squash-msg[commit with the squashed commit messages]'
     _arguments \
         ':branch-name:__gitex_branch_names'
 }
-
 _git-stamp() {
     _arguments -C \
          '(--replace -r)'{--replace,-r}'[replace stamps with same id]'
 }
-
 _git-standup() {
     _arguments -C \
         '-a[Specify the author of commits. Use "all" to specify all authors.]' \
@@ -325,22 +273,18 @@ _git-standup() {
         '-m[The depth of recursive directory search]' \
         '-B[Display the commits in branch groups]'
 }
-
 _git-summary() {
     _arguments '--line[summarize with lines rather than commits]'
     _arguments '--dedup-by-email[remove duplicate users by the email address]'
     _arguments '--no-merges[exclude merge commits]'
     __gitex_commits
 }
-
 _git-undo(){
     _arguments -C \
         '(--soft -s)'{--soft,-s}'[only rolls back the commit but changes remain un-staged]' \
         '(--hard -h)'{--hard,-h}'[wipes your commit(s)]'
 }
-
 zstyle -g existing_user_commands ':completion:*:*:git:*' user-commands
-
 zstyle ':completion:*:*:git:*' user-commands $existing_user_commands \
     alias:'define, search and show aliases' \
     abort:'abort current revert, merge, rebase, or cherry-pick process' \

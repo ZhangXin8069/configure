@@ -26,13 +26,11 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # «/usr» at this point would be highlighted as path_prefix; so should
 # a parameter that expands to an equivalent string be highlighted.
 #
 # More complicated parameter substitutions aren't eval'd; issue #328.
 BUFFER='$PWD; ${PWD}'
-
 expected_region_highlight=(
   "1 4 unknown-token"    # $PWD (without AUTO_CD)
   "5 5 commandseparator" # ;

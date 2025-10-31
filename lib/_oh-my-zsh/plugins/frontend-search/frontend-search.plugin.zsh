@@ -28,7 +28,6 @@ alias typescript='frontend typescript'
 alias unheap='frontend unheap'
 alias vuejs='frontend vuejs'
 alias nextjs='frontend nextjs'
-
 function _frontend_fallback() {
   if [[ "$FRONTEND_SEARCH_FALLBACK_LUCKY" == "true" ]]; then
     case true in
@@ -41,10 +40,8 @@ function _frontend_fallback() {
     esac
   fi
 }
-
 function frontend() {
   emulate -L zsh
-
   # define search context URLS
   local -A urls
   urls=(
@@ -79,7 +76,6 @@ function frontend() {
     vuejs          $(_frontend_fallback 'vuejs.org')
     nextjs         $(_frontend_fallback 'nextjs.org')
   )
-
   # show help for command list
   if [[ $# -lt 2 ]]; then
     print -P "Usage: frontend %Ucontext%u %Uterm%u [...%Umore%u] (or just: %Ucontext%u %Uterm%u [...%Umore%u])"
@@ -95,7 +91,6 @@ function frontend() {
     print -P ""
     return 1
   fi
-
   # check whether the search context is supported
   if [[ -z "$urls[$1]" ]]; then
     echo "Search context \"$1\" currently not supported."
@@ -108,12 +103,9 @@ function frontend() {
     echo ""
     return 1
   fi
-
   # build search url:
   # join arguments passed with '%20', then append to search context URL
   url="${urls[$1]}$(omz_urlencode -P ${@[2,-1]})"
-
   echo "Opening $url ..."
-
   open_command "$url"
 }

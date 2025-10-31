@@ -1,29 +1,19 @@
 # web-search plugin
-
 This plugin adds aliases for searching with Google, Wiki, Bing, YouTube and other popular services.
-
 Open your `~/.zshrc` file and enable the `web-search` plugin:
-
 ```zsh
 plugins=( ... web-search)
 ```
-
 ## Usage
-
 You can use the `web-search` plugin in these two forms:
-
 - `web_search <context> <term> [more terms if you want]`
 - `<context> <term> [more terms if you want]`
-
 For example, these two are equivalent:
-
 ```zsh
 web_search google oh-my-zsh
 google oh-my-zsh
 ```
-
 Available search contexts are:
-
 | Context               | URL                                             |
 | --------------------- | ----------------------------------------------- |
 | `bing`                | `https://www.bing.com/search?q=`                |
@@ -50,9 +40,7 @@ Available search contexts are:
 | `npmpkg`              | `https://www.npmjs.com/search?q=`               |
 | `packagist`           | `https://packagist.org/?query=`                 |
 | `gopkg`               | `https://pkg.go.dev/search?m=package&q=`        |
-
 Also there are aliases for bang-searching DuckDuckGo:
-
 | Context   | Bang  |
 | --------- | ----- |
 | `wiki`    | `!w`  |
@@ -60,25 +48,19 @@ Also there are aliases for bang-searching DuckDuckGo:
 | `map`     | `!m`  |
 | `image`   | `!i`  |
 | `ducky`   | `!`   |
-
 ### Custom search engines
-
 If you want to add other search contexts to the plugin, you can use the `$ZSH_WEB_SEARCH_ENGINES` variable.
 Set it before Oh My Zsh is sourced, with the following format:
-
 ```zsh
 ZSH_WEB_SEARCH_ENGINES=(
     <context> <URL>
     <context> <URL>
 )
 ```
-
 where `<context>` is the name of the search context, and `<URL>` a URL of the same type as the search contexts
 above. For example, to add `reddit`, you'd do:
-
 ```zsh
 ZSH_WEB_SEARCH_ENGINES=(reddit "https://www.reddit.com/search/?q=")
 ```
-
 These custom search engines will also be turned to aliases, so you can both do `web_search reddit <query>` or
 `reddit <query>`.

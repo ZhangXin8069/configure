@@ -4,7 +4,6 @@ echo "PATH:"$_PATH
 # pushd ${_PATH}/../
 # source ./env.sh
 # popd
-
 # init
 _NAME=$(basename "$0")
 name='test'
@@ -12,7 +11,6 @@ work_name="test"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
-
 # do
 pushd ${tmp_path}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
@@ -25,5 +23,4 @@ for ((i = 0; i < 10; i++)); do
 done
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
-
 # done

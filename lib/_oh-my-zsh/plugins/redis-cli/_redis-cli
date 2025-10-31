@@ -1,8 +1,6 @@
 #compdef redis-cli rec
 #autoload
-
 #redis cli completion, based off homebrew completion (ref. 2011-04-14)
-
 local -a _1st_arguments
 _1st_arguments=(
   'append:append a value to a key'
@@ -128,14 +126,11 @@ _1st_arguments=(
   'zscore:get the score associated with the given member in a sorted set'
   'zunionstore:add multiple sorted sets and store te resulting sorted set in a new key'
 )
-
 local expl
-
 _arguments \
   '(-v --version)'{-v,--version}'[show version]' \
   '(-h --help)'{-h,--help}'[show help]' \
   '*:: :->subcmds' && return 0
-
 if (( CURRENT == 1 )); then
   _describe -t commands "redis-cli subcommand" _1st_arguments
   return

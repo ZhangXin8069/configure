@@ -4,16 +4,13 @@ Refeshes OMZ emoji database based on the latest Unicode spec
 """
 import re
 import json
-
 spec = open("emoji-data.txt", "r")
-
 # Regexes
 # regex_emoji will return, respectively:
 # the code points, its type (status), the actual emoji, and its official name
 regex_emoji = r"^([\w ].*?\S)\s*;\s*([\w-]+)\s*#\s*(.*?)\s(\S.*).*$"
 # regex_group returns the group of subgroup that a line opens
 regex_group = r"^#\s*(group|subgroup):\s*(.*)$"
-
 headers = """
 # emoji-char-definitions.zsh - Emoji definitions for oh-my-zsh emoji plugin
 #
@@ -29,7 +26,6 @@ headers = """
 #                    definitions at run time. The keys are the group names, and
 #                    the values are whitespace-separated lists of emoji
 #                    character names.
-
 # Main emoji
 typeset -gAH emoji
 # National flags
@@ -39,7 +35,6 @@ typeset -gAH emoji_mod
 # Emoji groups
 typeset -gAH emoji_groups
 """
-
 #######
 # Adding country codes
 #######
@@ -50,10 +45,8 @@ typeset -gAH emoji_groups
 # included as aliases, but not if you re-run this script without uncommenting.)
 # Warning: country_converter is very verbose, and will print warnings all over
 # your terminal.
-
 # import country_converter as coco # pylint: disable=wrong-import-position
 # cc = coco.CountryConverter()
-
 # def country_iso(_all_names, _omz_name):
 #     """ Using the external library country_converter,
 #         this function can detect the ISO2 and ISO3 codes
@@ -66,17 +59,12 @@ typeset -gAH emoji_groups
 #         iso3 = cc.convert(names=[omz_no_underscore], to='ISO3')
 #         _all_names.append(iso3)
 #     return _all_names
-
-
 #######
 # Helper functions
 #######
-
 def code_to_omz(_code_points):
     """ Returns a ZSH-compatible Unicode string from the code point(s) """
     return r'\U' + r'\U'.join(_code_points.split(' '))
-
-
 def name_to_omz(_name, _group, _subgroup, _status):
     """ Returns a reasonable snake_case name for the emoji. """
     def snake_case(_string):
@@ -85,7 +73,6 @@ def name_to_omz(_name, _group, _subgroup, _status):
         replace_ands = re.sub(r'\&', r'and', remove_dots)
         remove_whitespace = re.sub(r'[^\#\*\w]', r'_', replace_ands)
         return re.sub(r'__', r'_', remove_whitespace)
-
     shortname = ""
     def split_at_colon(s): return s.split(": ")
     # Special treatment by group and subgroup
@@ -103,8 +90,6 @@ def name_to_omz(_name, _group, _subgroup, _status):
     elif _status == "minimally-qualified":
         shortname += "_minimally"
     return shortname
-
-
 def increment_name(_shortname):
     """ Increment the short name by 1. If you get, say,
     'woman_detective_unqualified', it returns
@@ -115,12 +100,9 @@ def increment_name(_shortname):
         num = int(last_char)
         return _shortname[:-1] + str(num + 1)
     return _shortname + "_1"
-
 ########
 # Going through every line
 ########
-
-
 group, subgroup, short_name_buffer = "", "", ""
 emoji_database = []
 for line in spec:
@@ -146,34 +128,26 @@ for line in spec:
         emoji_database.append(
             [omz_codes, status, emoji, omz_name, group, subgroup])
 spec.close()
-
 ########
 # Write to emoji-char-definitions.zsh
 ########
-
 # Aliases for emojis are retrieved through the DB of Gemoji
 # Retrieved on Aug 9 2019 from the following URL:
 # https://raw.githubusercontent.com/github/gemoji/master/db/emoji.json
-
 gemoji_db = open("gemoji_db.json")
 j = json.load(gemoji_db)
 aliases_map = {entry['emoji']: entry['aliases'] for entry in j}
 all_omz_names = [emoji_data[3] for emoji_data in emoji_database]
-
 # Let's begin writing to this file
 output = open("emoji-char-definitions.zsh", "w")
 output.write(headers)
-
 emoji_groups = {"fruits": "\n", "vehicles": "\n", "hands": "\n",
                 "people": "\n", "animals": "\n", "faces": "\n",
                 "flags": "\n"}
-
 # First, write every emoji down
 for _omz_codes, _status, _emoji, _omz_name, _group, _subgroup in emoji_database:
-
     # One emoji can be mapped to multiple names (aliases or country codes)
     names_for_this_emoji = [_omz_name]
-
     # Variable that indicates in which map the emoji will be located
     emoji_map = "emoji"
     if _status == "component":
@@ -182,17 +156,14 @@ for _omz_codes, _status, _emoji, _omz_name, _group, _subgroup in emoji_database:
         emoji_map = "emoji_flags"
         # Adding country codes (Optional, see above)
         # names_for_this_emoji = country_iso(names_for_this_emoji, _omz_name)
-
     # Check if there is an alias available in the Gemoji DB
     if _emoji in aliases_map.keys():
         for alias in aliases_map[_emoji]:
             if alias not in all_omz_names:
                 names_for_this_emoji.append(alias)
-
     # And now we write to the definitions file
     for one_name in names_for_this_emoji:
         output.write(f"{emoji_map}[{one_name}]=$'{_omz_codes}'\n")
-
     # Storing the emoji in defined subgroups for the next step
     if _status == "fully-qualified":
         if _subgroup == "food-fruit":
@@ -209,7 +180,6 @@ for _omz_codes, _status, _emoji, _omz_name, _group, _subgroup in emoji_database:
             emoji_groups["faces"] += f"  {_omz_name}\n"
         elif _group == "Flags":
             emoji_groups["flags"] += f"  {_omz_name}\n"
-
 # Second, write the subgroups to the end of the file
 for name, string in emoji_groups.items():
     output.write(f'\nemoji_groups[{name}]="{string}"\n')

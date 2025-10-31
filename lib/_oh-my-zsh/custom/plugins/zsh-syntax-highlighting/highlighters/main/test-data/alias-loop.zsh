@@ -27,12 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 function b() {} # beware of ALIAS_FUNC_DEF
 alias a=b b=c c=b
-
 BUFFER='a foo; :'
-
 expected_region_highlight=(
   # An alias is ineligible for expansion whilst it's being expanded.
   # Therefore, the "b" in the expansion of the alias "c" is not considered

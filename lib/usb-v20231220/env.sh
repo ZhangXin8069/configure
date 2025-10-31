@@ -1,6 +1,5 @@
 # BASH
 # unset
-
 # EXPORT
 export PATH=/usr/local/python/bin:$PATH
 export PATH=${HOME}/sbin:$PATH
@@ -19,7 +18,6 @@ export PATH=${CUDA_HOME}/bin:$PATH
 export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
 export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
 export MANPATH=${CUDA_HOME}/share/man:$MANPATH
-
 # ALIAS
 #########
 # EXAMPLE
@@ -49,7 +47,6 @@ alias clash="flatpak run io.github.Fndroid.clash_for_windows"
 # EXAMPLE
 # http://dict.youdao.com/search?q=%GDWORD%&ue=utf8 # goldendict settings
 #########
-
 # SOURCE
 pushd ${HOME}/qcu
 source ./usb-env.sh

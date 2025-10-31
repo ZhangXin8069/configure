@@ -26,14 +26,12 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Must be at command word, since the word following 'if' isn't currently considered
 # a command word (issue #207).
 #
 # An opening '((' without matching '))' is highlighted correctly under zsh-5.1.1-52-g4bed2cf
 # or newer, only (issue #188).
 BUFFER='(( x == 42 ))'
-
 expected_region_highlight=(
   "1 2 reserved-word"   # ((
   "12 13 reserved-word" # ))

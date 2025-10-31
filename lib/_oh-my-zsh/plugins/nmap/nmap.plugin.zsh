@@ -1,5 +1,4 @@
 # Some useful nmap aliases for scan modes
-
 # Nmap options are:
 #  -sS - TCP SYN scan
 #  -v - verbose
@@ -14,7 +13,6 @@
 #  -sA - TCP ACK scan
 #  -F - fast scan
 #  --script=vuln - also access vulnerabilities in target
-
 alias nmap_open_ports="nmap --open"
 alias nmap_list_interfaces="nmap --iflist"
 alias nmap_slow="sudo nmap -sS -v -T1"

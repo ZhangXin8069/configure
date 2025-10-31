@@ -1,21 +1,17 @@
 #compdef ufw
 #autoload
-
 typeset -A opt_args
-
 function _ufw_delete_rules {
   if ufw status &> /dev/null ; then
     ufw status numbered \
       | perl -n -e'/\[ +(\d+)\] +([^ ].+)/ && print "\"$1\[$2\]\" "'
   fi
 }
-
 function _ufw_app_profiles {
   grep -rhoP "(?<=\[)[^\]]+" /etc/ufw/applications.d/ \
     | awk '{ print "\""$0"\""}' \
     | tr '\n' ' '
 }
-
 local -a _1st_arguments
 _1st_arguments=(
   'allow:add allow rule'
@@ -35,18 +31,14 @@ _1st_arguments=(
   'status:show firewall status'
   'version:display version information'
 )
-
 local context state line curcontext="$curcontext"
-
 _arguments -C \
   '(--dry-run)--dry-run[dry run]' \
   '1:: :->cmds' \
   '2:: :->subcmds' \
   '3:: :->subsubcmds' \
 && return 0
-
 local rules
-
 case "$state" in
   (cmds)
     _describe -t commands "ufw commands" _1st_arguments
@@ -111,5 +103,4 @@ case "$state" in
         ;;
     esac
 esac
-
 return

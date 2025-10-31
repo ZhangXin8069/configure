@@ -1,18 +1,12 @@
 # Postgres plugin
-
 This plugin adds some aliases for useful Postgres commands.
-
 :warning: this plugin works exclusively with Postgres installed via Homebrew on OSX
 because Postgres paths are hardcoded to `/usr/local/var/postgres`.
-
 To use it, add `postgres` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... postgres)
 ```
-
 ## Aliases
-
 | Alias       | Command                                                                         | Description                                                 |
 |-------------|---------------------------------------------------------------------------------|-------------------------------------------------------------|
 | startpost   | `pg_ctl -D /usr/local/var/postgres -l /usr/local/var/postgres/server.log start` | Start postgres server                                       |

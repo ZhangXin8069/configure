@@ -1,9 +1,7 @@
 #compdef zeus
 #autoload
-
 # in order to make this work, you will need to have the gem zeus installed
 # zeus zsh completion
-
 local -a _1st_arguments
 if [[ -e .zeus.sock ]]; then
   _1st_arguments=(
@@ -24,7 +22,6 @@ else
   'init:Generate a zeus.json file'
   )
 fi
-
 _rails_generate_arguments() {
     generate_arguments=(
       controller
@@ -44,7 +41,6 @@ _rails_generate_arguments() {
       stylesheets
     )
 }
-
 _rake_does_task_list_need_generating () {
   if [ ! -f .rake_tasks ]; then return 0;
   else
@@ -53,12 +49,10 @@ _rake_does_task_list_need_generating () {
     return $(expr $accurate '>=' $changed)
   fi
 }
-
 _zrake ()
 {
     local expl
     declare -a tasks
-
     if [ -f Rakefile ]; then
       if _rake_does_task_list_need_generating; then
         echo "\nGenerating .rake_tasks..." > /dev/stderr
@@ -68,22 +62,17 @@ _zrake ()
       _wanted tasks expl 'rake' compadd $tasks
     fi
 }
-
 local expl
 local curcontext="$curcontext" state line
 typeset -A opt_args
-
 _arguments -C \
     ':command:->command' \
     '*::options:->options'
-
-
 case $state in
   (command)
     _describe -t commands "zeus subcommand" _1st_arguments
     return
   ;;
-
   (options)
     case $line[1] in
       (rake)

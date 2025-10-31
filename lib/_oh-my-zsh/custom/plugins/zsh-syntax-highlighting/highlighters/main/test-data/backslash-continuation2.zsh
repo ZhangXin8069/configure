@@ -27,9 +27,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER=$'echo foo\\\nbar"baz"'
-
 expected_region_highlight=(
   '1 4 builtin'                               # echo
   '6 18 default "issue #705"'                 # foo\\\nbar"baz"

@@ -27,11 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 local y='x=$(ls)'
-
 BUFFER=$'$y'
-
 expected_region_highlight=(
   # Used to trigger a "BUG" message on stderr - issues #670 and #674
   '1 2 unknown-token' # $y (not an assignment)

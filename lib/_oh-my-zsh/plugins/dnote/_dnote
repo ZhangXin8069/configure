@@ -1,7 +1,5 @@
 #compdef dnote
-
 local -a _1st_arguments
-
 _1st_arguments=(
   'add:add a new note'
   'view:list books, notes, or view a content'
@@ -14,18 +12,14 @@ _1st_arguments=(
   'version:print the current version'
   'help:get help about any command'
 )
-
 get_booknames() {
   local names=$(dnote view --name-only)
   local -a ret
-
   while read -r line; do
     ret+=("${line}")
   done <<< "$names"
-
   echo "$ret"
 }
-
 if (( CURRENT == 2 )); then
   _describe -t commands "dnote subcommand" _1st_arguments
   return
@@ -36,4 +30,3 @@ elif (( CURRENT == 3 )); then
         "names:book names:($(get_booknames))"
   esac
 fi
-

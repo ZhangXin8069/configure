@@ -26,11 +26,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 setopt interactive_comments
-
 BUFFER='echo "foo #bar" #baz # quux'
-
 expected_region_highlight=(
   "1 4 builtin"                 # echo
   "6 15 default"                # "foo #bar"

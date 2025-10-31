@@ -2,7 +2,6 @@
 if (( ! $+commands[atlas] )); then
   return
 fi
-
 # If the completion file doesn't exist yet, we need to autoload it and
 # bind it to `atlas`. Otherwise, compinit will have already done that.
 if [[ ! -f "$ZSH_CACHE_DIR/completions/_atlas" ]]; then
@@ -10,5 +9,4 @@ if [[ ! -f "$ZSH_CACHE_DIR/completions/_atlas" ]]; then
   autoload -Uz _atlas
   _comps[atlas]=_atlas
 fi
-
 atlas completion zsh >| "$ZSH_CACHE_DIR/completions/atlas" &|

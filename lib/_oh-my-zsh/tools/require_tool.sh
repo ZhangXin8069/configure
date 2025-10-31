@@ -3,7 +3,6 @@ __require_tool_version_compare() {
     # Locally ignore failures, otherwise we'll exit whenever $1 and $2
     # are not equal!
     set +e
-
     awk_strverscmp='
   # Use only awk features that work with 7th edition Unix awk (1978).
   # My, what an old awk you have, Mr. Solaris!
@@ -68,12 +67,10 @@ __require_tool_version_compare() {
     esac
   )
 }
-
 __require_tool_fatal() {
   echo $@ >/dev/stderr
   return 1
 }
-
 # Usage: require_tool program version
 # Returns: 0 if $1 version if greater equals than $2, 1 otherwise.
 # In case of error, message is written on error output.
@@ -97,50 +94,39 @@ require_tool() {
     ;;
   esac
 }
-
 usage() {
   cat <<EOF
 NAME
     require_tool.sh - Ensure version of a tool is greater than the one expected
-
 SYNOPSIS
     require_tool.sh [ -h ]
                     [ --help ]
                     [ TOOL MIN_VERSION ]
-
 DESCRIPTION
     TOOL is the name or path of the program to check. If the name is specified, its
     path is deduced from PATH environment variable. If environment variable TOOL
     (in upper-case characters) is defined, considers its value as path to the tool.
-
     MIN_VERSION is a string representing the minimum required version.
-
 BEHAVIOR
     * locate path to the program.
     * execute $ TOOL_PATH --version
     * extract version from standard output.
     * compare this version to the expected one.
-
 OPTIONS
     -h --help
         Display this message and exit 0
-
 ERRORS
     if program is not found or its version is prior to expected version,
     a message is written to error output.
-
 EXIT VALUE
     returns 0 if program version if greater equals than expected version,
     returns 1 otherwise.
-
 EXAMPLE
     $ require_tool.sh emacs 23
     $ CC=g++ require_tool.sh cc 4.6
     $ require_tool.sh zsh 4.5
-
 EOF
 }
-
 for arg in $@; do
   case $arg in
   -h | --help)
@@ -153,5 +139,4 @@ if [ $# -gt 2 ]; then
   echo "ERROR: expecting 2 parameters. Please see option --help"
   exit 1
 fi
-
 require_tool $@

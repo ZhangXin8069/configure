@@ -1,26 +1,21 @@
 #!/bin/zsh -f
-
 emulate -L zsh
-
 local RUNNING_AS_COMMAND=
 local EXIT=return
 if [[ $(whence -w $0) == *:' 'command ]]; then
     RUNNING_AS_COMMAND=1
     EXIT=exit
 fi
-
 local DOC='scd -- smart change to a recently used directory
 usage: scd [options] [pattern1 pattern2 ...]
 Go to a directory path that matches all patterns.  Prefer recent or
 frequently visited directories as found in the directory index.
 Display a selection menu in case of multiple matches.
-
 Special patterns:
   ^PAT      match at the path root, "^/home"
   PAT$      match paths ending with PAT, "man$"
   ./        match paths under the current directory
   :PAT      require PAT to span the tail, ":doc", ":re/doc"
-
 Options:
   -a, --add         add current or specified directories to the index.
   --unindex         remove current or specified directories from the index.
@@ -38,7 +33,6 @@ Options:
   -v, --verbose     display directory rank in the selection menu.
   -h, --help        display this message and exit.
 '
-
 local SCD_HISTFILE=${SCD_HISTFILE:-${HOME}/.scdhistory}
 local SCD_HISTSIZE=${SCD_HISTSIZE:-5000}
 local SCD_MENUSIZE=${SCD_MENUSIZE:-20}
@@ -47,32 +41,26 @@ local SCD_THRESHOLD=${SCD_THRESHOLD:-0.005}
 local SCD_SCRIPT=${RUNNING_AS_COMMAND:+$SCD_SCRIPT}
 local SCD_ALIAS=~/.scdalias.zsh
 local SCD_IGNORE=~/.scdignore
-
 # Minimum logarithm of probability.  Avoids out of range warning in exp().
 local -r MINLOGPROB=-15
-
 # When false, use case-insensitive globbing to fix PWD capitalization.
 local PWDCASECORRECT=true
 if [[ ${OSTYPE} == darwin* ]]; then
     PWDCASECORRECT=false
 fi
-
 local a d m p i maxrank threshold
 local opt_help opt_add opt_unindex opt_recursive opt_verbose
 local opt_alias opt_unalias opt_all opt_push opt_list
 local -A drank dalias scdignore
 local dmatching
 local last_directory
-
 setopt extendedglob noautonamedirs brace_ccl
-
 # If SCD_SCRIPT is defined make sure that that file exists and is empty.
 # This removes any old previous commands from the SCD_SCRIPT file.
 [[ -n "$SCD_SCRIPT" ]] && [[ -s $SCD_SCRIPT || ! -f $SCD_SCRIPT ]] && (
     umask 077
     : >| $SCD_SCRIPT
 )
-
 # process command line options
 zmodload -i zsh/zutil
 zmodload -i zsh/datetime
@@ -83,18 +71,14 @@ zparseopts -D -E -- a=opt_add -add=opt_add -unindex=opt_unindex \
     A=opt_all -all=opt_all p=opt_push -push=opt_push -list=opt_list \
     v=opt_verbose -verbose=opt_verbose h=opt_help -help=opt_help \
     || $EXIT $?
-
 # remove the first instance of "--" from positional arguments
 argv[(i)--]=( )
-
 if [[ -n $opt_help ]]; then
     print $DOC
     $EXIT
 fi
-
 # load directory aliases if they exist
 [[ -r $SCD_ALIAS ]] && source $SCD_ALIAS
-
 # load scd-ignore patterns if available
 if [[ -s $SCD_IGNORE ]]; then
     setopt noglob
@@ -110,12 +94,10 @@ if [[ -s $SCD_IGNORE ]]; then
     done
     setopt glob
 fi
-
 # Private internal functions are prefixed with _scd_Y19oug_.
 # Clean them up when the scd function returns.
 setopt localtraps
 trap 'unfunction -m "_scd_Y19oug_*"' EXIT
-
 # works faster than the (:a) modifier and is compatible with zsh 4.2.6
 _scd_Y19oug_abspath() {
     set -A $1 ${(ps:\0:)"$(
@@ -133,7 +115,6 @@ _scd_Y19oug_abspath() {
         done
         )"}
 }
-
 # define directory alias
 if [[ -n $opt_alias ]]; then
     if [[ -n $1 && ! -d $1 ]]; then
@@ -153,7 +134,6 @@ if [[ -n $opt_alias ]]; then
     )
     $EXIT $?
 fi
-
 # undefine one or more directory aliases
 if [[ -n $opt_unalias ]]; then
     local -U uu
@@ -201,7 +181,6 @@ if [[ -n $opt_unalias ]]; then
     fi
     $EXIT $ec
 fi
-
 # The "compress" function collapses repeated directories into
 # a single entry with a time-stamp yielding an equivalent probability.
 _scd_Y19oug_compress() {
@@ -236,7 +215,6 @@ _scd_Y19oug_compress() {
         }
         ' $*
 }
-
 # Rewrite directory index if it is at least 20% oversized.
 local curhistsize
 if [[ -z $opt_unindex && -s $SCD_HISTFILE ]] && \
@@ -267,12 +245,10 @@ curhistsize=$(wc -l <$SCD_HISTFILE) && \
         print -lr -- $m >| ${SCD_HISTFILE}
     ) &|
 fi
-
 # Determine the last recorded directory
 if [[ -s ${SCD_HISTFILE} ]]; then
     last_directory=${"$(tail -n 1 ${SCD_HISTFILE})"#*;}
 fi
-
 # The "record" function adds its arguments to the directory index.
 _scd_Y19oug_record() {
     while [[ -n $last_directory && $1 == $last_directory ]]; do
@@ -284,7 +260,6 @@ _scd_Y19oug_record() {
           print -lr -- ${p}${^*} >>| $SCD_HISTFILE )
     fi
 }
-
 if [[ -n $opt_add ]]; then
     m=( ${^${argv:-$PWD}}(N-/) )
     _scd_Y19oug_abspath m ${m}
@@ -298,7 +273,6 @@ if [[ -n $opt_add ]]; then
     fi
     $EXIT
 fi
-
 # take care of removing entries from the directory index
 if [[ -n $opt_unindex ]]; then
     if [[ ! -s $SCD_HISTFILE ]]; then
@@ -338,7 +312,6 @@ if [[ -n $opt_unindex ]]; then
     [[ ${#m} == 0 ]] || print -r -- $m >> ${SCD_HISTFILE}
     $EXIT
 fi
-
 # The "action" function is called when there is just one target directory.
 _scd_Y19oug_action() {
     local cdcmd=cd
@@ -355,7 +328,6 @@ _scd_Y19oug_action() {
         print -r "${cdcmd} ${(qqq)d}" >| $SCD_SCRIPT
     fi
 }
-
 # Select and order indexed directories by matching command-line patterns.
 # Set global arrays dmatching and drank.
 _scd_Y19oug_match() {
@@ -367,25 +339,18 @@ _scd_Y19oug_match() {
         drank[${dmatching[1]}]=1
         return
     fi
-
     # quote brackets when PWD is /Volumes/[C]/
     local qpwd=${PWD//(#m)[][]/\\${MATCH}}
-
     # support "./" as an alias for $PWD to match only subdirectories.
     argv=( ${argv/(#s).\/(#e)/(#s)${qpwd}(|/*)(#e)} )
-
     # support "./pat" as an alias for $PWD/pat.
     argv=( ${argv/(#m)(#s).\/?*/(#s)${qpwd}${MATCH#.}} )
-
     # support "^" as an anchor for the root directory, e.g., "^$HOME".
     argv=( ${argv/(#m)(#s)\^?*/(#s)${${~MATCH[2,-1]}}} )
-
     # support "$" as an anchor at the end of directory name.
     argv=( ${argv/(#m)?[$](#e)/${MATCH[1]}(#e)} )
-
     # support prefix ":" to match over the tail component.
     argv=( ${argv/(#m)(#s):?*/${MATCH[2,-1]}[^/]#(#e)} )
-
     # calculate rank of all directories in SCD_HISTFILE and store it in drank.
     # include a dummy entry to avoid issues with splitting an empty string.
     [[ -s $SCD_HISTFILE ]] && drank=( ${(f)"$(
@@ -425,7 +390,6 @@ _scd_Y19oug_match() {
         )"}
     )
     unset "drank[/dev/null]"
-
     # filter drank to the entries that match all arguments
     for a; do
         p="(#l)*(${a})*"
@@ -434,26 +398,22 @@ _scd_Y19oug_match() {
     # require that at least one argument matches in directory tail name.
     p="(#l)*(${(j:|:)argv})[^/]#"
     drank=( ${(kv)drank[(I)${~p}]} )
-
     # discard ignored directories
     if [[ -z ${opt_all} ]]; then
         for d in ${(k)drank}; do
             [[ -z ${scdignore[(k)$d]} ]] || unset "drank[$d]"
         done
     fi
-
     # build a list of matching directories reverse-sorted by their probabilities
     dmatching=( ${(f)"$(
         builtin printf "%s %s\n" ${(Oakv)drank} |
         /usr/bin/sort -grk1 )"}
     )
     dmatching=( ${dmatching#*[[:blank:]]} )
-
     # do not match $HOME or $PWD when run without arguments
     if [[ $# == 0 ]]; then
         dmatching=( ${dmatching:#(${HOME}|${PWD})} )
     fi
-
     # keep at most SCD_MENUSIZE of matching and valid directories
     # mark up any deleted entries in the index
     local -A isdeleted
@@ -469,13 +429,11 @@ _scd_Y19oug_match() {
     if [[ -n ${isdeleted} ]]; then
         print -lr -- ": deleted:0;"${^${(k)isdeleted}} >> $SCD_HISTFILE
     fi
-
     # find the maximum rank
     maxrank=0.0
     for d in $dmatching; do
         [[ ${drank[$d]} -lt maxrank ]] || maxrank=${drank[$d]}
     done
-
     # discard all directories below the rank threshold
     threshold=$(( maxrank * SCD_THRESHOLD ))
     if [[ -n ${opt_all} ]]; then
@@ -483,15 +441,12 @@ _scd_Y19oug_match() {
     fi
     dmatching=( ${^dmatching}(Ne:'(( ${drank[$REPLY]} >= threshold ))':) )
 }
-
 _scd_Y19oug_match $*
-
 ## process matching directories.
 if [[ ${#dmatching} == 0 ]]; then
     print -u2 "No matching directory."
     $EXIT 1
 fi
-
 ## build formatted directory aliases for selection menu or list display
 for d in $dmatching; do
     if [[ -n ${opt_verbose} ]]; then
@@ -500,7 +455,6 @@ for d in $dmatching; do
         dalias[$d]=$(print -Dr -- $d)
     fi
 done
-
 ## process the --list option
 if [[ -n $opt_list ]]; then
     for d in $dmatching; do
@@ -509,13 +463,11 @@ if [[ -n $opt_list ]]; then
     done
     $EXIT
 fi
-
 ## handle a single matching directory here.
 if [[ ${#dmatching} == 1 ]]; then
     _scd_Y19oug_action $dmatching
     $EXIT $?
 fi
-
 ## Here we have multiple matches.  Let's use the selection menu.
 a=( {a-z} {A-Z} )
 a=( ${a[1,${#dmatching}]} )
@@ -524,9 +476,7 @@ for i in {1..${#dmatching}}; do
     [[ -n ${a[i]} ]] || break
     p+="${a[i]}) ${dalias[${dmatching[i]}]}"
 done
-
 print -c -r -- $p
-
 if read -s -k 1 d && [[ ${i::=${a[(I)$d]}} -gt 0 ]]; then
     _scd_Y19oug_action ${dmatching[i]}
     $EXIT $?

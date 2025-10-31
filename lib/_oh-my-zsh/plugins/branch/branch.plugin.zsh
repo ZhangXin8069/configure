@@ -1,7 +1,6 @@
 # Branch: displays the current Git or Mercurial branch fast.
 # Victor Torres <vpaivatorres@gmail.com>
 # Oct 2, 2015
-
 function branch_prompt_info() {
   # Start checking in current working directory
   local branch="" dir="$PWD"
@@ -12,7 +11,6 @@ function branch_prompt_info() {
       echo '±' "${branch:gs/%/%%}"
       return
     fi
-
     # Found .hg directory
     if [[ -d "${dir}/.hg" ]]; then
       if [[ -f "${dir}/.hg/branch" ]]; then
@@ -20,15 +18,12 @@ function branch_prompt_info() {
       else
         branch="default"
       fi
-
       if [[ -f "${dir}/.hg/bookmarks.current" ]]; then
         branch="${branch}/$(<"${dir}/.hg/bookmarks.current")"
       fi
-
       echo '☿' "${branch:gs/%/%%}"
       return
     fi
-
     # Check parent directory
     dir="${dir:h}"
   done

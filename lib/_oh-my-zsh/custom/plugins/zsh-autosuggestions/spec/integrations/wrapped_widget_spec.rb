@@ -1,6 +1,5 @@
 describe 'a wrapped widget' do
   let(:widget) { 'backward-delete-char' }
-
   context 'initialized before sourcing the plugin' do
     let(:before_sourcing) do
       -> do
@@ -11,7 +10,6 @@ describe 'a wrapped widget' do
           run_command("zle -N #{widget} #{widget}-magic")
       end
     end
-
     it 'executes the custom behavior and the built-in behavior' do
       with_history('foobar', 'foodar') do
         session.send_string('food').send_keys('C-h')
@@ -19,7 +17,6 @@ describe 'a wrapped widget' do
       end
     end
   end
-
   context 'initialized after sourcing the plugin' do
     before do
       session.
@@ -28,7 +25,6 @@ describe 'a wrapped widget' do
         run_command("zle -N #{widget} #{widget}-magic").
         clear_screen
     end
-
     it 'executes the custom behavior and the built-in behavior' do
       with_history('foobar', 'foodar') do
         session.send_string('food').send_keys('C-h')

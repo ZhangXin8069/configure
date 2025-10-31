@@ -1,9 +1,6 @@
 # snap plugin
-
 This plugin sets up aliases for the common [snap](https://snapcraft.io/docs/getting-started) commands
-
 ## Aliases
-
 | Alias | Full command |
 | --- | ---|
 | sv | snap version |

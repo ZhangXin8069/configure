@@ -1,7 +1,6 @@
 # CLI support for JIRA interaction
 #
 # See README.md for details
-
 function _jira_usage() {
 cat <<EOF
 jira                            Performs the default action
@@ -16,7 +15,6 @@ jira assigned [username]        Queries for issues assigned to a user
 jira branch                     Opens an existing issue matching the current branch name
 EOF
 }
-
 function jira() {
   emulate -L zsh
   local action jira_url jira_prefix
@@ -31,7 +29,6 @@ function jira() {
   else
     action="new"
   fi
-
   if [[ -f .jira-url ]]; then
     jira_url=$(cat .jira-url)
   elif [[ -f ~/.jira-url ]]; then
@@ -42,7 +39,6 @@ function jira() {
     _jira_url_help
     return 1
   fi
-
   if [[ -f .jira-prefix ]]; then
     jira_prefix=$(cat .jira-prefix)
   elif [[ -f ~/.jira-prefix ]]; then
@@ -52,8 +48,6 @@ function jira() {
   else
     jira_prefix=""
   fi
-
-
   if [[ $action == "new" ]]; then
     echo "Opening new issue"
     open_command "${jira_url}/secure/CreateIssue!default.jspa"
@@ -113,7 +107,6 @@ function jira() {
       issue_arg=${(U)action}
       issue="${jira_prefix}${issue_arg}"
     fi
-
     local url_fragment
     if [[ "$2" == "m" ]]; then
       url_fragment="#add-comment"
@@ -124,28 +117,23 @@ function jira() {
     open_command "${jira_url}/browse/${issue}${url_fragment}"
   fi
 }
-
 function _jira_url_help() {
   cat << EOF
 error: JIRA URL is not specified anywhere.
-
 Valid options, in order of precedence:
   .jira-url file
   \$HOME/.jira-url file
   \$JIRA_URL environment variable
 EOF
 }
-
 function _jira_rapid_board() {
   rapid_view=${2:=$JIRA_RAPID_VIEW}
-
   if [[ -z $rapid_view ]]; then
     open_command "${jira_url}/secure/RapidBoard.jspa"
   else
     open_command "${jira_url}/secure/RapidBoard.jspa?rapidView=$rapid_view"
   fi
 }
-
 function _jira_query() {
   emulate -L zsh
   local verb="$1"
@@ -165,7 +153,6 @@ function _jira_query() {
     echo "error: JIRA_NAME not specified" >&2
     return 1
   fi
-
   echo "Browsing issues ${verb} ${preposition} ${jira_name}"
   query="${lookup}+%3D+%22${jira_name}%22+AND+resolution+%3D+unresolved+ORDER+BY+priority+DESC%2C+created+ASC"
   open_command "${jira_url}/secure/IssueNavigator.jspa?reset=true&jqlQuery=${query}"

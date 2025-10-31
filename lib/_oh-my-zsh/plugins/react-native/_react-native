@@ -1,6 +1,5 @@
 #compdef react-native
 #autoload
-
 local -a _1st_arguments
 _1st_arguments=(
     'init:<ProjectName> generates a new project and installs its dependencies'
@@ -19,13 +18,10 @@ _1st_arguments=(
     'log-android:starts adb logcat'
     'log-ios:starts iOS device syslog tail'
 )
-
-
 _arguments \
     '(--version)--version[show version]' \
     '(--help)--help[show help]' \
     '*:: :->subcmds' && return 0
-
 if (( CURRENT == 1 )); then
   _describe -t commands "react-native subcommand" _1st_arguments
   return

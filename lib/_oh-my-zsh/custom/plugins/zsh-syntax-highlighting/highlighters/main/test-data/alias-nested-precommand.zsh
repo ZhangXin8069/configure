@@ -27,12 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 alias a=b b=sudo
 sudo() {}
-
 BUFFER='a -u phy1729 echo; :'
-
 expected_region_highlight=(
   '1 1 alias'                # a
   '3 4 single-hyphen-option' # -u

@@ -1,10 +1,8 @@
 # if there is a virtualenv already loaded pyenv should not be loaded
 # see https://github.com/ohmyzsh/ohmyzsh/issues/12589
 [[ -n ${VIRTUAL_ENV:-} ]] && return
-
 pyenv_config_warning() {
   [[ "$ZSH_PYENV_QUIET" != true ]] || return 0
-
   local reason="$1"
   local pyenv_root="${PYENV_ROOT/#$HOME/\$HOME}"
   cat >&2 <<EOF
@@ -22,10 +20,8 @@ You'll need to restart your user session for the changes to take effect.${(%):-%
 For more information go to https://github.com/pyenv/pyenv/#installation.
 EOF
 }
-
 # This plugin loads pyenv into the current shell and provides prompt info via
 # the 'pyenv_prompt_info' function. Also loads pyenv-virtualenv if available.
-
 # Look for pyenv in $PATH and verify that it's not a part of pyenv-win in WSL
 if ! command -v pyenv &>/dev/null; then
   FOUND_PYENV=0
@@ -34,7 +30,6 @@ elif [[ "${commands[pyenv]}" = */pyenv-win/* && "$(uname -r)" = *icrosoft* ]]; t
 else
   FOUND_PYENV=1
 fi
-
 # Look for pyenv and try to load it (will only work on interactive shells)
 if [[ $FOUND_PYENV -ne 1 ]]; then
   pyenvdirs=("$HOME/.pyenv" "/usr/local/pyenv" "/opt/pyenv" "/usr/local/opt/pyenv")
@@ -44,7 +39,6 @@ if [[ $FOUND_PYENV -ne 1 ]]; then
       break
     fi
   done
-
   if [[ $FOUND_PYENV -ne 1 ]]; then
     if (( $+commands[brew] )) && dir=$(brew --prefix pyenv 2>/dev/null); then
       if [[ -d "$dir/bin" ]]; then
@@ -52,40 +46,33 @@ if [[ $FOUND_PYENV -ne 1 ]]; then
       fi
     fi
   fi
-
   # If we found pyenv, load it but show a caveat about non-interactive shells
   if [[ $FOUND_PYENV -eq 1 ]]; then
     # Configuring in .zshrc only makes pyenv available for interactive shells
     export PYENV_ROOT="$dir"
     export PATH="$PYENV_ROOT/bin:$PATH"
     eval "$(pyenv init --path)"
-
     # Show warning due to bad pyenv configuration
     pyenv_config_warning 'pyenv command not found in $PATH'
   fi
 fi
-
 if [[ $FOUND_PYENV -eq 1 ]]; then
   if [[ -z "$PYENV_ROOT" ]]; then
     # This is only for backwards compatibility with users that previously relied
     # on this plugin exporting it. pyenv itself does not require it to be exported
     export PYENV_ROOT="$(pyenv root)"
   fi
-
   # Add pyenv shims to $PATH if not already added
   if [[ -z "${path[(Re)$(pyenv root)/shims]}" ]]; then
     eval "$(pyenv init --path)"
     pyenv_config_warning 'missing pyenv shims in $PATH'
   fi
-
   # Load pyenv
   eval "$(pyenv init - --no-rehash zsh)"
-
   # If pyenv-virtualenv exists, load it
   if [[ "$ZSH_PYENV_VIRTUALENV" != false && "$(pyenv commands)" =~ "virtualenv-init" ]]; then
     eval "$(pyenv virtualenv-init - zsh)"
   fi
-
   function pyenv_prompt_info() {
     local version="$(pyenv version-name)"
     echo "${version:gs/%/%%}"
@@ -97,6 +84,5 @@ else
     echo "system: ${version:gs/%/%%}"
   }
 fi
-
 unset FOUND_PYENV pyenvdirs dir
 unfunction pyenv_config_warning

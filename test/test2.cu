@@ -1,22 +1,18 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
-
 #define L 4
 #define N (L * L * L * L)
 #define MAX_ITER 1000
 #define TOL 1e-12
-
 // Define lattice site indices
 #define ix(i, j, k, t) ((t)*L * L * L + (k)*L * L + (j)*L + (i))
-
 // Define lattice structure
 class Lattice
 {
 public:
     double *fermion_field;
     double *gauge_field;
-
     // Constructor
     Lattice()
     {
@@ -31,7 +27,6 @@ public:
             }
         }
     }
-
     // Destructor
     ~Lattice()
     {
@@ -39,7 +34,6 @@ public:
         cudaFree(gauge_field);
     }
 };
-
 // Compute Wilson fermion operator on GPU
 __device__ double wilson_fermion_op(Lattice *lat, int i, int j)
 {
@@ -80,7 +74,6 @@ __device__ double wilson_fermion_op(Lattice *lat, int i, int j)
     wf += 2.0 * lat->fermion_field[j];
     return wf;
 }
-
 // Compute gauge field gradient on GPU
 __global__ void gauge_field_grad_kernel(Lattice *lat, double *grad)
 {
@@ -120,7 +113,6 @@ __global__ void gauge_field_grad_kernel(Lattice *lat, double *grad)
         }
     }
 }
-
 // Compute gauge field gradient on CPU
 void gauge_field_grad(Lattice *lat, double *grad)
 {
@@ -129,7 +121,6 @@ void gauge_field_grad(Lattice *lat, double *grad)
     gauge_field_grad_kernel<<<num_blocks, block_size>>>(lat, grad);
     cudaDeviceSynchronize();
 }
-
 // Initialize lattice
 void init_lattice(Lattice *lat)
 {
@@ -146,14 +137,12 @@ void init_lattice(Lattice *lat)
         }
     }
 }
-
 // Free lattice memory
 void free_lattice(Lattice *lat)
 {
     cudaFree(lat->fermion_field);
     cudaFree(lat->gauge_field);
 }
-
 // Compute LQCD stable conjugate gradient on GPU
 void lqcd_cg(Lattice *lat, double *b, double *x)
 {
@@ -215,7 +204,6 @@ void lqcd_cg(Lattice *lat, double *b, double *x)
     cudaFree(p);
     cudaFree(Ap);
 }
-
 int main()
 {
     Lattice *lat = new Lattice();
@@ -231,18 +219,15 @@ int main()
     }
     // Compute LQCD stable conjugate gradient
     lqcd_cg(lat, b, x);
-
     // Print solution vector
     for (int i = 0; i < N; i++)
     {
         printf("%f ", x[i]);
     }
     printf("\n");
-
     // Free memory
     cudaFree(b);
     cudaFree(x);
     delete lat;
-
     return 0;
 }

@@ -1,23 +1,18 @@
 #!/bin/sh
-
 if ! type git 2>/dev/null 1>&2; then
     echo "Please install GIT first"
     echo "Exiting"
     exit 1
 fi
-
 #
 # Clone or pull
 #
-
 if ! test -d "$HOME/.config"; then
     mkdir "$HOME/.config"
 fi
-
 if ! test -d "$HOME/.config/znt"; then
     mkdir "$HOME/.config/znt"
 fi
-
 echo ">>> Downloading zsh-navigation-tools to ~/.config/znt"
 if test -d ~/.config/znt/zsh-navigation-tools; then
     cd ~/.config/znt/zsh-navigation-tools
@@ -27,29 +22,21 @@ else
     git clone https://github.com/psprint/zsh-navigation-tools.git zsh-navigation-tools
 fi
 echo ">>> Done"
-
 #
 # Copy configs
 #
-
 echo ">>> Copying config files"
-
 cd ~/.config/znt
-
 set n-aliases.conf n-env.conf n-history.conf n-list.conf n-panelize.conf n-cd.conf n-functions.conf n-kill.conf n-options.conf
-
 for i; do
     if ! test -f "$i"; then
         cp -v zsh-navigation-tools/.config/znt/$i .
     fi
 done
-
 echo ">>> Done"
-
 #
 # Modify .zshrc
 #
-
 echo ">>> Updating .zshrc"
 if ! grep zsh-navigation-tools ~/.zshrc >/dev/null 2>&1; then
     echo >>~/.zshrc

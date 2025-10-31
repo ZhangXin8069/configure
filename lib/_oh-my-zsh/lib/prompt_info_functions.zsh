@@ -6,7 +6,6 @@
 #
 # See also lib/bzr.zsh, lib/git.zsh and lib/nvm.zsh for
 # git_prompt_info, bzr_prompt_info and nvm_prompt_info
-
 # Dummy implementations that return false to prevent command_not_found
 # errors with themes, that implement these functions
 # Real implementations will be used when the respective plugins are loaded
@@ -24,7 +23,6 @@ function chruby_prompt_info \
 {
   return 1
 }
-
 # oh-my-zsh supports an rvm prompt by default
 # get the name of the rvm ruby version
 function rvm_prompt_info() {
@@ -34,10 +32,7 @@ function rvm_prompt_info() {
   [[ -z "${rvm_prompt}" ]] && return 1
   echo "${ZSH_THEME_RUBY_PROMPT_PREFIX}${rvm_prompt:gs/%/%%}${ZSH_THEME_RUBY_PROMPT_SUFFIX}"
 }
-
 ZSH_THEME_RVM_PROMPT_OPTIONS="i v g"
-
-
 # use this to enable users to see their ruby version, no matter which
 # version management system they use
 function ruby_prompt_info() {

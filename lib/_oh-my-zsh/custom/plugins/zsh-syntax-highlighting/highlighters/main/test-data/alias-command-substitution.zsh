@@ -26,12 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Alias must be at least 4 characters to test the regression
 # cf. 139ea2b189819c43cc251825981c116959b15cc3
 alias foobar='echo "$(echo foobar)"'
 BUFFER='foobar'
-
 expected_region_highlight=(
   "1 6 alias" # foobar
 )

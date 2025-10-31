@@ -1,10 +1,8 @@
 -------------------------------------
 CHANGES FROM PREVIOUS VERSIONS OF ZNT
 -------------------------------------
-
 Changes from 2.2.1 to 2.2.7
 ---------------------------
-
 Tmux integration has been added – bind file znt-tmux.zsh in Tmux as
 described in README.md and e.g. run local history on remote hosts. Tmux
 opens new window with n-history, and pastes selected history entry into

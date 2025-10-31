@@ -3,7 +3,6 @@
 #include <cmath>
 #include <chrono>
 #include <cuda.h>
-
 class Lattice
 {
 public:
@@ -20,12 +19,10 @@ public:
     }
     // Accessor function to retrieve pointer to the lattice data
     __host__ double *data() { return sites.data(); }
-
 private:
     int L;
     std::vector<double> sites;
 };
-
 __global__ void initializeLattice(double *lattice, int L)
 {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -34,7 +31,6 @@ __global__ void initializeLattice(double *lattice, int L)
         lattice[id] = 1.0;
     }
 }
-
 __global__ void computeDslash(double *phi, double *gauge, double *dslash_phi, int L)
 {
     __shared__ double shared_gauge[4 * 8 * 8];
@@ -64,7 +60,6 @@ __global__ void computeDslash(double *phi, double *gauge, double *dslash_phi, in
     }
     dslash_phi[mu + 4 * (x + L * (y + L * (z + L * t)))] = 2.0 * phi[mu + 4 * (x + L * (y + L * (z + L * t)))] - tmp;
 }
-
 __device__ void computeDaggerDslash(double *phi, double *gauge, double *dagger_dslash_phi, int L)
 {
     __shared__ double shared_gauge[4 * 8 * 8];
@@ -94,7 +89,6 @@ __device__ void computeDaggerDslash(double *phi, double *gauge, double *dagger_d
     }
     dagger_dslash_phi[mu + 4 * (x + L * (y + L * (z + L * t)))] = 2.0 * phi[mu + 4 * (x + L * (y + L * (z + L * t)))] - tmp;
 }
-
 __global__ void computeR(double *r, double *b, double *a, double *x, double *gauge, int L)
 {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -104,7 +98,6 @@ __global__ void computeR(double *r, double *b, double *a, double *x, double *gau
         computeDaggerDslash(r, gauge, r, L);
     }
 }
-
 __global__ void computeP(double *p, double *r, double *beta, double *p_ap, int L)
 {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -113,7 +106,6 @@ __global__ void computeP(double *p, double *r, double *beta, double *p_ap, int L
         p[id] = r[id] + beta[0] * p_ap[id];
     }
 }
-
 __global__ void computeAlpha(double *alpha, double *r, double *p)
 {
     __shared__ double shared_r[4 * 256];
@@ -134,7 +126,6 @@ __global__ void computeAlpha(double *alpha, double *r, double *p)
     }
     alpha[0] = rho / pAp;
 }
-
 __global__ void computeAx(double *Ax, double *p, double *gauge, int L)
 {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -143,7 +134,6 @@ __global__ void computeAx(double *Ax, double *p, double *gauge, int L)
         computeDaggerDslash(p, gauge, Ax, L);
     }
 }
-
 __global__ void computeBeta(double *beta, double *r, double *r_new)
 {
     __shared__ double shared_r[4 * 256];
@@ -164,7 +154,6 @@ __global__ void computeBeta(double *beta, double *r, double *r_new)
     }
     beta[0] = rho_new / rho;
 }
-
 __global__ void updateX(double *x, double *alpha, double *p, int L)
 {
     int id = blockIdx.x * blockDim.x + threadIdx.x;
@@ -173,7 +162,6 @@ __global__ void updateX(double *x, double *alpha, double *p, int L)
         x[id] += alpha[0] * p[id];
     }
 }
-
 void cg(Lattice &x, Lattice &b, Lattice &gauge, int L, int max_it)
 {
     int num_threads = 256;
@@ -243,7 +231,6 @@ void cg(Lattice &x, Lattice &b, Lattice &gauge, int L, int max_it)
     cudaFree(d_alpha);
     cudaFree(d_pAp);
 }
-
 int main()
 {
     int L = 8;

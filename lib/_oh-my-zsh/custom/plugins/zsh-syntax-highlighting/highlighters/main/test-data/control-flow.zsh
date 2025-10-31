@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='while if echo Hello; then ls /; else ls; fi; do stat "x"; done; repeat 10 ls'
-
 expected_region_highlight+=(
   "1 5 reserved-word"            # while
   "7 8 reserved-word"            # if

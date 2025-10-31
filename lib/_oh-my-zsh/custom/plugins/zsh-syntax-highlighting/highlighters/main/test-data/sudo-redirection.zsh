@@ -26,11 +26,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 sudo() {}
-
 BUFFER='sudo -u >/tmp otheruser ls; sudo ls; sudo -i ls'
-
 expected_region_highlight=(
   "1 4 precommand"             # sudo
   "6 7 single-hyphen-option"   # -u

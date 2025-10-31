@@ -1,6 +1,5 @@
 #compdef jira
 #autoload
-
 local -a _1st_arguments
 _1st_arguments=(
   'new:create a new issue'
@@ -13,11 +12,9 @@ _1st_arguments=(
   'dumpconfig:display effective jira configuration'
   'help:print usage help to stdout'
 )
-
 _arguments -C \
   ':command:->command' \
   '*::options:->options'
-
 case $state in
   (command)
     _describe -t commands "jira subcommand" _1st_arguments

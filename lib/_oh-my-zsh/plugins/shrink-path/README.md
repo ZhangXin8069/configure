@@ -1,17 +1,11 @@
 # shrink-path
-
 A plugin to shrink directory paths for brevity and pretty-printing.
-
 To use it, add `shrink-path` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... shrink-path)
 ```
-
 ## Examples
-
 For this directory tree:
-
 ```
 /home/
   me/
@@ -22,9 +16,7 @@ For this directory tree:
     f i g/
       baz/
 ```
-
 here are the results of calling `shrink_path <option> /home/me/foo/bar/quux`:
-
 ```
 Option        Result
 <none>        /h/m/f o/ba/q
@@ -39,19 +31,14 @@ Option        Result
 -g -q         /h*/m*/f\ o*/ba*/q*
 -x            /home/me/foo/bar/quux
 ```
-
 ## Usage
-
 For a fish-style working directory in your command prompt, add the following to
 your theme or zshrc:
-
 ```zsh
 setopt prompt_subst
 PS1='%n@%m $(shrink_path -f)>'
 ```
-
 The following options are available:
-
 ```
     -f, --fish       fish simulation, equivalent to -l -s -t.
     -g, --glob       Add asterisk to allow globbing of shrunk path (equivalent to -e "*")
@@ -66,30 +53,22 @@ The following options are available:
     -q, --quote      Quote special characters in the shrunk path
     -x, --expand     Print the full path. This takes precedence over the other options
 ```
-
 The long options can also be set via zstyle, like
-
 ```zsh
 zstyle :prompt:shrink_path fish yes
 ```
-
 Note: Directory names containing two or more consecutive spaces are not yet
 supported.
-
 ## Trick: toggle shrinking with a keyboard shortcut
-
 You can use the `expand` option to disable the path shrinking. You can combine that
 with a key binding widget to toggle path shrinking on and off.
-
 ```zsh
 # Toggle off path shrinking
 zstyle ':prompt:shrink_path' expand true
 # Toggle on path shrinking
 zstyle -d ':prompt:shrink_path' expand
 ```
-
 Combined with a widget:
-
 ```zsh
 # Widget definition
 shrink-path-toggle() {
@@ -102,17 +81,11 @@ zle -N shrink-path-toggle
 # Key binding to ALT+SHIFT+S
 bindkey "^[S" shrink-path-toggle
 ```
-
 ## License
-
 Copyright (C) 2008 by Daniel Friesel <derf@xxxxxxxxxxxxxxxxxx>
 Copyright (C) 2018-2020 by Pavel N. Krivitsky
-
 License: WTFPL <http://www.wtfpl.net>
-
 Ref: <https://www.zsh.org/mla/workers/2009/msg00415.html>
      <https://www.zsh.org/mla/workers/2009/msg00419.html>
-
 ## Misc
-
 Keywords: prompt directory truncate shrink collapse fish

@@ -1,15 +1,10 @@
 # Podman plugin
-
 This plugin adds auto-completion and aliases for [podman](https://podman.io/).
-
 To use it add `podman` to the plugins array in your zshrc file.
-
 ```zsh
 plugins=(... podman)
 ```
-
 ## Aliases
-
 | Alias   | Command                                       | Description                                                                              |
 | :------ | :-------------------------------------------- | :--------------------------------------------------------------------------------------- |
 | pbl     | `podman build`                                | Build an image from a Dockerfile                                                         |

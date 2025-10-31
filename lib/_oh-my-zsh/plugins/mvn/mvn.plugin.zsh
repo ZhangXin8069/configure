@@ -4,16 +4,13 @@ mvn-or-mvnw() {
   while [[ ! -x "$dir/mvnw" && "$dir" != / ]]; do
     dir="${dir:h}"
   done
-
   if [[ -x "$dir/mvnw" ]]; then
     echo "Running \`$dir/mvnw\`..." >&2
     "$dir/mvnw" "$@"
     return $?
   fi
-
   command mvn "$@"
 }
-
 # Wrapper function for Maven's mvn command. Based on https://gist.github.com/1027800
 mvn-color() {
   local BOLD=$(echoti bold)
@@ -23,7 +20,6 @@ mvn-color() {
   local TEXT_BLUE=$(echoti setaf 4)
   local TEXT_WHITE=$(echoti setaf 7)
   local RESET_FORMATTING=$(echoti sgr0)
-
   (
     # Filter mvn output using sed. Before filtering set the locale to C, so invalid characters won't break some sed implementations
     unset LANG
@@ -34,18 +30,14 @@ mvn-color() {
       -e "s/\(\[WARNING\]\)\(.*\)/${BOLD}${TEXT_YELLOW}\1${RESET_FORMATTING}\2/g" \
       -e "s/\(\[ERROR\]\)\(.*\)/${BOLD}${TEXT_RED}\1${RESET_FORMATTING}\2/g" \
       -e "s/Tests run: \([^,]*\), Failures: \([^,]*\), Errors: \([^,]*\), Skipped: \([^,]*\)/${BOLD}${TEXT_GREEN}Tests run: \1${RESET_FORMATTING}, Failures: ${BOLD}${TEXT_RED}\2${RESET_FORMATTING}, Errors: ${BOLD}${TEXT_RED}\3${RESET_FORMATTING}, Skipped: ${BOLD}${TEXT_YELLOW}\4${RESET_FORMATTING}/g"
-
     # Make sure formatting is reset
     echo -ne "${RESET_FORMATTING}"
   )
 }
-
 # either use original mvn or the mvn wrapper
 alias mvn="mvn-or-mvnw"
-
 # Run mvn against the pom found in a project's root directory (assumes a git repo)
 alias 'mvn!'='mvn -f $(git rev-parse --show-toplevel 2>/dev/null || echo ".")/pom.xml'
-
 # aliases
 alias mvnag='mvn archetype:generate'
 alias mvnboot='mvn spring-boot:run'
@@ -76,59 +68,45 @@ alias mvnt='mvn test'
 alias mvntc='mvn tomcat:run'
 alias mvntc7='mvn tomcat7:run'
 alias mvn-updates='mvn versions:display-dependency-updates'
-
-
 function listMavenCompletions {
   local file new_file
   local -a profiles POM_FILES modules
-
   # Root POM
   POM_FILES=(~/.m2/settings.xml)
-
   # POM in the current directory
   if [[ -f pom.xml ]]; then
     local file=pom.xml
     POM_FILES+=("${file:A}")
   fi
-
   # Look for POM files in parent directories
   while [[ -n "$file" ]] && grep -q "<parent>" "$file"; do
     # look for a new relativePath for parent pom.xml
     new_file=$(grep -e "<relativePath>.*</relativePath>" "$file" | sed -e 's/.*<relativePath>\(.*\)<\/relativePath>.*/\1/')
-
     # if <parent> is present but not defined, assume ../pom.xml
     if [[ -z "$new_file" ]]; then
       new_file="../pom.xml"
     fi
-
     # if file doesn't exist break
     file="${file:h}/${new_file}"
     if ! [[ -e "$file" ]]; then
       break
     fi
-
     POM_FILES+=("${file:A}")
   done
-
   # Get profiles from found files
   for file in $POM_FILES; do
     [[ -e $file ]] || continue
     profiles+=($(sed 's/<!--.*-->//' "$file" | sed '/<!--/,/-->/d' | grep -e "<profile>" -A 1 | grep -e "<id>.*</id>" | sed 's?.*<id>\(.*\)<\/id>.*?-P\1?'))
   done
-
   # List modules
   modules=($(print -l **/pom.xml(-.N:h) | grep -v '/target/classes/META-INF/'))
-
   reply=(
     # common lifecycle
     clean initialize process-resources compile process-test-resources test-compile test package verify install deploy site
-
     # integration testing
     pre-integration-test integration-test
-
     # common plugins
     deploy failsafe install site surefire checkstyle javadoc jxr pmd ant antrun archetype assembly dependency enforcer gpg help release repository source eclipse idea jetty cargo jboss tomcat tomcat6 tomcat7 exec versions war ear ejb android scm buildnumber nexus repository sonar license hibernate3 liquibase flyway gwt
-
     # deploy
     deploy:deploy-file
     # failsafe
@@ -139,7 +117,6 @@ function listMavenCompletions {
     site:site site:deploy site:run site:stage site:stage-deploy site:attach-descriptor site:jar site:effective-site
     # surefire
     surefire:test
-
     # checkstyle
     checkstyle:checkstyle checkstyle:check checkstyle:checkstyle-aggregate
     # javadoc
@@ -148,7 +125,6 @@ function listMavenCompletions {
     jxr:jxr jxr:aggregate jxr:test-jxr jxr:test-aggregate
     # pmd
     pmd:pmd pmd:cpd pmd:check pmd:cpd-check
-
     # ant
     ant:ant ant:clean
     # antrun
@@ -173,12 +149,10 @@ function listMavenCompletions {
     repository:bundle-create repository:bundle-pack
     # source
     source:aggregate source:jar source:jar-no-fork source:test-jar source:test-jar-no-fork
-
     # eclipse
     eclipse:clean eclipse:eclipse
     # idea
     idea:clean idea:idea
-
     # jetty
     jetty:run jetty:run-exploded
     # cargo
@@ -205,7 +179,6 @@ function listMavenCompletions {
     scm:add scm:bootstrap scm:branch scm:changelog scm:check-local-modification scm:checkin scm:checkout scm:diff scm:edit scm:export scm:list scm:remove scm:status scm:tag scm:unedit scm:update scm:update-subprojects scm:validate
     # buildnumber
     buildnumber:create buildnumber:create-timestamp buildnumber:help buildnumber:hgchangeset
-
     # war
     war:war war:exploded war:inplace war:manifest
     # ear
@@ -218,7 +191,6 @@ function listMavenCompletions {
     nexus:staging-list nexus:staging-close nexus:staging-drop nexus:staging-release nexus:staging-build-promotion nexus:staging-profiles-list nexus:settings-download
     # repository
     repository:bundle-create repository:bundle-pack repository:help
-
     # sonar
     sonar:sonar
     # license
@@ -285,10 +257,8 @@ function listMavenCompletions {
     liberty:clean-server liberty:compile-jsp liberty:configure-arquillian liberty:create-server liberty:debug liberty:debug-server liberty:deploy liberty:dev liberty:display-url liberty:dump-server liberty:install-apps liberty:install-feature liberty:install-server liberty:java-dump-server liberty:package-server liberty:run liberty:run-server liberty:server-status liberty:start liberty:start-server liberty:status liberty:stop liberty:stop-server liberty:test-start-server liberty:test-stop-server liberty:undeploy liberty:uninstall-feature
     # vaadin
     vaadin:prepare-frontend vaadin:build-frontend vaadin:clean-frontend vaadin:dance
-
     # options
     "-Dmaven.test.skip=true" -DskipTests -DskipITs -Dmaven.surefire.debug -DenableCiProfile "-Dpmd.skip=true" "-Dcheckstyle.skip=true" "-Dtycho.mode=maven" "-Dmaven.test.failure.ignore=true" "-DgroupId=" "-DartifactId=" "-Dversion=" "-Dpackaging=jar" "-Dfile=" "-Dextensions="
-
     # arguments
     -am --also-make
     -amd --also-make-dependents-am
@@ -327,18 +297,15 @@ function listMavenCompletions {
     -v --version
     -V --show-version
     -X --debug
-
     cli:execute cli:execute-phase
     archetype:generate generate-sources
     cobertura:cobertura
     -Dtest=$(if [ -d ./src/test/java ] ; then find ./src/test/java -type f -name '*.java' | grep -v svn | sed 's?.*/\([^/]*\)\..*?-Dtest=\1?' ; fi)
     -Dit.test=$(if [ -d ./src/test/java ] ; then find ./src/test/java -type f -name '*.java' | grep -v svn | sed 's?.*/\([^/]*\)\..*?-Dit.test=\1?' ; fi)
-
     $profiles
     $modules
   )
 }
-
 compctl -K listMavenCompletions mvn mvnw
 compctl -K listMavenCompletions mvn-color
 compctl -K listMavenCompletions mvn-or-mvnw

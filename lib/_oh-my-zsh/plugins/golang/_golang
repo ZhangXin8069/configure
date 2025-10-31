@@ -1,5 +1,4 @@
 #compdef go
-
 __go_packages() {
   local gopaths
   declare -a gopaths
@@ -9,12 +8,10 @@ __go_packages() {
     _path_files -W "$p/src" -/
   done
 }
-
 __go_identifiers() {
   local tmpl_path="${functions_source[$0]:h}/templates"
   compadd $(godoc -templates "$tmpl_path" ${words[-2]} 2> /dev/null)
 }
-
 _go() {
   typeset -a commands build_flags
   commands+=(
@@ -56,7 +53,6 @@ _go() {
     '-installsuffix[suffix to add to package directory]:suffix'
     '-tags[list of build tags to consider satisfied]:tags'
   )
-
   case ${words[2]} in
   doc)
     _arguments -s -w \
@@ -142,12 +138,10 @@ _go() {
       'verify[verify dependencies have expected content]'
       'why[explain why packages or modules are needed]'
     )
-
     if (( CURRENT == 3 )); then
       _values 'go mod commands' ${mod_commands[@]} "help[display help]"
       return
     fi
-
     case ${words[3]} in
     help)
       _values 'go mod commands' ${mod_commands[@]}
@@ -245,5 +239,4 @@ _go() {
     ;;
   esac
 }
-
 _go "$@"

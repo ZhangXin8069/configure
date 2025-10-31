@@ -1,29 +1,18 @@
 (($ + commands[apt])) && APT=apt || APT=apt-get
-
 alias acs='apt-cache search'
-
 alias afs='apt-file search --regexp'
-
 # These are apt/apt-get only
 alias ags="$APT source"
-
 alias acp='apt-cache policy'
-
 #List all installed packages
 alias agli='apt list --installed'
-
 # List available updates only
 alias aglu='apt list --upgradable'
-
 alias acsp='apt-cache showpkg'
 compdef _acsp acsp='apt-cache showpkg'
-
 # superuser operations ######################################################
-
 alias afu='sudo apt-file update'
-
 alias ppap='sudo ppa-purge'
-
 alias age="sudo $APT"
 alias aga="sudo $APT autoclean"
 alias agb="sudo $APT build-dep"
@@ -37,17 +26,13 @@ alias agud="sudo $APT update && sudo $APT dist-upgrade"
 alias agug="sudo $APT upgrade"
 alias aguu="sudo $APT update && sudo $APT upgrade"
 alias agar="sudo $APT autoremove"
-
 # Remove ALL kernel images and headers EXCEPT the one in use
 alias kclean='sudo aptitude remove -P ?and(~i~nlinux-(ima|hea) ?not(~n`uname -r`))'
-
 # Misc. #####################################################################
 # print all installed packages
 alias allpkgs='dpkg --get-selections | grep -v deinstall'
-
 # Create a basic .deb package
 alias mydeb='time dpkg-buildpackage -rfakeroot -us -uc'
-
 # apt-add-repository with automatic install/upgrade of the desired package
 # Usage: aar ppa:xxxxxx/xxxxxx [packagename]
 # If packagename is not given as 2nd argument the function will ask for it and guess the default by taking
@@ -58,15 +43,12 @@ function aar() {
   else
     read "PACKAGE?Type in the package name to install/upgrade with this ppa [${1##*/}]: "
   fi
-
   if [ -z "$PACKAGE" ]; then
     PACKAGE=${1##*/}
   fi
-
   sudo apt-add-repository $1 && sudo $APT update
   sudo $APT install $PACKAGE
 }
-
 # Prints apt history
 # Usage:
 #   apt-history install
@@ -102,7 +84,6 @@ function apt-history() {
     ;;
   esac
 }
-
 # Kernel-package building shortcut
 function kerndeb() {
   # temporarily unset MAKEFLAGS ( '-j3' will fail )
@@ -110,13 +91,10 @@ function kerndeb() {
   print '$MAKEFLAGS set to '"'$MAKEFLAGS'"
   appendage='-custom'        # this shows up in $(uname -r)
   revision=$(date +"%Y%m%d") # this shows up in the .deb file name
-
   make-kpkg clean
-
   time fakeroot make-kpkg --append-to-version "$appendage" --revision \
     "$revision" kernel_image kernel_headers
 }
-
 # List packages by size
 function apt-list-packages {
   dpkg-query -W --showformat='${Installed-Size} ${Package} ${Status}\n' |

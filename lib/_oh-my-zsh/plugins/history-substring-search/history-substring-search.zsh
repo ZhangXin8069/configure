@@ -38,22 +38,18 @@
 # POSSIBILITY OF SUCH DAMAGE.
 #
 ##############################################################################
-
 #-----------------------------------------------------------------------------
 # declare global configuration variables
 #-----------------------------------------------------------------------------
-
 : ${HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_FOUND='bg=magenta,fg=white,bold'}
 : ${HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_NOT_FOUND='bg=red,fg=white,bold'}
 : ${HISTORY_SUBSTRING_SEARCH_GLOBBING_FLAGS='i'}
 : ${HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE=''}
 : ${HISTORY_SUBSTRING_SEARCH_FUZZY=''}
 : ${HISTORY_SUBSTRING_SEARCH_PREFIXED=''}
-
 #-----------------------------------------------------------------------------
 # declare internal global variables
 #-----------------------------------------------------------------------------
-
 typeset -g BUFFER MATCH MBEGIN MEND CURSOR
 typeset -g _history_substring_search_refresh_display
 typeset -g _history_substring_search_query_highlight
@@ -66,45 +62,33 @@ typeset -g -a _history_substring_search_matches
 typeset -g -i _history_substring_search_match_index
 typeset -g -A _history_substring_search_unique_filter
 typeset -g -i _history_substring_search_zsh_5_9
-
 #-----------------------------------------------------------------------------
 # the main ZLE widgets
 #-----------------------------------------------------------------------------
-
 history-substring-search-up() {
   _history-substring-search-begin
-
   _history-substring-search-up-history ||
   _history-substring-search-up-buffer ||
   _history-substring-search-up-search
-
   _history-substring-search-end
 }
-
 history-substring-search-down() {
   _history-substring-search-begin
-
   _history-substring-search-down-history ||
   _history-substring-search-down-buffer ||
   _history-substring-search-down-search
-
   _history-substring-search-end
 }
-
 zle -N history-substring-search-up
 zle -N history-substring-search-down
-
 #-----------------------------------------------------------------------------
 # implementation details
 #-----------------------------------------------------------------------------
-
 zmodload -F zsh/parameter
 autoload -Uz is-at-least
-
 if is-at-least 5.9 $ZSH_VERSION; then
   _history_substring_search_zsh_5_9=1
 fi
-
 #
 # We have to "override" some keys and widgets if the
 # zsh-syntax-highlighting plugin has not been loaded:
@@ -122,7 +106,6 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
       region_highlight=()
     fi
   }
-
   #
   # Check if $1 denotes the name of a callable function, i.e. it is fully
   # defined or it is marked for autoloading and autoloading it at the first
@@ -142,7 +125,6 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
       return $?
     fi
   }
-
   #
   # The zsh-syntax-highlighting plugin uses zle-line-pre-redraw hook instead
   # of the legacy "bind all widgets" if 1) zsh has the memo= feature (added in
@@ -153,7 +135,6 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
     # The following code is based on the zsh-syntax-highlighting plugin.
     #
     autoload -U add-zle-hook-widget
-
     _history-substring-search-zle-line-finish() {
       #
       # Reset $WIDGET since the 'main' highlighter depends on it.
@@ -167,7 +148,6 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
         _zsh_highlight
       }
     }
-
     _history-substring-search-zle-line-pre-redraw() {
       #
       # If the zsh-syntax-highlighting plugin has been loaded (after our plugin
@@ -186,7 +166,6 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
       #
       true && _zsh_highlight "$@"
     }
-
     if [[ -o zle ]]; then
       add-zle-hook-widget zle-line-pre-redraw _history-substring-search-zle-line-pre-redraw
       add-zle-hook-widget zle-line-finish _history-substring-search-zle-line-finish
@@ -208,29 +187,23 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
         echo 'zsh-syntax-highlighting: failed loading zsh/zleparameter.' >&2
         return 1
       }
-
       # Override ZLE widgets to make them invoke _zsh_highlight.
       local cur_widget
       for cur_widget in ${${(f)"$(builtin zle -la)"}:#(.*|_*|orig-*|run-help|which-command|beep|yank*)}; do
         case $widgets[$cur_widget] in
-
           # Already rebound event: do nothing.
           user:$cur_widget|user:_zsh_highlight_widget_*);;
-
           # User defined widget: override and rebind old one with prefix "orig-".
           user:*) eval "zle -N orig-$cur_widget ${widgets[$cur_widget]#*:}; \
                         _zsh_highlight_widget_$cur_widget() { builtin zle orig-$cur_widget -- \"\$@\" && _zsh_highlight }; \
                         zle -N $cur_widget _zsh_highlight_widget_$cur_widget";;
-
           # Completion widget: override and rebind old one with prefix "orig-".
           completion:*) eval "zle -C orig-$cur_widget ${${widgets[$cur_widget]#*:}/:/ }; \
                               _zsh_highlight_widget_$cur_widget() { builtin zle orig-$cur_widget -- \"\$@\" && _zsh_highlight }; \
                               zle -N $cur_widget _zsh_highlight_widget_$cur_widget";;
-
           # Builtin widget: override and make it call the builtin ".widget".
           builtin) eval "_zsh_highlight_widget_$cur_widget() { builtin zle .$cur_widget -- \"\$@\" && _zsh_highlight }; \
                          zle -N $cur_widget _zsh_highlight_widget_$cur_widget";;
-
           # Default: unhandled case.
           *) echo "zsh-syntax-highlighting: unhandled ZLE widget '$cur_widget'" >&2 ;;
         esac
@@ -238,19 +211,14 @@ if [[ $+functions[_zsh_highlight] -eq 0 ]]; then
     }
     #-------------->8------------------->8------------------->8-----------------
     # SPDX-SnippetEnd
-
     _zsh_highlight_bind_widgets
   fi
-
   unfunction _history-substring-search-function-callable
 fi
-
 _history-substring-search-begin() {
   setopt localoptions extendedglob
-
   _history_substring_search_refresh_display=
   _history_substring_search_query_highlight=
-
   #
   # If the buffer is the same as the previously displayed history substring
   # search result, then just keep stepping through the match list. Otherwise
@@ -259,12 +227,10 @@ _history-substring-search-begin() {
   if [[ -n $BUFFER && $BUFFER == ${_history_substring_search_result:-} ]]; then
     return;
   fi
-
   #
   # Clear the previous result.
   #
   _history_substring_search_result=''
-
   if [[ -z $BUFFER ]]; then
     #
     # If the buffer is empty, we will just act like up-history/down-history
@@ -274,14 +240,12 @@ _history-substring-search-begin() {
     _history_substring_search_query=
     _history_substring_search_query_parts=()
     _history_substring_search_raw_matches=()
-
   else
     #
     # For the purpose of highlighting we keep a copy of the original
     # query string.
     #
     _history_substring_search_query=$BUFFER
-
     #
     # compose search pattern
     #
@@ -293,20 +257,17 @@ _history-substring-search-begin() {
     else
       _history_substring_search_query_parts=(${==_history_substring_search_query})
     fi
-
     #
     # Escape and join query parts with wildcard character '*' as seperator
     # `(j:CHAR:)` join array to string with CHAR as seperator
     #
     local search_pattern="${(j:*:)_history_substring_search_query_parts[@]//(#m)[\][()|\\*?#<>~^]/\\$MATCH}*"
-
     #
     # Support anchoring history search to the beginning of the command
     #
     if [[ -z $HISTORY_SUBSTRING_SEARCH_PREFIXED ]]; then
       search_pattern="*${search_pattern}"
     fi
-
     #
     # Find all occurrences of the search pattern in the history file.
     #
@@ -316,7 +277,6 @@ _history-substring-search-begin() {
     #
     _history_substring_search_raw_matches=(${(k)history[(R)(#$HISTORY_SUBSTRING_SEARCH_GLOBBING_FLAGS)${search_pattern}]})
   fi
-
   #
   # In order to stay as responsive as possible, we will process the raw
   # matches lazily (when the user requests the next match) to choose items
@@ -334,7 +294,6 @@ _history-substring-search-begin() {
   _history_substring_search_raw_match_index=0
   _history_substring_search_matches=()
   _history_substring_search_unique_filter=()
-
   #
   # If $_history_substring_search_match_index is equal to
   # $#_history_substring_search_matches + 1, this indicates that we
@@ -359,17 +318,13 @@ _history-substring-search-begin() {
     _history_substring_search_match_index=0
   fi
 }
-
 _history-substring-search-end() {
   setopt localoptions extendedglob
-
   local highlight_memo=
   _history_substring_search_result=$BUFFER
-
   if [[ $_history_substring_search_zsh_5_9 -eq 1 ]]; then
     highlight_memo='memo=history-substring-search'
   fi
-
   # the search was successful so display the result properly by clearing away
   # existing highlights and moving the cursor to the end of the result buffer
   if [[ $_history_substring_search_refresh_display -eq 1 ]]; then
@@ -380,10 +335,8 @@ _history-substring-search-end() {
     fi
     CURSOR=${#BUFFER}
   fi
-
   # highlight command line using zsh-syntax-highlighting
   _zsh_highlight
-
   # highlight the search query inside the command line
   if [[ -n $_history_substring_search_query_highlight ]]; then
     # highlight first matching query parts
@@ -403,11 +356,9 @@ _history-substring-search-end() {
       fi
     done
   fi
-
   # For debugging purposes:
   # zle -R "mn: "$_history_substring_search_match_index" m#: "${#_history_substring_search_matches}
   # read -k -t 200 && zle -U -- "$REPLY"
-
   #
   # When this function returns, z-sy-h runs its line-pre-redraw hook. It has no
   # logic for determining highlight priority, when two different memo= marked
@@ -424,11 +375,9 @@ _history-substring-search-end() {
     read -k -t ${HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_TIMEOUT:-1} && zle -U -- "$REPLY"
     region_highlight=( "${(@)region_highlight:#*${highlight_memo}*}" )
   fi
-
   # Exit successfully from the history-substring-search-* widgets.
   return 0
 }
-
 _history-substring-search-up-buffer() {
   #
   # Check if the UP arrow was pressed to move the cursor within a multi-line
@@ -449,15 +398,12 @@ _history-substring-search-up-buffer() {
   buflines=(${(f)BUFFER})
   XLBUFFER=$LBUFFER"x"
   xlbuflines=(${(f)XLBUFFER})
-
   if [[ $#buflines -gt 1 && $CURSOR -ne $#BUFFER && $#xlbuflines -ne 1 ]]; then
     zle up-line-or-history
     return 0
   fi
-
   return 1
 }
-
 _history-substring-search-down-buffer() {
   #
   # Check if the DOWN arrow was pressed to move the cursor within a multi-line
@@ -478,67 +424,53 @@ _history-substring-search-down-buffer() {
   buflines=(${(f)BUFFER})
   XRBUFFER="x"$RBUFFER
   xrbuflines=(${(f)XRBUFFER})
-
   if [[ $#buflines -gt 1 && $CURSOR -ne $#BUFFER && $#xrbuflines -ne 1 ]]; then
     zle down-line-or-history
     return 0
   fi
-
   return 1
 }
-
 _history-substring-search-up-history() {
   #
   # Behave like up in ZSH, except clear the $BUFFER
   # when beginning of history is reached like in Fish.
   #
   if [[ -z $_history_substring_search_query ]]; then
-
     # we have reached the absolute top of history
     if [[ $HISTNO -eq 1 ]]; then
       BUFFER=
-
     # going up from somewhere below the top of history
     else
       zle up-line-or-history
     fi
-
     return 0
   fi
-
   return 1
 }
-
 _history-substring-search-down-history() {
   #
   # Behave like down-history in ZSH, except clear the
   # $BUFFER when end of history is reached like in Fish.
   #
   if [[ -z $_history_substring_search_query ]]; then
-
     # going down from the absolute top of history
     if [[ $HISTNO -eq 1 && -z $BUFFER ]]; then
       BUFFER=${history[1]}
       _history_substring_search_refresh_display=1
-
     # going down from somewhere above the bottom of history
     else
       zle down-line-or-history
     fi
-
     return 0
   fi
-
   return 1
 }
-
 _history_substring_search_process_raw_matches() {
   #
   # Process more outstanding raw matches and append any matches that need to
   # be displayed to the user to _history_substring_search_matches.
   # Return whether there were any more results appended.
   #
-
   #
   # While we have more raw matches. Process them to see if there are any more
   # matches that need to be displayed to the user.
@@ -549,7 +481,6 @@ _history_substring_search_process_raw_matches() {
     #
     _history_substring_search_raw_match_index+=1
     local index=${_history_substring_search_raw_matches[$_history_substring_search_raw_match_index]}
-
     #
     # If HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE is set to a non-empty value,
     # then ensure that only unique matches are presented to the user.
@@ -562,7 +493,6 @@ _history_substring_search_process_raw_matches() {
       # already added it to _history_substring_search_matches.
       #
       local entry=${history[$index]}
-
       if [[ -z ${_history_substring_search_unique_filter[$entry]} ]]; then
         #
         # This is a new unique entry. Add it to the filter and append the
@@ -570,47 +500,39 @@ _history_substring_search_process_raw_matches() {
         #
         _history_substring_search_unique_filter[$entry]=1
         _history_substring_search_matches+=($index)
-
         #
         # Indicate that we did find a match.
         #
         return 0
       fi
-
     else
       #
       # Just append the new history index to the processed matches.
       #
       _history_substring_search_matches+=($index)
-
       #
       # Indicate that we did find a match.
       #
       return 0
     fi
-
   done
-
   #
   # We are beyond the end of the list of raw matches. Indicate that no
   # more matches are available.
   #
   return 1
 }
-
 _history-substring-search-has-next() {
   #
   # Predicate function that returns whether any more older matches are
   # available.
   #
-
   if  [[ $_history_substring_search_match_index -lt $#_history_substring_search_matches ]]; then
     #
     # We did not reach the end of the processed list, so we do have further
     # matches.
     #
     return 0
-
   else
     #
     # We are at the end of the processed list. Try to process further
@@ -622,20 +544,17 @@ _history-substring-search-has-next() {
     return $?
   fi
 }
-
 _history-substring-search-has-prev() {
   #
   # Predicate function that returns whether any more younger matches are
   # available.
   #
-
   if [[ $_history_substring_search_match_index -gt 1 ]]; then
     #
     # We did not reach the beginning of the processed list, so we do have
     # further matches.
     #
     return 0
-
   else
     #
     # We are at the beginning of the processed list. We do not have any more
@@ -644,7 +563,6 @@ _history-substring-search-has-prev() {
     return 1
   fi
 }
-
 _history-substring-search-found() {
   #
   # A match is available. The index of the match is held in
@@ -658,7 +576,6 @@ _history-substring-search-found() {
   BUFFER=$history[$_history_substring_search_matches[$_history_substring_search_match_index]]
   _history_substring_search_query_highlight=$HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_FOUND
 }
-
 _history-substring-search-not-found() {
   #
   # No more matches are available.
@@ -672,10 +589,8 @@ _history-substring-search-not-found() {
   BUFFER=$_history_substring_search_query
   _history_substring_search_query_highlight=$HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_NOT_FOUND
 }
-
 _history-substring-search-up-search() {
   _history_substring_search_refresh_display=1
-
   #
   # Select history entry during history-substring-down-search:
   #
@@ -707,7 +622,6 @@ _history-substring-search-up-search() {
   # _history-substring-search-begin(). _history-substring-search-up-search()
   # will initially increment it to 1.
   #
-
   if [[ $_history_substring_search_match_index -gt $#_history_substring_search_matches ]]; then
     #
     # We are beyond the end of $_history_substring_search_matches. This
@@ -719,7 +633,6 @@ _history-substring-search-up-search() {
     _history-substring-search-not-found
     return
   fi
-
   if _history-substring-search-has-next; then
     #
     # We do have older matches.
@@ -729,7 +642,6 @@ _history-substring-search-up-search() {
     #
     _history_substring_search_match_index+=1
     _history-substring-search-found
-
   else
     #
     # We do not have older matches.
@@ -741,7 +653,6 @@ _history-substring-search-up-search() {
     _history_substring_search_match_index+=1
     _history-substring-search-not-found
   fi
-
   #
   # When HIST_FIND_NO_DUPS is set, meaning that only unique command lines from
   # history should be matched, make sure the new and old results are different.
@@ -753,7 +664,6 @@ _history-substring-search-up-search() {
   if [[ -o HIST_IGNORE_ALL_DUPS || -n $HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE ]]; then
     return
   fi
-
   if [[ -o HIST_FIND_NO_DUPS && $BUFFER == $_history_substring_search_result ]]; then
     #
     # Repeat the current search so that a different (unique) match is found.
@@ -761,10 +671,8 @@ _history-substring-search-up-search() {
     _history-substring-search-up-search
   fi
 }
-
 _history-substring-search-down-search() {
   _history_substring_search_refresh_display=1
-
   #
   # Select history entry during history-substring-down-search:
   #
@@ -789,7 +697,6 @@ _history-substring-search-down-search() {
   # _history-substring-search-begin(). _history-substring-search-down-search()
   # will initially decrement it to 0.
   #
-
   if [[ $_history_substring_search_match_index -lt 1 ]]; then
     #
     # We are beyond the beginning of $_history_substring_search_matches.
@@ -799,7 +706,6 @@ _history-substring-search-down-search() {
     _history-substring-search-not-found
     return
   fi
-
   if _history-substring-search-has-prev; then
     #
     # We do have younger matches.
@@ -809,7 +715,6 @@ _history-substring-search-down-search() {
     #
     _history_substring_search_match_index+=-1
     _history-substring-search-found
-
   else
     #
     # We do not have younger matches.
@@ -821,7 +726,6 @@ _history-substring-search-down-search() {
     _history_substring_search_match_index+=-1
     _history-substring-search-not-found
   fi
-
   #
   # When HIST_FIND_NO_DUPS is set, meaning that only unique command lines from
   # history should be matched, make sure the new and old results are different.
@@ -833,7 +737,6 @@ _history-substring-search-down-search() {
   if [[ -o HIST_IGNORE_ALL_DUPS || -n $HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE ]]; then
     return
   fi
-
   if [[ -o HIST_FIND_NO_DUPS && $BUFFER == $_history_substring_search_result ]]; then
     #
     # Repeat the current search so that a different (unique) match is found.
@@ -841,6 +744,5 @@ _history-substring-search-down-search() {
     _history-substring-search-down-search
   fi
 }
-
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et

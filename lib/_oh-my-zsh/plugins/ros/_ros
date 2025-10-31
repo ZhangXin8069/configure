@@ -1,8 +1,6 @@
 #compdef ros
 #autoload
-
 # roswell zsh completion, based on gem completion
-
 local -a _1st_arguments
 _1st_arguments=(
 'run: Run repl'
@@ -19,9 +17,7 @@ _1st_arguments=(
 'version:Show the roswell version information'
 "help:Use \"ros help [command]\" for more information about a command."$'\n\t\t'"Use \"ros help [topic]\" for more information about the topic."
 )
-
 #local expl
-
 _arguments \
   '(--version)'--version'[Print version information and quit]' \
   '(-w --wrap)'{-w,--wrap}'[\[CODE\] Run roswell with a shell wrapper CODE]' \
@@ -49,13 +45,10 @@ _arguments \
   '--quiet'--quiet'[be quite quiet while building default]' \
   '--test'--test'[for test purpose]' \
   '*:: :->subcmds'  && return 0
-
-
 if (( CURRENT == 1 )); then
   _describe -t commands "ros subcommand" _1st_arguments
   return
 fi
-
 # _files
 case "$words[1]" in
   -l|--load)

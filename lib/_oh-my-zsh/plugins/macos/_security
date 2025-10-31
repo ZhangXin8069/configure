@@ -1,5 +1,4 @@
 #compdef security
-
 local -a _1st_arguments
 _1st_arguments=(
   'help:Show all commands, or show usage for a command'
@@ -47,12 +46,10 @@ _1st_arguments=(
   'create-filevaultmaster-keychain:"Create a keychain containing a key pair for FileVault recovery use'
 )
 _arguments '*:: :->command'
-
 if (( CURRENT == 1 )); then
   _describe -t commands "security command" _1st_arguments
   return
 fi
-
 case "$words[1]" in
   find-(generic|internet)-password)
     _values \

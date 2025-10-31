@@ -4,33 +4,22 @@
 # This function allows to choose a directory from pushd stack
 #
 # Uses n-list
-
 emulate -L zsh
-
 setopt extendedglob pushdignoredups
-
 zmodload zsh/curses
 local IFS="
 "
-
 # Unset before configuration is read
 unset NLIST_COLORING_PATTERN
-
 [ -f ~/.config/znt/n-list.conf ] && builtin source ~/.config/znt/n-list.conf
 [ -f ~/.config/znt/n-cd.conf ] && builtin source ~/.config/znt/n-cd.conf
-
 local list
 local selected
-
 NLIST_REMEMBER_STATE=0
-
 list=( `dirs -p` )
 list=( "${(@M)list:#(#i)*$1*}" )
-
 local NLIST_GREP_STRING="$1"
-
 [ "$#list" -eq 0 ] && echo "No matching directories"
-
 if [ "$#hotlist" -ge 1 ]; then
     typeset -a NLIST_NONSELECTABLE_ELEMENTS NLIST_HOP_INDEXES
     local tmp_list_size="$#list"
@@ -44,18 +33,14 @@ if [ "$#hotlist" -ge 1 ]; then
 else
     [ "$#list" -eq 0 ] && return 1
 fi
-
 n-list "${list[@]}"
-
 if [ "$REPLY" -gt 0 ]; then
     selected="$reply[REPLY]"
     selected="${selected/#\~/$HOME}"
-
     (( NCD_DONT_PUSHD )) && setopt NO_AUTO_PUSHD
     cd "$selected"
     local code=$?
     (( NCD_DONT_PUSHD )) && setopt AUTO_PUSHD
-
     if [ "$code" -eq "0" ]; then
         # ZLE?
         if [ "${(t)CURSOR}" = "integer-local-special" ]; then
@@ -67,5 +52,4 @@ if [ "$REPLY" -gt 0 ]; then
 else
     [ "${(t)CURSOR}" = "integer-local-special" ] && zle redisplay
 fi
-
 # vim: set filetype=zsh:

@@ -1,20 +1,14 @@
 # tmux
-
 This plugin provides aliases for [tmux](https://tmux.github.io/), the terminal multiplexer. To use it add
 `tmux` to the plugins array in your zshrc file.
-
 ```zsh
 plugins=(... tmux)
 ```
-
 The plugin also supports the following:
-
 - determines if tmux is installed or not, if not, prompts user to install tmux
 - determines if the terminal supports the 256 colors or not, sets the appropriate configuration variable
 - sets the correct local config file to use
-
 ## Aliases
-
 | Alias      | Command                    | Description                                              |
 | ---------- | -------------------------- | -------------------------------------------------------- |
 | `ta`       | tmux attach -t             | Attach new tmux session to already running named session |
@@ -26,9 +20,7 @@ The plugin also supports the following:
 | `tmux`     | `_zsh_tmux_plugin_run`     | Start a new tmux session                                 |
 | `tmuxconf` | `$EDITOR $ZSH_TMUX_CONFIG` | Open .tmux.conf file with an editor                      |
 | `ts`       | tmux new-session -s        | Create a new named tmux session                          |
-
 ## Configuration Variables
-
 | Variable                            | Description                                                                                                 |
 | ----------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | `ZSH_TMUX_AUTOSTART`                | Automatically starts tmux (default: `false`)                                                                |

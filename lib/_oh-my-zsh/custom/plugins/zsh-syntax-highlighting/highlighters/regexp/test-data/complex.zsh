@@ -26,11 +26,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 ZSH_HIGHLIGHT_REGEXP+=('[0-9\+\-]+' 'fg=white,bold,bg=red')
-
 BUFFER='echo 1+9-3 7+2'
-
 expected_region_highlight=(
   "6 10 fg=white,bold,bg=red"
   "12 14 fg=white,bold,bg=red"

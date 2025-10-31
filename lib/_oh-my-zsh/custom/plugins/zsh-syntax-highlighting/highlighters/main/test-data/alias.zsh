@@ -26,13 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 alias alias1="ls"
 alias -s alias2="echo"
 function alias1() {} # to check that it's highlighted as an alias, not as a function
-
 BUFFER='x.alias2; alias1; alias2'
-
 # Set expected_region_highlight as a function of zsh version.
 #
 # Highlight of suffix alias requires zsh-5.1.1 or newer; see issue #126,

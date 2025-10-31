@@ -2,14 +2,11 @@ _git-flow ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
-
             local -a subcommands
             subcommands=(
                 'init:Initialize a new git repo with support for the branching model.'
@@ -27,54 +24,42 @@ _git-flow ()
             )
             _describe -t commands 'git flow' subcommands
         ;;
-
         (options)
             case $line[1] in
-
                 (init)
                     _arguments \
                         -f'[Force setting of gitflow branches, even if already configured]'
                     ;;
-
                     (version)
                     ;;
-
                     (hotfix)
                         __git-flow-hotfix
                     ;;
-
                     (release)
                         __git-flow-release
                     ;;
-
                     (feature)
                         __git-flow-feature
                     ;;
                     (bugfix)
                         __git-flow-bugfix
                     ;;
-
                     (config)
                     __git-flow-config
                     ;;
-
             esac
         ;;
     esac
 }
-
 __git-flow-release ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
-
             local -a subcommands
             subcommands=(
                 'start:Start a new release branch.'
@@ -89,16 +74,13 @@ __git-flow-release ()
             _arguments \
                 -v'[Verbose (more) output]'
         ;;
-
         (options)
             case $line[1] in
-
                 (start)
                     _arguments \
                         -F'[Fetch from origin before performing finish]'\
                         ':version:__git_flow_version_list'
                 ;;
-
                 (finish)
                     _arguments \
                         -F'[Fetch from origin before performing finish]' \
@@ -108,30 +90,25 @@ __git-flow-release ()
                         -p'[Push to $ORIGIN after performing finish]'\
                         ':version:__git_flow_version_list'
                 ;;
-
                 (delete)
                     _arguments \
                         -f'[Force deletion]' \
                         -r'[Delete remote branch]' \
                         ':version:__git_flow_version_list'
                 ;;
-
                 (publish)
                     _arguments \
                         ':version:__git_flow_version_list'
                 ;;
-
                 (track)
                     _arguments \
                         ':version:__git_flow_version_list'
                 ;;
-
                 (rebase)
                     _arguments \
                         -i'[Do an interactive rebase]' \
                         ':branch:__git_branch_names'
                 ;;
-
                 *)
                     _arguments \
                         -v'[Verbose (more) output]'
@@ -140,19 +117,15 @@ __git-flow-release ()
         ;;
     esac
 }
-
 __git-flow-hotfix ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
-
             local -a subcommands
             subcommands=(
                 'start:Start a new hotfix branch.'
@@ -166,17 +139,14 @@ __git-flow-hotfix ()
             _arguments \
                 -v'[Verbose (more) output]'
         ;;
-
         (options)
             case $line[1] in
-
                 (start)
                     _arguments \
                         -F'[Fetch from origin before performing finish]'\
                         ':hotfix:__git_flow_version_list'\
                         ':branch-name:__git_branch_names'
                 ;;
-
                 (finish)
                     _arguments \
                         -F'[Fetch from origin before performing finish]' \
@@ -186,20 +156,17 @@ __git-flow-hotfix ()
                         -p'[Push to $ORIGIN after performing finish]'\
                         ':hotfix:__git_flow_hotfix_list'
                 ;;
-
                 (delete)
                     _arguments \
                         -f'[Force deletion]' \
                         -r'[Delete remote branch]' \
                         ':hotfix:__git_flow_hotfix_list'
                 ;;
-
                 (rebase)
                     _arguments \
                         -i'[Do an interactive rebase]' \
                         ':branch:__git_branch_names'
                 ;;
-
                 *)
                     _arguments \
                         -v'[Verbose (more) output]'
@@ -208,19 +175,15 @@ __git-flow-hotfix ()
         ;;
     esac
 }
-
 __git-flow-feature ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
-
             local -a subcommands
             subcommands=(
                 'start:Start a new feature branch.'
@@ -239,63 +202,52 @@ __git-flow-feature ()
             _arguments \
                 -v'[Verbose (more) output]'
         ;;
-
         (options)
             case $line[1] in
-
                 (start)
                     _arguments \
                         -F'[Fetch from origin before performing finish]'\
                         ':feature:__git_flow_feature_list'\
                         ':branch-name:__git_branch_names'
                 ;;
-
                 (finish)
                     _arguments \
                         -F'[Fetch from origin before performing finish]' \
                         -r'[Rebase instead of merge]'\
                         ':feature:__git_flow_feature_list'
                 ;;
-
                 (delete)
                     _arguments \
                         -f'[Force deletion]' \
                         -r'[Delete remote branch]' \
                         ':feature:__git_flow_feature_list'
                 ;;
-
                 (publish)
                     _arguments \
                         ':feature:__git_flow_feature_list'\
                 ;;
-
                 (track)
                     _arguments \
                         ':feature:__git_flow_feature_list'\
                 ;;
-
                 (diff)
                     _arguments \
                         ':branch:__git_branch_names'\
                 ;;
-
                 (rebase)
                     _arguments \
                         -i'[Do an interactive rebase]' \
                         ':branch:__git_branch_names'
                 ;;
-
                 (checkout)
                     _arguments \
                         ':branch:__git_flow_feature_list'\
                 ;;
-
                 (pull)
                     _arguments \
                         ':remote:__git_remotes'\
                         ':branch:__git_branch_names'
                 ;;
-
                 *)
                     _arguments \
                         -v'[Verbose (more) output]'
@@ -304,19 +256,15 @@ __git-flow-feature ()
         ;;
     esac
 }
-
 __git-flow-bugfix ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
-
             local -a subcommands
             subcommands=(
                 'start:Start a new bugfix branch.'
@@ -335,63 +283,52 @@ __git-flow-bugfix ()
             _arguments \
                 -v'[Verbose (more) output]'
         ;;
-
         (options)
             case $line[1] in
-
                 (start)
                     _arguments \
                         -F'[Fetch from origin before performing finish]'\
                         ':bugfix:__git_flow_bugfix_list'\
                         ':branch-name:__git_branch_names'
                 ;;
-
                 (finish)
                     _arguments \
                         -F'[Fetch from origin before performing finish]' \
                         -r'[Rebase instead of merge]'\
                         ':bugfix:__git_flow_bugfix_list'
                 ;;
-
                 (delete)
                     _arguments \
                         -f'[Force deletion]' \
                         -r'[Delete remote branch]' \
                         ':bugfix:__git_flow_bugfix_list'
                 ;;
-
                 (publish)
                     _arguments \
                         ':bugfix:__git_flow_bugfix_list'\
                 ;;
-
                 (track)
                     _arguments \
                         ':bugfix:__git_flow_bugfix_list'\
                 ;;
-
                 (diff)
                     _arguments \
                         ':branch:__git_branch_names'\
                 ;;
-
                 (rebase)
                     _arguments \
                         -i'[Do an interactive rebase]' \
                         ':branch:__git_branch_names'
                 ;;
-
                 (checkout)
                     _arguments \
                         ':branch:__git_flow_bugfix_list'\
                 ;;
-
                 (pull)
                     _arguments \
                         ':remote:__git_remotes'\
                         ':branch:__git_branch_names'
                 ;;
-
                 *)
                     _arguments \
                         -v'[Verbose (more) output]'
@@ -400,19 +337,15 @@ __git-flow-bugfix ()
         ;;
     esac
 }
-
 __git-flow-config ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
-
             local -a subcommands
             subcommands=(
                 'list:List the configuration. (Alias to `git flow config`)'
@@ -420,10 +353,8 @@ __git-flow-config ()
             )
             _describe -t commands 'git flow config' subcommands
         ;;
-
         (options)
             case $line[1] in
-
                 (set)
                     _arguments \
                         --local'[Use repository config file]' \
@@ -432,7 +363,6 @@ __git-flow-config ()
                         --file'[Use given config file]'\
                         ':option:(master develop feature hotfix release support versiontagprefix)'
                 ;;
-
                 *)
                     _arguments \
                         --local'[Use repository config file]' \
@@ -448,44 +378,32 @@ __git_flow_version_list ()
 {
     local expl
     declare -a versions
-
     versions=(${${(f)"$(_call_program versions git flow release list 2> /dev/null | tr -d ' |*')"}})
     __git_command_successful || return
-
     _wanted versions expl 'version' compadd $versions
 }
-
 __git_flow_feature_list ()
 {
     local expl
     declare -a features
-
     features=(${${(f)"$(_call_program features git flow feature list 2> /dev/null | tr -d ' |*')"}})
     __git_command_successful || return
-
     _wanted features expl 'feature' compadd $features
 }
-
 __git_flow_bugfix_list ()
 {
     local expl
     declare -a bugfixes
-
     bugfixes=(${${(f)"$(_call_program bugfixes git flow bugfix list 2> /dev/null | tr -d ' |*')"}})
     __git_command_successful || return
-
     _wanted bugfixes expl 'bugfix' compadd $bugfixes
 }
-
 __git_remotes () {
     local expl gitdir remotes
-
     gitdir=$(_call_program gitdir git rev-parse --git-dir 2>/dev/null)
     __git_command_successful || return
-
     remotes=(${${(f)"$(_call_program remotes git config --get-regexp '"^remote\..*\.url$"')"}//#(#b)remote.(*).url */$match[1]})
     __git_command_successful || return
-
     # TODO: Should combine the two instead of either or.
     if (( $#remotes > 0 )); then
         _wanted remotes expl remote compadd $* - $remotes
@@ -493,28 +411,21 @@ __git_remotes () {
         _wanted remotes expl remote _files $* - -W "($gitdir/remotes)" -g "$gitdir/remotes/*"
     fi
 }
-
 __git_flow_hotfix_list ()
 {
     local expl
     declare -a hotfixes
-
     hotfixes=(${${(f)"$(_call_program hotfixes git flow hotfix list 2> /dev/null | tr -d ' |*')"}})
     __git_command_successful || return
-
     _wanted hotfixes expl 'hotfix' compadd $hotfixes
 }
-
 __git_branch_names () {
     local expl
     declare -a branch_names
-
     branch_names=(${${(f)"$(_call_program branchrefs git for-each-ref --format='"%(refname)"' refs/heads 2>/dev/null)"}#refs/heads/})
     __git_command_successful || return
-
     _wanted branch-names expl branch-name compadd $* - $branch_names
 }
-
 __git_command_successful () {
     if (( ${#pipestatus:#0} > 0 )); then
         _message 'not a git repository'
@@ -522,5 +433,4 @@ __git_command_successful () {
     fi
     return 0
 }
-
 zstyle ':completion:*:*:git:*' user-commands flow:'provide high-level repository operations'

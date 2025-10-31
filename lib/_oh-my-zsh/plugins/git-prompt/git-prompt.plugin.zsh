@@ -2,14 +2,11 @@
 # https://zdharma-continuum.github.io/Zsh-100-Commits-Club/Zsh-Plugin-Standard.html
 0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
-
 __GIT_PROMPT_DIR="${0:A:h}"
-
 ## Hook function definitions
 function chpwd_update_git_vars() {
     update_current_git_vars
 }
-
 function preexec_update_git_vars() {
     case "$2" in
         git*|hub*|gh*|stg*)
@@ -17,24 +14,19 @@ function preexec_update_git_vars() {
         ;;
     esac
 }
-
 function precmd_update_git_vars() {
     if [ -n "$__EXECUTED_GIT_COMMAND" ] || [ ! -n "$ZSH_THEME_GIT_PROMPT_CACHE" ]; then
         update_current_git_vars
         unset __EXECUTED_GIT_COMMAND
     fi
 }
-
 autoload -U add-zsh-hook
 add-zsh-hook chpwd chpwd_update_git_vars
 add-zsh-hook precmd precmd_update_git_vars
 add-zsh-hook preexec preexec_update_git_vars
-
-
 ## Function definitions
 function update_current_git_vars() {
     unset __CURRENT_GIT_STATUS
-
     local gitstatus="$__GIT_PROMPT_DIR/gitstatus.py"
     _GIT_STATUS=$(python3 ${gitstatus} 2>/dev/null)
      __CURRENT_GIT_STATUS=("${(@s: :)_GIT_STATUS}")
@@ -48,14 +40,12 @@ function update_current_git_vars() {
     GIT_STASHED=$__CURRENT_GIT_STATUS[8]
     GIT_CLEAN=$__CURRENT_GIT_STATUS[9]
     GIT_DELETED=$__CURRENT_GIT_STATUS[10]
-
     if [ -z ${ZSH_THEME_GIT_SHOW_UPSTREAM+x} ]; then
         GIT_UPSTREAM=
     else
         GIT_UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name "@{upstream}" 2>/dev/null) && GIT_UPSTREAM="${ZSH_THEME_GIT_PROMPT_UPSTREAM_SEPARATOR}${GIT_UPSTREAM}"
     fi
 }
-
 git_super_status() {
     precmd_update_git_vars
     if [ -n "$__CURRENT_GIT_STATUS" ]; then
@@ -92,7 +82,6 @@ git_super_status() {
       echo "$STATUS"
     fi
 }
-
 # Default values for the appearance of the prompt.
 ZSH_THEME_GIT_PROMPT_PREFIX="("
 ZSH_THEME_GIT_PROMPT_SUFFIX=")"
@@ -108,6 +97,5 @@ ZSH_THEME_GIT_PROMPT_UNTRACKED="%{$fg[cyan]%}%{…%G%}"
 ZSH_THEME_GIT_PROMPT_STASHED="%{$fg_bold[blue]%}%{⚑%G%}"
 ZSH_THEME_GIT_PROMPT_CLEAN="%{$fg_bold[green]%}%{✔%G%}"
 ZSH_THEME_GIT_PROMPT_UPSTREAM_SEPARATOR="->"
-
 # Set the prompt.
 RPROMPT='$(git_super_status)'

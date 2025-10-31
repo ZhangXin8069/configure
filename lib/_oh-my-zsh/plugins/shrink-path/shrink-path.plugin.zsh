@@ -33,11 +33,9 @@
 #
 # Ref: https://www.zsh.org/mla/workers/2009/msg00415.html
 #      https://www.zsh.org/mla/workers/2009/msg00419.html
-
 shrink_path () {
         setopt localoptions
         setopt rc_quotes null_glob
-
         typeset -i lastfull=0
         typeset -i short=0
         typeset -i tilde=0
@@ -46,7 +44,6 @@ shrink_path () {
         typeset ellipsis=""
         typeset -i quote=0
         typeset -i expand=0
-
         if zstyle -t ':prompt:shrink_path' fish; then
                 lastfull=1
                 short=1
@@ -56,7 +53,6 @@ shrink_path () {
                 tilde=1
                 named=1
         fi
-
         local last
         zstyle -s ':prompt:shrink_path' last last
         case "$last" in
@@ -65,13 +61,11 @@ shrink_path () {
           (""|*[^0-9]*) lastfull=0 ;;
           (*) lastfull=$last ;;
         esac
-
         zstyle -t ':prompt:shrink_path' short && short=1
         zstyle -t ':prompt:shrink_path' tilde && tilde=1
         zstyle -t ':prompt:shrink_path' glob && ellipsis='*'
         zstyle -t ':prompt:shrink_path' quote && quote=1
         zstyle -t ':prompt:shrink_path' expand && expand=1
-
         while [[ $1 == -* ]]; do
                 case $1 in
                         --)
@@ -134,19 +128,15 @@ shrink_path () {
                 esac
                 shift
         done
-
         typeset -i elllen=${#ellipsis}
         typeset -a tree expn
         typeset result part dir=${1-$PWD}
         typeset -i i
-
         [[ -d $dir ]] || return 0
-
         if (( expand )) {
                 echo "$dir"
                 return 0
         }
-
         if (( named )) {
                 for part in ${(k)nameddirs}; {
                         [[ $dir == ${nameddirs[$part]}(/*|) ]] && dir=${dir/#${nameddirs[$part]}/\~$part}
@@ -176,7 +166,6 @@ shrink_path () {
                                 expn=($(echo ${part}*(-/)))
                                 (( short )) && [[ $i -ge $((length - ellen)) ]] && break
                         done
-
                         typeset -i dif=$(( ${#dir} - ${#part} - ellen ))
                         if [[ $dif -gt 0 ]]
                         then
@@ -193,5 +182,4 @@ shrink_path () {
                 echo ${result:-/}
         )
 }
-
 ## vim:ft=zsh

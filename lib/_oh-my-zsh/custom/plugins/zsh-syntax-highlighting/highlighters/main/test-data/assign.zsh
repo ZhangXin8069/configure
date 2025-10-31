@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='A=1 b=("foo" bar)'
-
 expected_region_highlight=(
   "1 3 assign"                  # A=1
   "3 3 default"                 # 1

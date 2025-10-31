@@ -1,5 +1,4 @@
 #compdef docker-compose
-
 # Description
 # -----------
 #  zsh completion for docker-compose
@@ -13,11 +12,9 @@
 #  * @albers docker-compose bash completion script
 #  * @felixr docker zsh completion script : https://github.com/felixr/docker-zsh-completion
 # -------------------------------------------------------------------------
-
 __docker-compose_q() {
     docker-compose 2>/dev/null $compose_options "$@"
 }
-
 # All services defined in docker-compose.yml
 __docker-compose_all_services_in_compose_file() {
     local already_selected
@@ -26,62 +23,50 @@ __docker-compose_all_services_in_compose_file() {
     __docker-compose_q ps --services "$@" \
         | grep -Ev "^(${already_selected})$"
 }
-
 # All services, even those without an existing container
 __docker-compose_services_all() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     services=$(__docker-compose_all_services_in_compose_file "$@")
     _alternative "args:services:($services)" && ret=0
-
     return ret
 }
-
 # All services that are defined by a Dockerfile reference
 __docker-compose_services_from_build() {
     [[ $PREFIX = -* ]] && return 1
     __docker-compose_services_all --filter source=build
 }
-
 # All services that are defined by an image
 __docker-compose_services_from_image() {
     [[ $PREFIX = -* ]] && return 1
     __docker-compose_services_all --filter source=image
 }
-
 __docker-compose_pausedservices() {
     [[ $PREFIX = -* ]] && return 1
     __docker-compose_services_all --filter status=paused
 }
-
 __docker-compose_stoppedservices() {
     [[ $PREFIX = -* ]] && return 1
     __docker-compose_services_all --filter status=stopped
 }
-
 __docker-compose_runningservices() {
     [[ $PREFIX = -* ]] && return 1
     __docker-compose_services_all --filter status=running
 }
-
 __docker-compose_services() {
     [[ $PREFIX = -* ]] && return 1
     __docker-compose_services_all
 }
-
 __docker-compose_caching_policy() {
     oldp=( "$1"(Nmh+1) )            # 1 hour
     (( $#oldp ))
 }
-
 __docker-compose_commands() {
     local cache_policy
-
     zstyle -s ":completion:${curcontext}:" cache-policy cache_policy
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __docker-compose_caching_policy
     fi
-
     if ( [[ ${+_docker_compose_subcommands} -eq 0 ]] || _cache_invalid docker_compose_subcommands) \
         && ! _retrieve_cache docker_compose_subcommands;
     then
@@ -92,10 +77,8 @@ __docker-compose_commands() {
     fi
     _describe -t docker-compose-commands "docker-compose command" _docker_compose_subcommands
 }
-
 __docker-compose_subcommand() {
     local opts_help opts_force_recreate opts_no_recreate opts_no_build opts_remove_orphans opts_timeout opts_no_color opts_no_deps
-
     opts_help='(: -)--help[Print usage]'
     opts_force_recreate="(--no-recreate)--force-recreate[Recreate containers even if their configuration and image haven't changed. Incompatible with --no-recreate.]"
     opts_no_recreate="(--force-recreate)--no-recreate[If containers already exist, don't recreate them. Incompatible with --force-recreate.]"
@@ -104,9 +87,7 @@ __docker-compose_subcommand() {
     opts_timeout=('(-t --timeout)'{-t,--timeout}"[Specify a shutdown timeout in seconds. (default: 10)]:seconds: ")
     opts_no_color='--no-color[Produce monochrome output.]'
     opts_no_deps="--no-deps[Don't start linked services.]"
-
     integer ret=1
-
     case "$words[1]" in
         (build)
             _arguments \
@@ -308,10 +289,8 @@ __docker-compose_subcommand() {
             _message 'Unknown sub command' && ret=1
             ;;
     esac
-
     return ret
 }
-
 _docker-compose() {
     # Support for subservices, which allows for `compdef _docker docker-shell=_docker_containers`.
     # Based on /usr/share/zsh/functions/Completion/Unix/_git without support for `ret`.
@@ -319,19 +298,15 @@ _docker-compose() {
         _call_function - _$service
         return
     fi
-
     local curcontext="$curcontext" state line
     integer ret=1
     typeset -A opt_args
-
     local file_description
-
     if [[ -n ${words[(r)-f]} || -n ${words[(r)--file]} ]] ; then
         file_description="Specify an override docker-compose file (default: docker-compose.override.yml)"
     else
         file_description="Specify an alternate docker-compose file (default: docker-compose.yml)"
     fi
-
     _arguments -C \
         '(- :)'{-h,--help}'[Get help]' \
         '*'{-f,--file}"[${file_description}]:file:_files -g '*.yml'" \
@@ -352,9 +327,7 @@ _docker-compose() {
         "--skip-hostname-check[Don't check the daemon's hostname against the name specified in the client certificate (for example if your docker host is an IP address)]" \
         '(-): :->command' \
         '(-)*:: :->option-or-argument' && ret=0
-
     local -a relevant_compose_flags relevant_compose_repeatable_flags relevant_docker_flags compose_options docker_options
-
     relevant_compose_flags=(
         "--env-file"
         "--file" "-f"
@@ -367,11 +340,9 @@ _docker-compose() {
         "--tlsverify"
         "--skip-hostname-check"
     )
-
     relevant_compose_repeatable_flags=(
         "--file" "-f"
     )
-
     relevant_docker_flags=(
         "--host" "-H"
         "--tls"
@@ -380,7 +351,6 @@ _docker-compose() {
         "--tlskey"
         "--tlsverify"
     )
-
     for k in "${(@k)opt_args}"; do
         if [[ -n "${relevant_docker_flags[(r)$k]}" ]]; then
             docker_options+=$k
@@ -404,7 +374,6 @@ _docker-compose() {
             fi
         fi
     done
-
     case $state in
         (command)
             __docker-compose_commands && ret=0
@@ -414,8 +383,6 @@ _docker-compose() {
             __docker-compose_subcommand && ret=0
             ;;
     esac
-
     return ret
 }
-
 _docker-compose "$@"

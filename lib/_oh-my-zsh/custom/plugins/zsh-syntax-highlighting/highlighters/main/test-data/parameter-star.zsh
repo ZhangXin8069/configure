@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='() { : $* }'
-
 # This tests that $* isn't highlighted as a glob.
 # If we ever add a "unquoted parameter" style, the expectation may change.
 expected_region_highlight=(

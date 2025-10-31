@@ -1,7 +1,5 @@
 # Sublime Merge Aliases
-
 () {
-
 	if [[ "$OSTYPE" == linux* ]]; then
 		local _sublime_linux_paths
 		_sublime_linux_paths=(
@@ -49,7 +47,5 @@
 			fi
 		done
 	fi
-
 }
-
 alias smt='sm .'

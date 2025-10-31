@@ -1,19 +1,13 @@
 # composer
-
 This plugin provides completion for [composer](https://getcomposer.org/), as well as aliases
 for frequent composer commands. It also adds Composer's global binaries to the PATH, using
 Composer if available.
-
 To use it add `composer` to the plugins array in your zshrc file.
-
 ```zsh
 plugins=(... composer)
 ```
-
 Original author: Daniel Gomes <me@danielcsgomes.com>
-
 ## Aliases
-
 | Alias  | Command                            | Description                                                                             |
 | ------ | ---------------------------------- | --------------------------------------------------------------------------------------- |
 | `c`    | `composer`                         | Starts composer                                                                         |

@@ -58,18 +58,14 @@ _task_conjunctions=(
 )
 _task_cmds=($(task _commands; task _aliases))
 _task_zshcmds=( ${(f)"$(task _zshcommands)"} sentinel:sentinel:sentinel )
-
 _task_aliases=($(task _aliases))
-
 _task() {
     _arguments -s -S \
         "*::task default:_task_default"
     return 0
 }
-
 local -a reply args word
 word=$'[^\0]#\0'
-
 # priorities
 local -a task_priorities
 _regex_words values 'task priorities' \
@@ -77,14 +73,12 @@ _regex_words values 'task priorities' \
   'M:Middle' \
   'L:Low'
 task_priorities=("$reply[@]")
-
 # projects
 local -a task_projects
 task_projects=(
   /"$word"/
   ":values:task projects:compadd -a _task_projects"
 )
-
 local -a _task_dates
 _regex_words values 'task dates' \
   'tod*ay:Today' \
@@ -119,7 +113,6 @@ _regex_words values 'task dates' \
   'later:Later' \
   'someday:Some Day'
 _task_dates=("$reply[@]")
-
 local -a _task_reldates
 _regex_words values 'task reldates' \
   'hrs:n hours' \
@@ -130,19 +123,16 @@ _regex_words values 'task reldates' \
   'th:4th, 5th, etc.' \
   'wks:weeks'
 _task_reldates=("$reply[@]")
-
 task_dates=(
   \( "$_task_dates[@]" \|
     \( /$'[0-9][0-9]#'/- \( "$_task_reldates[@]" \) \)
   \)
 )
-
 local -a task_zshids
 if (( $#_task_zshids )); then
   _regex_words values 'task IDs' $_task_zshids
   task_zshids=("$reply[@]")
 fi
-
 _regex_words values 'task frequencies' \
   'daily:Every day' \
   'day:Every day' \
@@ -158,7 +148,6 @@ _regex_words values 'task frequencies' \
   'biannual:Every two years' \
   'biyearly:Every two years'
 _task_freqs=("$reply[@]")
-
 local -a _task_frequencies
 _regex_words values 'task frequencies' \
   'd:days' \
@@ -166,13 +155,11 @@ _regex_words values 'task frequencies' \
   'q:quarters' \
   'y:years'
 _task_frequencies=("$reply[@]")
-
 task_freqs=(
   \( "$_task_freqs[@]" \|
      \( /$'[0-9][0-9]#'/- \( "$_task_frequencies[@]" \) \)
   \)
 )
-
 # attributes
 local -a task_attributes
 _regex_words -t ':' default 'task attributes' \
@@ -191,7 +178,6 @@ _regex_words -t ':' default 'task attributes' \
   'sc*heduled:Date task is scheduled to start:$task_dates' \
   'dep*ends:Other tasks that this task depends upon:$task_zshids'
 task_attributes=("$reply[@]")
-
 args=(
   \( "$task_attributes[@]" \|
   \( /'(project|description|status|entry|end|start|scheduled|depends|due|wait|recur|priority|until|limit).'/- \( /$'[^:]#:'/ ":default:modifiers:compadd -S ':' -a _task_modifiers" \) \) \|
@@ -201,30 +187,24 @@ args=(
   \) \#
 )
 _regex_arguments _task_attributes "${args[@]}"
-
 ## task commands
-
 # filter completion
 (( $+functions[_task_filter] )) ||
 _task_filter() {
   _task_attributes "$@"
-
   # TODO complete conjunctions only if the previous word is a filter expression, i.e. attribute, ID, any non-command
   _describe -t default 'task conjunctions' _task_conjunctions
 }
-
 # execute completion
 (( $+functions[_task_execute] )) ||
 _task_execute() {
   _files
 }
-
 # id-only completion
 (( $+functions[_task_id] )) ||
 _task_id() {
   _describe -t values 'task IDs' _task_zshids
 }
-
 # subcommand-only function
 (( $+functions[_task_subcommands] )) ||
 _task_subcommands() {
@@ -238,26 +218,21 @@ _task_subcommands() {
     cmd=${_zshcmd%%:*}
     category=${${_zshcmd#*:}%%:*}
     desc=${_zshcmd#*:*:}
-
     # Present each category as soon as the first entry in the *next* category
     # is seen.
     if [[ $category != $lastcategory && -n $lastcategory ]]; then
       _describe -t ${lastcategory}-commands "task ${lastcategory} command" subcommands
       subcommands=()
     fi
-
     # Log the subcommand; we will process it in some future iteration.
     subcommands+=( "$cmd:$desc" )
-
     lastcategory=$category
   done
 }
-
 ## first level completion => task sub-command completion
 (( $+functions[_task_default] )) ||
 _task_default() {
     local cmd ret=1
-
   integer i=1
   while (( i < $#words ))
   do
@@ -270,16 +245,12 @@ _task_default() {
     fi
     (( i++ ))
   done
-
   # update IDs
   _task_zshids=( ${(f)"$(task _zshids)"} )
-
   _task_subcommands
   _describe -t tasks 'task IDs' _task_zshids
   _describe -t aliases 'task aliases' _task_aliases
   _call_function ret _task_filter
-
   return ret
 }
-
 _task "$@"

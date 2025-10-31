@@ -1,15 +1,10 @@
 # git plugin
-
 The git plugin provides many [aliases](#aliases) and a few useful [functions](#functions).
-
 To use it, add `git` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... git)
 ```
-
 ## Aliases
-
 | Alias                  | Command                                                                                                                         |
 | :--------------------- | :------------------------------------------------------------------------------------------------------------------------------ |
 | `grt`                  | `cd "$(git rev-parse --show-toplevel \|\| echo .)"`                                                                             |
@@ -215,19 +210,14 @@ plugins=(... git)
 | `gk`                   | `gitk --all --branches &!`                                                                                                      |
 | `gke`                  | `gitk --all $(git log --walk-reflogs --pretty=%h) &!`                                                                           |
 | `gtl`                  | `gtl(){ git tag --sort=-v:refname -n --list ${1}\* }; noglob gtl`                                                               |
-
 ### Main branch preference
-
 Following the recent push for removing racially-charged words from our technical vocabulary, the git plugin
 favors using a branch name other than `master`. In this case, we favor the shorter, neutral and descriptive
 term `main`. This means that any aliases and functions that previously used `master`, will use `main` if that
 branch exists. We do this via the function `git_main_branch`.
-
 ### Deprecated aliases
-
 These are aliases that have been removed, renamed, or otherwise modified in a way that may, or may not,
 receive further support.
-
 | Alias    | Command                                                   | Modification                                              |
 | :------- | :-------------------------------------------------------- | :-------------------------------------------------------- |
 | `gap`    | `git add --patch`                                         | New alias: `gapa`.                                        |
@@ -247,11 +237,8 @@ receive further support.
 | `gupav`  | `git pull --rebase --autostash -v`                        | now alias `gprav`                                         |
 | `gupom`  | `git pull --rebase origin $(git_main_branch)`             | now alias `gprom`                                         |
 | `gupomi` | `git pull --rebase=interactive origin $(git_main_branch)` | now alias `gpromi`                                        |
-
 ## Functions
-
 ### Current
-
 | Command                  | Description                                                                                                     |
 | :----------------------- | :-------------------------------------------------------------------------------------------------------------- |
 | `current_branch`         | Returns the name of the current branch.                                                                         |
@@ -262,23 +249,17 @@ receive further support.
 | `grename <old> <new>`    | Renames branch `<old>` to `<new>`, including on the origin remote.                                              |
 | `gbda`                   | Deletes all merged branches                                                                                     |
 | `gbds`                   | Deletes all squash-merged branches (**Note: performance degrades with number of branches**)                     |
-
 ### Work in Progress (WIP)
-
 These features allow you to pause developing one branch and switch to another one (_"Work in Progress"_, or
 “wip”). When you want to go back to work, just “unwip” it.
-
 | Command            | Description                                     |
 | :----------------- | :---------------------------------------------- |
 | `gwip`             | Commit wip branch                               |
 | `gunwip`           | Uncommit wip branch                             |
 | `gunwipall`        | Uncommit all recent `--wip--` commits           |
 | `work_in_progress` | Echoes a warning if the current branch is a wip |
-
 Note that `gwip` and `gunwip` are aliases, but are also documented here to group all related WIP features.
-
 ### Deprecated functions
-
 | Command              | Description                             | Reason                                                           |
 | :------------------- | :-------------------------------------- | :--------------------------------------------------------------- |
 | `current_repository` | Return the names of the current remotes | Didn't work properly. Use `git remote -v` instead (`grv` alias). |

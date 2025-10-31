@@ -2,7 +2,6 @@ if ! (( $+commands[tmux] )); then
   print "zsh tmux plugin: tmux not found. Please install tmux before using this plugin." >&2
   return 1
 fi
-
 # CONFIGURATION VARIABLES
 # Automatically start tmux
 : ${ZSH_TMUX_AUTOSTART:=false}
@@ -47,7 +46,6 @@ else
 fi
 # Set -u option to support unicode
 : ${ZSH_TMUX_UNICODE:=false}
-
 # ALIASES
 function _build_tmux_alias {
   setopt localoptions no_rc_expand_param
@@ -58,44 +56,35 @@ function _build_tmux_alias {
       tmux $2 $3 \"\$@\"
     fi
   }"
-
   local f s
   f="_omz_tmux_alias_${1}"
   s=(${(z)2})
-
   eval "function ${f}() {
     shift words;
     words=(tmux ${@:2} \$words);
     ((CURRENT+=${#s[@]}+1))
     _tmux
   }"
-
   compdef "$f" "$1"
 }
-
 alias tksv='tmux kill-server'
 alias tl='tmux list-sessions'
 alias tmuxconf='$EDITOR $ZSH_TMUX_CONFIG'
-
 _build_tmux_alias "ta" "attach" "-t"
 _build_tmux_alias "tad" "attach -d" "-t"
 _build_tmux_alias "ts" "new-session" "-s"
 _build_tmux_alias "tkss" "kill-session" "-t"
-
 unfunction _build_tmux_alias
-
 # Determine if the terminal supports 256 colors
 if [[ $terminfo[colors] == 256 ]]; then
   export ZSH_TMUX_TERM=$ZSH_TMUX_FIXTERM_WITH_256COLOR
 else
   export ZSH_TMUX_TERM=$ZSH_TMUX_FIXTERM_WITHOUT_256COLOR
 fi
-
 # Handle $0 according to the standard:
 # https://zdharma-continuum.github.io/Zsh-100-Commits-Club/Zsh-Plugin-Standard.html
 0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
-
 # Set the correct local config file to use.
 if [[ "$ZSH_TMUX_ITERM2" == "false" && -e "$ZSH_TMUX_CONFIG" ]]; then
   export ZSH_TMUX_CONFIG
@@ -103,22 +92,18 @@ if [[ "$ZSH_TMUX_ITERM2" == "false" && -e "$ZSH_TMUX_CONFIG" ]]; then
 else
   export _ZSH_TMUX_FIXED_CONFIG="${0:h:a}/tmux.only.conf"
 fi
-
 # Wrapper function for tmux.
 function _zsh_tmux_plugin_run() {
   if [[ -n "$@" ]]; then
     command tmux "$@"
     return $?
   fi
-
   local -a tmux_cmd
   tmux_cmd=(command tmux)
   [[ "$ZSH_TMUX_ITERM2" == "true" ]] && tmux_cmd+=(-CC)
   [[ "$ZSH_TMUX_UNICODE" == "true" ]] && tmux_cmd+=(-u)
-
   local _detached=""
   [[ "$ZSH_TMUX_DETACHED" == "true" ]] && _detached="-d"
-
   local session_name
   if [[ "$ZSH_TMUX_AUTONAME_SESSION" == "true" ]]; then
     # Name the session after the basename of the current directory
@@ -130,14 +115,12 @@ function _zsh_tmux_plugin_run() {
   else
       session_name="$ZSH_TMUX_DEFAULT_SESSION_NAME"
   fi
-
   # Try to connect to an existing session.
   if [[ -n "$session_name" ]]; then
     [[ "$ZSH_TMUX_AUTOCONNECT" == "true" ]] && $tmux_cmd attach $_detached -t "$session_name"
   else
     [[ "$ZSH_TMUX_AUTOCONNECT" == "true" ]] && $tmux_cmd attach $_detached
   fi
-
   # If failed, just run tmux, fixing the TERM variable if requested.
   if [[ $? -ne 0 ]]; then
     if [[ "$ZSH_TMUX_FIXTERM" == "true" ]]; then
@@ -145,24 +128,20 @@ function _zsh_tmux_plugin_run() {
     elif [[ -e "$ZSH_TMUX_CONFIG" ]]; then
       tmux_cmd+=(-f "$ZSH_TMUX_CONFIG")
     fi
-
     if [[ -n "$session_name" ]]; then
       $tmux_cmd new-session -s "$session_name"
     else
       $tmux_cmd new-session
     fi
   fi
-
   if [[ "$ZSH_TMUX_AUTOQUIT" == "true" ]]; then
     exit
   fi
 }
-
 # Use the completions for tmux for our function
 compdef _tmux _zsh_tmux_plugin_run
 # Alias tmux to our wrapper function.
 alias tmux=_zsh_tmux_plugin_run
-
 function _tmux_directory_session() {
   # current directory without leading path
   local dir=${PWD##*/}
@@ -173,9 +152,7 @@ function _tmux_directory_session() {
   # create or attach to the session
   tmux new -As "$session_name"
 }
-
 alias tds=_tmux_directory_session
-
 # Autostart if not already in tmux and enabled.
 if [[ -z "$TMUX" && "$ZSH_TMUX_AUTOSTART" == "true" && -z "$INSIDE_EMACS" && -z "$EMACS" && -z "$VIM" && -z "$INTELLIJ_ENVIRONMENT_READER" ]]; then
   # Actually don't autostart if we already did and multiple autostarts are disabled.

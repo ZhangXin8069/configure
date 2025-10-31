@@ -26,11 +26,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 ZSH_HIGHLIGHT_PATTERNS+=('rm -rf *' 'fg=white,bold,bg=red')
-
 BUFFER='rm -rf /'
-
 expected_region_highlight=(
   "1 8 fg=white,bold,bg=red" # rm -rf /
 )

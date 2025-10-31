@@ -27,9 +27,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER=$'x="$(ls x y z)"'
-
 expected_region_highlight=(
   '1 15 assign'                                 # x="$(ls x y z)"
   '3 15 default'                                # "$(ls x y z)"

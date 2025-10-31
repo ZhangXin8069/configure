@@ -2,15 +2,12 @@
 _cakephp3_get_command_list () {
 	bin/cake completion commands
 }
-
 _cakephp3_get_sub_command_list () {
 	bin/cake completion subcommands ${words[2]}
 }
-
 _cakephp3_get_3rd_argument () {
 	bin/cake ${words[2]} ${words[3]} | \grep '\-\ '| \awk '{print $2}'
 }
-
 _cakephp3 () {
 	local -a has3rdargument
 	has3rdargument=("all" "controller" "fixture" "model" "template")
@@ -28,10 +25,8 @@ _cakephp3 () {
 		fi
   fi
 }
-
 compdef _cakephp3 bin/cake
 compdef _cakephp3 cake
-
 #Alias
 alias c3='bin/cake'
 alias c3cache='bin/cake schema_cache clear'

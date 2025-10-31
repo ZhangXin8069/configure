@@ -26,14 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 if zmodload zsh/pcre 2>/dev/null; then
   setopt RE_MATCH_PCRE
-
   ZSH_HIGHLIGHT_REGEXP+=('\bsudo\b' 'fg=white,bold,bg=red')
-
   BUFFER='sudo ls'
-
   expected_region_highlight=(
     "1 4 fg=white,bold,bg=red"
   )

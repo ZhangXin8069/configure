@@ -1,13 +1,9 @@
 This plugin allows to display command's execution time in a very nonintrusive way.
-
 Timer can be tuned by these two variables:
-
 * `TIMER_PRECISION` allows to control number of decimal places (default `1`)
 * `TIMER_FORMAT` allows to adjust display format (default `'/%d'`)
 * `TIMER_THRESHOLD` allows to set the minimum execution time that causes the timer to be shown (default `0`)
-
 Sample session:
-
     me@here:~$ sleep 1                                         /1.0s
     me@here:~$ sleep 73                                     /1m13.0s
     me@here:~$ TIMER_FORMAT='[%d]'; TIMER_PRECISION=2        [0.00s]

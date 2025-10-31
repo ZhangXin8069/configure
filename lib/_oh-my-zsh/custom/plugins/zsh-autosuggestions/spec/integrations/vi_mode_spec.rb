@@ -4,7 +4,6 @@ describe 'when using vi mode' do
       session.run_command('bindkey -v')
     end
   end
-
   describe 'moving the cursor after exiting insert mode' do
     it 'should not clear the current suggestion' do
       with_history('foobar foo') do
@@ -12,12 +11,10 @@ describe 'when using vi mode' do
           send_string('foo').
           send_keys('escape').
           send_keys('h')
-
         wait_for { session.content }.to eq('foobar foo')
       end
     end
   end
-
   describe '`vi-forward-word-end`' do
     it 'should accept through the end of the current word' do
       with_history('foobar foo') do
@@ -27,12 +24,10 @@ describe 'when using vi mode' do
           send_keys('e'). # vi-forward-word-end
           send_keys('a'). # vi-add-next
           send_string('baz')
-
         wait_for { session.content }.to eq('foobarbaz')
       end
     end
   end
-
   describe '`vi-forward-word`' do
     it 'should accept through the first character of the next word' do
       with_history('foobar foo') do
@@ -42,12 +37,10 @@ describe 'when using vi mode' do
           send_keys('w'). # vi-forward-word
           send_keys('a'). # vi-add-next
           send_string('az')
-
         wait_for { session.content }.to eq('foobar faz')
       end
     end
   end
-
   describe '`vi-find-next-char`' do
     it 'should accept through the next occurrence of the character' do
       with_history('foobar foo') do
@@ -58,22 +51,18 @@ describe 'when using vi mode' do
           send_keys('o').
           send_keys('a'). # vi-add-next
           send_string('b')
-
         wait_for { session.content }.to eq('foobar fob')
       end
     end
   end
-
   describe '`vi-delete`' do
     it 'should be able to remove the last character in the buffer' do
       skip 'deleting last char did not work below zsh version 5.0.8' if session.zsh_version < Gem::Version.new('5.0.8')
-
       session.
         send_string('echo foo').
         send_keys('escape').
         send_keys('d').
         send_keys('l')
-
       wait_for { session.content }.to eq('echo fo')
     end
   end

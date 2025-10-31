@@ -27,11 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # We aren't testing how this is highlighted; we're testing that it's not
 # evaluated.  If it gets evaluated, the test suite will die.
 BUFFER=$': /(e*exit 42*)'
-
 expected_region_highlight=(
   '1 1 builtin'    # :
   '3 15 default'   # /(e*exit 42*)

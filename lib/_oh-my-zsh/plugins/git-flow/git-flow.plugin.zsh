@@ -23,7 +23,6 @@ alias gflrfc='git flow release finish ${$(git_current_branch)#release/}'
 alias gflrp='git flow release publish'
 alias gflrpc='git flow release publish ${$(git_current_branch)#release/}'
 alias gflrs='git flow release start'
-
 # Source completion script
 # Handle $0 according to the standard:
 # https://zdharma-continuum.github.io/Zsh-100-Commits-Club/Zsh-Plugin-Standard.html

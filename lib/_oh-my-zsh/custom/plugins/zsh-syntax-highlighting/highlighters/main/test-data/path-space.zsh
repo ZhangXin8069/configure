@@ -26,11 +26,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 mkdir A
 touch "A/mu with spaces"
 BUFFER='ls A/mu\ with\ spaces'
-
 expected_region_highlight=(
   "1 2  command" # ls
   "4 21 path"    # A/mu\ with\ spaces

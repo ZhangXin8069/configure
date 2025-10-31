@@ -1,9 +1,6 @@
 #compdef tugboat
 #autoload
-
 # Tugboat zsh autocompletion
-
-
 local -a _commands
 _commands=(
   'add-key:[NAME] Upload an ssh public key.'
@@ -31,7 +28,6 @@ _commands=(
   'version:Show version.'
   'wait:[FUZZY_NAME] Wait for a droplet to reach a state.'
 )
-
 local -a _create_arguments
 _create_arguments=(
   '-s:[--size=N] The size_id of the droplet'
@@ -42,31 +38,24 @@ _create_arguments=(
   '-b:[--backups-enabled] Enable backups on the droplet'
   '-q:[--quiet]'
 )
-
 __task_list ()
 {
   local expl
   declare -a tasks
-
   arguments=(add-key authorize create destroy destroy_image droplets halt help images info info_image keys password-reset rebuild regions resize restart sizes snapshot ssh start verify version wait)
-
   _wanted tasks expl 'help' compadd $arguments
 }
-
 __droplets_list ()
 {
     _wanted application expl 'command' compadd $(command tugboat droplets | cut -d " " -f1)
 }
-
 __tugboat-create ()
 {
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
         ':command:->command' \
         '*::options:->options'
-
     case $state in
         (command)
             _describe -t commands "gem subcommand" _create_arguments
@@ -74,30 +63,24 @@ __tugboat-create ()
         ;;
     esac
 }
-
 local curcontext="$curcontext" state line
 typeset -A opt_args
-
 _arguments -C \
     ':command:->command' \
     '*::options:->options'
-
 case $state in
   (command)
     _describe -t commands "gem subcommand" _commands
     return
   ;;
-
   (options)
     case $line[1] in
       (help)
         _arguments ':feature:__task_list'
       ;;
-
       (ssh)
         _arguments ':feature:__droplets_list'
       ;;
-
       (create)
         _arguments ':feature:__tugboat-create'
       ;;
