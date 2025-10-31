@@ -26,15 +26,12 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 sudo() {}
-
 # Tests three codepaths:
 # * -i  (no argument)
 # * -C3 (pasted argument)
 # * -u otheruser (non-pasted argument)
 BUFFER='sudo -C3 -u otheruser -i ls /; sudo ; sudo -u ; sudo notacommand'
-
 expected_region_highlight=(
   "1 4 precommand"             # sudo
   "6 8 single-hyphen-option"   # -C3

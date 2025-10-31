@@ -20,17 +20,11 @@
 # THE SOFTWARE.
 #
 # Author: Konstantin Lepa <konstantin.lepa@gmail.com>
-
 """ANSI Color formatting for output in terminal."""
-
 from __future__ import print_function
 import os
-
-
 __ALL__ = [ 'colored', 'cprint' ]
-
 VERSION = (1, 1, 0)
-
 ATTRIBUTES = dict(
         list(zip([
             'bold',
@@ -46,8 +40,6 @@ ATTRIBUTES = dict(
             ))
         )
 del ATTRIBUTES['']
-
-
 HIGHLIGHTS = dict(
         list(zip([
             'on_grey',
@@ -62,8 +54,6 @@ HIGHLIGHTS = dict(
             list(range(40, 48))
             ))
         )
-
-
 COLORS = dict(
         list(zip([
             'grey',
@@ -78,23 +68,15 @@ COLORS = dict(
             list(range(30, 38))
             ))
         )
-
-
 RESET = '\033[0m'
-
-
 def colored(text, color=None, on_color=None, attrs=None):
     """Colorize text.
-
     Available text colors:
         red, green, yellow, blue, magenta, cyan, white.
-
     Available text highlights:
         on_red, on_green, on_yellow, on_blue, on_magenta, on_cyan, on_white.
-
     Available attributes:
         bold, dark, underline, blink, reverse, concealed.
-
     Example:
         colored('Hello, World!', 'red', 'on_grey', ['blue', 'blink'])
         colored('Hello, World!', 'green')
@@ -103,27 +85,18 @@ def colored(text, color=None, on_color=None, attrs=None):
         fmt_str = '\033[%dm%s'
         if color is not None:
             text = fmt_str % (COLORS[color], text)
-
         if on_color is not None:
             text = fmt_str % (HIGHLIGHTS[on_color], text)
-
         if attrs is not None:
             for attr in attrs:
                 text = fmt_str % (ATTRIBUTES[attr], text)
-
         text += RESET
     return text
-
-
 def cprint(text, color=None, on_color=None, attrs=None, **kwargs):
     """Print colorize text.
-
     It accepts arguments of print function.
     """
-
     print((colored(text, color, on_color, attrs)), **kwargs)
-
-
 if __name__ == '__main__':
     print('Current terminal type: %s' % os.getenv('TERM'))
     print('Test basic colors:')
@@ -136,7 +109,6 @@ if __name__ == '__main__':
     cprint('Cyan color', 'cyan')
     cprint('White color', 'white')
     print(('-' * 78))
-
     print('Test highlights:')
     cprint('On grey color', on_color='on_grey')
     cprint('On red color', on_color='on_red')
@@ -147,7 +119,6 @@ if __name__ == '__main__':
     cprint('On cyan color', on_color='on_cyan')
     cprint('On white color', color='grey', on_color='on_white')
     print('-' * 78)
-
     print('Test attributes:')
     cprint('Bold grey color', 'grey', attrs=['bold'])
     cprint('Dark red color', 'red', attrs=['dark'])
@@ -160,9 +131,7 @@ if __name__ == '__main__':
     cprint('Dark blink concealed white color', 'white',
             attrs=['dark', 'blink', 'concealed'])
     print(('-' * 78))
-
     print('Test mixing:')
     cprint('Underline red on grey color', 'red', 'on_grey',
             ['underline'])
     cprint('Reversed green on red color', 'green', 'on_red', ['reverse'])
-

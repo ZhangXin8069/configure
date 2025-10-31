@@ -27,10 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Define named and anonymous function using the alternative syntax
 BUFFER=$'function f { pwd }; function { pwd }'
-
 expected_region_highlight=(
   '1 8 reserved-word'                # function
   '10 10 default'                    # f

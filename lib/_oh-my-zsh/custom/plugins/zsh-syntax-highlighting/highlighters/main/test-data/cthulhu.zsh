@@ -27,11 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 #        0000000 0 01111111111222222 222233333 3 333344 4 4 444444555555555 5 6 6666 6 6 6667777777777888 8 8 88888999 9 9999 9 9 00 00 0000001111
 #        1234567 8 90123456789012345 678901234 5 678901 2 3 456789012345678 9 0 1234 5 6 7890123456789012 3 4 56789012 3 4567 8 9 01 23 4567890123
 BUFFER=$'echo Ph\\\'ng`echo lui "mg"\\`echo lw\\\'nafh \\\\\\`echo Cthu"lhu\\\\\\` R\\\\\'ly$(echo eh wag\\\\\\`echo h\\\'nag\\\\\\`\'l\' fht)agn`'
-
 expected_region_highlight=(
   '1 4 builtin'                                     # echo
   '6 113 default'                                   # Ph\'ng`echo lui "mg"\`echo lw\'nafh \\\`echo Cthu"lhu\\\` R\\'ly$(echo eh wag\\\`echo h\'nag\\\`'l' fht)agn`

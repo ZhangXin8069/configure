@@ -1,24 +1,16 @@
 # juju plugin
-
 This plugin provides useful aliases and functions for [juju](https://juju.is/) (for TAB completion,
 refer to the [official repo](https://github.com/juju/juju/blob/develop/etc/bash_completion.d/juju)).
-
 To use this plugin, add `juju` to the plugins array in your zshrc file.
-
 ```zsh
 plugins=(... juju)
 ```
-
 ## Aliases
-
 Naming convention:
-
 - `!` suffix: `--force --no-wait -y`.
 - `ds` suffix: `--destroy-storage`.
 - `jsh` prefix means `juju show-*`.
-
 ### General
-
 | Alias   | Command                                     | Description                                            |
 |---------|---------------------------------------------|--------------------------------------------------------|
 | `j`     | `juju`                                      | The juju command                                       |
@@ -31,9 +23,7 @@ Naming convention:
 | `jstj`  | `juju status --format=json`                 | Show status in json format (more detailed)             |
 | `jst`   | `juju status --relations --color`           | Show status, including relations, in color             |
 | `jsts`  | `juju status --relations --storage --color` | Show status, including relations and storage, in color |
-
 ### Bootstrap
-
 | Alias   | Command                             | Description                                           |
 |---------|-------------------------------------|-------------------------------------------------------|
 | `jb`    | `juju bootstrap`                    | Initializing a Juju cloud environment                 |
@@ -42,9 +32,7 @@ Naming convention:
 | `jblng` | `juju bootstrap --no-gui localhost` | Initializing an lxd cloud environment without GUI     |
 | `jbm`   | `juju bootstrap microk8s`           | Initializing a MicroK8s cloud environment             |
 | `jbmng` | `juju bootstrap --no-gui microk8s`  | Initializing a MicroK8s cloud environment without GUI |
-
 ### Controller
-
 | Alias    | Command                                                                               | Description                                                       |
 |----------|---------------------------------------------------------------------------------------|-------------------------------------------------------------------|
 | `jctl`   | `juju controllers`                                                                    | List all controllers                                              |
@@ -56,9 +44,7 @@ Naming convention:
 | `jkc`    | `juju kill-controller -y -t 0`                                                        | Forcibly terminate all associated resources for a Juju controller |
 | `jshc`   | `juju show-controller`                                                                | Shows detailed information of a controller                    |
 | `jsw`    | `juju switch`                                                                         | Select or identify the current controller and model               |
-
 ### Model
-
 | Alias    | Command                                                     | Description                                           |
 |----------|-------------------------------------------------------------|-------------------------------------------------------|
 | `jam`    | `juju add-model`                                            | Add a hosted model                                    |
@@ -70,9 +56,7 @@ Naming convention:
 | `jm`     | `juju models`                                               | List models a user can access on a controller         |
 | `jshm`   | `juju show-model`                                           | Show information about the current or specified model |
 | `jsw`    | `juju switch`                                               | Select or identify the current controller and model   |
-
 ### Application / unit
-
 | Alias    | Command                                                       | Description                                                               |
 |----------|---------------------------------------------------------------|---------------------------------------------------------------------------|
 | `jc`     | `juju config`                                                 | Get, set, or reset configuration for a deployed application               |
@@ -89,24 +73,18 @@ Naming convention:
 | `jssh`   | `juju ssh`                                                    | Initiate an SSH session or execute a command on a Juju target             |
 | `jsshc`  | `juju ssh --container`                                        | Initiate an SSH session or execute a command on a given container         |
 | `jshu`   | `juju show-unit`                                              | Displays information about a unit                                         |
-
 ### Storage
-
 | Alias   | Command                       | Description                                     |
 |---------|-------------------------------|-------------------------------------------------|
 | `jrs`   | `juju remove-storage`         | Remove storage                                  |
 | `jrs!`  | `juju remove-storage --force` | Remove storage even if it is currently attached |
-
 ### Relation
-
 | Alias     | Command                        | Description                                                       |
 |-----------|--------------------------------|-------------------------------------------------------------------|
 | `jrel`    | `juju relate`                  | Relate two applications                                           |
 | `jrmrel`  | `juju remove-relation`         | Remove an existing relation between two applications.             |
 | `jrmrel!` | `juju remove-relation --force` | Remove an existing relation between two applications, forcefully. |
-
 ### Cross-model relation (CMR)
-
 | Alias    | Command            | Description                                                    |
 |----------|--------------------|----------------------------------------------------------------|
 | `jex`    | `juju expose`      | Make an application publicly available over the network        |
@@ -114,15 +92,11 @@ Naming convention:
 | `jcon`   | `juju consume`     | Add a remote offer to the model                                |
 | `jrmsas` | `juju remove-saas` | Remove consumed applications (SAAS) from the model             |
 | `junex`  | `juju unexpose`    | Remove public availability over the network for an application |
-
 ### Bundle
-
 | Alias | Command              | Description                                                 |
 |-------|----------------------|-------------------------------------------------------------|
 | `jeb` | `juju export-bundle` | Export the current model configuration as a reusable bundle |
-
 ## Functions
-
 - `jaddr <app_name> [unit_num]`: display app or unit IP address.
 - `jreld <relation_name> <app_name> <unit_num>`: display app and unit relation data.
 - `jclean`: destroy all controllers

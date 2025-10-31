@@ -1,27 +1,18 @@
 # Colemak plugin
-
 This plugin remaps keys in `zsh`'s [`vi`-style navigation mode](http://zsh.sourceforge.net/Doc/Release/Zsh-Line-Editor.html#Keymaps)
 for a [Colemak](https://colemak.com/) keyboard layout, to match the QWERTY position:
-
 ![Colemak layout on a US keyboard](https://colemak.com/wiki/images/6/6c/Colemak2.png)
-
 To use it, add it to the plugins array in your `~/.zshrc` file:
-
 ```
 plugins=(... colemak)
 ```
-
 You will also need to enable `vi` mode, so add another line to `~/.zshrc`:
-
 ```
 bindkey -v
 ```
-
 Restart your shell and hit the `<ESC>` key to activate `vicmd` (navigation) mode,
 and start navigating `zsh` with your new keybindings!
-
 ## Key bindings for vicmd
-
 | Old        | New        | Binding                   | Description                                        |
 |------------|------------|---------------------------|----------------------------------------------------|
 | `CTRL`+`j` | `CTRL`+`n` | accept-line               | Insert new line                                    |
@@ -36,9 +27,7 @@ and start navigating `zsh` with your new keybindings!
 | `J`        | `N`        | vi-join                   | Join the current line with the next one            |
 | `e`        | `j`        | vi-forward-word-end       | Move to the end of the next word                   |
 | `E`        | `J`        | vi-forward-blank-word-end | Move to end of the current or next word            |
-
 ## Key bindings for less
-
 | Keyboard shortcut | `less` key binding |
 |-------------------|--------------------|
 | `n`               | forw-line          |

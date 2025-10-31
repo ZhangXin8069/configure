@@ -27,9 +27,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='echo =(:) a=(:) =(echo foo'
-
 expected_region_highlight=(
   '1 4 builtin' # echo
   '6 9 default' # =(:)
@@ -44,7 +42,6 @@ expected_region_highlight=(
   '19 22 builtin' # echo
   '24 26 default' # foo
 )
-
 if [[ ${(z):-'$('} == '$( ' ]]; then # ignore zsh 5.0.8 bug
   expected_region_highlight[8]='17 27 default' # =(echo foo
   expected_region_highlight[9]='17 27 process-substitution' # =(echo foo

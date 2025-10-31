@@ -1,7 +1,6 @@
 # WP-CLI
 # A command line interface for WordPress
 # https://wp-cli.org/
-
 # Core
 alias wpcc='wp core config'
 alias wpcd='wp core download'
@@ -12,12 +11,10 @@ alias wpcmi='wp core multisite-install'
 alias wpcu='wp core update'
 alias wpcudb='wp core update-db'
 alias wpcvc='wp core verify-checksums'
-
 # Cron
 alias wpcre='wp cron event'
 alias wpcrs='wp cron schedule'
 alias wpcrt='wp cron test'
-
 # Db
 alias wpdbe='wp db export'
 alias wpdbi='wp db import'
@@ -25,14 +22,12 @@ alias wpdbcr='wp db create'
 alias wpdbs='wp db search'
 alias wpdbch='wp db check'
 alias wpdbr='wp db repair'
-
 # Menu
 alias wpmc='wp menu create'
 alias wpmd='wp menu delete'
 alias wpmi='wp menu item'
 alias wpml='wp menu list'
 alias wpmlo='wp menu location'
-
 # Plugin
 alias wppa='wp plugin activate'
 alias wppda='wp plugin deactivate'
@@ -47,7 +42,6 @@ alias wppst='wp plugin status'
 alias wppt='wp plugin toggle'
 alias wppun='wp plugin uninstall'
 alias wppu='wp plugin update'
-
 # Post
 alias wppoc='wp post create'
 alias wppod='wp post delete'
@@ -58,10 +52,8 @@ alias wppol='wp post list'
 alias wppom='wp post meta'
 alias wppou='wp post update'
 alias wppourl='wp post url'
-
 # Sidebar
 alias wpsbl='wp sidebar list'
-
 # Theme
 alias wpta='wp theme activate'
 alias wptd='wp theme delete'
@@ -76,7 +68,6 @@ alias wptp='wp theme path'
 alias wpts='wp theme search'
 alias wptst='wp theme status'
 alias wptu='wp theme update'
-
 # User
 alias wpuac='wp user add-cap'
 alias wpuar='wp user add-role'
@@ -92,7 +83,6 @@ alias wpurc='wp user remove-cap'
 alias wpurr='wp user remove-role'
 alias wpusr='wp user set-role'
 alias wpuu='wp user update'
-
 # Widget
 alias wpwa='wp widget add'
 alias wpwda='wp widget deactivate'
@@ -100,15 +90,12 @@ alias wpwd='wp widget delete'
 alias wpwl='wp widget list'
 alias wpwm='wp widget move'
 alias wpwu='wp widget update'
-
 # Completion for wp
 autoload -U +X bashcompinit && bashcompinit
 _wp_complete() {
 	local cur=${COMP_WORDS[COMP_CWORD]}
-
 	IFS=$'\n' # want to preserve spaces at the end
 	local opts="$(wp cli completions --line="$COMP_LINE" --point="$COMP_POINT")"
-
 	if [[ "$opts" =~ \<file\>\s* ]]; then
 		COMPREPLY=($(compgen -f -- $cur))
 	elif [[ $opts = "" ]]; then

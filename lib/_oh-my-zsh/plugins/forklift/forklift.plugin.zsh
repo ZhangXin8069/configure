@@ -28,7 +28,6 @@ function fl {
     fi
   fi
   osascript 2>&1 1>/dev/null <<END
-
   try
     tell application "Finder"
         set forkLiftSetapp to name of application file id "com.binarynights.forklift-setapp"
@@ -57,7 +56,6 @@ function fl {
   on error err_msg number err_num
     set forkLift to null
   end try
-
   if forkLiftSetapp is not null and application forkLiftSetapp is running then
     tell application forkLiftSetapp
         activate
@@ -88,7 +86,6 @@ function fl {
     else if forkLift is not null then
         set appName to forkLift
     end if
-
     tell application appName
         activate
         set forkLiftVersion to version
@@ -100,7 +97,6 @@ function fl {
         activate
     end tell
   end if
-
   tell application "System Events"
     tell application process "ForkLift"
         try

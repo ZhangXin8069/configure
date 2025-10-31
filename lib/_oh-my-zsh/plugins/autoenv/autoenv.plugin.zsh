@@ -6,7 +6,6 @@ if ! type autoenv_init >/dev/null; then
   if (( $+commands[activate.sh] )); then
     autoenv_dir="${commands[activate.sh]:h}"
   fi
-
   # Locate autoenv installation
   if [[ -z $autoenv_dir ]]; then
     install_locations=(
@@ -29,7 +28,6 @@ if ! type autoenv_init >/dev/null; then
       fi
     done
   fi
-
   # Look for Homebrew path as a last resort
   if [[ -z "$autoenv_dir" ]] && (( $+commands[brew] )); then
     d=$(brew --prefix)/opt/autoenv
@@ -37,7 +35,6 @@ if ! type autoenv_init >/dev/null; then
       autoenv_dir=$d
     fi
   fi
-
   # Complain if autoenv is not installed
   if [[ -z $autoenv_dir ]]; then
     cat <<END >&2
@@ -58,11 +55,9 @@ END
 fi
 }
 [[ $? != 0 ]] && return $?
-
 # The use_env call below is a reusable command to activate/create a new Python
 # virtualenv, requiring only a single declarative line of code in your .env files.
 # It only performs an action if the requested virtualenv is not the current one.
-
 use_env() {
   local venv
   venv="$1"

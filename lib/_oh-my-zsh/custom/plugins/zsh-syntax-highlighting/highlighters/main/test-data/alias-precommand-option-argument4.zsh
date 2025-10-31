@@ -27,13 +27,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 alias sudo_b='sudo -b'
 alias sudo_b_u='sudo_b -u'
 sudo() {}
-
 BUFFER='sudo_b_u phy1729 ls foo'
-
 expected_region_highlight=(
   '1 8 alias'     # sudo_b_u
   '10 16 default' # phy1729

@@ -1,7 +1,6 @@
 # Don't try to load nvm if command already available
 # Note: nvm is a function so we need to use `which`
 which nvm &>/dev/null && return
-
 # See https://github.com/nvm-sh/nvm#installation-and-update
 if [[ -z "$NVM_DIR" ]]; then
   if [[ -d "$HOME/.nvm" ]]; then
@@ -15,11 +14,9 @@ if [[ -z "$NVM_DIR" ]]; then
     fi
   fi
 fi
-
 if [[ -z "$NVM_DIR" ]] || [[ ! -f "$NVM_DIR/nvm.sh" ]]; then
   return
 fi
-
 function _omz_load_nvm_completion {
   local _nvm_completion
   # Load nvm bash completion
@@ -35,23 +32,19 @@ function _omz_load_nvm_completion {
   done
   unfunction _omz_load_nvm_completion
 }
-
 function _omz_setup_autoload {
   if ! zstyle -t ':omz:plugins:nvm' autoload; then
     unfunction _omz_setup_autoload
     return
   fi
-
   # Autoload nvm when finding a .nvmrc file in the current directory
   # Adapted from: https://github.com/nvm-sh/nvm#zsh
   function load-nvmrc {
     local nvmrc_path="$(nvm_find_nvmrc)"
     local nvm_silent=""
     zstyle -t ':omz:plugins:nvm' silent-autoload && nvm_silent="--silent"
-
     if [[ -n "$nvmrc_path" ]]; then
       local nvmrc_node_version=$(nvm version $(command cat "$nvmrc_path" | tr -dc '[:print:]'))
-
       if [[ "$nvmrc_node_version" = "N/A" ]]; then
         nvm install
       elif [[ "$nvmrc_node_version" != "$(nvm version)" ]]; then
@@ -59,18 +52,14 @@ function _omz_setup_autoload {
       fi
     elif [[ -n "$(PWD=$OLDPWD nvm_find_nvmrc)" ]] && [[ "$(nvm version)" != "$(nvm version default)" ]]; then
       [[ -z $nvm_silent ]] && echo "Reverting to nvm default version"
-
       nvm use default $nvm_silent
     fi
   }
-
   autoload -U add-zsh-hook
   add-zsh-hook chpwd load-nvmrc
-
   load-nvmrc
   unfunction _omz_setup_autoload
 }
-
 if zstyle -t ':omz:plugins:nvm' lazy; then
   # Call nvm when first using nvm, node, npm, pnpm, yarn, corepack or other commands in lazy-cmd
   zstyle -a ':omz:plugins:nvm' lazy-cmd nvm_lazy_cmd

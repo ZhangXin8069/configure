@@ -26,13 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Assumes that '/bin/sh' exists and '/bin/s' does not exist.
 # Related to path_prefix.zsh
-
 PREBUFFER=$'ls \\\n'
 BUFFER='/bin/s'
-
 expected_region_highlight=(
   '1 6 path_prefix' # /bin/s
 )
