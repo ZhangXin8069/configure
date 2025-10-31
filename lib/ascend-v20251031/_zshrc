@@ -1,0 +1,20 @@
+export ZSH="/home/phyww/zhangxin/configure/lib/_oh-my-zsh"
+ZSH_THEME="robbyrussell"
+plugins=(
+  kubectx
+  aws
+  git
+  docker
+  you-should-use
+  zsh-syntax-highlighting
+  zsh-autosuggestions
+)
+source $ZSH/oh-my-zsh.sh
+export MANPATH="/usr/local/man:$MANPATH"
+if [[ -n $SSH_CONNECTION ]]; then
+  export EDITOR='vim'
+else
+  export EDITOR='mvim'
+fi
+export ARCHFLAGS="-arch x86_64"
+prompt_context() {}
