@@ -1,15 +1,11 @@
 #compdef rustc
-
 local -a _rustc_opts_switches _rustc_opts_lint _rustc_opts_debug
-
 typeset -A opt_args
-
 _rustc_debuginfo_levels=(
     "0[no debug info]"
     "1[line-tables only (for stacktraces and breakpoints)]"
     "2[full debug info with variable and type information (same as -g)]"
 )
-
 _rustc_crate_types=(
     'bin'
     'lib'
@@ -19,7 +15,6 @@ _rustc_crate_types=(
     'staticlib'
     'proc-macro'
 )
-
 _rustc_emit_types=(
     'asm'
     'llvm-bc'
@@ -67,7 +62,6 @@ _rustc_error_format=(
     'human'
     'json'
 )
-
 _rustc_opts_vals=(
     --cfg='[Configure the compilation environment]:SPEC:'
     -L'[Add a directory to the library search path]:DIR:_files -/'
@@ -89,7 +83,6 @@ _rustc_opts_vals=(
     --unpretty='[Present the input source, unstable (and less-pretty)]::TYPE:_values "TYPES" "$_rustc_unpretty_types[@]"'
     --color='[Configure coloring of output]:CONF:_values "COLORS" "$_rustc_color_types[@]"'
 )
-
 _rustc_opts_switches=(
     -g'[Equivalent to --debuginfo=2]'
     -O'[Equivalent to --opt-level=2]'
@@ -127,7 +120,6 @@ _rustc_opts_codegen=(
     'codegen-units=[divide crate into N units to optimize in parallel]:N:'
     'help[Show all codegen options]'
 )
-
 _rustc_opts_lint=(
     'help[Show a list of all lints]'
     'experimental[detects use of #\[experimental\] items]'
@@ -170,7 +162,6 @@ _rustc_opts_lint=(
     'bad-style[group of non_camel_case_types, non_snake_case, non_uppercase_statics]'
     'unused[group of unused_imports, unused_variable, dead_assignment, dead_code, unused_mut, unreachable_code]'
 )
-
 _rustc_opts_debug=(
     'verbose[in general, enable more debug printouts]'
     'span-free-formats[when debug-printing compiler state, do not include spans]'
@@ -202,20 +193,16 @@ _rustc_opts_debug=(
     'flowgraph-print-assigns[Include assignment analysis data in --pretty flowgraph output]'
     'flowgraph-print-all[Include all dataflow analysis data in --pretty flowgraph output]'
 )
-
 _rustc_opts_fun_lint(){
     _values -s , 'options' \
         "$_rustc_opts_lint[@]"
 }
-
 _rustc_opts_fun_debug(){
     _values 'options' "$_rustc_opts_debug[@]"
 }
-
 _rustc_opts_fun_codegen(){
     _values 'options' "$_rustc_opts_codegen[@]"
 }
-
 _arguments -s :  \
     '(-W --warn)'{-W,--warn=}'[Set lint warnings]:lint options:_rustc_opts_fun_lint' \
     '(-A --allow)'{-A,--allow=}'[Set lint allowed]:lint options:_rustc_opts_fun_lint' \

@@ -1,5 +1,4 @@
 #compdef git gitk
-
 # zsh completion wrapper for git
 #
 # Copyright (c) 2012-2020 Felipe Contreras <felipe.contreras@gmail.com>
@@ -20,18 +19,14 @@
 #
 #  zstyle ':completion:*:*:git:*' script ~/.git-completion.bash
 #
-
 zstyle -T ':completion:*:*:git:*' tag-order && \
 	zstyle ':completion:*:*:git:*' tag-order 'common-commands'
-
 zstyle -s ":completion:*:*:git:*" script script
 if [ -z "$script" ]; then
 	local -a locations
 	local e bash_completion
-
 	bash_completion=$(pkg-config --variable=completionsdir bash-completion 2>/dev/null) ||
 		bash_completion='/usr/share/bash-completion/completions/'
-
 	locations=(
 		"${${funcsourcetrace[1]%:*}:A:h}"/git-completion.bash
 		"$HOME/.local/share/bash-completion/completions/git"
@@ -43,33 +38,25 @@ if [ -z "$script" ]; then
 		test -f $e && script="$e" && break
 	done
 fi
-
 local old_complete="$functions[complete]"
 functions[complete]=:
 COMP_WORDBREAKS=':'
 GIT_SOURCING_ZSH_COMPLETION=y . "$script"
 functions[complete]="$old_complete"
-
 __gitcompadd ()
 {
 	compadd -p "${2-}" -S "${3- }" -q -- ${=1} && _ret=0
 }
-
 __gitcomp ()
 {
 	emulate -L zsh
-
 	IFS=$' \t\n' __gitcompadd "$1" "${2-}" "${4- }"
 }
-
 __gitcomp_opts ()
 {
 	emulate -L zsh
-
 	local cur_="${3-$cur}"
-
 	[[ "$cur_" == *= ]] && return
-
 	local c IFS=$' \t\n' sfx
 	for c in ${=1}; do
 		if [[ $c == "--" ]]; then
@@ -77,7 +64,6 @@ __gitcomp_opts ()
 			__gitcompadd "--no-..."
 			break
 		fi
-
 		if [[ -z "${4+set}" ]]; then
 			case $c in
 			*=) c="${c%=}"; sfx="=" ;;
@@ -90,40 +76,31 @@ __gitcomp_opts ()
 		__gitcompadd "$c" "${2-}" "$sfx"
 	done
 }
-
 __gitcomp_nl ()
 {
 	emulate -L zsh
-
 	# words that don't end up in space
 	compadd -p "${2-}" -S "${4- }" -q -- ${${(f)1}:#*\ } && _ret=0
 	# words that end in space
 	compadd -p "${2-}" -S " ${4- }" -q -- ${${(M)${(f)1}:#*\ }% } && _ret=0
 }
-
 __gitcomp_file ()
 {
 	emulate -L zsh
-
 	compadd -f -p "${2-}" -- ${(f)1} && _ret=0
 }
-
 __gitcomp_direct ()
 {
 	__gitcomp_nl "$1" "" "" ""
 }
-
 __gitcomp_file_direct ()
 {
 	__gitcomp_file "$1" ""
 }
-
 __git_complete_command ()
 {
 	emulate -L zsh
-
 	compset -P '*[=:]'
-
 	local command="$1"
 	local completion_func="_git_${command//-/_}"
 	if (( $+functions[$completion_func] )); then
@@ -136,22 +113,17 @@ __git_complete_command ()
 		return 1
 	fi
 }
-
 __git_zsh_bash_func ()
 {
 	emulate -L ksh
-
 	local command=$1
-
 	__git_complete_command "$command" && return
-
 	local expansion=$(__git_aliased_command "$command")
 	if [ -n "$expansion" ]; then
 		words[1]=$expansion
 		__git_complete_command "$expansion"
 	fi
 }
-
 __git_zsh_cmd_common ()
 {
 	local -a list
@@ -181,7 +153,6 @@ __git_zsh_cmd_common ()
 	tag:'create, list, delete or verify a tag object signed with GPG')
 	_describe -t common-commands 'common commands' list && _ret=0
 }
-
 __git_zsh_cmd_alias ()
 {
 	local -a list
@@ -189,7 +160,6 @@ __git_zsh_cmd_alias ()
 	list=(${(f)"$(printf "%s:alias for '%s'\n" ${(f@)list})"})
 	_describe -t alias-commands 'aliases' list && _ret=0
 }
-
 __git_zsh_cmd_all ()
 {
 	local -a list
@@ -197,13 +167,11 @@ __git_zsh_cmd_all ()
 	list=( ${=__git_all_commands} )
 	_describe -t all-commands 'all commands' list && _ret=0
 }
-
 __git_zsh_main ()
 {
 	local curcontext="$curcontext" state state_descr line
 	typeset -A opt_args
 	local -a __git_C_args
-
 	_arguments -C \
 		'(-p --paginate -P --no-pager)'{-p,--paginate}'[pipe all output into ''less'']' \
 		'(-p --paginate -P --no-pager)'{-P,--no-pager}'[do not pipe git output into a pager]' \
@@ -223,7 +191,6 @@ __git_zsh_main ()
 		'*-c[pass a configuration parameter to the command]: :->config' \
 		'(-): :->command' \
 		'(-)*:: :->arg' && return
-
 	case $state in
 	(command)
 		_tags common-commands alias-commands all-commands
@@ -240,35 +207,27 @@ __git_zsh_main ()
 		;;
 	(arg)
 		local command="${words[1]}" __git_dir __git_cmd_idx=1
-
 		if (( $+opt_args[--bare] )); then
 			__git_dir='.'
 		else
 			__git_dir=${~opt_args[--git-dir]}
 		fi
-
 		for x in ${(s.:.)opt_args[-C]}; do
 			__git_C_args+=('-C' ${~x})
 		done
-
 		(( $+opt_args[--help] )) && command='help'
-
 		words=( git ${words[@]} )
-
 		__git_zsh_bash_func $command
 		;;
 	esac
 }
-
 _git ()
 {
 	local _ret=1
 	local cur cword prev __git_cmd_idx=0
-
 	cur=${words[CURRENT]}
 	prev=${words[CURRENT-1]}
 	let cword=CURRENT-1
-
 	if (( $+functions[__${service}_zsh_main] )); then
 		__${service}_zsh_main
 	elif (( $+functions[__${service}_main] )); then
@@ -278,9 +237,7 @@ _git ()
 	elif ((	$+functions[_${service//-/_}] )); then
 		emulate ksh -c _${service//-/_}
 	fi
-
 	let _ret && _default && _ret=0
 	return _ret
 }
-
 _git

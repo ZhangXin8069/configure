@@ -27,14 +27,11 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 _zsh_highlight_add_highlight()
 {
   region_highlight+=("$1 $2 ${(j.,.)argv[3,-1]}")
 }
-
 BUFFER='type'
-
 expected_region_highlight=(
   '1 4 builtin,arg0' # type
 )

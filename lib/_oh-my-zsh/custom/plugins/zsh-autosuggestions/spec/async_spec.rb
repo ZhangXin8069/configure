@@ -1,6 +1,5 @@
 context 'with asynchronous suggestions enabled' do
   let(:options) { ["ZSH_AUTOSUGGEST_USE_ASYNC="] }
-
   describe '`up-line-or-beginning-search`' do
     let(:before_sourcing) do
       -> do
@@ -13,7 +12,6 @@ context 'with asynchronous suggestions enabled' do
           send_keys('enter')
       end
     end
-
     it 'should show previous history entries' do
       with_history(
         'echo foo',
@@ -26,7 +24,6 @@ context 'with asynchronous suggestions enabled' do
       end
     end
   end
-
   describe '`copy-earlier-word`' do
     let(:before_sourcing) do
       -> do
@@ -36,7 +33,6 @@ context 'with asynchronous suggestions enabled' do
           run_command('bindkey "^N" copy-earlier-word')
       end
     end
-
     it 'should cycle through previous words in the buffer' do
       session.clear_screen
       session.send_string('foo bar baz')
@@ -49,22 +45,17 @@ context 'with asynchronous suggestions enabled' do
       wait_for { session.content }.to eq('foo bar bazfoo')
     end
   end
-
   describe 'pressing ^C after fetching a suggestion' do
     before do
       skip 'Workaround does not work below v5.0.8' if session.zsh_version < Gem::Version.new('5.0.8')
     end
-
     it 'terminates the prompt and begins a new one' do
       session.send_keys('e')
       sleep 0.5
       session.send_keys('C-c')
       sleep 0.5
       session.send_keys('echo')
-
       wait_for { session.content }.to eq("e\necho")
     end
   end
 end
-
-

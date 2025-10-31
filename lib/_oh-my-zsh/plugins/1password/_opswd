@@ -1,11 +1,9 @@
 #compdef opswd
-
 function _opswd() {
   local -a services
   services=("${(@f)$(op item list --categories Login --cache 2>/dev/null | awk 'NR != 1 { print $2 }')}")
   [[ -z "$services" ]] || compadd -a -- services
 }
-
 # TODO: 2022-03-26: Remove support for op CLI 1
 autoload -Uz is-at-least
 is-at-least 2.0.0 $(op --version) || {
@@ -15,5 +13,4 @@ is-at-least 2.0.0 $(op --version) || {
     [[ -z "$services" ]] || compadd -a -- services
   }
 }
-
 _opswd "$@"

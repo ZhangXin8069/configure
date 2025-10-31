@@ -1,6 +1,5 @@
 #compdef asadmin
 #autoload
-
 local -a _1st_arguments
 _1st_arguments=(
     "add-library:adds one or more library JAR files to GlassFish Server"
@@ -269,14 +268,11 @@ _1st_arguments=(
     "verify-domain-xml:verifies the content of the domain.xml file"
     "version:displays version information forGlassFish Server"
 )
-
 _arguments '*:: :->command'
-
 if (( CURRENT == 1 )); then
     _describe -t commands "asadmin command" _1st_arguments
     return
 fi
-
 local -a _command_args
 case "$words[1]" in
     add-library)
@@ -1033,117 +1029,93 @@ case "$words[1]" in
         _command_args=('--local+:local:(true false)' '--terse+:terse:(true false)' '--verbose+:verbose:(true false)')
         ;;
 esac
-
-
 _asadmin_applications() {
     compadd $(command asadmin list-applications --terse | sed 's/\s.*//')
 }
-
 _asadmin_clusters() {
     compadd $(command asadmin list-clusters --terse | sed 's/\s.*//')
 }
-
 _asadmin_configs() {
     compadd $(command asadmin list-configs --terse)
 }
-
 _asadmin_instances() {
     compadd $(command asadmin list-instances --terse --nostatus domain)
 }
-
 _asadmin_instances_standalone() {
     compadd $(command asadmin list-instances --terse --standaloneonly --nostatus domain)
 }
-
 _asadmin_libraries() {
     compadd $(command asadmin list-libraries --terse)
 }
-
 _asadmin_nodes() {
     compadd $(command asadmin list-nodes --terse)
 }
-
 _asadmin_nodes_config() {
     compadd $(command asadmin list-nodes-config --terse)
 }
-
 _asadmin_nodes_dcom() {
     compadd $(command asadmin list-nodes-dcom --terse)
 }
-
 _asadmin_nodes_ssh() {
     compadd $(command asadmin list-nodes-ssh --terse)
 }
-
 _asadmin_targets() {
     _asadmin_instances
     _asadmin_clusters
     _asadmin_configs
     compadd domain server
 }
-
 _asadmin_targets_cluster_clustered_instance_config_das_domain_standalone_instance() {
     _asadmin_instances
     _asadmin_clusters
     _asadmin_configs
     compadd domain server
 }
-
 _asadmin_targets_cluster_clustered_instance_config_das_standalone_instance() {
     _asadmin_instances
     _asadmin_clusters
     _asadmin_configs
     compadd server
 }
-
 _asadmin_targets_cluster_clustered_instance_das_domain_standalone_instance() {
     _asadmin_instances
     _asadmin_clusters
     compadd domain server
 }
-
 _asadmin_targets_cluster_clustered_instance_das_standalone_instance() {
     _asadmin_instances
     _asadmin_clusters
     _asadmin_configs
     compadd server
 }
-
 _asadmin_targets_cluster_config_das_standalone_instance() {
     _asadmin_instances_standalone
     _asadmin_clusters
     _asadmin_configs
     compadd server
 }
-
 _asadmin_targets_cluster_das_domain_standalone_instance() {
     _asadmin_instances_standalone
     _asadmin_clusters
     compadd domain server
 }
-
 _asadmin_targets_cluster_das_standalone_instance() {
     _asadmin_instances_standalone
     _asadmin_clusters
     compadd server
 }
-
 _asadmin_targets_clustered_instance_das() {
     _asadmin_instances
     compadd server
 }
-
 _asadmin_targets_clustered_instance_das_standalone_instance() {
     _asadmin_instances
     compadd server
 }
-
 _asadmin_targets_cluster_standalone_instance() {
     _asadmin_clusters
     _asadmin_instances_standalone
 }
-
-
 compadd '--help'
 _arguments \
     $_command_args \

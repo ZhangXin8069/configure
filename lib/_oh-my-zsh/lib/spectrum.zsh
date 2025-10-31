@@ -1,9 +1,7 @@
 # A script to make using 256 colors in zsh less painful.
 # P.C. Shyamshankar <sykora@lucentbeing.com>
 # Copied from https://github.com/sykora/etc/blob/master/zsh/functions/spectrum/
-
 typeset -AHg FX FG BG
-
 FX=(
   reset "%{[00m%}"
   bold "%{[01m%}" no-bold "%{[22m%}"
@@ -13,12 +11,10 @@ FX=(
   blink "%{[05m%}" no-blink "%{[25m%}"
   reverse "%{[07m%}" no-reverse "%{[27m%}"
 )
-
 for color in {000..255}; do
   FG[$color]="%{[38;5;${color}m%}"
   BG[$color]="%{[48;5;${color}m%}"
 done
-
 # Show all 256 colors with color number
 function spectrum_ls() {
   setopt localoptions nopromptsubst
@@ -27,7 +23,6 @@ function spectrum_ls() {
     print -P -- "$code: ${FG[$code]}${ZSH_SPECTRUM_TEXT}%{$reset_color%}"
   done
 }
-
 # Show all 256 colors where the background is set to specific color
 function spectrum_bls() {
   setopt localoptions nopromptsubst

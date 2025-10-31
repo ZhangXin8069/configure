@@ -1,11 +1,9 @@
 #!/usr/bin/env zsh
 # vim:ft=zsh ts=2 sw=2 sts=2
-
 # NOTE: The following emoji show as $'character' in the title
 #  white_medium_star
 #  sparkles
 #  dizzy_symbol
-
 _emotty_sets[stellar]="
   full_moon_symbol
   waning_gibbous_moon_symbol

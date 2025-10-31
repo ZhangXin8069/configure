@@ -1,5 +1,4 @@
 DEFAULT_MACHINE="default"
-
 docker-up() {
     if [ -z "$1" ]; then
         docker-machine start "${DEFAULT_MACHINE}"

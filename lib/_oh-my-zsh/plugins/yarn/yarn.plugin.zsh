@@ -1,7 +1,6 @@
 if zstyle -T ':omz:plugins:yarn' global-path; then
   # Skip yarn call if default global bin dir exists
   [[ -d "$HOME/.yarn/bin" ]] && bindir="$HOME/.yarn/bin" || bindir="$(yarn global bin 2>/dev/null)"
-
   # Add yarn bin directory to $PATH if it exists and not already in $PATH
   [[ $? -eq 0 ]] \
     && [[ -d "$bindir" ]] \
@@ -9,7 +8,6 @@ if zstyle -T ':omz:plugins:yarn' global-path; then
     && path+=("$bindir")
   unset bindir
 fi
-
 alias y="yarn"
 alias ya="yarn add"
 alias yad="yarn add --dev"
@@ -36,14 +34,12 @@ alias yv="yarn version"
 alias yw="yarn workspace"
 alias yws="yarn workspaces"
 alias yy="yarn why"
-
 # Commands that are specific to the yarn version being used
 if zstyle -t ':omz:plugins:yarn' berry; then
   # aliases that differ
   alias yuil='yui' # --latest flag was removed in yarn berry
   alias yii='yarn install --immutable'
   alias yifl='yarn install --immutable'
-
   # unique aliases
   alias ydlx="yarn dlx"
   alias yn="yarn node"
@@ -52,7 +48,6 @@ else
   alias yuil='yarn upgrade-interactive --latest'
   alias yii='yarn install --frozen-lockfile'
   alias yifl='yarn install --frozen-lockfile'
-
   # unique aliases
   alias yga="yarn global add"
   alias ygls="yarn global list"

@@ -1,7 +1,6 @@
 # diagnostics.zsh
 #
 # Diagnostic and debugging support for oh-my-zsh
-
 # omz_diagnostic_dump()
 #
 # Author: Andrew Janke <andrew@apjanke.net>
@@ -52,14 +51,10 @@
 # * Consider whether to move default output file location to TMPDIR. More robust
 #     but less user friendly.
 #
-
 autoload -Uz is-at-least
-
 function omz_diagnostic_dump() {
   emulate -L zsh
-
   builtin echo "Generating diagnostic dump; please be patient..."
-
   local thisfcn=omz_diagnostic_dump
   local -A opts
   local opt_verbose opt_noverbose opt_outfile
@@ -68,7 +63,6 @@ function omz_diagnostic_dump() {
   builtin zparseopts -A opts -D -- "v+=opt_verbose" "V+=opt_noverbose"
   local verbose n_verbose=${#opt_verbose} n_noverbose=${#opt_noverbose}
   (( verbose = 1 + n_verbose - n_noverbose ))
-
   if [[ ${#*} > 0 ]]; then
     opt_outfile=$1
   fi
@@ -79,14 +73,12 @@ function omz_diagnostic_dump() {
   if [[ -n "$opt_outfile" ]]; then
     outfile="$opt_outfile"
   fi
-
   # Always write directly to a file so terminal escape sequences are
   # captured cleanly
   _omz_diag_dump_one_big_text &> "$outfile"
   if [[ $? != 0 ]]; then
     builtin echo "$thisfcn: error while creating diagnostic dump; see $outfile for details"
   fi
-
   builtin echo
   builtin echo Diagnostic dump file created at: "$outfile"
   builtin echo
@@ -96,17 +88,13 @@ function omz_diagnostic_dump() {
   builtin echo "WARNING: This dump file contains all your zsh and omz configuration files,"
   builtin echo "so don't share it publicly if there's sensitive information in them."
   builtin echo
-
 }
-
 function _omz_diag_dump_one_big_text() {
   local program programs progfile md5
-
   builtin echo oh-my-zsh diagnostic dump
   builtin echo
   builtin echo $outfile
   builtin echo
-
   # Basic system and zsh information
   command date
   command uname -a
@@ -117,7 +105,6 @@ function _omz_diag_dump_one_big_text() {
   builtin echo
   _omz_diag_dump_os_specific_version
   builtin echo
-
   # Installed programs
   programs=(sh zsh ksh bash sed cat grep ls find git posh)
   local progfile="" extra_str="" sha_str=""
@@ -148,11 +135,9 @@ function _omz_diag_dump_one_big_text() {
   builtin echo "git: $(git --version)"
   builtin echo "grep: $(grep --version)"
   builtin echo
-
   # Core command definitions
   _omz_diag_dump_check_core_commands || return 1
   builtin echo
-
   # ZSH Process state
   builtin echo Process state:
   builtin echo pwd: $PWD
@@ -171,7 +156,6 @@ function _omz_diag_dump_one_big_text() {
   builtin echo Locale:
   command locale
   builtin echo
-
   # Zsh installation and configuration
   builtin echo Zsh configuration:
   builtin echo setopt: $(builtin setopt)
@@ -185,7 +169,6 @@ function _omz_diag_dump_one_big_text() {
   builtin echo '$fpath directories:'
   command ls -lad $fpath
   builtin echo
-
   # Oh-my-zsh installation
   builtin echo oh-my-zsh installation:
   command ls -ld ~/.z*
@@ -207,7 +190,6 @@ function _omz_diag_dump_one_big_text() {
     (builtin cd ${custom_dir:h} && command find ${custom_dir:t} -name .git -prune -o -print)
     builtin echo
   fi
-
   # Key binding and terminal info
   if [[ $verbose -ge 1 ]]; then
     builtin echo "bindkey:"
@@ -217,7 +199,6 @@ function _omz_diag_dump_one_big_text() {
     command infocmp -L
     builtin echo
   fi
-
   # Configuration file info
   local zdotdir=${ZDOTDIR:-$HOME}
   builtin echo "Zsh configuration files:"
@@ -245,9 +226,7 @@ function _omz_diag_dump_one_big_text() {
       _omz_diag_dump_echo_file_w_header $dumpfile
     done
   fi
-
 }
-
 function _omz_diag_dump_check_core_commands() {
   builtin echo "Core command check:"
   local redefined name builtins externals reserved_words
@@ -298,15 +277,12 @@ function _omz_diag_dump_check_core_commands() {
       redefined+=$name
     fi
   done
-
   if [[ -n "$redefined" ]]; then
     builtin echo "SOME CORE COMMANDS HAVE BEEN REDEFINED: $redefined"
   else
     builtin echo "All core commands are defined normally"
   fi
-
 }
-
 function _omz_diag_dump_echo_file_w_header() {
   local file=$1
   if [[ ( -f $file || -h $file ) ]]; then
@@ -325,7 +301,6 @@ function _omz_diag_dump_echo_file_w_header() {
     command ls -lad "$file"
   fi
 }
-
 function _omz_diag_dump_os_specific_version() {
   local osname osver version_file version_files
   case "$OSTYPE" in
@@ -338,11 +313,9 @@ function _omz_diag_dump_os_specific_version() {
       command systeminfo | command head -n 4 | command tail -n 2
       ;;
   esac
-
   if builtin which lsb_release >/dev/null; then
     builtin echo "OS Release: $(command lsb_release -s -d)"
   fi
-
   version_files=( /etc/*-release(N) /etc/*-version(N) /etc/*_version(N) )
   for version_file in $version_files; do
     builtin echo "$version_file:"
@@ -350,4 +323,3 @@ function _omz_diag_dump_os_specific_version() {
     builtin echo
   done
 }
-

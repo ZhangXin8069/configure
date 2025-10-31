@@ -1,8 +1,6 @@
 #!/usr/bin/env zsh
-
 function music itunes() {
   local APP_NAME=Music sw_vers=$(sw_vers -productVersion 2>/dev/null)
-
   autoload is-at-least
   if [[ -z "$sw_vers" ]] || is-at-least 10.15 $sw_vers; then
     if [[ $0 = itunes ]]; then
@@ -12,7 +10,6 @@ function music itunes() {
   else
     APP_NAME=iTunes
   fi
-
   local opt=$1 playlist=$2
   (( $# > 0 )) && shift
   case "$opt" in
@@ -78,12 +75,10 @@ EOF
       # The toggle option depends on the shuffle button being visible in the Now playing area.
       # On and off use the menu bar items.
       local state=$1
-
       if [[ -n "$state" && "$state" != (on|off|toggle) ]]; then
         print "Usage: $0 shuffle [on|off|toggle]. Invalid option."
         return 1
       fi
-
       case "$state" in
         on|off)
           # Inspired by: https://stackoverflow.com/a/14675583
@@ -120,14 +115,12 @@ EOF
   esac
   osascript -e "tell application \"$APP_NAME\" to $opt"
 }
-
 function _music() {
   local app_name
   case "$words[1]" in
     itunes) app_name="iTunes" ;;
     music|*) app_name="Music" ;;
   esac
-
   local -a cmds subcmds
   cmds=(
     "launch:Launch the ${app_name} app"
@@ -147,7 +140,6 @@ function _music() {
     {shuf,shuff,shuffle}":Set shuffle mode"
     {-h,--help}":Show usage"
   )
-
   if (( CURRENT == 2 )); then
     _describe 'command' cmds
   elif (( CURRENT == 3 )); then
@@ -163,8 +155,6 @@ function _music() {
         _describe 'command' subcmds ;;
     esac
   fi
-
   return 0
 }
-
 compdef _music music itunes

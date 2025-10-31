@@ -1,9 +1,6 @@
 # Deno Plugin
-
 This plugin sets up completion and aliases for [Deno](https://deno.land).
-
 ## Aliases
-
 | Alias | Full command        |
 | ----- | ------------------- |
 | db    | deno bundle         |

@@ -8,16 +8,12 @@
 # Example password: nz5ej2kypkvcw0rn5cvhs6qxtm
 #
 # If given a numerical argument, generate that many passwords.
-
 emulate -L zsh -o no_unset -o warn_create_global -o warn_nested_var
-
 if [[ ARGC -gt 1 || ${1-1} != ${~:-<1-$((16#7FFFFFFF))>} ]]; then
   print -ru2 -- "usage: $0 [NUM]"
   return 1
 fi
-
 zmodload zsh/system || return
-
 {
   local -r chars=abcdefghjkmnpqrstvwxyz0123456789
   local c

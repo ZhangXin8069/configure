@@ -4,10 +4,8 @@ if [[ -n "$ZSH_THEME_RANDOM_BLACKLIST" ]]; then
   ZSH_THEME_RANDOM_IGNORED=($ZSH_THEME_RANDOM_BLACKLIST)
   unset ZSH_THEME_RANDOM_BLACKLIST
 fi
-
 # Make themes a unique array
 typeset -Ua themes
-
 if [[ "${(t)ZSH_THEME_RANDOM_CANDIDATES}" = array && ${#ZSH_THEME_RANDOM_CANDIDATES[@]} -gt 0 ]]; then
   # Use ZSH_THEME_RANDOM_CANDIDATES if properly defined
   themes=(${(@)ZSH_THEME_RANDOM_CANDIDATES:#random})
@@ -23,13 +21,11 @@ else
     themes=("${(@)themes:#$theme}")
   done
 fi
-
 # Choose a theme out of the pool of candidates
 N=${#themes[@]}
 (( N = (RANDOM%N) + 1 ))
 RANDOM_THEME="${themes[$N]}"
 unset N themes theme
-
 # Source theme
 if [[ -f "$ZSH_CUSTOM/$RANDOM_THEME.zsh-theme" ]]; then
   source "$ZSH_CUSTOM/$RANDOM_THEME.zsh-theme"
@@ -41,7 +37,6 @@ else
   echo "[oh-my-zsh] Random theme '${RANDOM_THEME}' not found"
   return 1
 fi
-
 if [[ "$ZSH_THEME_RANDOM_QUIET" != true ]]; then
   echo "[oh-my-zsh] Random theme '${RANDOM_THEME}' loaded"
 fi

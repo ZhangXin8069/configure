@@ -1,7 +1,6 @@
 # Find where asdf should be installed
 ASDF_DIR="${ASDF_DIR:-$HOME/.asdf}"
 ASDF_COMPLETIONS="$ASDF_DIR/completions"
-
 if [[ ! -f "$ASDF_DIR/asdf.sh" || ! -f "$ASDF_COMPLETIONS/_asdf" ]]; then
   # If not found, check for archlinux/AUR package (/opt/asdf-vm/)
   if [[ -f "/opt/asdf-vm/asdf.sh" ]]; then
@@ -17,7 +16,6 @@ if [[ ! -f "$ASDF_DIR/asdf.sh" || ! -f "$ASDF_COMPLETIONS/_asdf" ]]; then
     return
   fi
 fi
-
 # Load command
 if [[ -f "$ASDF_DIR/asdf.sh" ]]; then
   source "$ASDF_DIR/asdf.sh"

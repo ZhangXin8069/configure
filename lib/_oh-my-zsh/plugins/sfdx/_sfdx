@@ -1,12 +1,9 @@
 #compdef sfdx
-
 # DESCRIPTION: Zsh completion script for the Salesforce CLI
 # AUTHOR: Wade Wegner (@WadeWegner)
 # REPO: https://github.com/wadewegner/salesforce-cli-zsh-completion
 # LICENSE: https://github.com/wadewegner/salesforce-cli-zsh-completion/blob/master/LICENSE
-
 local -a _1st_arguments
-
 _1st_arguments=(
 	"force\:alias\:list":"list username aliases for the Salesforce CLI"
 	"force\:alias\:set":"set username aliases for the Salesforce CLI"
@@ -106,14 +103,11 @@ _1st_arguments=(
 	"force\:visualforce\:component\:create":"create a Visualforce component"
 	"force\:visualforce\:page\:create":"create a Visualforce page"
 )
-
 _arguments '*:: :->command'
-
 if (( CURRENT == 1 )); then
  _describe -t commands "sfdx command" _1st_arguments
  return
 fi
-
 local -a _command_args
 case "$words[1]" in
  force:limits:api:display)
@@ -1104,7 +1098,6 @@ case "$words[1]" in
  )
  ;;
  esac
-
 _arguments \
  $_command_args \
  && return 0

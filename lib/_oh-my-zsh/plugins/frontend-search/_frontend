@@ -1,21 +1,15 @@
 #compdef frontend
-
 zstyle ':completion:*:descriptions' format '%B%d%b'
 zstyle ':completion::complete:frontend:*:commands' group-name commands
 zstyle ':completion::complete:frontend:*:frontend_points' group-name frontend_points
 zstyle ':completion::complete:frontend::' list-grouped
-
 zmodload zsh/mapfile
-
 function _frontend() {
   local CONFIG=$HOME/.frontend-search
   local ret=1
-
   local -a commands
   local -a frontend_points
-
   frontend_points=( "${(f)mapfile[$CONFIG]//$HOME/~}" )
-
   commands=(
     'angular: Search in Angular.io website'
     'angularjs: Search in docs.angularjs.org website'
@@ -47,11 +41,9 @@ function _frontend() {
     'unheap: Search in unheap website'
     'vuejs: Search in VueJS website'
   )
-
   _arguments -C \
     '1: :->first_arg' \
     '2: :->second_arg' && ret=0
-
   case $state in
     first_arg)
       _describe -t frontend_points "Warp points" frontend_points && ret=0
@@ -146,12 +138,9 @@ function _frontend() {
       esac
       ;;
   esac
-
   return $ret
 }
-
 _frontend "$@"
-
 # Local Variables:
 # mode: Shell-Script
 # sh-indentation: 2

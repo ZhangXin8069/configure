@@ -27,15 +27,12 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER=$': $(( 1729 )'
-
 expected_region_highlight=(
   '1 1 builtin' # :
   '3 12 default' # $(( 1729 )
   '3 12 arithmetic-expansion' # $(( 1729 )
 )
-
 if [[ ${(z):-'$('} == '$( ' ]]; then # ignore zsh 5.0.8 bug
   expected_region_highlight[2]='3 13 default' # $(( 1729 )
 fi

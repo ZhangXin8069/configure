@@ -1,32 +1,24 @@
 #compdef repo
-
 __git_apply_whitespace_strategies ()
 {
   declare -a strategies
-
   strategies=(
     'nowarn:turn off the trailing-whitespace warning'
     'warn:output trailing-whitespace warning, but apply patch'
     'fix:output trailing-whitespace warning and strip trailing whitespace'
     'error:output trailing-whitespace warning and refuse to apply patch'
     'error-all:same as "error", but output warnings for all files')
-
   _describe -t strategies 'trailing-whitespace resolution strategy' strategies $*
 }
-
-
 _repo()
 {
   local context state state_descr line curcontext="$curcontext"
   typeset -A opt_args
-
   local ret=1
-
   _arguments -C \
     '(- 1 *)--help[show usage]'\
     '1:command:->command'\
     '*::args:->args' && ret=0
-
   case $state in
     (command)
       repo list  2> /dev/null > /dev/null
@@ -204,76 +196,62 @@ _repo()
       esac
       ;;
   esac
-
   return $ret
 }
-
 __repo_reviewers()
 {
  # _message -e url 'reviewers'
 }
-
 __repo_url_prompt()
 {
   _message -e url 'url'
 }
-
 __repo_manifest_name()
 {
   _message -e manifest_name 'manifest name'
 }
-
 _group()
 {
   _message -e group 'group'
 }
-
 __repo_branch()
 {
   #_message -e branch 'Repo branch'
   branches=($(repo branches| cut -c4- | grep '|' | cut -d' ' -f1))
   _describe -t branches 'Select repo branch' branches
 }
-
 __repo__repo_branch_or_rev()
 {
   _message -e branch_or_rev 'repo branch or revision'
 }
-
 __repo_depth_prompt()
 {
   _message -e depth 'depth'
 }
-
 __repo_projects()
 {
   _message -e depth 'Optional option : <projects>...'
   projects=($(repo list | cut -d' ' -f1))
   _describe -t projects 'Select projects (keep empty for selecting all projects)' projects
 }
-
 __repo_projects_mandatory()
 {
   projects=($(repo list | cut -d' ' -f1))
   #_describe -t projects 'Select projects to apply commands' projects
   _values -s ' ' "Select projects to apply commands" $projects
 }
-
 __repo_new__repo_branch_name()
 {
   branches=($(repo branches| cut -c4- | grep '|' | cut -d' ' -f1))
   _describe "" branches
   _message -e "branch name" 'Enter new branch name or select an existing repo branch'
 }
-
 __repo_projects_or_all()
 {
   #_message -e depth '[--all | <project>...]'
-
   projects=(--all $(repo list | cut -d' ' -f1))
   _describe -t projects 'Select projects or --all' projects
   _describe -t --all 'All projects'
 }
-
 _repo "$@"
 return $?

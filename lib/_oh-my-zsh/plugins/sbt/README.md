@@ -1,16 +1,11 @@
 # sbt plugin
-
 This plugin adds completion for the [sbt, the interactive build tool](https://scala-sbt.org/),
 as well as some aliases for common sbt commands.
-
 To use it, add `sbt` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... sbt)
 ```
-
 ## Aliases
-
 | Alias | Command               | Description                                                  |
 |-------|-----------------------|--------------------------------------------------------------|
 | sbc   | `sbt compile`         | Compiles the main sources                                    |

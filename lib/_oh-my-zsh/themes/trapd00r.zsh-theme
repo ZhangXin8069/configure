@@ -17,10 +17,8 @@
 # git❨ master ❩ DIRTY
 # scp1@shiva:pts/4-> /home » scp1 » dev » utils (0)
 # >
-
 autoload -U add-zsh-hook
 autoload -Uz vcs_info
-
 local c0=$'\e[m'
 local c1=$'\e[38;5;245m'
 local c2=$'\e[38;5;250m'
@@ -35,14 +33,10 @@ local c10=$'\e[1m'
 local c11=$'\e[38;5;208m\e[1m'
 local c12=$'\e[38;5;142m\e[1m'
 local c13=$'\e[38;5;196m\e[1m'
-
-
 zsh_path() {
   setopt localoptions nopromptsubst
-
   local colors
   colors=$(echoti colors)
-
   local -A yellow
   yellow=(
     1  '%F{228}'   2  '%F{222}'   3  '%F{192}'   4  '%F{186}'
@@ -51,7 +45,6 @@ zsh_path() {
     13  '%F{214}'   14  '%F{178}'  15  '%F{208}'   16  '%F{172}'
     17  '%F{202}'   18  '%F{166}'
   )
-
   local dir i=1
   for dir (${(s:/:)PWD}); do
     if [[ $i -eq 1 ]]; then
@@ -67,9 +60,7 @@ zsh_path() {
         print -Pn "%F{yellow} > "
       fi
     fi
-
     (( i++ ))
-
     if [[ $colors -ge 256 ]]; then
       print -Pn "%F{065}$dir"
     else
@@ -78,8 +69,6 @@ zsh_path() {
   done
   print -Pn "%f"
 }
-
-
 # We don't want to use the extended colorset in the TTY / VC.
 if [ "$TERM" = linux ]; then
   c1=$'\e[34;1m'
@@ -95,17 +84,12 @@ if [ "$TERM" = linux ]; then
   c12=$'\e[36m'
   c13=$'\e[31;1m'
 fi
-
 zstyle ':vcs_info:*' actionformats \
     '%{$c8%}(%f%s)%{$c7%}-%F{5}[%F{2}%b%F{3}|%F{1}%a%F{5}]%f '
-
 zstyle ':vcs_info:*' formats \
     "%{$c8%}%s%%{$c7%}❨ %{$c9%}%{$c11%}%b%{$c7%} ❩%{$reset_color%}%f "
-
 zstyle ':vcs_info:*' enable git
-
 add-zsh-hook precmd prompt_jnrowe_precmd
-
 prompt_jnrowe_precmd () {
   vcs_info
   if [ "${vcs_info_msg_0_}" = "" ]; then

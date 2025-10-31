@@ -14,7 +14,6 @@
 # ZSH_THEME_VAGRANT_PROMPT_POWEROFF="%{$fg_no_bold[red]%}●"
 # ZSH_THEME_VAGRANT_PROMPT_SUSPENDED="%{$fg_no_bold[yellow]%}●"
 # ZSH_THEME_VAGRANT_PROMPT_NOT_CREATED="%{$fg_no_bold[white]%}○"
-
 function vagrant_prompt_info() {
   local vm_states vm_state
   if [[ -d .vagrant && -f Vagrantfile ]]; then

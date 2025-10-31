@@ -1,8 +1,6 @@
 #compdef supervisorctl
-
 typeset -A opt_args
 local context state line
-
 _supervisorctl() {
     _arguments -s -S \
         {--configuration,-c}"[configuration file path (default /etc/supervisor.conf)]:FILENAME:_files" \
@@ -14,11 +12,9 @@ _supervisorctl() {
         {--history-file,-r}"[keep a readline history (if readline is available)]:FILENAME:_files" \
         "*::supervisorctl commands:_supervisorctl_command"
 }
-
 (( $+functions[_supervisorctl_command] )) ||
 _supervisorctl_command() {
     local cmd ret=1
-
     (( $+supervisorctl_cmds )) || _supervisorctl_cmds=(
         "add:Activates any updates in config for process/group" \
         "avail:Display all configured processes" \
@@ -42,13 +38,11 @@ _supervisorctl_command() {
         "version:Show the version of the remote supervisord process" \
         "help:Show help" \
         )
-
     if (( CURRENT == 1 )); then
         _describe -t commands 'supervisorctl subcommand' _supervisorctl_cmds \
             || compadd "$@" - ${(s.:.)${(j.:.)_supervisorctl_syns}}
     else
         local curcontext="$curcontext"
-
         cmd="${${_supervisorctl_cmds[(r)$words[1]:*]%%:*}:-${(k)_supervisorctl_syns[(r)(*:|)$words[1](:*|)]}}"
         if (( $#cmd )); then
             curcontext="${curcontext%:*:*}:supervisorctl-${cmd}:"
@@ -59,7 +53,6 @@ _supervisorctl_command() {
         return ret
     fi
 }
-
 # get supervisor contoroll processes
 (( $+functions[_get_supervisor_procs] )) ||
 _get_supervisor_procs() {
@@ -68,70 +61,58 @@ _get_supervisor_procs() {
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy _supervisor_procs_caching_policy
     fi
-
     if ( [[ ${+_supervisor_procs} -eq 0 ]] || _cache_invalid supervisor_procs ) \
         && ! _retrieve_cache supervisor_procs; then
-
         _supervisor_procs=(${${(f)"$(supervisorctl status >/dev/null 2>&1 | awk -F' ' '{print $1}')"}})
         _store_cache supervisor_procs _supervisor_procs
     fi
-
     local expl
     _wanted supervisor_procs expl 'supervisor processes' compadd -a _supervisor_procs
 }
-
 _supervisor_procs_caching_policy() {
     local -a oldp
     oldp=( "$1"(Nmw+1) )
     (( $#oldp ))
 }
-
 (( $+functions[_supervisorctl_add] )) ||
 _supervisorctl_add() {
     _arguments -s \
         "--help[use help system]" \
         "*::supervisorctl commands:_supervisorctl"
 }
-
 (( $+functions[_supervisorctl_help] )) ||
 _supervisorctl_help() {
     _arguments -s \
         "*:supervisorctl commands:_supervisorctl"
 }
-
 (( $+functions[_supervisorctl_maintail] )) ||
 _supervisorctl_maintail() {
     _arguments -s \
         '-f[Continuous tail of supervisor main log file (Ctrl-C to exit)]'
 }
-
 (( $+functions[_supervisorctl_start] )) ||
 _supervisorctl_start() {
     # TODO: add 'all'
     _arguments -s \
         '*::supervisor process:_get_supervisor_procs'
 }
-
 (( $+functions[_supervisorctl_restart] )) ||
 _supervisorctl_restart() {
     # TODO: add 'all'
     _arguments -s \
         '*::supervisor process:_get_supervisor_procs'
 }
-
 (( $+functions[_supervisorctl_status] )) ||
 _supervisorctl_status() {
     _arguments \
         '*::supervisor process:_get_supervisor_procs'
 }
-
 (( $+functions[_supervisorctl_stop] )) ||
 _supervisorctl_stop() {
     # TODO: add 'all'
     _arguments -s \
         '*::supervisor process:_get_supervisor_procs'
 }
-
 (( $+functions[_supervisorctl_tail] )) ||
 _supervisorctl_tail() {
     # TODO: add 'stderr'
@@ -139,5 +120,4 @@ _supervisorctl_tail() {
         '-f[Continuous tail of named process stdout Ctrl-C to exit.]' \
         '*::supervisor process:_get_supervisor_procs'
 }
-
 _supervisorctl "$@"

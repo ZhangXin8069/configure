@@ -1,23 +1,18 @@
 #compdef geeknote
-
 # Geeknote Autocomplete plugin for Zsh
 # Requires: Geeknote installed
 # Author : Ján Koščo (@s7anley)
-
 __login() {
     # no arguments
 }
-
 __logout() {
     _arguments \
         '--force[Do not ask about logging out.]'
 }
-
 __settings() {
     _arguments \
         "--editor+[Set the editor, which use to edit and create notes.]::"
 }
-
 __create() {
     _arguments \
         '--title+[The note title.]::' \
@@ -26,7 +21,6 @@ __create() {
         '--notebook+[Set the notebook where to save note.]::' \
         '--resource+[Add a resource to the note.]::'
 }
-
 __edit() {
     _arguments \
         '--note+[The name or ID from the previous search of a note to edit.]::' \
@@ -36,7 +30,6 @@ __edit() {
         '--notebook+[Assign new notebook for the note.]::' \
         '--resource+[Add a resource to the note.]::'
 }
-
 __find() {
     _arguments \
         '--search+[Text to search.]::' \
@@ -48,54 +41,44 @@ __find() {
         '--content-search[Search by content, not by title.]' \
         '--exact-entry[Search for exact entry of the request.]'
 }
-
 __show() {
     _arguments \
         '--note+[The name or ID from the previous search of a note to show.]::' \
         '--raw[Show the raw note body.]'
 }
-
 __remove() {
     _arguments \
         '--note+[The name or ID from the previous search of a note to remove.]::' \
         '--force[Do not ask about removing.]'
 }
-
 __notebook-list() {
     # no arguments
 }
-
 __notebook-create() {
     _arguments \
         '--title+[Set the title of new notebook.]::'
 }
-
 __notebook-edit() {
     _arguments \
         '--title+[Set the title of new notebook.]::' \
         '--notebook+[The name of a notebook to rename.]::'
 }
-
 __tag-list() {
     # no arguments
 }
-
 __tag-create() {
     _arguments \
         '--title+[Set the title of new tag.]::'
 }
-
 __tag-edit() {
     _arguments \
         '--tagname+[The name of a tag to rename.]::' \
         '--title+[Set the new name of tag.]::'
 }
-
 __user() {
     _arguments \
         '--full[Show full information.]'
 }
-
 local -a _1st_arguments
 _1st_arguments=(
     'login':'Authorize in Evernote.'
@@ -114,14 +97,11 @@ _1st_arguments=(
     'tag-edit':'Edit/rename tag.'
     'user':'Show information about active user.'
 )
-
 _arguments '*:: :->command'
-
 if (( CURRENT == 1 )); then
     _describe -t commands "geeknote command" _1st_arguments
     return
 fi
-
 local -a _command_args
 case "$words[1]" in
     login)

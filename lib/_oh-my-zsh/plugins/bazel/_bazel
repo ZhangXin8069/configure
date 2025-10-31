@@ -1,5 +1,4 @@
 #compdef bazel bazelisk
-
 # Copyright 2015 The Bazel Authors. All rights reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,7 +12,6 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-
 # Installation
 # ------------
 #
@@ -35,33 +33,26 @@
 # -------
 #  completion:init:bazel:* cache-lifetime
 #    Lifetime for the completion cache (if turned on, default: 1 week)
-
 local curcontext="$curcontext" state line
-
 : ${BAZEL_COMPLETION_PACKAGE_PATH:=%workspace%}
 : ${BAZEL:=bazel}
 _bazel_b() { ${BAZEL} --noblock_for_lock "$@" 2>/dev/null; }
-
 # Default cache lifetime is 1 week
 zstyle -s ":completion:${curcontext}:" cache-lifetime lifetime
 if [[ -z "${lifetime}" ]]; then
   lifetime=$((60*60*24*7))
 fi
-
 _bazel_cache_policy() {
   local -a oldp
   oldp=( "$1"(Nms+${lifetime}) )
   (( $#oldp ))
 }
-
 _set_cache_policy() {
   zstyle -s ":completion:*:$curcontext*" cache-policy update_policy
-
   if [[ -z "$update_policy" ]]; then
     zstyle ":completion:$curcontext*" cache-policy _bazel_cache_policy
   fi
 }
-
 # Skips over all global arguments.  After invocation, OFFSET contains the
 # position of the bazel command in $words.
 _adapt_subcommand_offset() {
@@ -74,12 +65,10 @@ _adapt_subcommand_offset() {
     fi
   done
 }
-
 # Retrieve the cache but also check that the value is not empty.
 _bazel_safe_retrieve_cache() {
   _retrieve_cache $1 && [[ ${(P)#2} -gt 0 ]]
 }
-
 # Puts the name of the variable that contains the options for the bazel
 # subcommand handed in as the first argument into the global variable
 # _bazel_cmd_options.
@@ -106,7 +95,6 @@ _bazel_get_options() {
     if ! eval "raw_options=(\${(@f)$opts_var})"; then
       return
     fi
-
     local -a option_list
     for opt in $raw_options; do
       case $opt in
@@ -124,7 +112,6 @@ _bazel_get_options() {
           option_list+=("$opt") ;;
       esac
     done
-
     local -a cmd_args
     local cmd_type
     if eval "cmd_type=\${BAZEL_COMMAND_${lcmd:u}_ARGUMENT}" && [[ -n $cmd_type ]]; then
@@ -140,14 +127,12 @@ _bazel_get_options() {
           cmd_args+=("1::topic:_bazel_help_topic -- ${lst//,/ }") ;;
       esac
     fi
-
     typeset -g "${_bazel_cmd_options}"="${(pj:|:)option_list[*]}"
     _store_cache BAZEL_${lcmd}_options ${_bazel_cmd_options}
     typeset -g "${_bazel_cmd_args}"="${(pj:|:)cmd_args[*]}"
     _store_cache BAZEL_${lcmd}_args ${_bazel_cmd_args}
   fi
 }
-
 _get_build_targets() {
   local pkg=$1
   local rule_re
@@ -169,7 +154,6 @@ _get_build_targets() {
   fi
   echo ${completions[*]}
 }
-
 # Returns all packages that match $PREFIX.  PREFIX may start with //, in which
 # case the workspace roots are searched.  Otherwise, they are completed based on
 # PWD.
@@ -193,13 +177,11 @@ _get_build_packages() {
   done
   echo ${final_paths[*]}
 }
-
 _package_remove_slash() {
   if [[ $KEYS == ':' && $LBUFFER == */ ]]; then
     LBUFFER=${LBUFFER[1,-2]}
   fi
 }
-
 # Completion function for BUILD targets, called by the completion system.
 _bazel_complete_target() {
   local expl
@@ -226,35 +208,28 @@ _bazel_complete_target() {
     compadd "${expl[@]}" -a targets
   fi
 }
-
 _bazel_complete_target_label() {
   typeset -g target_type=build
   _bazel_complete_target
 }
-
 _bazel_complete_target_label_test() {
   typeset -g target_type=test
   _bazel_complete_target
 }
-
 _bazel_complete_target_label_bin() {
   typeset -g target_type=bin
   _bazel_complete_target
 }
-
 ### Actual completion commands
-
 _bazel() {
   _adapt_subcommand_offset
   if (( CURRENT - OFFSET > 0 )); then
     # Remember the subcommand name, stored globally so we can access it
     # from any subsequent function
     cmd=${words[OFFSET]//-/_}
-
     # Set the context for the subcommand.
     curcontext="${curcontext%:*:*}:bazel-$cmd:"
     _set_cache_policy
-
     # Narrow the range of words we are looking at to exclude cmd
     # name and any leading options
     (( CURRENT = CURRENT - OFFSET + 1 ))
@@ -276,7 +251,6 @@ _bazel() {
   fi
   return
 }
-
 _get_commands() {
   # bazel_cmd_list is a global (g) array (a)
   typeset -ga _bazel_cmd_list
@@ -289,7 +263,6 @@ _get_commands() {
     _store_cache BAZEL_commands _bazel_cmd_list
   fi
 }
-
 # Completion function for bazel subcommands, called by the completion system.
 _bazel_commands() {
   if [[ ${#_bazel_cmd_list} == 0 ]]; then
@@ -298,10 +271,8 @@ _bazel_commands() {
       _get_commands
     fi
   fi
-
   _describe -t bazel-commands 'Bazel command' _bazel_cmd_list
 }
-
 # Completion function for bazel help options, called by the completion system.
 _bazel_help_topic() {
   if [[ ${#_bazel_cmd_list} == 0 ]]; then
@@ -310,7 +281,6 @@ _bazel_help_topic() {
       _get_commands
     fi
   fi
-
   while [[ $# -gt 0 ]]; do
     if [[ $1 == -- ]]; then
       shift
@@ -322,7 +292,6 @@ _bazel_help_topic() {
   _bazel_help_list+=($_bazel_cmd_list)
   _describe -t bazel-help 'Help topic' _bazel_help_list
 }
-
 # Completion function for bazel info keys, called by the completion system.
 _bazel_info_key() {
   if [[ ${#_bazel_info_keys_list} == 0 ]]; then

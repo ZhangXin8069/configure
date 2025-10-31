@@ -27,9 +27,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='echo "foo$( '
-
 expected_region_highlight=(
   '1 4 builtin' # echo
   '6 12 default' # "foo$(
@@ -37,7 +35,6 @@ expected_region_highlight=(
   '10 12 command-substitution-quoted' # $(
   '10 11 command-substitution-delimiter-quoted' # $(
 )
-
 if [[ ${(z):-'$('} == '$( ' ]]; then # ignore zsh 5.0.8 bug
   expected_region_highlight[2]='6 13 default' # "foo$(
   expected_region_highlight[4]='10 13 command-substitution-quoted' # $(

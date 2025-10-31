@@ -1,15 +1,10 @@
 # Nmap plugin
-
 Adds some useful aliases for [Nmap](https://nmap.org/) similar to the profiles in zenmap.
-
 To use it, add `nmap` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... nmap)
 ```
-
 ## Aliases
-
 - `nmap_open_ports`: scan for open ports on target.
 - `nmap_list_interfaces`: list all network interfaces on host where the command runs.
 - `nmap_slow`: slow scan that avoids to spam the targets logs.

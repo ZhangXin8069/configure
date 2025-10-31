@@ -1,9 +1,7 @@
 #compdef fab
 #autoload
-
 local curcontext=$curcontext state line
 declare -A opt_args
-
 declare -a target_list
 target_list=("${(@f)$(fab -l 2>/dev/null | awk '{
     if (NF == 0 || NR == 1) next
@@ -14,12 +12,10 @@ target_list=("${(@f)$(fab -l 2>/dev/null | awk '{
         print $1":"docstring
     }
 }')}")
-
 _fab_targets() {
     [[ -n "$target_list" ]] || return
     _describe -t commands "fabric targets" target_list
 }
-
 output_levels=(
     'status: Status messages, i.e. noting when Fabric is done running, if the user used a keyboard interrupt, or when servers are disconnected from. These messages are almost always relevant and rarely verbose.'
     'aborts: Abort messages. Like status messages, these should really only be turned off when using Fabric as a library, and possibly not even then. Note that even if this output group is turned off, aborts will still occur – there just won’t be any output about why Fabric aborted!'
@@ -29,7 +25,6 @@ output_levels=(
     'stderr: Local, or remote, stderr, i.e. error-related output from commands.'
     'user: User-generated output, i.e. local output printed by fabfile code via use of the fastprint or puts functions.'
 )
-
 _arguments -w -S -C \
   '(-)'{-h,--help}'[show this help message and exit]: :->noargs' \
   '(-)'{-V,--version}'[show program''s version number and exit]: :->noargs' \
@@ -54,7 +49,6 @@ _arguments -w -S -C \
   '(--hide=-)--hide=-[comma-separated list of output levels to hide]: :->levels' \
   '(--show=-)--show=-[comma-separated list of output levels to show]: :->levels' \
   '*::: :->subcmds' && return 0
-
 if [[ CURRENT -ge 1 ]]; then
     case $state in
         noargs)
@@ -64,6 +58,5 @@ if [[ CURRENT -ge 1 ]]; then
         *)
             _fab_targets;;
     esac
-
     return
 fi
