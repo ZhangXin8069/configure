@@ -17,8 +17,8 @@ tmp_path=${_HOME}/${tmp_name}
 # do
 pushd ${work_path}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-echo "apt install $(cat apt_require.txt)"
-sudo apt install $(cat apt_require.txt)
+echo "apt install $(cat apt_requirement.txt)"
+sudo apt install $(cat apt_requirement.txt)
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
 

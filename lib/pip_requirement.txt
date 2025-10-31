@@ -9,11 +9,11 @@ ipython
 jieba
 jupyterlab
 #keras
-#torchvision
 #tensorflow-gpu
 tornado
 lxml
-#torch
+torchvision
+torch
 matplotlib
 matplotlib-inline
 networkx
