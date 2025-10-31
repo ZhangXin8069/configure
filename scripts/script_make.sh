@@ -7,7 +7,7 @@ popd
 
 # init
 _NAME=$(basename "$0")
-name='work'
+name='test'
 work_name="test"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
@@ -16,6 +16,7 @@ tmp_path=${_HOME}/${tmp_name}
 # do
 pushd ${tmp_path}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+rm ${name}*.sh
 for ((i = 0; i < 10; i++)); do
     echo "making ${name}${i}.sh in ${tmp_path}"
     echo "pushd ${tmp_path}" >${name}${i}.sh
