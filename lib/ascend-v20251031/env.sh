@@ -1,28 +1,5 @@
-pushd /home/phyww/zhangxin
-pushd ./configure
+pushd /home/phyww/zhangxin/configure
 source env.sh
-zsh
-export ZSH="$PWD/lib/_oh-my-zsh"
-ZSH_THEME="robbyrussell"
-plugins=(
-    kubectx
-    aws
-    git
-    docker
-    you-should-use
-    zsh-syntax-highlighting
-    zsh-autosuggestions
-)
-source $ZSH/oh-my-zsh.sh
-export MANPATH="/usr/local/man:$MANPATH"
-if [[ -n $SSH_CONNECTION ]]; then
-    export EDITOR='vim'
-else
-    export EDITOR='mvim'
-fi
-export ARCHFLAGS="-arch x86_64"
-prompt_context() {}
-popd
 popd
 export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:$LD_LIBRARY_PATH
 export ASCEND_TOOLKIT_HOME=/home/phyww/Ascend/ascend-toolkit/latest
