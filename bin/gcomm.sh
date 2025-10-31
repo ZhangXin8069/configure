@@ -3,9 +3,9 @@ _PATH=$(
     cd "$(dirname "$0")"
     pwd
 )
-pushd ${_PATH}/../
-source ./env.sh
-popd
+# pushd ${_PATH}/../
+# source ./env.sh
+# popd
 
 # init
 _NAME=$(basename "$0")
