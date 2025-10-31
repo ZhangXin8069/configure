@@ -30,13 +30,13 @@
 BUFFER=': >>>; : <>\<<<<EOF'
 
 expected_region_highlight=(
-  "1 1 builtin" # :
-  "3 4 redirection" # >>
-  "5 5 unknown-token" # >
+  "1 1 builtin"          # :
+  "3 4 redirection"      # >>
+  "5 5 unknown-token"    # >
   "6 6 commandseparator" # ;
-  "8 8 builtin" # :
-  "10 11 redirection" # <>
-  "12 13 default" # \<
-  "14 16 redirection" # <<<
-  "17 19 default" # EOF
+  "8 8 builtin"          # :
+  "10 11 redirection"    # <>
+  "12 13 default"        # \<
+  "14 16 redirection"    # <<<
+  "17 19 default"        # EOF
 )

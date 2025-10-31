@@ -30,7 +30,7 @@
 BUFFER='command -v ls'
 
 expected_region_highlight=(
-  "1 7 precommand" # command
+  "1 7 precommand"            # command
   "9 10 single-hyphen-option" # -v
-  "12 13 command" # ls
+  "12 13 command"             # ls
 )

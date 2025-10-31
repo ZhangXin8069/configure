@@ -31,9 +31,9 @@
 BUFFER=$'\! ls | \! ls'
 
 expected_region_highlight=(
-  '1 1 reserved-word' # \!
-  '3 4 command' # ls
+  '1 1 reserved-word'    # \!
+  '3 4 command'          # ls
   '6 6 commandseparator' # |
-  '8 8 unknown-token' # \!
-  '10 11 command' # ls
+  '8 8 unknown-token'    # \!
+  '10 11 command'        # ls
 )

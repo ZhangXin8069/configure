@@ -1,6 +1,7 @@
-if [ "$USERNAME" = "root" ]
-then CARETCOLOR="red"
-else CARETCOLOR="blue"
+if [ "$USERNAME" = "root" ]; then
+    CARETCOLOR="red"
+else
+    CARETCOLOR="blue"
 fi
 
 local return_code="%(?..%{$fg[red]%}%? ↵%{$reset_color%})"

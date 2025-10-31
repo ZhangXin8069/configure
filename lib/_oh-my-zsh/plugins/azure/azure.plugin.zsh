@@ -6,9 +6,8 @@ function azgs() {
 # AZ Subscription Selection
 alias azss="az account set --subscription"
 
-
 function az_subscriptions() {
-  az account list  --all --output tsv --query '[*].name' 2> /dev/null
+  az account list --all --output tsv --query '[*].name' 2>/dev/null
 }
 
 function _az_subscriptions() {
@@ -20,16 +19,15 @@ compctl -K _az_subscriptions azss
 function azure_prompt_info() {
   [[ ! -f "${AZURE_CONFIG_DIR:-$HOME/.azure}/azureProfile.json" ]] && return
   # azgs is too expensive, if we have jq, we enable the prompt
-  (( $+commands[jq] )) || return 1
+  (($ + commands[jq])) || return 1
   azgs=$(jq -r '.subscriptions[] | select(.isDefault==true) .name' "${AZURE_CONFIG_DIR:-$HOME/.azure}/azureProfile.json")
   echo "${ZSH_THEME_AZURE_PREFIX:=<az:}${azgs}${ZSH_THEME_AZURE_SUFFIX:=>}"
 }
 
-
 # Load az completions
 function _az-homebrew-installed() {
   # check if Homebrew is installed
-  (( $+commands[brew] )) || return 1
+  (($ + commands[brew])) || return 1
 
   # if so, we assume it's default way to install brew
   if [[ ${commands[brew]:t2} == bin/brew ]]; then
@@ -40,7 +38,6 @@ function _az-homebrew-installed() {
     _brew_prefix=$(brew --prefix)
   fi
 }
-
 
 # get az.completion.sh location from $PATH
 _az_zsh_completer_path="$commands[az_zsh_completer.sh]"

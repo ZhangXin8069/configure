@@ -22,7 +22,7 @@ _microk8s_enable_get_command_list() {
 }
 
 _microk8s_enable() {
-   compadd -X "MicroK8s Addons" $(_microk8s_enable_get_command_list)
+  compadd -X "MicroK8s Addons" $(_microk8s_enable_get_command_list)
 }
 
 compdef _microk8s_enable microk8s.enable

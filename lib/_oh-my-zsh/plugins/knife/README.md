@@ -5,6 +5,7 @@ to interact with [Chef](https://chef.io), a platform to automate and manage infr
 code.
 
 To use it, add `knife` to the plugins array in your zshrc file:
+
 ```zsh
 plugins=(... knife)
 ```

@@ -11,11 +11,9 @@ Requirements: Zsh v4.3.11 or later
 
 <a href="https://asciinema.org/a/37390" target="_blank"><img src="https://asciinema.org/a/37390.png" width="400" /></a>
 
-
 ## Installation
 
 See [INSTALL.md](INSTALL.md).
-
 
 ## Usage
 
@@ -25,13 +23,11 @@ If you press the <kbd>→</kbd> key (`forward-char` widget) or <kbd>End</kbd> (`
 
 If you invoke the `forward-word` widget, it will partially accept the suggestion up to the point that the cursor moves to.
 
-
 ## Configuration
 
 You may want to override the default global config variables. Default values of these variables can be found [here](src/config.zsh).
 
 **Note:** If you are using Oh My Zsh, you can put this configuration in a file in the `$ZSH_CUSTOM` directory. See their comments on [overriding internals](https://github.com/robbyrussell/oh-my-zsh/wiki/Customization#overriding-internals).
-
 
 ### Suggestion Highlight Style
 
@@ -47,7 +43,6 @@ For more info, read the Character Highlighting section of the zsh manual: `man z
 
 **Note:** Some iTerm2 users have reported [not being able to see the suggestions](https://github.com/zsh-users/zsh-autosuggestions/issues/416#issuecomment-486516333). If this affects you, the problem is likely caused by incorrect color settings. In order to correct this, go into iTerm2's setting, navigate to profile > colors and make sure that the colors for Basic Colors > Background and ANSI Colors > Bright Black are **different**.
 
-
 ### Suggestion Strategy
 
 `ZSH_AUTOSUGGEST_STRATEGY` is an array that specifies how suggestions should be generated. The strategies in the array are tried successively until a suggestion is found. There are currently three built-in strategies to choose from:
@@ -57,7 +52,6 @@ For more info, read the Character Highlighting section of the zsh manual: `man z
 - `match_prev_cmd`: Like `history`, but chooses the most recent match whose preceding history item matches the most recently executed command ([more info](src/strategies/match_prev_cmd.zsh)). Note that this strategy won't work as expected with ZSH options that don't preserve the history order such as `HIST_IGNORE_ALL_DUPS` or `HIST_EXPIRE_DUPS_FIRST`.
 
 For example, setting `ZSH_AUTOSUGGEST_STRATEGY=(history completion)` will first try to find a suggestion from your history, but, if it can't find a match, will find a suggestion from the completion engine.
-
 
 ### Widget Mapping
 
@@ -72,7 +66,6 @@ This plugin works by triggering custom behavior when certain [zle widgets](http:
 Widgets that modify the buffer and are not found in any of these arrays will fetch a new suggestion after they are invoked.
 
 **Note:** A widget shouldn't belong to more than one of the above arrays.
-
 
 ### Disabling suggestion for large buffers
 
@@ -101,7 +94,6 @@ Set `ZSH_AUTOSUGGEST_COMPLETION_IGNORE` to a [glob pattern](http://zsh.sourcefor
 
 **Note:** This only affects the `completion` suggestion strategy.
 
-
 ### Key Bindings
 
 This plugin provides a few widgets that you can use with `bindkey`:
@@ -120,7 +112,6 @@ For example, this would bind <kbd>ctrl</kbd> + <kbd>space</kbd> to accept the cu
 bindkey '^ ' autosuggest-accept
 ```
 
-
 ## Troubleshooting
 
 If you have a problem, please search through [the list of issues on GitHub](https://github.com/zsh-users/zsh-autosuggestions/issues?q=) to see if someone else has already reported it.
@@ -135,7 +126,6 @@ When reporting an issue, please include:
 - The version of zsh you're using (`zsh --version`)
 - Which operating system you're running
 
-
 ## Uninstallation
 
 1. Remove the code referencing this plugin from `~/.zshrc`.
@@ -146,23 +136,20 @@ When reporting an issue, please include:
     rm -rf ~/.zsh/zsh-autosuggestions # Or wherever you installed
     ```
 
-
 ## Development
 
 ### Build Process
 
 Edit the source files in `src/`. Run `make` to build `zsh-autosuggestions.zsh` from those source files.
 
-
 ### Pull Requests
 
 Pull requests are welcome! If you send a pull request, please:
 
-- Request to merge into the `develop` branch (*NOT* `master`)
+- Request to merge into the `develop` branch (_NOT_ `master`)
 - Match the existing coding conventions.
 - Include helpful comments to keep the barrier-to-entry low for people new to the project.
 - Write tests that cover your code as much as possible.
-
 
 ### Testing
 
@@ -183,7 +170,6 @@ To run the tests for a specific version of zsh (where `<version>` below is subst
 ```sh
 docker run -it -e TEST_ZSH_BIN=zsh-<version> -v $PWD:/zsh-autosuggestions zsh-autosuggestions-test make test
 ```
-
 
 ## License
 

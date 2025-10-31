@@ -33,7 +33,7 @@ chmod -x foo
 BUFFER=$'./foo; ./foo'
 
 expected_region_highlight=(
-  '1 5 unknown-token' # ./foo (in middle)
+  '1 5 unknown-token'    # ./foo (in middle)
   '6 6 commandseparator' # ;
-  '8 12 unknown-token' # ./foo (at end)
+  '8 12 unknown-token'   # ./foo (at end)
 )

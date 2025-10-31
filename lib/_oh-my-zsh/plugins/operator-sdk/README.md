@@ -7,5 +7,3 @@ To use it, add `operator-sdk` to the plugins array of your zshrc file:
 ```sh
 plugins=(... operator-sdk)
 ```
-
-

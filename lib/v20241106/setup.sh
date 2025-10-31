@@ -12,7 +12,7 @@ apt install python3-dev pip
 apt install cmake
 apt install openmpi-bin openmpi-common libopenmpi-dev
 # apt --fix-broken install
-# dpkg --configure -a 
+# dpkg --configure -a
 ######
 pushd ~
 apt install zsh wget

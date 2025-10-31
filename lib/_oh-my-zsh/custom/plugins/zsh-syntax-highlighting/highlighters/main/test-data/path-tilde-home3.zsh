@@ -32,5 +32,5 @@ BUFFER='ls \~'
 
 expected_region_highlight=(
   "1 2 command" # ls
-  "4 5 default"    # \~
+  "4 5 default" # \~
 )

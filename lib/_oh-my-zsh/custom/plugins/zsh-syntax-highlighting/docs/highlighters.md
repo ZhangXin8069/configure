@@ -19,7 +19,6 @@ Syntax highlighting is done by pluggable highlighters:
 [root]: highlighters/root.md
 [line]: highlighters/line.md
 
-
 Highlighter-independent settings
 --------------------------------
 
@@ -36,7 +35,6 @@ function).  Example:
 ZSH_HIGHLIGHT_MAXLENGTH=512
 ```
 
-
 How to activate highlighters
 ----------------------------
 
@@ -47,7 +45,6 @@ By default `ZSH_HIGHLIGHT_HIGHLIGHTERS` is `(main)`. For example to activate
 ```zsh
 ZSH_HIGHLIGHT_HIGHLIGHTERS+=(brackets pattern cursor)
 ```
-
 
 How to tweak highlighters
 -------------------------
@@ -63,7 +60,6 @@ page][zshzle-Character-Highlighting].
 
 Some highlighters support additional configuration parameters; see each
 highlighter's documentation for details and examples.
-
 
 How to implement a new highlighter
 ----------------------------------
@@ -113,7 +109,7 @@ To create your own `acme` highlighter:
 
 * Name your own functions and global variables `_zsh_highlight_acme_*`.
 
-    - In zsh-syntax-highlighting 0.4.0 and earlier, the entrypoints 
+  * In zsh-syntax-highlighting 0.4.0 and earlier, the entrypoints
         `_zsh_highlight_highlighter_acme_predicate` and
         `_zsh_highlight_highlighter_acme_paint`
         were named

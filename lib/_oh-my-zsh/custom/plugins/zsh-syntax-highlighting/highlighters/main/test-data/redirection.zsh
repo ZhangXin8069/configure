@@ -31,9 +31,9 @@
 BUFFER='<<<foo echo >>&!bar'
 
 expected_region_highlight=(
-  "1 3 redirection" # <<<
-  "4 6 default" # foo
-  "8 11 builtin" # echo
+  "1 3 redirection"   # <<<
+  "4 6 default"       # foo
+  "8 11 builtin"      # echo
   "13 16 redirection" # >>&!
-  "17 19 default" # bar
+  "17 19 default"     # bar
 )

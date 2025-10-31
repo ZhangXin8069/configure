@@ -31,10 +31,10 @@
 BUFFER='(repeat 1; do)'
 
 expected_region_highlight=(
-  '1 1 reserved-word' # (
-  '2 7 reserved-word' # repeat
-  '9 9 default' # 1
+  '1 1 reserved-word'      # (
+  '2 7 reserved-word'      # repeat
+  '9 9 default'            # 1
   '10 10 commandseparator' # ;
-  '12 13 reserved-word' # do
-  '14 14 unknown-token' # )
+  '12 13 reserved-word'    # do
+  '14 14 unknown-token'    # )
 )

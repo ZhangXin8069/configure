@@ -8,8 +8,6 @@
 
 </div>
 
-
-
 <h4 align="center">
   <a href="https://www.zsh.org/" target="_blank"><code>ZSH</code></a> plugin for Agnosticism.
 </h4>
@@ -85,7 +83,6 @@ smile suddenly appeared on your face like regaining a good life.
 
 > If winter comes, can spring be far behind?
 
-
 ## ✨ Features
 
 - 🌟 Pure Zsh's script without any third-party dependencies.
@@ -118,6 +115,7 @@ antigen bundle jeffreytse/zsh-vi-mode
 ```
 
 #### Using [zplug](https://github.com/b4b4r07/zplug)
+
 Load `zsh-vi-mode` as a plugin in your `.zshrc`
 
 ```shell
@@ -152,6 +150,7 @@ Clone `zsh-vi-mode` into your custom plugins repo
 git clone https://github.com/jeffreytse/zsh-vi-mode \
   $ZSH_CUSTOM/plugins/zsh-vi-mode
 ```
+
 Then load as a plugin in your `.zshrc`
 
 ```shell
@@ -295,6 +294,7 @@ Clone this repository somewhere (`$HOME/.zsh-vi-mode` for example)
 ```shell
 git clone https://github.com/jeffreytse/zsh-vi-mode.git $HOME/.zsh-vi-mode
 ```
+
 Then source it in your `.zshrc` (or `.bashrc`)
 
 ```shell
@@ -319,7 +319,6 @@ History
 - `ctrl-n` : Next command in history
 - `/`      : Search backward in history
 - `n`      : Repeat the last `/`
-
 
 Mode indicators
 ---------------
@@ -355,7 +354,6 @@ Movement
 - `;`   : Repeat latest f, t, F or T [count] times
 - `,`   : Repeat latest f, t, F or T in opposite direction
 
-
 Insertion
 ---------
 
@@ -381,6 +379,7 @@ option.
 - `ds"`   : Delete `"`
 
  2. `s-prefix` mode (s->verb->surround)
+
 - `sa"`   : Add `"` for visual selection
 - `sd"`   : Delete `"`
 - `sr"'`  : Change `"` to `'`
@@ -672,7 +671,7 @@ ZVM_MODE_VISUAL_LINE
 ZVM_MODE_REPLACE
 ```
 
-For updating the vi mode indicator, we should add our commands to 
+For updating the vi mode indicator, we should add our commands to
 `zvm_after_select_vi_mode_commands`. For example:
 
 ```zsh

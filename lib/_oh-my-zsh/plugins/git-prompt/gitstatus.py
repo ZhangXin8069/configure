@@ -14,7 +14,8 @@ def get_tagname_or_hash():
     hash_ = check_output(hash_cmd).decode('utf-8').strip()
 
     # get tagname
-    tags_cmd = ['git', 'for-each-ref', '--points-at=HEAD', '--count=2', '--sort=-version:refname', '--format=%(refname:short)', 'refs/tags']
+    tags_cmd = ['git', 'for-each-ref', '--points-at=HEAD', '--count=2',
+                '--sort=-version:refname', '--format=%(refname:short)', 'refs/tags']
     tags = check_output(tags_cmd).decode('utf-8').split()
 
     if tags:
@@ -24,6 +25,8 @@ def get_tagname_or_hash():
     return None
 
 # Re-use method from https://github.com/magicmonty/bash-git-prompt to get stashs count
+
+
 def get_stash():
     cmd = Popen(['git', 'rev-parse', '--git-dir'], stdout=PIPE, stderr=PIPE)
     so, se = cmd.communicate()
@@ -38,7 +41,8 @@ def get_stash():
 
 # `git status --porcelain --branch` can collect all information
 # branch, remote_branch, untracked, staged, changed, conflicts, ahead, behind
-po = Popen(['git', 'status', '--porcelain', '--branch'], env=dict(os.environ, LANG="C"), stdout=PIPE, stderr=PIPE)
+po = Popen(['git', 'status', '--porcelain', '--branch'],
+           env=dict(os.environ, LANG="C"), stdout=PIPE, stderr=PIPE)
 stdout, sterr = po.communicate()
 if po.returncode != 0:
     sys.exit(0)  # Not a git repository
@@ -46,7 +50,8 @@ if po.returncode != 0:
 # collect git status information
 untracked, staged, changed, deleted, conflicts = [], [], [], [], []
 ahead, behind = 0, 0
-status = [(line[0], line[1], line[2:]) for line in stdout.decode('utf-8').splitlines()]
+status = [(line[0], line[1], line[2:])
+          for line in stdout.decode('utf-8').splitlines()]
 for st in status:
     if st[0] == '#' and st[1] == '#':
         if re.search('Initial commit on', st[2]) or re.search('No commits yet on', st[2]):

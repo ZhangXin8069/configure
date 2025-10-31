@@ -10,7 +10,7 @@ apt install vim tree
 apt install htop # btop nvtop
 apt install python3-dev pip
 # apt install cmake
-wget  https://github.com/Kitware/CMake/releases/download/v3.31.0/cmake-3.31.0-linux-x86_64.sh
+wget https://github.com/Kitware/CMake/releases/download/v3.31.0/cmake-3.31.0-linux-x86_64.sh
 wget https://github.com/Syllo/nvtop/releases/download/3.1.0/nvtop-x86_64.AppImage
 wget https://github.com/aristocratos/btop/releases/download/v1.4.0/btop-x86_64-linux-musl.tbz
 mv cmake-3.31.0-linux-x86_64.sh nvtop-x86_64.AppImage btop-x86_64-linux-musl.tbz /usr/local
@@ -28,13 +28,13 @@ ln -s /usr/local/btop/bin/* .
 ln -s /usr/local/nvtop/squashfs-root/usr/bin/* .
 popd
 popd
-pushd /usr/bin 
+pushd /usr/bin
 ln -s ./python3 python
 popd
 apt install openmpi-bin openmpi-common libopenmpi-dev
 apt install libnccl2 libnccl-dev
 # apt --fix-broken install
-# dpkg --configure -a 
+# dpkg --configure -a
 ######
 pushd ~
 apt install zsh wget

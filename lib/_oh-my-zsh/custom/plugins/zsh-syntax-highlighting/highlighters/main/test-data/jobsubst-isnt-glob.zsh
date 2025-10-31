@@ -31,7 +31,7 @@
 BUFFER=$': %? %?foo'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 4 default' # %?
+  '1 1 builtin'  # :
+  '3 4 default'  # %?
   '6 10 default' # %?foo
 )

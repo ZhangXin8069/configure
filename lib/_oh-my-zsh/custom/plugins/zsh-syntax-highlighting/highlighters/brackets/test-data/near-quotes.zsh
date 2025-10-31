@@ -29,8 +29,8 @@
 
 unsorted=1
 
-ZSH_HIGHLIGHT_STYLES[bracket-level-1]=
-ZSH_HIGHLIGHT_STYLES[bracket-level-2]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 1]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 2]=
 
 BUFFER=': {"{x}"}'
 

@@ -33,11 +33,11 @@ alias p='print -r --'
 BUFFER=$'s=$(p foo)'
 
 expected_region_highlight=(
-  '1 10 assign' # s=$(p foo)
-  '3 10 default' # $(p foo)
-  '3 10 command-substitution-unquoted' # $(p foo)
-  '3 4 command-substitution-delimiter-unquoted' # $(
-  '5 5 alias' # p
-  '7 9 default' # foo
+  '1 10 assign'                                   # s=$(p foo)
+  '3 10 default'                                  # $(p foo)
+  '3 10 command-substitution-unquoted'            # $(p foo)
+  '3 4 command-substitution-delimiter-unquoted'   # $(
+  '5 5 alias'                                     # p
+  '7 9 default'                                   # foo
   '10 10 command-substitution-delimiter-unquoted' # )
 )

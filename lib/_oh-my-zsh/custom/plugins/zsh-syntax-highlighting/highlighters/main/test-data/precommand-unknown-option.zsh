@@ -28,16 +28,16 @@
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
 
-sudo(){}
+sudo() {}
 
 BUFFER='sudo -ux ls; sudo -x ls'
 
 expected_region_highlight=(
-  '1 4 precommand' # sudo
-  '6 8 single-hyphen-option' # -ux
-  '10 11 command' # ls
-  '12 12 commandseparator' # ;
-  '14 17 precommand' # sudo
+  '1 4 precommand'             # sudo
+  '6 8 single-hyphen-option'   # -ux
+  '10 11 command'              # ls
+  '12 12 commandseparator'     # ;
+  '14 17 precommand'           # sudo
   '19 20 single-hyphen-option' # -x
-  '22 23 command' # ls
+  '22 23 command'              # ls
 )

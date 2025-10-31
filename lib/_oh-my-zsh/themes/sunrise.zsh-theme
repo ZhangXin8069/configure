@@ -10,49 +10,49 @@ B=$fg_no_bold[blue]
 RESET=$reset_color
 
 if [ "$USERNAME" = "root" ]; then
-    PROMPTCOLOR="%{$R%}" PROMPTPREFIX="-!-";
+  PROMPTCOLOR="%{$R%}" PROMPTPREFIX="-!-"
 else
-    PROMPTCOLOR="" PROMPTPREFIX="---";
+  PROMPTCOLOR="" PROMPTPREFIX="---"
 fi
 
 local return_code="%(?..%{$R%}%? ↵%{$RESET%})"
 
 # Get the status of the working tree (copied and modified from git.zsh)
 custom_git_prompt_status() {
-  INDEX=$(git status --porcelain 2> /dev/null)
+  INDEX=$(git status --porcelain 2>/dev/null)
   STATUS=""
   # Non-staged
-  if $(echo "$INDEX" | grep '^?? ' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^?? ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_UNTRACKED$STATUS"
   fi
-  if $(echo "$INDEX" | grep '^UU ' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^UU ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_UNMERGED$STATUS"
   fi
-  if $(echo "$INDEX" | grep '^ D ' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^ D ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_DELETED$STATUS"
   fi
-  if $(echo "$INDEX" | grep '^.M ' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^.M ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_MODIFIED$STATUS"
-  elif $(echo "$INDEX" | grep '^AM ' &> /dev/null); then
+  elif $(echo "$INDEX" | grep '^AM ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_MODIFIED$STATUS"
-  elif $(echo "$INDEX" | grep '^ T ' &> /dev/null); then
+  elif $(echo "$INDEX" | grep '^ T ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_MODIFIED$STATUS"
   fi
   # Staged
-  if $(echo "$INDEX" | grep '^D  ' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^D  ' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_STAGED_DELETED$STATUS"
   fi
-  if $(echo "$INDEX" | grep '^R' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^R' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_STAGED_RENAMED$STATUS"
   fi
-  if $(echo "$INDEX" | grep '^M' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^M' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_STAGED_MODIFIED$STATUS"
   fi
-  if $(echo "$INDEX" | grep '^A' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^A' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_PROMPT_STAGED_ADDED$STATUS"
   fi
 
-  if $(echo -n "$STATUS" | grep '.*' &> /dev/null); then
+  if $(echo -n "$STATUS" | grep '.*' &>/dev/null); then
     STATUS="$ZSH_THEME_GIT_STATUS_PREFIX$STATUS"
   fi
 
@@ -61,7 +61,7 @@ custom_git_prompt_status() {
 
 # get the name of the branch we are on (copied and modified from git.zsh)
 function custom_git_prompt() {
-  ref=$(git symbolic-ref HEAD 2> /dev/null) || return
+  ref=$(git symbolic-ref HEAD 2>/dev/null) || return
   echo "$ZSH_THEME_GIT_PROMPT_PREFIX${ref#refs/heads/}$(parse_git_dirty)$(git_prompt_ahead)$(custom_git_prompt_status)$ZSH_THEME_GIT_PROMPT_SUFFIX"
 }
 
@@ -76,7 +76,6 @@ ZSH_THEME_GIT_PROMPT_DIRTY="%{$R%}*"
 ZSH_THEME_GIT_PROMPT_CLEAN=""
 
 ZSH_THEME_GIT_PROMPT_AHEAD="%{$B%}➔"
-
 
 ZSH_THEME_GIT_STATUS_PREFIX=" "
 

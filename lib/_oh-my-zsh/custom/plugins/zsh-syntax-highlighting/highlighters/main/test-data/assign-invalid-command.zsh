@@ -31,7 +31,7 @@
 BUFFER=$'x=y nosuchcommand'
 
 expected_region_highlight=(
-  '1 3 assign' # x=y
-  '3 3 default' # y
+  '1 3 assign'         # x=y
+  '3 3 default'        # y
   '5 17 unknown-token' # nosuchcommand
 )
