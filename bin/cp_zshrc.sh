@@ -1,11 +1,14 @@
 # source
-_PATH=`cd "$(dirname "$0")";pwd`
+_PATH=$(
+    cd "$(dirname "$0")"
+    pwd
+)
 pushd ${_PATH}/../
 source ./env.sh
 popd
 
 # init
-_NAME=`basename "$0"`
+_NAME=$(basename "$0")
 work_name="lib"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}

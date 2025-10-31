@@ -30,9 +30,9 @@
 BUFFER='ps aux | grep java'
 
 expected_region_highlight=(
-  "1  2  command" # ps
-  "4  6  default" # aux
+  "1  2  command"          # ps
+  "4  6  default"          # aux
   "8  8  commandseparator" # |
-  "10 13 command" # grep
-  "15 18 default" # java
+  "10 13 command"          # grep
+  "15 18 default"          # java
 )

@@ -12,7 +12,7 @@ function omz_history {
     builtin read -E
     [[ "$REPLY" = [yY] ]] || return 0
 
-    print -nu2 >| "$HISTFILE"
+    print -nu2 >|"$HISTFILE"
     fc -p "$HISTFILE"
 
     print -u2 History file deleted.
@@ -27,11 +27,11 @@ function omz_history {
 
 # Timestamp format
 case ${HIST_STAMPS-} in
-  "mm/dd/yyyy") alias history='omz_history -f' ;;
-  "dd.mm.yyyy") alias history='omz_history -E' ;;
-  "yyyy-mm-dd") alias history='omz_history -i' ;;
-  "") alias history='omz_history' ;;
-  *) alias history="omz_history -t '$HIST_STAMPS'" ;;
+"mm/dd/yyyy") alias history='omz_history -f' ;;
+"dd.mm.yyyy") alias history='omz_history -E' ;;
+"yyyy-mm-dd") alias history='omz_history -i' ;;
+"") alias history='omz_history' ;;
+*) alias history="omz_history -t '$HIST_STAMPS'" ;;
 esac
 
 ## History file configuration

@@ -32,5 +32,5 @@ BUFFER=$': =ls'
 
 expected_region_highlight=(
   '1 1 builtin' # :
-  '3 5 path' # =ls
+  '3 5 path'    # =ls
 )

@@ -12,7 +12,7 @@ function drpu() {
 }
 
 function drf() {
-  if [[ -z "$1" ]] then
+  if [[ -z "$1" ]]; then
     drush core-config
   else
     drush core-config --choice=$1
@@ -35,7 +35,7 @@ function drnew() {
 
     HOST=http://$(hostname -i)/
 
-    if [[ $WEBSITE_NAME == "" ]] then
+    if [[ $WEBSITE_NAME == "" ]]; then
       MINUTES=$(date +%M:%S)
       WEBSITE_NAME="Drupal-$MINUTES"
       echo "Your website will be named: $WEBSITE_NAME"
@@ -46,7 +46,7 @@ function drnew() {
     echo "Type your localhost directory: (Leave empty for /var/www/html/)"
     read DIRECTORY
 
-    if [[ $DIRECTORY == "" ]] then
+    if [[ $DIRECTORY == "" ]]; then
       DIRECTORY="/var/www/html/"
     fi
 
@@ -71,7 +71,7 @@ function drnew() {
 
 # Aliases
 alias dr="drush"
-alias drca="drush cc all" # Deprecated for Drush 8
+alias drca="drush cc all"   # Deprecated for Drush 8
 alias drcb="drush cc block" # Deprecated for Drush 8
 alias drcex="drush config:export -y"
 alias drcg="drush cc registry" # Deprecated for Drush 8

@@ -13,23 +13,28 @@ Inspired by several tools used to simplify usage of `kubectl`.
 Homebrew package manager:
 
 ```
-$ brew update
-$ brew install kube-ps1
+brew update
+brew install kube-ps1
 ```
+
 ### From Source
 
 1. Clone this repository
 2. Source the kube-ps1.sh in your `~/.zshrc` or your `~/.bashrc`
 
 ### Arch Linux
+
 AUR Package available at [https://aur.archlinux.org/packages/kube-ps1/](https://aur.archlinux.org/packages/kube-ps1/).
 
 #### Zsh
+
 ```sh
 source /path/to/kube-ps1.sh
 PROMPT='$(kube_ps1)'$PROMPT
 ```
+
 #### Bash
+
 ```sh
 source /path/to/kube-ps1.sh
 PS1='[\u@\h \W $(kube_ps1)]\$ '
@@ -40,6 +45,7 @@ PS1='[\u@\h \W $(kube_ps1)]\$ '
 #### Using [zplugin](https://github.com/zdharma/zplugin)
 
 Update `.zshrc` with:
+
 ```sh
 zplugin light jonmosco/kube-ps1
 PROMPT='$(kube_ps1)'$PROMPT
@@ -58,6 +64,7 @@ from brew ports:
 ```
 brew install openshift-cli
 ```
+
 or the source can be downloaded:
 
 [OC Client Tools](https://www.openshift.org/download.html)
@@ -127,9 +134,9 @@ the following environment variables:
 | `KUBE_PS1_BINARY` | `kubectl` | Default Kubernetes binary |
 | `KUBE_PS1_NS_ENABLE` | `true` | Display the namespace. If set to `false`, this will also disable `KUBE_PS1_DIVIDER` |
 | `KUBE_PS1_PREFIX` | `(` | Prompt opening character  |
-| `KUBE_PS1_SYMBOL_ENABLE` | `true ` | Display the prompt Symbol. If set to `false`, this will also disable `KUBE_PS1_SEPARATOR` |
+| `KUBE_PS1_SYMBOL_ENABLE` | `true` | Display the prompt Symbol. If set to `false`, this will also disable `KUBE_PS1_SEPARATOR` |
 | `KUBE_PS1_SYMBOL_PADDING` | `false` | Adds a space (padding) after the symbol to prevent clobbering prompt characters |
-| `KUBE_PS1_SYMBOL_DEFAULT` | `⎈ ` | Default prompt symbol. Unicode `\u2388` |
+| `KUBE_PS1_SYMBOL_DEFAULT` | `⎈` | Default prompt symbol. Unicode `\u2388` |
 | `KUBE_PS1_SYMBOL_USE_IMG` | `false` | ☸️  ,  Unicode `\u2638` as the prompt symbol |
 | `KUBE_PS1_SEPARATOR` | &#124; | Separator between symbol and context name |
 | `KUBE_PS1_DIVIDER` | `:` | Separator between context and namespace |
@@ -225,11 +232,13 @@ minimal configuration before submitting a bug report.
 This can be done as follows for each shell before loading kube-ps1:
 
 Bash:
+
 ```bash
 bash --norc
 ```
 
 Zsh:
+
 ```bash
 zsh -f
 or
@@ -238,5 +247,5 @@ zsh --no-rcs
 
 ## Contributors
 
-* [Ahmet Alp Balkan](https://github.com/ahmetb)
-* Jared Yanovich
+- [Ahmet Alp Balkan](https://github.com/ahmetb)
+- Jared Yanovich

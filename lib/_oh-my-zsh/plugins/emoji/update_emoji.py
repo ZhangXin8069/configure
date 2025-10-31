@@ -76,6 +76,7 @@ def code_to_omz(_code_points):
     """ Returns a ZSH-compatible Unicode string from the code point(s) """
     return r'\U' + r'\U'.join(_code_points.split(' '))
 
+
 def name_to_omz(_name, _group, _subgroup, _status):
     """ Returns a reasonable snake_case name for the emoji. """
     def snake_case(_string):
@@ -86,7 +87,7 @@ def name_to_omz(_name, _group, _subgroup, _status):
         return re.sub(r'__', r'_', remove_whitespace)
 
     shortname = ""
-    split_at_colon = lambda s: s.split(": ")
+    def split_at_colon(s): return s.split(": ")
     # Special treatment by group and subgroup
     # If the emoji is a flag, we strip "flag" from its name
     if _group == "Flags" and len(split_at_colon(_name)) > 1:
@@ -103,6 +104,7 @@ def name_to_omz(_name, _group, _subgroup, _status):
         shortname += "_minimally"
     return shortname
 
+
 def increment_name(_shortname):
     """ Increment the short name by 1. If you get, say,
     'woman_detective_unqualified', it returns
@@ -118,6 +120,7 @@ def increment_name(_shortname):
 # Going through every line
 ########
 
+
 group, subgroup, short_name_buffer = "", "", ""
 emoji_database = []
 for line in spec:
@@ -129,7 +132,7 @@ for line in spec:
             group = name
         elif gr_or_sub == "subgroup":
             subgroup = name
-        continue # Moving on...
+        continue  # Moving on...
     # Second, test if this line references one emoji
     emoji_match = re.findall(regex_emoji, line)
     if emoji_match != []:

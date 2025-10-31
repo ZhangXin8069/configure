@@ -33,23 +33,26 @@
 BUFFER=$'zstyle; builtin zstyle; builtin command zstyle; nice zstyle'
 
 # Verify that no $^path/zstyle(N) binary exists.
-if (disable zstyle; type zstyle >/dev/null); then
+if (
+  disable zstyle
+  type zstyle >/dev/null
+); then
   echo >&2 "precommand-type2: error: 'zstyle' exists not only as a builtin"
 fi
 
 expected_region_highlight=(
-  '1 6 builtin' # zstyle
+  '1 6 builtin'          # zstyle
   '7 7 commandseparator' # ;
 
-  '9 15 precommand' # builtin
-  '17 22 builtin' # zstyle
+  '9 15 precommand'        # builtin
+  '17 22 builtin'          # zstyle
   '23 23 commandseparator' # ;
 
-  '25 31 precommand' # builtin
-  '33 39 precommand' # command
+  '25 31 precommand'                 # builtin
+  '33 39 precommand'                 # command
   '41 46 unknown-token "issue #608"' # zstyle
-  '47 47 commandseparator' # ;
+  '47 47 commandseparator'           # ;
 
-  '49 52 precommand' # nice
+  '49 52 precommand'                 # nice
   '54 59 unknown-token "issue #608"' # zstyle
 )

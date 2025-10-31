@@ -76,7 +76,7 @@ source $ZSH/oh-my-zsh.sh
 | vscie `id or vsix-path` | code --install-extension `extension-id> or <extension-vsix-path` | Installs an extension.            |
 | vscue `id or vsix-path` | code --uninstall-extension `id or vsix-path`                     | Uninstalls an extension.          |
 
-## Other options:
+## Other options
 
 | Alias        | Command                   | Description                                                                                                           |
 | ------------ | ------------------------- | --------------------------------------------------------------------------------------------------------------------- |

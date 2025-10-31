@@ -4,6 +4,7 @@ This plugin returns an emoji for the current $TTY number so it can be used
 in a prompt.
 
 To use it, add emotty to the plugins array in your zshrc file:
+
 ```
 plugins=(... emotty)
 ```
@@ -17,6 +18,7 @@ on the number associated to the `$TTY`.
 
 There are different sets of emoji characters available, to choose a different
 set, set `$emotty_set` to the name of the set you would like to use, e.g.:
+
 ```
 emotty_set=nature
 ```

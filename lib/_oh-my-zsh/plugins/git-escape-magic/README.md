@@ -1,7 +1,7 @@
 # Git Escape Magic
 
 This plugin is copied from the original at
-https://github.com/knu/zsh-git-escape-magic. All credit for the
+<https://github.com/knu/zsh-git-escape-magic>. All credit for the
 functionality enabled by this plugin should go to @knu.
 
 An excerpt from that project's readme explains its purpose.

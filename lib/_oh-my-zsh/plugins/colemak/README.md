@@ -12,6 +12,7 @@ plugins=(... colemak)
 ```
 
 You will also need to enable `vi` mode, so add another line to `~/.zshrc`:
+
 ```
 bindkey -v
 ```

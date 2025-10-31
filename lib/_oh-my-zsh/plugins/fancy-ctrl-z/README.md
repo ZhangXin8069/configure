@@ -6,9 +6,9 @@ The fg part really hurts me. I just wanted to hit Ctrl-z once again to get back
 to Vim. I could not find a solution, so I developed one on my own that
 works wonderfully with ZSH.
 
-Source: http://sheerun.net/2014/03/21/how-to-boost-your-vim-productivity/
+Source: <http://sheerun.net/2014/03/21/how-to-boost-your-vim-productivity/>
 
 Credits:
+
 - original idea by @sheerun
 - added to OMZ by @mbologna
-

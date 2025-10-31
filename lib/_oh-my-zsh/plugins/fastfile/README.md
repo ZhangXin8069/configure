@@ -16,14 +16,14 @@ Example: you access folder `/code/project/backend/database` very frequently.
 First, generate a shortcut with the name `pjdb`:
 
 ```zsh
-$ fastfile pjdb /code/project/backend/database
+fastfile pjdb /code/project/backend/database
 ```
 
 Next time you want to access it, use `§pjdb`. For example:
 
 ```zsh
-$ cd §pjdb
-$ subl §pjdb
+cd §pjdb
+subl §pjdb
 ```
 
 where § is the fastfile prefix (see [below](#options) for how to change).

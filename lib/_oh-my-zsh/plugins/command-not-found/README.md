@@ -9,6 +9,7 @@ plugins=(... command-not-found)
 ```
 
 An example of how this plugin works in Ubuntu:
+
 ```
 $ mutt
 The program 'mutt' can be found in the following packages:

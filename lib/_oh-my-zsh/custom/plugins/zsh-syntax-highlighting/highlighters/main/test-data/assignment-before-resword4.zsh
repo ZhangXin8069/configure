@@ -31,10 +31,10 @@
 BUFFER=$'foo=bar [[ -n foo ]]'
 
 expected_region_highlight=(
-  '1 7 assign' # foo=bar
-  '5 7 default' # bar
-  '9 10 unknown-token' # [[
+  '1 7 assign'                 # foo=bar
+  '5 7 default'                # bar
+  '9 10 unknown-token'         # [[
   '12 13 single-hyphen-option' # -n
-  '15 17 default' # foo
-  '19 20 reserved-word' # ]]
+  '15 17 default'              # foo
+  '19 20 reserved-word'        # ]]
 )

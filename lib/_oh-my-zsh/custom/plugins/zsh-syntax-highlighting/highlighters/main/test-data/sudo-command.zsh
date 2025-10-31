@@ -27,7 +27,7 @@
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
 
-sudo(){}
+sudo() {}
 
 # Tests three codepaths:
 # * -i  (no argument)
@@ -36,19 +36,19 @@ sudo(){}
 BUFFER='sudo -C3 -u otheruser -i ls /; sudo ; sudo -u ; sudo notacommand'
 
 expected_region_highlight=(
-  "1 4 precommand" # sudo
-  "6 8 single-hyphen-option" # -C3
+  "1 4 precommand"             # sudo
+  "6 8 single-hyphen-option"   # -C3
   "10 11 single-hyphen-option" # -u
-  "13 21 default" # otheruser
+  "13 21 default"              # otheruser
   "23 24 single-hyphen-option" # -i
-  "26 27 command" # ls
-  "29 29 path" # /
-  "30 30 commandseparator" # ;
-  "32 35 precommand" # sudo
-  "37 37 unknown-token" # ;, error because empty command
-  "39 42 precommand" # sudo
+  "26 27 command"              # ls
+  "29 29 path"                 # /
+  "30 30 commandseparator"     # ;
+  "32 35 precommand"           # sudo
+  "37 37 unknown-token"        # ;, error because empty command
+  "39 42 precommand"           # sudo
   "44 45 single-hyphen-option" # -u
-  "47 47 unknown-token" # ;, error because incomplete command
-  "49 52 precommand" # sudo
-  "54 64 unknown-token" # notacommand - doesn't falls back to "not a command word" codepath
+  "47 47 unknown-token"        # ;, error because incomplete command
+  "49 52 precommand"           # sudo
+  "54 64 unknown-token"        # notacommand - doesn't falls back to "not a command word" codepath
 )

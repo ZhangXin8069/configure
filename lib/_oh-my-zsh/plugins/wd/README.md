@@ -83,7 +83,7 @@ zplug "mfaerevaag/wd", as:command, use:"wd.sh", hook-load:"wd() { . $ZPLUG_REPOS
 
 ### Automatic
 
-_Note: automatic install does not provide the manpage. It is also poor security practice to run remote code without first reviewing it, so you ought to look [here](https://github.com/mfaerevaag/wd/blob/master/install.sh)_
+*Note: automatic install does not provide the manpage. It is also poor security practice to run remote code without first reviewing it, so you ought to look [here](https://github.com/mfaerevaag/wd/blob/master/install.sh)*
 
 Run either command in your terminal:
 
@@ -170,7 +170,6 @@ wd addcd /foo/ bar
 wd addcd /foo/
 ```
 
-
 You can omit point name to automatically use the current directory's name instead.
 
 * From any directory, warp to `foo` with:
@@ -193,7 +192,7 @@ wd ...
 ```
 
 This is a wrapper for the zsh's `dirs` function.  
-_You might need to add `setopt AUTO_PUSHD` to your `.zshrc` if you are not using [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh)._
+*You might need to add `setopt AUTO_PUSHD` to your `.zshrc` if you are not using [oh-my-zsh](https://github.com/ohmyzsh/ohmyzsh).*
 
 * Remove warp point:
 

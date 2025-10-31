@@ -1,4 +1,4 @@
-open_lighthouse_ticket () {
+open_lighthouse_ticket() {
   if [ ! -f .lighthouse-url ]; then
     echo "There is no .lighthouse-url file in the current directory..."
     return 0

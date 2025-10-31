@@ -31,11 +31,11 @@
 BUFFER=$'[[ foo && bar || baz ]]'
 
 expected_region_highlight=(
-  '1 2 reserved-word' # [[
-  '4 6 default' # foo
-  '8 9 default' # &&
-  '11 13 default' # bar
-  '15 16 default' # ||
-  '18 20 default' # baz
+  '1 2 reserved-word'   # [[
+  '4 6 default'         # foo
+  '8 9 default'         # &&
+  '11 13 default'       # bar
+  '15 16 default'       # ||
+  '18 20 default'       # baz
   '22 23 reserved-word' # ]]
 )

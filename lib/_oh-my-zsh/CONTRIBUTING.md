@@ -177,11 +177,13 @@ type(scope)!: subject
   Examples:
 
   - Commit that changes the `git` plugin:
+
   ```
   feat(git): add alias for `git commit`
   ```
 
   - Commit that changes many plugins:
+
   ```
   style: fix inline declaration of arrays
   ```
@@ -219,12 +221,14 @@ type(scope)!: subject
   Formatting tricks: the commit subject may contain:
 
   - Links to related issues or PRs by writing `#issue`. This will be highlighted by the changelog tool:
+
     ```
     feat(archlinux): add support for aura AUR helper (#9467)
     ```
 
   - Formatted inline code by using backticks: the text between backticks will also be highlighted by
     the changelog tool:
+
     ```
     feat(shell-proxy): enable unexported `DEFAULT_PROXY` setting (#9774)
     ```

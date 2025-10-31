@@ -15,13 +15,13 @@ plugins=(... sudo)
 Say you have typed a long command and forgot to add `sudo` in front:
 
 ```console
-$ apt-get install build-essential
+apt-get install build-essential
 ```
 
 By pressing the <kbd>esc</kbd> key twice, you will have the same command with `sudo` prefixed without typing:
 
 ```console
-$ sudo apt-get install build-essential
+sudo apt-get install build-essential
 ```
 
 The same happens for editing files with your default editor (defined in `$SUDO_EDITOR`, `$VISUAL` or `$EDITOR`, in that order):
@@ -29,13 +29,13 @@ The same happens for editing files with your default editor (defined in `$SUDO_E
 If the editor defined were `vim`:
 
 ```console
-$ vim /etc/hosts
+vim /etc/hosts
 ```
 
 By pressing the <kbd>esc</kbd> key twice, you will have the same command with `sudo -e` instead of the editor, that would open that editor with root privileges:
 
 ```console
-$ sudo -e /etc/hosts
+sudo -e /etc/hosts
 ```
 
 ### Previous executed commands

@@ -77,15 +77,15 @@ local -a id_names
 
 _id_names() {
     local app_list
-    app_list=`pm2 list -m`
+    app_list=$(pm2 list -m)
 
     local -a names ids
-    names=(`echo $app_list | grep '+---' | awk '{print $2}'`)
-    ids=(`echo $app_list | grep 'pm2 id' | awk '{print $4}'`)
+    names=($(echo $app_list | grep '+---' | awk '{print $2}'))
+    ids=($(echo $app_list | grep 'pm2 id' | awk '{print $4}'))
 
-    if (( ${#ids} > 0 )); then
+    if ((${#ids} > 0)); then
         for i in {1..${#ids}}; do
-            id_names+=( "${ids[i]}:${names[i]}" )
+            id_names+=("${ids[i]}:${names[i]}")
         done
     fi
 }
@@ -95,7 +95,7 @@ _arguments \
     '(-h --help)'{-h,--help}'[output usage information]' \
     '*:: :->subcmds' && return 0
 
-if (( CURRENT == 1 )); then
+if ((CURRENT == 1)); then
     _describe "command" _1st_arguments
     return
 fi
@@ -130,39 +130,40 @@ logs_options=(
 )
 
 case "$words[1]" in
-    start)
-        _arguments $start_options && return 0
-        ;;
-    logs)
-        _arguments $logs_options && return 0
-        ;;
-    stop|restart|delete|reload|reset)
-        _arguments $id_all_comp && return 0
-        ;;
-    env|inspect|monitor|unmonitor|describe)
-        _arguments $id_comp && return 0
-        ;;
-    deploy|startOrRestart|startOrReload)
-        _files ;;
+start)
+    _arguments $start_options && return 0
+    ;;
+logs)
+    _arguments $logs_options && return 0
+    ;;
+stop | restart | delete | reload | reset)
+    _arguments $id_all_comp && return 0
+    ;;
+env | inspect | monitor | unmonitor | describe)
+    _arguments $id_comp && return 0
+    ;;
+deploy | startOrRestart | startOrReload)
+    _files
+    ;;
 esac
 
 case "$state" in
-    id_comp)
-        _id_names
-        _alternative \
-            'args:app args:(($id_names))'
-        ;;
-    id_all_comp)
-        _id_names
-        id_names+=(all)
-        _alternative \
-            'args:app args:(($id_names))'
-        ;;
-    id_all_files_comp)
-        _id_names
-        id_names+=(all)
-        _alternative \
-            'args:app args:(($id_names))' \
-            'files:filename:_files'
-        ;;
+id_comp)
+    _id_names
+    _alternative \
+        'args:app args:(($id_names))'
+    ;;
+id_all_comp)
+    _id_names
+    id_names+=(all)
+    _alternative \
+        'args:app args:(($id_names))'
+    ;;
+id_all_files_comp)
+    _id_names
+    id_names+=(all)
+    _alternative \
+        'args:app args:(($id_names))' \
+        'files:filename:_files'
+    ;;
 esac

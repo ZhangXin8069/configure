@@ -2,7 +2,7 @@
 # unset
 # MODULE
 module purge
-module load gcc/10.3.0-gcc-4.8.5 
+module load gcc/10.3.0-gcc-4.8.5
 module load cuda/11.4.4-gcc-10.3.0
 module load git/2.40.0-gcc-10.3.0
 module load openmpi/4.1.5-gcc-10.3.0

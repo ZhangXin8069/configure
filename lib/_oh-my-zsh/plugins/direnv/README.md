@@ -12,4 +12,4 @@ plugins=(... direnv)
 
 In order to make this work, you will need to have the direnv installed.
 
-More info on the usage and install: https://github.com/direnv/direnv
+More info on the usage and install: <https://github.com/direnv/direnv>

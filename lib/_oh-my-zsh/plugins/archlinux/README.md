@@ -169,16 +169,16 @@ whether the package manager is installed, checked in the following order:
 
 ## Contributors
 
-- Benjamin Boudreau - dreurmail@gmail.com
-- Celso Miranda - contacto@celsomiranda.net
-- ratijas (ivan tkachenko) - me@ratijas.tk
-- Juraj Fiala - doctorjellyface@riseup.net
-- KhasMek - Boushh@gmail.com
-- Majora320 (Moses Miller) - Majora320@gmail.com
-- Martin Putniorz - mputniorz@gmail.com
-- MatthR3D - matthr3d@gmail.com
-- ornicar - thibault.duplessis@gmail.com
-- Ybalrid (Arthur Brainville) - ybalrid@ybalrid.info
-- Jeff M. Hubbard - jeffmhubbard@gmail.com
-- K. Harishankar(harishnkr) - hari2menon1234@gmail.com
-- WH-2099 - wh2099@outlook.com
+- Benjamin Boudreau - <dreurmail@gmail.com>
+- Celso Miranda - <contacto@celsomiranda.net>
+- ratijas (ivan tkachenko) - <me@ratijas.tk>
+- Juraj Fiala - <doctorjellyface@riseup.net>
+- KhasMek - <Boushh@gmail.com>
+- Majora320 (Moses Miller) - <Majora320@gmail.com>
+- Martin Putniorz - <mputniorz@gmail.com>
+- MatthR3D - <matthr3d@gmail.com>
+- ornicar - <thibault.duplessis@gmail.com>
+- Ybalrid (Arthur Brainville) - <ybalrid@ybalrid.info>
+- Jeff M. Hubbard - <jeffmhubbard@gmail.com>
+- K. Harishankar(harishnkr) - <hari2menon1234@gmail.com>
+- WH-2099 - <wh2099@outlook.com>

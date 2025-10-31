@@ -10,7 +10,7 @@
 
 # Either switch to a directory from dirstack, using +N or -N syntax
 # or switch to a directory by path, using `switch-to-dir -- <path>`
-switch-to-dir () {
+switch-to-dir() {
 	# If $1 is --, then treat $2 as a directory path
 	if [[ $1 == -- ]]; then
 		# We use `-q` because we don't want chpwd to run, we'll do it manually
@@ -30,45 +30,45 @@ switch-to-dir () {
 	done
 }
 
-insert-cycledleft () {
+insert-cycledleft() {
 	switch-to-dir +1 || return $?
 
 	local fn
 	for fn in chpwd $chpwd_functions precmd $precmd_functions; do
-		(( $+functions[$fn] )) && $fn
+		(($ + functions[$fn])) && $fn
 	done
 	zle reset-prompt
 }
 zle -N insert-cycledleft
 
-insert-cycledright () {
+insert-cycledright() {
 	switch-to-dir -0 || return $?
 
 	local fn
 	for fn in chpwd $chpwd_functions precmd $precmd_functions; do
-		(( $+functions[$fn] )) && $fn
+		(($ + functions[$fn])) && $fn
 	done
 	zle reset-prompt
 }
 zle -N insert-cycledright
 
-insert-cycledup () {
+insert-cycledup() {
 	switch-to-dir -- .. || return $?
 
 	local fn
 	for fn in chpwd $chpwd_functions precmd $precmd_functions; do
-		(( $+functions[$fn] )) && $fn
+		(($ + functions[$fn])) && $fn
 	done
 	zle reset-prompt
 }
 zle -N insert-cycledup
 
-insert-cycleddown () {
+insert-cycleddown() {
 	switch-to-dir -- "$(find . -mindepth 1 -maxdepth 1 -type d | sort -n | head -n 1)" || return $?
 
 	local fn
 	for fn in chpwd $chpwd_functions precmd $precmd_functions; do
-		(( $+functions[$fn] )) && $fn
+		(($ + functions[$fn])) && $fn
 	done
 	zle reset-prompt
 }
@@ -81,7 +81,7 @@ zle -N insert-cycleddown
 # iTerm2 does not have these key combinations defined by default; you will need
 # to add them under "Keys" in your profile if you want to use this. You can do
 # this conveniently by loading the "xterm with Numeric Keypad" preset.
-bindkey "\e[1;6D" insert-cycledleft     # Ctrl+Shift+Left
-bindkey "\e[1;6C" insert-cycledright    # Ctrl+Shift+Right
-bindkey "\e[1;6A" insert-cycledup       # Ctrl+Shift+Up
-bindkey "\e[1;6B" insert-cycleddown     # Ctrl+Shift+Down
+bindkey "\e[1;6D" insert-cycledleft  # Ctrl+Shift+Left
+bindkey "\e[1;6C" insert-cycledright # Ctrl+Shift+Right
+bindkey "\e[1;6A" insert-cycledup    # Ctrl+Shift+Up
+bindkey "\e[1;6B" insert-cycleddown  # Ctrl+Shift+Down

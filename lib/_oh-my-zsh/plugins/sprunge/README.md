@@ -1,6 +1,6 @@
 # Sprunge plugin
 
-This plugin uploads data and fetch URL from the pastebin http://sprunge.us
+This plugin uploads data and fetch URL from the pastebin <http://sprunge.us>
 
 To enable it, add 'sprunge' to your plugins:
 

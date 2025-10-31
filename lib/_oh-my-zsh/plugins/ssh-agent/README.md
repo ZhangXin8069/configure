@@ -119,7 +119,6 @@ to the ssh-agent.
 ssh-add --apple-use-keychain ~/.ssh/id_rsa ...
 ```
 
-
 This plugin can be configured to use the keychain when loading using the following:
 
 ```
@@ -128,6 +127,6 @@ zstyle :omz:plugins:ssh-agent ssh-add-args --apple-load-keychain
 
 ## Credits
 
-Based on code from Joseph M. Reagle: https://www.cygwin.com/ml/cygwin/2001-06/msg00537.html
+Based on code from Joseph M. Reagle: <https://www.cygwin.com/ml/cygwin/2001-06/msg00537.html>
 
 Agent-forwarding support based on ideas from Florent Thoumie and Jonas Pfenniger

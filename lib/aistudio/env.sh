@@ -13,7 +13,6 @@ source /home/aistudio/configure/env.sh
 ## quda
 export QUDA_ENABLE_P2P=0
 export QUDA_ENABLE_TUNING=0
-" >> ./.bashrc
+" >>./.bashrc
 source ./.bashrc
 popd
-

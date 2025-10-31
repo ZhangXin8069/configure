@@ -33,12 +33,12 @@
 BUFFER=$'cat <&p; exec {myfd}>&-'
 
 expected_region_highlight=(
-  '1 3 command' # cat
-  '5 6 redirection' # <&
-  '7 7 redirection' # p
+  '1 3 command'          # cat
+  '5 6 redirection'      # <&
+  '7 7 redirection'      # p
   '8 8 commandseparator' # ;
-  '10 13 precommand' # exec
-  '15 20 named-fd' # {myfd}
-  '21 22 redirection' # >&
-  '23 23 redirection' # -
+  '10 13 precommand'     # exec
+  '15 20 named-fd'       # {myfd}
+  '21 22 redirection'    # >&
+  '23 23 redirection'    # -
 )

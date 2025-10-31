@@ -12,7 +12,6 @@
 ZSH_THEME_GIT_PROMPT_PREFIX="%{$fg[cyan]%}("
 ZSH_THEME_GIT_PROMPT_SUFFIX=") %{$reset_color%}"
 
-
 # by default, use green for user@host and no prefix
 local ZSH_ESSEMBEH_COLOR="green"
 local ZSH_ESSEMBEH_PREFIX=""

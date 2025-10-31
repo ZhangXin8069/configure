@@ -32,6 +32,6 @@ BUFFER=$'">" foo ls'
 
 expected_region_highlight=(
   '1 3 unknown-token' # ">" - not "redirection"
-  '5 7 default' # foo
-  '9 10 default' # ls - not "command"
+  '5 7 default'       # foo
+  '9 10 default'      # ls - not "command"
 )

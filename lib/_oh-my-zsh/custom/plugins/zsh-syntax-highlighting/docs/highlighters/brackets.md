@@ -4,7 +4,6 @@ zsh-syntax-highlighting / highlighters / brackets
 This is the `brackets` highlighter, that highlights brackets and parentheses, and
 matches them.
 
-
 ### How to tweak it
 
 This highlighter defines the following styles:

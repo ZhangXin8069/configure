@@ -1,3 +1,1 @@
-firefox --new-window https://sites.google.com/view/zhangxin8069/home 
-
-
+firefox --new-window https://sites.google.com/view/zhangxin8069/home

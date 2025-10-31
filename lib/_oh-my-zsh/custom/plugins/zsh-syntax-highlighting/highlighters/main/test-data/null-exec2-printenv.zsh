@@ -31,8 +31,8 @@
 BUFFER=$'env | grep $needle'
 
 expected_region_highlight=(
-  '1 3 precommand' # env
+  '1 3 precommand'       # env
   '5 5 commandseparator' # |
-  '7 10 command' # grep
-  '12 18 default' # $needle
+  '7 10 command'         # grep
+  '12 18 default'        # $needle
 )

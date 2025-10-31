@@ -31,10 +31,10 @@
 BUFFER=$'for i in \\\n; do done'
 
 expected_region_highlight=(
-  '1 3 reserved-word' # for
-  '5 5 default' # i
-  '7 8 default' # in
+  '1 3 reserved-word'      # for
+  '5 5 default'            # i
+  '7 8 default'            # in
   '12 12 commandseparator' # ;
-  '14 15 reserved-word' # do
-  '17 20 reserved-word' # done
+  '14 15 reserved-word'    # do
+  '17 20 reserved-word'    # done
 )

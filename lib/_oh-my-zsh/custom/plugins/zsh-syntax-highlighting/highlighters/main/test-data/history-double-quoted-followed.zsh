@@ -31,9 +31,9 @@
 BUFFER=': !!= "!!="'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
+  '1 1 builtin'                        # :
   '3 4 history-expansion "issue #713"' # !!
-  '7 11 default' # "!!="
-  '7 11 double-quoted-argument' # "!!="
-  '8 9 history-expansion "issue #713' # !!
+  '7 11 default'                       # "!!="
+  '7 11 double-quoted-argument'        # "!!="
+  '8 9 history-expansion "issue #713'  # !!
 )

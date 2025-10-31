@@ -37,5 +37,5 @@ BUFFER='] /'
 
 expected_region_highlight=(
   '1 1 alias' # ]
-  '3 3 path' # /
+  '3 3 path'  # /
 )

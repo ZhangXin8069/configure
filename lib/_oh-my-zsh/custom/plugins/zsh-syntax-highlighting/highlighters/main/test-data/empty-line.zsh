@@ -32,5 +32,5 @@ BUFFER=$'\\\n; ls'
 
 expected_region_highlight=(
   '3 3 unknown-token' # ;
-  '5 6 command' # ls
+  '5 6 command'       # ls
 )

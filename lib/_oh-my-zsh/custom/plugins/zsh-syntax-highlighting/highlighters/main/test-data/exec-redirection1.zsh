@@ -30,9 +30,9 @@
 BUFFER='exec {foo}>&/tmp ls'
 
 expected_region_highlight=(
-  "1 4 precommand" # exec
-  "6 10 named-fd" # {foo}
+  "1 4 precommand"    # exec
+  "6 10 named-fd"     # {foo}
   "11 12 redirection" # >&
-  "13 16 path" # /tmp
-  "18 19 command" # ls
+  "13 16 path"        # /tmp
+  "18 19 command"     # ls
 )

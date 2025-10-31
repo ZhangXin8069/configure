@@ -33,11 +33,11 @@
 BUFFER=$': $(<*)'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 7 default' # $(<*)
-  '3 7 command-substitution-unquoted' # $(<*)
+  '1 1 builtin'                                 # :
+  '3 7 default'                                 # $(<*)
+  '3 7 command-substitution-unquoted'           # $(<*)
   '3 4 command-substitution-delimiter-unquoted' # $(
-  '5 5 redirection' # <
-  '6 6 default' # * - not globbing!
+  '5 5 redirection'                             # <
+  '6 6 default'                                 # * - not globbing!
   '7 7 command-substitution-delimiter-unquoted' # )
 )

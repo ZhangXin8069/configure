@@ -52,7 +52,6 @@ HOME="${HOME:-$(getent passwd $USER 2>/dev/null | cut -d: -f6)}"
 # macOS does not have getent, but this works even if $HOME is unset
 HOME="${HOME:-$(eval echo ~$USER)}"
 
-
 # Track if $ZSH was provided
 custom_zsh=${ZSH:+yes}
 
@@ -77,7 +76,6 @@ BRANCH=${BRANCH:-master}
 CHSH=${CHSH:-yes}
 RUNZSH=${RUNZSH:-yes}
 KEEP_ZSHRC=${KEEP_ZSHRC:-no}
-
 
 command_exists() {
   command -v "$@" >/dev/null 2>&1
@@ -166,12 +164,12 @@ supports_hyperlinks() {
 
   # If $TERM_PROGRAM is set, these terminals support hyperlinks
   case "$TERM_PROGRAM" in
-  Hyper|iTerm.app|terminology|WezTerm|vscode) return 0 ;;
+  Hyper | iTerm.app | terminology | WezTerm | vscode) return 0 ;;
   esac
 
   # These termcap entries support hyperlinks
   case "$TERM" in
-  xterm-kitty|alacritty|alacritty-direct) return 0 ;;
+  xterm-kitty | alacritty | alacritty-direct) return 0 ;;
   esac
 
   # xfce4-terminal supports hyperlinks
@@ -197,15 +195,15 @@ supports_hyperlinks() {
 # Source: https://gist.github.com/XVilka/8346728
 supports_truecolor() {
   case "$COLORTERM" in
-  truecolor|24bit) return 0 ;;
+  truecolor | 24bit) return 0 ;;
   esac
 
   case "$TERM" in
-  iterm           |\
-  tmux-truecolor  |\
-  linux-truecolor |\
-  xterm-truecolor |\
-  screen-truecolor) return 0 ;;
+  iterm | \
+    tmux-truecolor | \
+    linux-truecolor | \
+    xterm-truecolor | \
+    screen-truecolor) return 0 ;;
   esac
 
   return 1
@@ -220,7 +218,7 @@ fmt_link() {
 
   case "$3" in
   --text) printf '%s\n' "$1" ;;
-  --url|*) fmt_underline "$2" ;;
+  --url | *) fmt_underline "$2" ;;
   esac
 }
 
@@ -303,17 +301,17 @@ setup_ohmyzsh() {
   fi
 
   # Manual clone with git config options to support git < v1.7.2
-  git init --quiet "$ZSH" && cd "$ZSH" \
-  && git config core.eol lf \
-  && git config core.autocrlf false \
-  && git config fsck.zeroPaddedFilemode ignore \
-  && git config fetch.fsck.zeroPaddedFilemode ignore \
-  && git config receive.fsck.zeroPaddedFilemode ignore \
-  && git config oh-my-zsh.remote origin \
-  && git config oh-my-zsh.branch "$BRANCH" \
-  && git remote add origin "$REMOTE" \
-  && git fetch --depth=1 origin \
-  && git checkout -b "$BRANCH" "origin/$BRANCH" || {
+  git init --quiet "$ZSH" && cd "$ZSH" &&
+    git config core.eol lf &&
+    git config core.autocrlf false &&
+    git config fsck.zeroPaddedFilemode ignore &&
+    git config fetch.fsck.zeroPaddedFilemode ignore &&
+    git config receive.fsck.zeroPaddedFilemode ignore &&
+    git config oh-my-zsh.remote origin &&
+    git config oh-my-zsh.branch "$BRANCH" &&
+    git remote add origin "$REMOTE" &&
+    git fetch --depth=1 origin &&
+    git checkout -b "$BRANCH" "origin/$BRANCH" || {
     [ ! -d "$ZSH" ] || {
       cd -
       rm -rf "$ZSH" 2>/dev/null
@@ -366,7 +364,7 @@ setup_zshrc() {
   fi
   omz=$(echo "$omz" | sed "s|^$HOME/|\$HOME/|")
 
-  sed "s|^export ZSH=.*$|export ZSH=\"${omz}\"|" "$ZSH/templates/zshrc.zsh-template" > "$zdot/.zshrc-omztemp"
+  sed "s|^export ZSH=.*$|export ZSH=\"${omz}\"|" "$ZSH/templates/zshrc.zsh-template" >"$zdot/.zshrc-omztemp"
   mv -f "$zdot/.zshrc-omztemp" "$zdot/.zshrc"
 
   echo
@@ -399,15 +397,24 @@ EOF
     "$FMT_YELLOW" "$FMT_RESET"
   read -r opt
   case $opt in
-    y*|Y*|"") ;;
-    n*|N*) echo "Shell change skipped."; return ;;
-    *) echo "Invalid choice. Shell change skipped."; return ;;
+  y* | Y* | "") ;;
+  n* | N*)
+    echo "Shell change skipped."
+    return
+    ;;
+  *)
+    echo "Invalid choice. Shell change skipped."
+    return
+    ;;
   esac
 
   # Check if we're running on Termux
   case "$PREFIX" in
-    *com.termux*) termux=true; zsh=zsh ;;
-    *) termux=false ;;
+  *com.termux*)
+    termux=true
+    zsh=zsh
+    ;;
+  *) termux=false ;;
   esac
 
   if [ "$termux" != true ]; then
@@ -435,9 +442,9 @@ EOF
 
   # We're going to change the default shell, so back up the current one
   if [ -n "$SHELL" ]; then
-    echo "$SHELL" > "$zdot/.shell.pre-oh-my-zsh"
+    echo "$SHELL" >"$zdot/.shell.pre-oh-my-zsh"
   else
-    grep "^$USER:" /etc/passwd | awk -F: '{print $7}' > "$zdot/.shell.pre-oh-my-zsh"
+    grep "^$USER:" /etc/passwd | awk -F: '{print $7}' >"$zdot/.shell.pre-oh-my-zsh"
   fi
 
   echo "Changing your shell to $zsh..."
@@ -452,9 +459,9 @@ EOF
   # be prompted for the password either way, so this shouldn't cause any issues.
   #
   if user_can_sudo; then
-    sudo -k chsh -s "$zsh" "$USER"  # -k forces the password prompt
+    sudo -k chsh -s "$zsh" "$USER" # -k forces the password prompt
   else
-    chsh -s "$zsh" "$USER"          # run chsh normally
+    chsh -s "$zsh" "$USER" # run chsh normally
   fi
 
   # Check if the shell change was successful
@@ -470,11 +477,11 @@ EOF
 
 # shellcheck disable=SC2183  # printf string has more %s than arguments ($FMT_RAINBOW expands to multiple arguments)
 print_success() {
-  printf '%s         %s__      %s           %s        %s       %s     %s__   %s\n'      $FMT_RAINBOW $FMT_RESET
-  printf '%s  ____  %s/ /_    %s ____ ___  %s__  __  %s ____  %s_____%s/ /_  %s\n'      $FMT_RAINBOW $FMT_RESET
-  printf '%s / __ \\%s/ __ \\  %s / __ `__ \\%s/ / / / %s /_  / %s/ ___/%s __ \\ %s\n'  $FMT_RAINBOW $FMT_RESET
-  printf '%s/ /_/ /%s / / / %s / / / / / /%s /_/ / %s   / /_%s(__  )%s / / / %s\n'      $FMT_RAINBOW $FMT_RESET
-  printf '%s\\____/%s_/ /_/ %s /_/ /_/ /_/%s\\__, / %s   /___/%s____/%s_/ /_/  %s\n'    $FMT_RAINBOW $FMT_RESET
+  printf '%s         %s__      %s           %s        %s       %s     %s__   %s\n' $FMT_RAINBOW $FMT_RESET
+  printf '%s  ____  %s/ /_    %s ____ ___  %s__  __  %s ____  %s_____%s/ /_  %s\n' $FMT_RAINBOW $FMT_RESET
+  printf '%s / __ \\%s/ __ \\  %s / __ `__ \\%s/ / / / %s /_  / %s/ ___/%s __ \\ %s\n' $FMT_RAINBOW $FMT_RESET
+  printf '%s/ /_/ /%s / / / %s / / / / / /%s /_/ / %s   / /_%s(__  )%s / / / %s\n' $FMT_RAINBOW $FMT_RESET
+  printf '%s\\____/%s_/ /_/ %s /_/ /_/ /_/%s\\__, / %s   /___/%s____/%s_/ /_/  %s\n' $FMT_RAINBOW $FMT_RESET
   printf '%s    %s        %s           %s /____/ %s       %s     %s          %s....is now installed!%s\n' $FMT_RAINBOW $FMT_GREEN $FMT_RESET
   printf '\n'
   printf '\n'
@@ -498,9 +505,12 @@ main() {
   # Parse arguments
   while [ $# -gt 0 ]; do
     case $1 in
-      --unattended) RUNZSH=no; CHSH=no ;;
-      --skip-chsh) CHSH=no ;;
-      --keep-zshrc) KEEP_ZSHRC=yes ;;
+    --unattended)
+      RUNZSH=no
+      CHSH=no
+      ;;
+    --skip-chsh) CHSH=no ;;
+    --keep-zshrc) KEEP_ZSHRC=yes ;;
     esac
     shift
   done

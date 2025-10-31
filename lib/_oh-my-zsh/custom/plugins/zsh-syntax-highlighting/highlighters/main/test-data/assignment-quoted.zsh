@@ -31,7 +31,7 @@
 BUFFER=$'1="foo"'
 
 expected_region_highlight=(
-  '1 7 assign' # 1="foo"
-  '3 7 default' # "foo"
+  '1 7 assign'                 # 1="foo"
+  '3 7 default'                # "foo"
   '3 7 double-quoted-argument' # "foo"
 )

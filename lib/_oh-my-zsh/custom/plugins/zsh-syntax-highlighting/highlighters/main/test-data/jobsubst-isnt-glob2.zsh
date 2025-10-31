@@ -31,7 +31,7 @@
 BUFFER=$': foo%?bar'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
+  '1 1 builtin'  # :
   '3 10 default' # foo%?bar
   '7 7 globbing' # ?
 )

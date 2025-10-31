@@ -10,7 +10,6 @@ Inspired by and based on rake-fast zsh plugin.
 
 This is entirely based on [this pull request by Ullrich Schäfer](https://github.com/robb/.dotfiles/pull/10/), which is inspired by [this Ruby on Rails trick from 2006](https://weblog.rubyonrails.org/2006/3/9/fast-rake-task-completion-for-zsh/).
 
-
 ## Installation
 
 Just add the plugin to your `.zshrc`:

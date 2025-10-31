@@ -1,8 +1,8 @@
 #!/bin/bash
-  
+
 ulimit -n 100000
 APP=$@
-local_rank=$((${OMPI_COMM_WORLD_LOCAL_RANK}%8))
+local_rank=$((${OMPI_COMM_WORLD_LOCAL_RANK} % 8))
 
 case ${local_rank} in
 [0])

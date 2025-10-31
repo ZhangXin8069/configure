@@ -31,15 +31,15 @@
 BUFFER=$'x="$(ls x y z)"'
 
 expected_region_highlight=(
-  '1 15 assign' # x="$(ls x y z)"
-  '3 15 default' # "$(ls x y z)"
-  '3 3 double-quoted-argument' # "
-  '15 15 double-quoted-argument' # "
-  '4 14 command-substitution-quoted' # $(ls x y z)
-  '4 5 command-substitution-delimiter-quoted' # $(
-  '6 7 command' # ls
-  '9 9 default' # x
-  '11 11 default' # y
-  '13 13 default' # z
+  '1 15 assign'                                 # x="$(ls x y z)"
+  '3 15 default'                                # "$(ls x y z)"
+  '3 3 double-quoted-argument'                  # "
+  '15 15 double-quoted-argument'                # "
+  '4 14 command-substitution-quoted'            # $(ls x y z)
+  '4 5 command-substitution-delimiter-quoted'   # $(
+  '6 7 command'                                 # ls
+  '9 9 default'                                 # x
+  '11 11 default'                               # y
+  '13 13 default'                               # z
   '14 14 command-substitution-delimiter-quoted' # )
 )

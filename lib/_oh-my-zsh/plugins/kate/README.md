@@ -3,6 +3,7 @@
 This plugin adds aliases for the [Kate editor](https://kate-editor.org).
 
 To use it, add kate to the plugins array of your zshrc file:
+
 ```
 plugins=(... kate)
 ```

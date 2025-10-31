@@ -21,7 +21,10 @@ function fl {
       DIR=$(dirname $DIR)
     fi
     if [ "$DIR" != "." ]; then
-      PWD=`cd "$DIR";pwd`
+      PWD=$(
+        cd "$DIR"
+        pwd
+      )
     fi
   fi
   osascript 2>&1 1>/dev/null <<END

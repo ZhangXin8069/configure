@@ -36,9 +36,9 @@ $ hitchhiker_cow
 
 Fortune file: Andreas Gohr <andi@splitbrain.org> ([splitbrain.org](https://www.splitbrain.org/projects/fortunes/hg2g))
 
-Spelling and formatting fixes: grok@resist.ca
+Spelling and formatting fixes: <grok@resist.ca>
 
 Original quotes from:
 
-- https://web.archive.org/web/20120106083254/http://tatooine.fortunecity.com/vonnegut/29/hitch/parhaat.html
-- https://web.archive.org/web/20011112065737/http://www-personal.umd.umich.edu/~nhughes/dna/faqs/quotedir.html
+- <https://web.archive.org/web/20120106083254/http://tatooine.fortunecity.com/vonnegut/29/hitch/parhaat.html>
+- <https://web.archive.org/web/20011112065737/http://www-personal.umd.umich.edu/~nhughes/dna/faqs/quotedir.html>

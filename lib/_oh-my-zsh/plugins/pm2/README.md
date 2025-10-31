@@ -3,6 +3,7 @@
 The plugin adds several aliases and completions for common [pm2](http://pm2.keymetrics.io/) commands.
 
 To use it, add `pm2` to the plugins array of your zshrc file:
+
 ```
 plugins=(... pm2)
 ```

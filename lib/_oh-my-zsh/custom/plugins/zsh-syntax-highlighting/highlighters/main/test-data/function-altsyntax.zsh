@@ -32,14 +32,14 @@
 BUFFER=$'function f { pwd }; function { pwd }'
 
 expected_region_highlight=(
-  '1 8 reserved-word' # function
-  '10 10 default' # f
+  '1 8 reserved-word'                # function
+  '10 10 default'                    # f
   '12 12 reserved-word "issue #237"' # {
-  '14 16 command "issue #237"' # pwd
+  '14 16 command "issue #237"'       # pwd
   '18 18 reserved-word "issue #237"' # }
-  '19 19 commandseparator' # ;
-  '21 28 reserved-word' # function
+  '19 19 commandseparator'           # ;
+  '21 28 reserved-word'              # function
   '30 30 reserved-word "issue #237"' # {
-  '32 34 command "issue #237"' # pwd
+  '32 34 command "issue #237"'       # pwd
   '36 36 reserved-word "issue #237"' # }
 )

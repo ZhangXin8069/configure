@@ -1,11 +1,10 @@
-__require_tool_version_compare ()
-{
+__require_tool_version_compare() {
   (
     # Locally ignore failures, otherwise we'll exit whenever $1 and $2
     # are not equal!
     set +e
 
-awk_strverscmp='
+    awk_strverscmp='
   # Use only awk features that work with 7th edition Unix awk (1978).
   # My, what an old awk you have, Mr. Solaris!
   END {
@@ -63,18 +62,16 @@ awk_strverscmp='
 '
     awk "$awk_strverscmp" v1="$1" v2="$2" /dev/null
     case $? in
-      1)  echo '<';;
-      0)  echo '=';;
-      2)  echo '>';;
+    1) echo '<' ;;
+    0) echo '=' ;;
+    2) echo '>' ;;
     esac
   )
 }
 
-
-__require_tool_fatal ()
-{
-    echo $@ >/dev/stderr
-    return 1
+__require_tool_fatal() {
+  echo $@ >/dev/stderr
+  return 1
 }
 
 # Usage: require_tool program version
@@ -84,26 +81,25 @@ __require_tool_fatal ()
 # Example: require_tool gcc 4.6
 # Use GCC environment variable if defined instead of lookup for the tool
 # in the environment.
-require_tool ()
-{
+require_tool() {
   envvar_name=$(echo $1 | tr '[:lower:]' '[:upper:]')
   tool=$(printenv $envvar_name || echo $1)
-  local version=$($tool --version 2>/dev/null| \
+  local version=$($tool --version 2>/dev/null |
     sed -n 's/.*[^0-9.]\([0-9]*\.[0-9.]*\).*/\1/p;q')
-  if test x"$version" = x ; then
-      echo "$tool is required" >/dev/stderr
-      return 1
+  if test x"$version" = x; then
+    echo "$tool is required" >/dev/stderr
+    return 1
   fi
   case $(__require_tool_version_compare "$2" "$version") in
-    '>')
-	  echo "$1 $2 or better is required: this is $tool $version" >/dev/stderr
-	  return 1
-	  ;;
+  '>')
+    echo "$1 $2 or better is required: this is $tool $version" >/dev/stderr
+    return 1
+    ;;
   esac
 }
 
 usage() {
-    cat <<EOF
+  cat <<EOF
 NAME
     require_tool.sh - Ensure version of a tool is greater than the one expected
 
@@ -146,16 +142,16 @@ EOF
 }
 
 for arg in $@; do
-    case $arg in
-        -h|--help)
-            usage
-            exit 0
-            ;;
-    esac
+  case $arg in
+  -h | --help)
+    usage
+    exit 0
+    ;;
+  esac
 done
-if [ $# -gt 2 ] ; then
-    echo "ERROR: expecting 2 parameters. Please see option --help"
-    exit 1
+if [ $# -gt 2 ]; then
+  echo "ERROR: expecting 2 parameters. Please see option --help"
+  exit 1
 fi
 
 require_tool $@

@@ -40,5 +40,5 @@ BUFFER=$'sudo ls'
 
 expected_region_highlight=(
   '1 4 unknown-token' # sudo
-  '6 7 default' # ls - not 'command', since sudo isn't installed
+  '6 7 default'       # ls - not 'command', since sudo isn't installed
 )

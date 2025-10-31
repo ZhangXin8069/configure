@@ -38,18 +38,18 @@ if [[ $(type -w ls) != "ls: command" ]]; then
 fi
 
 expected_region_highlight=(
-  '1 2 command' # ls
+  '1 2 command'          # ls
   '7 7 commandseparator' # ;
 
-  '9 15 precommand' # builtin
+  '9 15 precommand'                  # builtin
   '17 18 unknown-token "issue #608"' # ls
-  '23 23 commandseparator' # ;
+  '23 23 commandseparator'           # ;
 
-  '25 31 precommand' # builtin
-  '33 39 precommand' # command
-  '41 42 command' # ls
+  '25 31 precommand'       # builtin
+  '33 39 precommand'       # command
+  '41 42 command'          # ls
   '47 47 commandseparator' # ;
 
   '49 52 precommand' # nice
-  '54 55 command' # ls
+  '54 55 command'    # ls
 )

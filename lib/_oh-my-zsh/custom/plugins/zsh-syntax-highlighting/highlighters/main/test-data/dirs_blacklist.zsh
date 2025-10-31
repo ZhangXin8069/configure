@@ -33,8 +33,8 @@ BUFFER=": foo/bar $PWD/foo foo/b"
 ZSH_HIGHLIGHT_DIRS_BLACKLIST=($PWD/foo $PWD/bar)
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 9 default' # foo/bar
-  "11 $(( 14 + $#PWD )) default" # $PWD/foo
-  "$(( 16 + $#PWD )) $(( 20 + $#PWD )) default" # foo/b
+  '1 1 builtin'                             # :
+  '3 9 default'                             # foo/bar
+  "11 $((14 + $#PWD)) default"              # $PWD/foo
+  "$((16 + $#PWD)) $((20 + $#PWD)) default" # foo/b
 )

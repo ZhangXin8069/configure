@@ -25,7 +25,7 @@ if [[ -z "$VSCODE" ]]; then
 fi
 
 function vsc {
-  if (( $# )); then
+  if (($#)); then
     $VSCODE $@
   else
     $VSCODE .

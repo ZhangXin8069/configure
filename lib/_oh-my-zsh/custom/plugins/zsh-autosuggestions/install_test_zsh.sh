@@ -10,11 +10,11 @@ for v in $(grep "^[^#]" ZSH_VERSIONS); do
 
   ./Util/preconfig
   ./configure --enable-pcre \
-              --enable-cap \
-              --enable-multibyte \
-              --with-term-lib='ncursesw tinfo' \
-              --with-tcsetpgrp \
-              --program-suffix="-$v"
+    --enable-cap \
+    --enable-multibyte \
+    --with-term-lib='ncursesw tinfo' \
+    --with-tcsetpgrp \
+    --program-suffix="-$v"
 
   make install.bin
   make install.modules

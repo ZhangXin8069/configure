@@ -30,7 +30,7 @@
 BUFFER='a=foo( bar ) :'
 
 expected_region_highlight=(
-  '1 12 assign' # a=foo( bar )
-  '3 12 default' # foo( bar )
+  '1 12 assign'   # a=foo( bar )
+  '3 12 default'  # foo( bar )
   '14 14 builtin' # :
 )

@@ -30,17 +30,17 @@
 BUFFER='ps aux | grep java | sort | uniq | tail | head'
 
 expected_region_highlight=(
-  "1  2  command" # ps
-  "4  6  default" # aux
+  "1  2  command"          # ps
+  "4  6  default"          # aux
   "8  8  commandseparator" # |
-  "10 13 command" # grep
-  "15 18 default" # java
+  "10 13 command"          # grep
+  "15 18 default"          # java
   "20 20 commandseparator" # |
-  "22 25 command" # sort
+  "22 25 command"          # sort
   "27 27 commandseparator" # |
-  "29 32 command" # uniq
+  "29 32 command"          # uniq
   "34 34 commandseparator" # |
-  "36 39 command" # tail
+  "36 39 command"          # tail
   "41 41 commandseparator" # |
-  "43 46 command" # head
+  "43 46 command"          # head
 )

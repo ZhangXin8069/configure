@@ -16,4 +16,3 @@ plugins=(... mongocli)
 | `mcm`    | `mongocli cloud-manager`                                    | Shortcut for mongocli Cloud Manager commands.          |
 | `mom`    | `mongocli ops-manager`                                      | Shortcut for mongocli Cloud Manager commands.          |
 | `miam`   | `mongocli iam`                                              | Shortcut for mongocli IAM commands.                    |
-

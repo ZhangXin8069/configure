@@ -6,7 +6,7 @@
 #       REQUIRE:  ack
 # ------------------------------------------------------------------------------
 
-if (( ! $+commands[ack] )); then
+if ((!$ + commands[ack])); then
     echo "'ack' is not installed!"
     return
 fi

@@ -33,7 +33,7 @@ alias a=: b='a | a'
 BUFFER='b | b'
 
 expected_region_highlight=(
-  '1 1 alias' # b
+  '1 1 alias'            # b
   '3 3 commandseparator' # |
-  '5 5 alias' # b
+  '5 5 alias'            # b
 )

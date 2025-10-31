@@ -51,13 +51,14 @@
 
 ## Homebrew
 
-1. Install command: 
+1. Install command:
+
     ```sh
     brew install zsh-autosuggestions
     ```
 
-2. To activate the autosuggestions, add the following at the end of your .zshrc: 
-    
+2. To activate the autosuggestions, add the following at the end of your .zshrc:
+
     ```sh
     source $(brew --prefix)/share/zsh-autosuggestions/zsh-autosuggestions.zsh
     ```

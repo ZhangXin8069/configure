@@ -22,7 +22,6 @@ First, install the package:
 [AUR-package]: https://aur.archlinux.org/packages/zsh-syntax-highlighting-git
 [brew-package]: https://github.com/Homebrew/homebrew-core/blob/master/Formula/z/zsh-syntax-highlighting.rb
 [debian-package]: https://packages.debian.org/zsh-syntax-highlighting
-[fedora-package]: https://apps.fedoraproject.org/packages/zsh-syntax-highlighting
 [fedora-package-alt]: https://bodhi.fedoraproject.org/updates/?packages=zsh-syntax-highlighting
 [freebsd-port]: https://www.freshports.org/textproc/zsh-syntax-highlighting/
 [gentoo-repository]: https://packages.gentoo.org/packages/app-shells/zsh-syntax-highlighting
@@ -89,7 +88,6 @@ https://github.com/zsh-users/zsh-syntax-highlighting/archive/master.tar.gz
 
   Note the `source` command must be **at the end** of `~/.zshrc`.
 
-
 ### With a plugin manager
 
 Note that `zsh-syntax-highlighting` must be the last plugin sourced.
@@ -148,7 +146,6 @@ Add `zinit light zsh-users/zsh-syntax-highlighting` to the end of your
 #### [zplug](https://github.com/zplug/zplug)
 
 Add `zplug "zsh-users/zsh-syntax-highlighting", defer:2` to your `.zshrc`.
-
 
 ### System-wide installation
 

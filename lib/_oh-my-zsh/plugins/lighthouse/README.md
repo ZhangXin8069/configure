@@ -26,4 +26,4 @@ plugins=(... lighthouse)
   # The browser goes to https://rails.lighthouseapp.com/projects/8994/tickets/23
   ```
 
-See a demo: http://screencast.com/t/ZDgwNDUwNT
+See a demo: <http://screencast.com/t/ZDgwNDUwNT>

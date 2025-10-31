@@ -32,8 +32,8 @@ alias a=: ls='ls -l'
 BUFFER='"a" foo; \ls'
 
 expected_region_highlight=(
-  '1 3 unknown-token' # "a"
-  '5 7 default' # foo
+  '1 3 unknown-token'    # "a"
+  '5 7 default'          # foo
   '8 8 commandseparator' # ;
-  '10 12 command' # \ls
+  '10 12 command'        # \ls
 )

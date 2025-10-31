@@ -38,7 +38,7 @@ function _git_time_since_commit() {
   # Only proceed if there is actually a commit.
   if last_commit=$(command git -c log.showSignature=false log --format='%at' -1 2>/dev/null); then
     now=$(date +%s)
-    seconds_since_last_commit=$((now-last_commit))
+    seconds_since_last_commit=$((now - last_commit))
 
     # Totals
     minutes=$((seconds_since_last_commit / 60))
@@ -47,11 +47,11 @@ function _git_time_since_commit() {
     years=$((days / 365))
 
     if [[ $years -gt 0 ]]; then
-      commit_age="${years}y$((days % 365 ))d"
+      commit_age="${years}y$((days % 365))d"
     elif [[ $days -gt 0 ]]; then
       commit_age="${days}d$((hours % 24))h"
     elif [[ $hours -gt 0 ]]; then
-      commit_age+="${hours}h$(( minutes % 60 ))m"
+      commit_age+="${hours}h$((minutes % 60))m"
     else
       commit_age="${minutes}m"
     fi

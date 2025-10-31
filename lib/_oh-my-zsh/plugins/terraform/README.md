@@ -31,7 +31,6 @@ plugins=(... terraform)
 | `tft`  | `terraform test`          |
 | `tfsh` | `terraform show`          |
 
-
 ## Prompt function
 
 You can add the current Terraform workspace in your prompt by adding `$(tf_prompt_info)`,

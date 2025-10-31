@@ -30,15 +30,16 @@
 
 # Test elision of some, but not all of the words
 # See issue #667 for the case of eliding all words
-local -a x; x=(sudo "")
+local -a x
+x=(sudo "")
 
-sudo(){}
+sudo() {}
 BUFFER=$'$x -u phy1729 ls'
 
 expected_region_highlight=(
   '1 2 precommand' # $x
   # The "" is elided.  If it weren't elided, the «ls» would be highlighted as an ordinary argument.
   '4 5 single-hyphen-option' # -u
-  '7 13 default' # phy1729
-  '15 16 command' # ls
+  '7 13 default'             # phy1729
+  '15 16 command'            # ls
 )

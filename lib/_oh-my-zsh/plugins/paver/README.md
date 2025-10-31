@@ -3,6 +3,7 @@
 This plugin adds completion for the `paver` command-line tool of [Paver](https://pythonhosted.org/Paver/).
 
 To use it, add `paver` to the plugins array of your zshrc file:
+
 ```zsh
 plugins=(... paver)
 ```

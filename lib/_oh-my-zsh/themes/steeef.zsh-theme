@@ -10,7 +10,7 @@
 export VIRTUAL_ENV_DISABLE_PROMPT=1
 
 function virtualenv_info {
-    [ $VIRTUAL_ENV ] && echo '('%F{blue}`basename $VIRTUAL_ENV`%f') '
+    [ $VIRTUAL_ENV ] && echo '('%F{blue}$(basename $VIRTUAL_ENV)%f') '
 }
 PR_GIT_UPDATE=1
 
@@ -54,24 +54,23 @@ FMT_ACTION="(%{$limegreen%}%a${PR_RST})"
 FMT_UNSTAGED="%{$orange%}●"
 FMT_STAGED="%{$limegreen%}●"
 
-zstyle ':vcs_info:*:prompt:*' unstagedstr   "${FMT_UNSTAGED}"
-zstyle ':vcs_info:*:prompt:*' stagedstr     "${FMT_STAGED}"
+zstyle ':vcs_info:*:prompt:*' unstagedstr "${FMT_UNSTAGED}"
+zstyle ':vcs_info:*:prompt:*' stagedstr "${FMT_STAGED}"
 zstyle ':vcs_info:*:prompt:*' actionformats "${FMT_BRANCH}${FMT_ACTION}"
-zstyle ':vcs_info:*:prompt:*' formats       "${FMT_BRANCH}"
-zstyle ':vcs_info:*:prompt:*' nvcsformats   ""
-
+zstyle ':vcs_info:*:prompt:*' formats "${FMT_BRANCH}"
+zstyle ':vcs_info:*:prompt:*' nvcsformats ""
 
 function steeef_preexec {
     case "$2" in
-        *git*)
-            PR_GIT_UPDATE=1
-            ;;
-        *hub*)
-            PR_GIT_UPDATE=1
-            ;;
-        *svn*)
-            PR_GIT_UPDATE=1
-            ;;
+    *git*)
+        PR_GIT_UPDATE=1
+        ;;
+    *hub*)
+        PR_GIT_UPDATE=1
+        ;;
+    *svn*)
+        PR_GIT_UPDATE=1
+        ;;
     esac
 }
 add-zsh-hook preexec steeef_preexec
@@ -82,9 +81,9 @@ function steeef_chpwd {
 add-zsh-hook chpwd steeef_chpwd
 
 function steeef_precmd {
-    if [[ -n "$PR_GIT_UPDATE" ]] ; then
+    if [[ -n "$PR_GIT_UPDATE" ]]; then
         # check for untracked files or updated submodules, since vcs_info doesn't
-        if git ls-files --other --exclude-standard 2> /dev/null | grep -q "."; then
+        if git ls-files --other --exclude-standard 2>/dev/null | grep -q "."; then
             PR_GIT_UPDATE=1
             FMT_BRANCH="(%{$turquoise%}%b%u%c%{$hotpink%}●${PR_RST})"
         else

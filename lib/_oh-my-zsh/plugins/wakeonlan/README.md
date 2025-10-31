@@ -27,13 +27,13 @@ contents:
 To wake that device, use the following command:
 
 ```console
-$ wake leto
+wake leto
 ```
 
 The available device names will be autocompleted, so:
 
 ```console
-$ wake <tab>
+wake <tab>
 ```
 
 ...will suggest "leto", along with any other configuration files that were

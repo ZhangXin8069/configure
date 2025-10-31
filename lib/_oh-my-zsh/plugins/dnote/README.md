@@ -13,13 +13,13 @@ plugins=(dnote)
 At the basic level, this plugin completes all Dnote commands.
 
 ```zsh
-$ dnote a(press <TAB> here)
+dnote a(press <TAB> here)
 ```
 
 would result in:
 
 ```zsh
-$ dnote add
+dnote add
 ```
 
 For some commands, this plugin dynamically suggests matching book names.
@@ -27,7 +27,7 @@ For some commands, this plugin dynamically suggests matching book names.
 For instance, if you have three books that begin with 'j': 'javascript', 'job', 'js',
 
 ```zsh
-$ dnote view j(press <TAB> here)
+dnote view j(press <TAB> here)
 ```
 
 would result in:
@@ -40,12 +40,11 @@ javascript  job         js
 As another example,
 
 ```zsh
-$ dnote edit ja(press <TAB> here)
+dnote edit ja(press <TAB> here)
 ```
 
 would result in:
 
-
 ```zsh
-$ dnote v javascript
+dnote v javascript
 ``````

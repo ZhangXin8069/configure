@@ -28,7 +28,7 @@ __timer_display_timer_precmd() {
         local tdiffstr=$(__timer_format_duration ${tdiff})
         local cols=$((COLUMNS - ${#tdiffstr} - 1))
         echo -e "\033[1A\033[${cols}C ${tdiffstr}"
-      fi 
+      fi
     fi
   fi
 }

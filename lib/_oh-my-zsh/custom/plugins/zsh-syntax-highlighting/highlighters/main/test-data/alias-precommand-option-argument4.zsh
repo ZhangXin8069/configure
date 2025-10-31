@@ -30,12 +30,12 @@
 
 alias sudo_b='sudo -b'
 alias sudo_b_u='sudo_b -u'
-sudo(){}
+sudo() {}
 
 BUFFER='sudo_b_u phy1729 ls foo'
 
 expected_region_highlight=(
-  '1 8 alias' # sudo_b_u
+  '1 8 alias'     # sudo_b_u
   '10 16 default' # phy1729
   '18 19 command' # ls
   '21 23 default' # foo

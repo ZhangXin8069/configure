@@ -32,21 +32,23 @@ EOH
 
   local before="<esc>" files after cmd
 
-  while getopts ":b:a:n:" option
-  do
+  while getopts ":b:a:n:" option; do
     case $option in
-      a) after="$OPTARG"
-         ;;
-      b) before="$OPTARG"
-         ;;
-      n) name="$OPTARG"
-         ;;
+    a)
+      after="$OPTARG"
+      ;;
+    b)
+      before="$OPTARG"
+      ;;
+    n)
+      name="$OPTARG"
+      ;;
     esac
   done
-  shift $((OPTIND-1))
+  shift $((OPTIND - 1))
 
   # If before or after commands begin with : and don't end with <cr>, append it
-  [[ ${after}  = :* && ${after}  != *\<cr\> ]] && after+="<cr>"
+  [[ ${after} = :* && ${after} != *\<cr\> ]] && after+="<cr>"
   [[ ${before} = :* && ${before} != *\<cr\> ]] && before+="<cr>"
   # Open files passed (:A means abs path resolving symlinks, :q means quoting special chars)
   [[ $# -gt 0 ]] && files=':args! '"${@:A:q}<cr>"
@@ -57,7 +59,7 @@ EOH
   gvim --servername "$name" --remote-send "$cmd" || return $?
 
   # Run postCallVim if defined (maybe to bring focus to gvim, see README)
-  (( ! $+functions[postCallVim] )) || postCallVim
+  ((!$ + functions[postCallVim])) || postCallVim
 }
 
 alias v=callvim

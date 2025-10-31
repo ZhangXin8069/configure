@@ -3,7 +3,6 @@ zsh-syntax-highlighting / highlighters / line
 
 This is the `line` highlighter, that highlights the whole line.
 
-
 ### How to tweak it
 
 This highlighter defines the following styles:

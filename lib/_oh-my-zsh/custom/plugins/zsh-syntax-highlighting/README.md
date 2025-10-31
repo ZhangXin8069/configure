@@ -31,13 +31,10 @@ Before: [![Screenshot #4.1](images/before4-smaller.png)](images/before4-smaller.
 <br/>
 After:&nbsp; [![Screenshot #4.2](images/after4-smaller.png)](images/after4-smaller.png)
 
-
-
 How to install
 --------------
 
 See [INSTALL.md](INSTALL.md).
-
 
 FAQ
 ---
@@ -82,9 +79,8 @@ See issues [#288][i288] and [#415][i415] for details.
 There is currently no "push" announcements channel.  However, the following
 alternatives exist:
 
-- GitHub's RSS feed of releases: https://github.com/zsh-users/zsh-syntax-highlighting/releases.atom
-- An anitya entry: https://release-monitoring.org/project/7552/
-
+- GitHub's RSS feed of releases: <https://github.com/zsh-users/zsh-syntax-highlighting/releases.atom>
+- An anitya entry: <https://release-monitoring.org/project/7552/>
 
 How to tweak
 ------------

@@ -1,13 +1,13 @@
 export OTP_HOME=~/.otp
 mkdir -p $OTP_HOME
 
-function ot () {
-  if ! command -v oathtool > /dev/null 2>&1; then
+function ot() {
+  if ! command -v oathtool >/dev/null 2>&1; then
     echo "Note: you need to install oathtool or oath-toolkit, depending on your OS or distribution."
     return 1
   fi
 
-  if ! command -v gpg > /dev/null 2>&1; then
+  if ! command -v gpg >/dev/null 2>&1; then
     echo "Note: you need to install gpg and create an ID using 'gpg --gen-key', unless you have one already."
     return 1
   fi
@@ -26,8 +26,8 @@ function ot () {
   fi
 }
 
-function otp_add_device () {
-  if [[ "x$1" == "x" ]] then
+function otp_add_device() {
+  if [[ "x$1" == "x" ]]; then
     echo "usage: $0 <profile.name>"
     return 1
   else
@@ -38,7 +38,7 @@ function otp_add_device () {
   fi
 }
 
-function otp_devices () {
+function otp_devices() {
   reply=($(find $OTP_HOME -name \*.otp.asc | xargs basename -s .otp.asc))
 }
 

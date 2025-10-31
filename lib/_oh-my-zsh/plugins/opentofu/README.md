@@ -32,7 +32,6 @@ plugins=(... opentofu)
 | `ttt` | `tofu test`     |
 | `ttws`| `tofu workspace`|
 
-
 ## Prompt functions
 
 - `tofu_prompt_info`: shows the current workspace when in an OpenTofu project directory.

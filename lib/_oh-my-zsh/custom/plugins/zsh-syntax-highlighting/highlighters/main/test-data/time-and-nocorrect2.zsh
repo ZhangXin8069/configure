@@ -32,9 +32,9 @@ BUFFER=$'time ls; nocorrect ls'
 alias time=':' nocorrect=':'
 
 expected_region_highlight=(
-  '1 4 alias' # time
-  '6 7 default' # ls
+  '1 4 alias'            # time
+  '6 7 default'          # ls
   '8 8 commandseparator' # ;
-  '10 18 alias' # nocorrect
-  '20 21 default' # ls
+  '10 18 alias'          # nocorrect
+  '20 21 default'        # ls
 )

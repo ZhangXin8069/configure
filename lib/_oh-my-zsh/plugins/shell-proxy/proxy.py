@@ -7,12 +7,14 @@ cwd = os.path.dirname(__file__)
 ssh_agent = os.path.join(cwd, "ssh-agent.py")
 proxy_env = "SHELLPROXY_URL"
 no_proxy_env = "SHELLPROXY_NO_PROXY"
-proxy_config = os.environ.get("SHELLPROXY_CONFIG") or os.path.expandvars("$HOME/.config/proxy")
+proxy_config = os.environ.get(
+    "SHELLPROXY_CONFIG") or os.path.expandvars("$HOME/.config/proxy")
 
-usage="""shell-proxy: no proxy configuration found.
+usage = """shell-proxy: no proxy configuration found.
 
 Set `{env}` or create a config file at `{config}`
 See the plugin README for more information.""".format(env=proxy_env, config=proxy_config)
+
 
 def get_http_proxy():
     default_proxy = os.environ.get(proxy_env)
@@ -21,13 +23,14 @@ def get_http_proxy():
         return default_proxy, no_proxy
 
     if os.path.isfile(proxy_config):
-        proxy_configdata = [line.strip() for line in check_output(proxy_config).decode("utf-8").splitlines()]
+        proxy_configdata = [line.strip() for line in check_output(
+            proxy_config).decode("utf-8").splitlines()]
         if len(proxy_configdata) >= 1:
             if not default_proxy:
                 default_proxy = proxy_configdata[0]
             if len(proxy_configdata) == 2 and not no_proxy:
                 no_proxy = proxy_configdata[1]
-    
+
     if default_proxy:
         return default_proxy, no_proxy
     print(usage, file=sys.stderr)
@@ -35,7 +38,8 @@ def get_http_proxy():
 
 
 def make_proxies(url: str, no_proxy: str):
-    proxies = {"%s_PROXY" % _: url for _ in ("HTTP", "HTTPS", "FTP", "RSYNC", "ALL")}
+    proxies = {"%s_PROXY" % _: url for _ in (
+        "HTTP", "HTTPS", "FTP", "RSYNC", "ALL")}
     proxies.update({name.lower(): value for (name, value) in proxies.items()})
     proxies["GIT_SSH"] = ssh_agent
     if no_proxy:
