@@ -26,28 +26,22 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # ZSH_HIGHLIGHT_STYLES is empty in tests. The path-separator code however compares its values.
 # Make sure the relevant ones are set to something.
 ZSH_HIGHLIGHT_STYLES[path_pathseparator]=set
 ZSH_HIGHLIGHT_STYLES[path_prefix_pathseparator]=set
-
 mkdir A
 touch A/mu
 BUFFER='ls /bin/ / A/mu A/m'
-
 expected_region_highlight=(
   "1 2 command"            # ls
   "4 8 path"               # /bin/
   "4 4 path_pathseparator" # /
   "8 8 path_pathseparator" # /
-
   "10 10 path"               # /
   "10 10 path_pathseparator" # /
-
   "12 15 path"               # A/mu
   "13 13 path_pathseparator" # /
-
   "17 19 path_prefix"               # A/m
   "18 18 path_prefix_pathseparator" # /
 )

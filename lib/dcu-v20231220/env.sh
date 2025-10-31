@@ -1,6 +1,5 @@
 # BASH
 # unset
-
 # MODULE
 module purge
 module load compiler/devtoolset/7.3.1
@@ -8,7 +7,6 @@ module load compiler/dtk-23.04
 module load compiler/gcc/7.3.1
 module load hpcx/gcc-7.3.1
 module list
-
 # EXPORT
 export PATH=/public/home/zhangxin/dcu/sbin:$PATH
 export CUPY_INSTALL_USE_HIP=1

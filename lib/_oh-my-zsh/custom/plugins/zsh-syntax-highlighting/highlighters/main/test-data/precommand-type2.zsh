@@ -27,11 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Test the behaviour of a builtin that does not exist as a command.
 # The spaces in $BUFFER are to align precommand-type*.zsh test files.
 BUFFER=$'zstyle; builtin zstyle; builtin command zstyle; nice zstyle'
-
 # Verify that no $^path/zstyle(N) binary exists.
 if (
   disable zstyle
@@ -39,20 +37,16 @@ if (
 ); then
   echo >&2 "precommand-type2: error: 'zstyle' exists not only as a builtin"
 fi
-
 expected_region_highlight=(
   '1 6 builtin'          # zstyle
   '7 7 commandseparator' # ;
-
   '9 15 precommand'        # builtin
   '17 22 builtin'          # zstyle
   '23 23 commandseparator' # ;
-
   '25 31 precommand'                 # builtin
   '33 39 precommand'                 # command
   '41 46 unknown-token "issue #608"' # zstyle
   '47 47 commandseparator'           # ;
-
   '49 52 precommand'                 # nice
   '54 59 unknown-token "issue #608"' # zstyle
 )

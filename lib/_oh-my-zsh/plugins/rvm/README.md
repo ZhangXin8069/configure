@@ -1,15 +1,10 @@
 # Ruby Version Manager plugin
-
 This plugin adds some utility functions and completions for [Ruby Version Manager](https://rvm.io/).
-
 To use it, add `rvm` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... rvm)
 ```
-
 ## Aliases
-
 | Alias        | Command              |
 | ------------ | -------------------- |
 | `rb18`       | `rvm use ruby-1.8.7` |
@@ -28,10 +23,7 @@ plugins=(... rvm)
 | `rvm-update` | `rvm get head`       |
 | `gems`       | `gem list`           |
 | `rvms`       | `rvm gemset`         |
-
 ## Deprecated versions
-
 At the time of writing this (2021-12-28), Ruby versions until 2.5 are [EOL][1],
 and will be removed in the future.
-
 [1]: https://endoflife.date/ruby

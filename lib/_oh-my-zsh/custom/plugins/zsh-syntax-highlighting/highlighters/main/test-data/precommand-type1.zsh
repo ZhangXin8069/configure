@@ -27,11 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Test the behaviour of a builtin that exists as a command as well.
 # The spaces in $BUFFER are to align precommand-type*.zsh test files.
 BUFFER=$'test  ; builtin test  ; builtin command test  ; nice test  '
-
 # Our expectations assumes that a 'test' external command exists (in addition
 # to the 'test' builtin).  Let's verify that, using the EQUALS option (which
 # is on by default).  If there's no 'test' command, the expansion will fail,
@@ -42,20 +40,16 @@ BUFFER=$'test  ; builtin test  ; builtin command test  ; nice test  '
 # ever does see this test fail for this reason, we should explicitly create
 # a 'test' executable in cwd and 'rehash'.
 : =test
-
 expected_region_highlight=(
   '1 4 builtin'          # test
   '7 7 commandseparator' # ;
-
   '9 15 precommand'        # builtin
   '17 20 builtin'          # test
   '23 23 commandseparator' # ;
-
   '25 31 precommand'           # builtin
   '33 39 precommand'           # command
   '41 44 command "issue #608"' # test
   '47 47 commandseparator'     # ;
-
   '49 52 precommand'           # nice
   '54 57 command "issue #608"' # test
 )

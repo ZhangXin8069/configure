@@ -1,11 +1,9 @@
 # JSON Tools
 # Adds command line aliases useful for dealing with JSON
-
 # Check that user-defined method is installed
 if [[ -n "$JSONTOOLS_METHOD" ]]; then
   (($ + commands[$JSONTOOLS_METHOD])) || unset JSONTOOLS_METHOD
 fi
-
 # If method undefined, find the first one that is installed
 if [[ -z "$JSONTOOLS_METHOD" ]]; then
   for JSONTOOLS_METHOD in node python3 ruby; do
@@ -14,11 +12,9 @@ if [[ -z "$JSONTOOLS_METHOD" ]]; then
     # Otherwise unset the variable
     unset JSONTOOLS_METHOD
   done
-
   # If no methods were found, exit the plugin
   [[ -n "$JSONTOOLS_METHOD" ]] || return 1
 fi
-
 # Define json tools for each method
 case "$JSONTOOLS_METHOD" in
 node)
@@ -102,9 +98,7 @@ ruby)
   ;;
 esac
 unset JSONTOOLS_METHOD
-
 ## Add NDJSON support
-
 function {pp,is,urlencode,urldecode}_ndjson() {
   local json jsonfunc="${0//ndjson/json}"
   while read -r json; do

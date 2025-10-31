@@ -1,20 +1,14 @@
 zsh-syntax-highlighting / highlighters / main
 ---------------------------------------------
-
 This is the `main` highlighter, that highlights:
-
 * Commands
 * Options
 * Arguments
 * Paths
 * Strings
-
 This highlighter is active by default.
-
 ### How to tweak it
-
 This highlighter defines the following styles:
-
 * `unknown-token` - unknown tokens / errors
 * `reserved-word` - shell reserved words (`if`, `for`)
 * `alias` - aliases
@@ -65,56 +59,40 @@ This highlighter defines the following styles:
 * `numeric-fd` - numeric file descriptor (the `2` in `echo foo {fd}>&2`)
 * `arg0` - a command word other than one of those enumerated above (other than a command, precommand, alias, function, or shell builtin command).
 * `default` - everything else
-
 To override one of those styles, change its entry in `ZSH_HIGHLIGHT_STYLES`,
 for example in `~/.zshrc`:
-
 ```zsh
 # Declare the variable
 typeset -A ZSH_HIGHLIGHT_STYLES
-
 # To differentiate aliases from other command types
 ZSH_HIGHLIGHT_STYLES[alias]='fg=magenta,bold'
-
 # To have paths colored instead of underlined
 ZSH_HIGHLIGHT_STYLES[path]='fg=cyan'
-
 # To disable highlighting of globbing expressions
 ZSH_HIGHLIGHT_STYLES[globbing]='none'
 ```
-
 The syntax for values is the same as the syntax of "types of highlighting" of
 the zsh builtin `$zle_highlight` array, which is documented in [the `zshzle(1)`
 manual page][zshzle-Character-Highlighting].
-
 #### Parameters
-
 To avoid partial path lookups on a path, add the path to the `ZSH_HIGHLIGHT_DIRS_BLACKLIST` array.
-
 ```zsh
 ZSH_HIGHLIGHT_DIRS_BLACKLIST+=(/mnt/slow_share)
 ```
-
 ### Useless trivia
-
 #### Forward compatibility
-
 zsh-syntax-highlighting attempts to be forward-compatible with zsh.
 Specifically, we attempt to facilitate highlighting _command word_ types that
 had not yet been invented when this version of zsh-syntax-highlighting was
 released.
-
 A _command word_ is something like a function name, external command name, et
 cetera.  (See
 [Simple Commands & Pipelines in `zshmisc(1)`][zshmisc-Simple-Commands-And-Pipelines]
 for a formal definition.)
-
 If a new _kind_ of command word is ever added to zsh — something conceptually
 different than "function" and "alias" and "external command" — then command words
 of that (new) kind will be highlighted by the style `arg0_$kind`,
 where `$kind` is the output of `type -w` on the new kind of command word.  If that
 style is not defined, then the style `arg0` will be used instead.
-
 [zshmisc-Simple-Commands-And-Pipelines]: https://zsh.sourceforge.io/Doc/Release/Shell-Grammar.html#Simple-Commands-_0026-Pipelines
-
 [zshzle-Character-Highlighting]: https://zsh.sourceforge.io/Doc/Release/Zsh-Line-Editor.html#Character-Highlighting

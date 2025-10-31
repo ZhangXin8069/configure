@@ -1,23 +1,18 @@
 alias x=extract
-
 extract() {
   setopt localoptions noautopushd
-
   if (( $# == 0 )); then
     cat >&2 <<'EOF'
 Usage: extract [-option] [file ...]
-
 Options:
     -r, --remove    Remove archive after unpacking.
 EOF
   fi
-
   local remove_archive=1
   if [[ "$1" == "-r" ]] || [[ "$1" == "--remove" ]]; then
     remove_archive=0
     shift
   fi
-
   local pwd="$PWD"
   while (( $# > 0 )); do
     if [[ ! -f "$1" ]]; then
@@ -25,28 +20,23 @@ EOF
       shift
       continue
     fi
-
     local success=0
     local file="$1" full_path="${1:A}"
     local extract_dir="${1:t:r}"
-
     # Remove the .tar extension if the file name is .tar.*
     if [[ $extract_dir =~ '\.tar$' ]]; then
       extract_dir="${extract_dir:r}"
     fi
-
     # If there's a file or directory with the same name as the archive
     # add a random string to the end of the extract directory
     if [[ -e "$extract_dir" ]]; then
       local rnd="${(L)"${$(( [##36]$RANDOM*$RANDOM ))}":1:5}"
       extract_dir="${extract_dir}-${rnd}"
     fi
-
     # Create an extraction directory based on the file name
     command mkdir -p "$extract_dir"
     builtin cd -q "$extract_dir"
     echo "extract: extracting to $extract_dir" >&2
-
     case "${file:l}" in
       (*.tar.gz|*.tgz)
         (( $+commands[pigz] )) && { tar -I pigz -xvf "$full_path" } || tar zxvf "$full_path" ;;
@@ -96,14 +86,11 @@ EOF
         echo "extract: '$file' cannot be extracted" >&2
         success=1 ;;
     esac
-
     (( success = success > 0 ? success : $? ))
     (( success == 0 && remove_archive == 0 )) && command rm "$full_path"
     shift
-
     # Go back to original working directory
     builtin cd -q "$pwd"
-
     # If content of extract dir is a single directory, move its contents up
     # Glob flags:
     # - D: include files starting with .

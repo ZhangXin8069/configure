@@ -4,11 +4,9 @@ function wake() {
     echo "ERROR: There is no configuration file at \"$config_file\"."
     return 1
   fi
-
   if ((!$ + commands[wakeonlan])); then
     echo "ERROR: Can't find \"wakeonlan\".  Are you sure it's installed?"
     return 1
   fi
-
   wakeonlan -f "$config_file"
 }

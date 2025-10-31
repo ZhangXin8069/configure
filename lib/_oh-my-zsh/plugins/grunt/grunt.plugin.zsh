@@ -46,53 +46,42 @@
 #    $ exec zsh
 #
 # -----------------------------------------------------------------------------
-
 function __grunt() {
     local curcontext="$curcontext" update_policy state
     local show_grunt_path update_msg gruntfile opts tasks
-
     # Setup cache-policy.
     zstyle -s ":completion:${curcontext}:" cache-policy update_policy
     if [[ -z $update_policy ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __grunt_caching_policy
     fi
-
     # Check show_path option.
     zstyle -b ":completion:${curcontext}:options:" show_grunt_path show_grunt_path
-
     # Get current gruntfile.
     gruntfile=$(__grunt_get_gruntfile)
-
     # Initialize opts and tasks.
     opts=()
     tasks=()
-
     # Add help options.
     opts+=('(- 1 *)'{-h,--help}'[Display this help text.]')
-
     ## Complete without gruntfile.
     if [[ ! -f $gruntfile ]]; then
         _arguments "${opts[@]}"
         return
     fi
-
     ## Complete with gruntfile.
     # Retrieve cache.
     if ! __grunt_update_cache "$gruntfile"; then
         update_msg=' (cache updated)'
     fi
-
     # Make options completion.
     if [[ ${#__grunt_opts} -gt 0 ]]; then
         opts+=("${__grunt_opts[@]}")
     fi
-
     # Complete arguments.
     _arguments \
         "${opts[@]}" \
         '*: :->tasks' \
         && return
-
     case $state in
         tasks)
             if [[ $show_grunt_path == 'yes' ]]; then
@@ -105,10 +94,8 @@ function __grunt() {
             fi
         ;;
     esac
-
     return 0
 }
-
 # Cache policy:
 #   The cache file name: grunt
 #   The cache variable name: __grunt_version __grunt_gruntfile __grunt_opts __grunt_tasks
@@ -118,18 +105,14 @@ function __grunt_update_cache() {
     local is_updating=0
     local gruntfile="$1"
     local grunt_info no_update_options cache_path
-
     # Check no_update_options option.
     zstyle -b ":completion:${curcontext}:options:" no_update_options no_update_options
-
-
     if ! ( ((  $+__grunt_gruntfile )) \
         && (( $+__grunt_opts )) \
         && (( $+__grunt_tasks )) ) \
         && ! _retrieve_cache 'grunt'; then
         is_updating=1
     fi
-
     if [[ $gruntfile != $__grunt_gruntfile ]]; then
         # Except for --help options.
         __grunt_gruntfile=$gruntfile
@@ -150,16 +133,13 @@ function __grunt_update_cache() {
             unset __grunt_gruntfile
         fi
     fi
-
     if _cache_invalid 'grunt'; then
         is_updating=1
     fi
-
     # Check _grunt version.
     if [[ $__grunt_version != $version ]]; then
         is_updating=1
     fi
-
     if [[ $is_updating -ne 0 ]]; then
         # Update cache.
         __grunt_version=$version
@@ -172,7 +152,6 @@ function __grunt_update_cache() {
     fi
     return $is_updating
 }
-
 function __grunt_get_tasks() {
     echo -E "$1" \
         | grep 'Available tasks' -A 100 \
@@ -181,7 +160,6 @@ function __grunt_get_tasks() {
         | sed -e 's/:/\\:/g' \
         | sed -e 's/  /:/'
 }
-
 function __grunt_get_opts() {
     local opt_hunk opt_sep opt_num line opt
     opt_hunk=$(echo -E "$1" \
@@ -189,7 +167,6 @@ function __grunt_get_opts() {
         | sed '1 d' \
         | sed -e 's/[[:blank:]]*$//' \
     )
-
     opt_sep=()
     opt_hunk=(${(f)opt_hunk})
     opt_num=0
@@ -205,7 +182,6 @@ function __grunt_get_opts() {
         fi
         opt_sep[$opt_num]=("${opt_sep[$opt_num]}${opt}")
     done
-
     for line in "$opt_sep[@]"; do
         opt=(${(s:\t:)line})
         if [[ ${opt[1]} == '--help' ]]; then
@@ -219,7 +195,6 @@ function __grunt_get_opts() {
         fi
     done
 }
-
 function __grunt_get_gruntfile() {
     local gruntfile
     local curpath="$PWD"
@@ -234,16 +209,13 @@ function __grunt_get_gruntfile() {
     done
     return 1
 }
-
 function __grunt_caching_policy() {
     # Returns status zero if the completions cache needs rebuilding.
-
     # Rebuild if .agignore more recent than cache.
     if [[ -f $__grunt_gruntfile && $__grunt_gruntfile -nt $1 ]]; then
         # Invalid cache because gruntfile is old.
         return 0
     fi
-
     local -a oldp
     local expire
     zstyle -s ":completion:${curcontext}:options:" expire expire || expire=7
@@ -251,5 +223,4 @@ function __grunt_caching_policy() {
     oldp=( "$1"(Nm+$expire) )
     (( $#oldp ))
 }
-
 compdef __grunt grunt

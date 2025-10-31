@@ -1,13 +1,11 @@
 # BASH
 # unset
-
 # EXPORT
 export PATH=/usr/local/python/bin:$PATH
 export PATH=${HOME}/sbin:$PATH
 export PATH=${HOME}/.local/bin:$PATH
 export LD_LIBRARY_PATH=${HOME}/slib:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/usr/local/lib:$LD_LIBRARY_PATH
-
 # ALIAS
 #########
 # EXAMPLE
@@ -36,7 +34,6 @@ alias media_writer="flatpak run org.fedoraproject.MediaWriter"
 # EXAMPLE
 # http://dict.youdao.com/search?q=%GDWORD%&ue=utf8 # goldendict settings
 #########
-
 # SOURCE
 pushd ${HOME}/qcu
 source ./computer-env.sh

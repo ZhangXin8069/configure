@@ -1,12 +1,9 @@
 NAME=zsh-navigation-tools
-
 INSTALL?=install -c
 PREFIX?=/usr/local
 SHARE_DIR?=$(DESTDIR)$(PREFIX)/share/$(NAME)
 DOC_DIR?=$(DESTDIR)$(PREFIX)/share/doc/$(NAME)
-
 all:
-
 install:
 	$(INSTALL) -d $(SHARE_DIR)
 	$(INSTALL) -d $(SHARE_DIR)/.config
@@ -23,7 +20,6 @@ install:
 	for fname in n-*; do cp "$$fname" $(SHARE_DIR); done; \
 	for fname in znt-*; do cp "$$fname" $(SHARE_DIR); done; \
 	for fname in .config/znt/n-*; do cp "$$fname" $(SHARE_DIR)/.config/znt; done;
-
 uninstall:
 	rm -f $(SHARE_DIR)/.revision-hash $(SHARE_DIR)/_* $(SHARE_DIR)/zsh-* $(SHARE_DIR)/n-* $(SHARE_DIR)/znt-* $(SHARE_DIR)/.config/znt/n-*
 	[ -d $(SHARE_DIR)/.config/znt ] && rmdir $(SHARE_DIR)/.config/znt || true
@@ -31,5 +27,4 @@ uninstall:
 	[ -d $(SHARE_DIR) ] && rmdir $(SHARE_DIR) || true
 	rm -f $(DOC_DIR)/README.md $(DOC_DIR)/LICENSE $(DOC_DIR)/n-history2.png 
 	[ -d $(DOC_DIR) ] && rmdir $(DOC_DIR) || true
-
 .PHONY: all install uninstall

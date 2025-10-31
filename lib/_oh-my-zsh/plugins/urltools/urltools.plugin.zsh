@@ -3,11 +3,9 @@
 #
 # Taken from:
 # https://ruslanspivak.com/2010/06/02/urlencode-and-urldecode-from-a-command-line/
-
 if [[ $(whence $URLTOOLS_METHOD) = "" ]]; then
     URLTOOLS_METHOD=""
 fi
-
 if [[ $(whence node) != "" && ("x$URLTOOLS_METHOD" = "x" || "x$URLTOOLS_METHOD" = "xnode") ]]; then
     alias urlencode='node -e "console.log(encodeURIComponent(process.argv[1]))"'
     alias urldecode='node -e "console.log(decodeURIComponent(process.argv[1]))"'
@@ -38,5 +36,4 @@ elif [[ $(whence perl) != "" && ("x$URLTOOLS_METHOD" = "x" || "x$URLTOOLS_METHOD
         alias urldecode="perl -e '\$new=\$ARGV[0]; \$new =~ s/\%([A-Fa-f0-9]{2})/pack(\"C\", hex(\$1))/seg; print \"\$new\n\";'"
     fi
 fi
-
 unset URLTOOLS_METHOD

@@ -26,17 +26,13 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
-
 # List of keyword and color pairs.
 typeset -gA ZSH_HIGHLIGHT_PATTERNS
-
 # Whether the pattern highlighter should be called or not.
 _zsh_highlight_highlighter_pattern_predicate()
 {
   _zsh_highlight_buffer_modified
 }
-
 # Pattern syntax highlighting function.
 _zsh_highlight_highlighter_pattern_paint()
 {
@@ -46,7 +42,6 @@ _zsh_highlight_highlighter_pattern_paint()
     _zsh_highlight_pattern_highlighter_loop "$BUFFER" "$pattern"
   done
 }
-
 _zsh_highlight_pattern_highlighter_loop()
 {
   # This does *not* do its job syntactically, sorry.

@@ -1,7 +1,6 @@
 #######################################
 #               Pacman                #
 #######################################
-
 # Pacman - https://wiki.archlinux.org/index.php/Pacman_Tips
 alias pacupg='sudo pacman -Syu'
 alias pacin='sudo pacman -S'
@@ -23,31 +22,22 @@ alias pacfiles='pacman -F'
 alias pacls='pacman -Ql'
 alias pacown='pacman -Qo'
 alias pacupd="sudo pacman -Sy"
-
 function paclist() {
   pacman -Qqe | xargs -I{} -P0 --no-run-if-empty pacman -Qs --color=auto "^{}\$"
 }
-
 function pacdisowned() {
   local tmp_dir db fs
   tmp_dir=$(mktemp --directory)
   db=$tmp_dir/db
   fs=$tmp_dir/fs
-
   trap "rm -rf $tmp_dir" EXIT
-
   pacman -Qlq | sort -u >"$db"
-
   find /etc /usr ! -name lost+found \
     \( -type d -printf '%p/\n' -o -print \) | sort >"$fs"
-
   comm -23 "$fs" "$db"
-
   rm -rf $tmp_dir
 }
-
 alias pacmanallkeys='sudo pacman-key --refresh-keys'
-
 function pacmansignkeys() {
   local key
   for key in $@; do
@@ -57,7 +47,6 @@ function pacmansignkeys() {
       --no-permission-warning --command-fd 0 --edit-key $key
   done
 }
-
 if (($ + commands[xdg - open])); then
   function pacweb() {
     if [[ $# = 0 || "$1" =~ '--help|-h' ]]; then
@@ -68,7 +57,6 @@ if (($ + commands[xdg - open])); then
       echo "    $bold_color$0$reset_color ${underline_color}target${reset_color}"
       return 1
     fi
-
     local pkg="$1"
     local infos="$(LANG=C pacman -Si "$pkg")"
     if [[ -z "$infos" ]]; then
@@ -79,11 +67,9 @@ if (($ + commands[xdg - open])); then
     xdg-open "https://www.archlinux.org/packages/$repo/$arch/$pkg/" &>/dev/null
   }
 fi
-
 #######################################
 #             AUR helpers             #
 #######################################
-
 if (($ + commands[aura])); then
   alias auin='sudo aura -S'
   alias aurin='sudo aura -A'
@@ -106,14 +92,12 @@ if (($ + commands[aura])); then
   alias auupd="sudo aura -Sy"
   alias auupg='sudo sh -c "aura -Syu              && aura -Au"'
   alias ausu='sudo sh -c "aura -Syu --no-confirm && aura -Au --no-confirm"'
-
   # extra bonus specially for aura
   alias auown="aura -Qqo"
   alias auls="aura -Qql"
   function auownloc() { aura -Qi $(aura -Qqo $@); }
   function auownls() { aura -Qql $(aura -Qqo $@); }
 fi
-
 if (($ + commands[pacaur])); then
   alias pacclean='pacaur -Sc'
   alias pacclr='pacaur -Scc'
@@ -133,7 +117,6 @@ if (($ + commands[pacaur])); then
   alias pamir='pacaur -Syy'
   alias paupd="pacaur -Sy"
 fi
-
 if (($ + commands[trizen])); then
   alias trconf='trizen -C'
   alias trupg='trizen -Syua'
@@ -154,7 +137,6 @@ if (($ + commands[trizen])); then
   alias trmir='trizen -Syy'
   alias trupd="trizen -Sy"
 fi
-
 if (($ + commands[yay])); then
   alias yaconf='yay -Pg'
   alias yaclean='yay -Sc'
@@ -175,7 +157,6 @@ if (($ + commands[yay])); then
   alias yamir='yay -Syy'
   alias yaupd="yay -Sy"
 fi
-
 # Check Arch Linux PGP Keyring before System Upgrade to prevent failure.
 function upgrade() {
   echo ":: Checking Arch Linux PGP Keyring..."

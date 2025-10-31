@@ -5,12 +5,10 @@
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
-
 __zic_fzf_prog() {
   [ -n "$TMUX_PANE" ] && [ "${FZF_TMUX:-0}" != 0 ] && [ ${LINES:-40} -gt 15 ] \
     && echo "fzf-tmux -d${FZF_TMUX_HEIGHT:-40%}" || echo "fzf"
 }
-
 __zic_matched_subdir_list() {
   local dir length seg starts_with_dir
   if [[ "$1" == */ ]]; then
@@ -76,36 +74,28 @@ __zic_matched_subdir_list() {
     fi
   fi
 }
-
 __zic_fzf_bindings() {
   autoload is-at-least
   fzf=$(__zic_fzf_prog)
-
   if $(is-at-least '0.21.0' $(${=fzf} --version)); then
     echo 'shift-tab:up,tab:down,bspace:backward-delete-char/eof'
   else
     echo 'shift-tab:up,tab:down'
   fi
 }
-
 _zic_list_generator() {
   __zic_matched_subdir_list "${(Q)@[-1]}" | sort
 }
-
 _zic_complete() {
   setopt localoptions nonomatch
   local l matches fzf tokens base
-
   l=$(_zic_list_generator $@)
-
   if [ -z "$l" ]; then
     zle ${__zic_default_completion:-expand-or-complete}
     return
   fi
-
   fzf=$(__zic_fzf_prog)
   fzf_bindings=$(__zic_fzf_bindings)
-
   if [ $(echo $l | wc -l) -eq 1 ]; then
     matches=${(q)l}
   else
@@ -117,7 +107,6 @@ _zic_complete() {
       echo -n "${(q)item} "
     done)
   fi
-
   matches=${matches% }
   if [ -n "$matches" ]; then
     tokens=(${(z)LBUFFER})
@@ -145,14 +134,11 @@ _zic_complete() {
   zle redisplay
   typeset -f zle-line-init >/dev/null && zle zle-line-init
 }
-
 zic-completion() {
   setopt localoptions noshwordsplit noksh_arrays noposixbuiltins
   local tokens cmd
-
   tokens=(${(z)LBUFFER})
   cmd=${tokens[1]}
-
   if [[ "$LBUFFER" =~ "^\ *cd$" ]]; then
     zle ${__zic_default_completion:-expand-or-complete}
   elif [ "$cmd" = cd ]; then
@@ -161,7 +147,6 @@ zic-completion() {
     zle ${__zic_default_completion:-expand-or-complete}
   fi
 }
-
 [ -z "$__zic_default_completion" ] && {
   binding=$(bindkey '^I')
   # $binding[(s: :w)2]
@@ -172,7 +157,6 @@ zic-completion() {
   [[ $binding =~ 'undefined-key' ]] || __zic_default_completion=$binding[(s: :w)2]
   unset binding
 }
-
 zle -N zic-completion
 if [ -z $zic_custom_binding ]; then
   zic_custom_binding='^I'

@@ -1,7 +1,6 @@
 if (( ! $+commands[podman] )); then
   return
 fi
-
 # If the completion file doesn't exist yet, we need to autoload it and
 # bind it to `podman`. Otherwise, compinit will have already done that.
 if [[ ! -f "$ZSH_CACHE_DIR/completions/_podman" ]]; then
@@ -9,9 +8,7 @@ if [[ ! -f "$ZSH_CACHE_DIR/completions/_podman" ]]; then
   autoload -Uz _podman
   _comps[podman]=_podman
 fi
-
 podman completion zsh 2> /dev/null >| "$ZSH_CACHE_DIR/completions/_podman" &|
-
 alias pbl='podman build'
 alias pcin='podman container inspect'
 alias pcls='podman container ls'

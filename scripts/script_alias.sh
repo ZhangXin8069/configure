@@ -4,7 +4,6 @@ echo "PATH:"$_PATH
 # pushd ${_PATH}/../
 # source ./env.sh
 # popd
-
 # init
 _NAME=$(basename "$0")
 name='work'
@@ -12,7 +11,6 @@ work_name="bin"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
-
 # do
 pushd ${tmp_path}
 rm scripts.sh
@@ -37,5 +35,4 @@ done
 echo "# <<< alias:$(date "+%Y-%m-%d-%H-%M-%S") <<<" >>scripts.sh
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
-
 # done

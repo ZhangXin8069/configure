@@ -26,14 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 unsorted=1
-
 ZSH_HIGHLIGHT_STYLES[bracket - level - 1]=
 ZSH_HIGHLIGHT_STYLES[bracket - level - 2]=
-
 BUFFER='echo ({x})'
-
 expected_region_highlight=(
   "6  6  bracket-level-1" # (
   "7  7  bracket-level-2" # {
