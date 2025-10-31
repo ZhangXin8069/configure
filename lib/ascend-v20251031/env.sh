@@ -28,3 +28,4 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
+export TORCH_DEVICE_BACKEND_AUTOLOAD=0
