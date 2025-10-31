@@ -1,5 +1,5 @@
 # CONFIGURE
-pushd /home/phyww/zhangxin
+pushd /public/home/zhangxin80699
 pushd ./configure
 source env.sh
 popd
