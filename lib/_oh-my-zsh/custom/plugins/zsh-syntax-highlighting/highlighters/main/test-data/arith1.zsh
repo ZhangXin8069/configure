@@ -31,7 +31,7 @@
 BUFFER=$': $(( 6 * 9 ))'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 14 default' # $(( 6 * 9 ))
+  '1 1 builtin'               # :
+  '3 14 default'              # $(( 6 * 9 ))
   '3 14 arithmetic-expansion' # $(( 6 * 9 ))
 )

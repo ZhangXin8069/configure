@@ -30,13 +30,13 @@
 
 # See also param-precommand-option-argument3.zsh
 alias sudo_u='sudo -u'
-sudo(){}
+sudo() {}
 
 BUFFER='sudo_u phy1729 ls foo'
 
 expected_region_highlight=(
-  '1 6 alias' # sudo_u
-  '8 14 default' # phy1729
+  '1 6 alias'     # sudo_u
+  '8 14 default'  # phy1729
   '16 17 command' # ls
   '19 21 default' # foo
 )

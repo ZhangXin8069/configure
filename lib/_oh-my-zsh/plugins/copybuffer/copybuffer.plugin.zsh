@@ -1,7 +1,7 @@
 # copy the active line from the command line buffer
 # onto the system clipboard
 
-copybuffer () {
+copybuffer() {
   if builtin which clipcopy &>/dev/null; then
     printf "%s" "$BUFFER" | clipcopy
   else

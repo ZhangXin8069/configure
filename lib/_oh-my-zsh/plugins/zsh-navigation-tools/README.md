@@ -24,9 +24,8 @@ plugins=(... zsh-navigation-tools)
 Also check out [![ZCA](https://imageshack.com/a/img911/8084/qSpO8a.png) Zsh Command Architect](https://github.com/zdharma-continuum/zsh-cmd-architect)
 and [Zconvey](https://github.com/zdharma-continuum/zconvey)
 
-
-
 Videos:
+
 - [https://youtu.be/QwZ8IJEgXRE](https://youtu.be/QwZ8IJEgXRE)
 - [https://youtu.be/DN9QqssAYB8](https://youtu.be/DN9QqssAYB8)
 
@@ -35,7 +34,6 @@ Screenshots:
 ![n-history](https://imageshack.com/a/img921/5046/bqr0mk.png)
 
 ![n-history](https://imageshack.com/a/img633/9905/WzfSdl.gif)
-
 
 ## History Widget
 

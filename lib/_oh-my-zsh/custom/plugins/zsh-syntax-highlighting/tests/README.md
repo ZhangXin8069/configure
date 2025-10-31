@@ -10,6 +10,7 @@ See the [main highlighter](../highlighters/main/test-data) for examples.
 Tests should set the following variables:
 
 1.
+
 Each test should define the string `$BUFFER` that is to be highlighted and the
 array parameter `$expected_region_highlight`.
 The value of that parameter is a list of strings of the form  `"$i $j $style"`.
@@ -20,19 +21,23 @@ that is, `$i` and `$j` specify a range, 1-indexed, inclusive of both endpoints.
 If `$todo` exists, the test point is marked as TODO (the failure of that test
 point will not fail the test), and `$todo` is used as the explanation.
 
-2. 
+2.
+
 If a test sets `$skip_test` to a non-empty string, the test will be skipped
 with the provided string as the reason.
 
-3. 
+3.
+
 If a test sets `$fail_test` to a non-empty string, the test will be skipped
 with the provided string as the reason.
 
 4.
+
 If a test sets `unsorted=1` the order of highlights in `$expected_region_highlight`
 need not match the order in `$region_highlight`.
 
 5.
+
 Normally, tests fail if `$expected_region_highlight` and `$region_highlight`
 have different numbers of elements.  To mark this check as expected to fail,
 tests may set `$expected_mismatch` to an explanation string (like `$todo`);
@@ -66,7 +71,6 @@ expected_region_highlight=(
 )
 ```
 
-
 Writing new tests
 -----------------
 
@@ -81,7 +85,6 @@ the current highlighting of the given `$BUFFER` (in this case, `ls -x`).
 
 _This tool is experimental._  Its interface may change.  In particular it may
 grow ways to set `$PREBUFFER` to inject free-form code into the generated file.
-
 
 Highlighting test
 -----------------
@@ -105,7 +108,6 @@ results (tests that failed but were expected to succeed, or vice-versa), run
 `make quiet-test` (or `make test QUIET=y`).
 
 [TAP]: https://testanything.org/
-
 
 Performance test
 ----------------

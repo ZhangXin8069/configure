@@ -31,12 +31,12 @@
 BUFFER='elif true; then echo two; fi'
 
 expected_region_highlight=(
-  '1 4 unknown-token' # elif
-  '6 9 builtin' # true
+  '1 4 unknown-token'      # elif
+  '6 9 builtin'            # true
   '10 10 commandseparator' # ;
-  '12 15 unknown-token' # then
-  '17 20 builtin' # echo
-  '22 24 default' # two
+  '12 15 unknown-token'    # then
+  '17 20 builtin'          # echo
+  '22 24 default'          # two
   '25 25 commandseparator' # ;
-  '27 28 unknown-token' # fi
+  '27 28 unknown-token'    # fi
 )

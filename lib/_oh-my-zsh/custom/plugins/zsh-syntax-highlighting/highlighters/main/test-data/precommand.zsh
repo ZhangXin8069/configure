@@ -30,7 +30,7 @@
 BUFFER=': command zzzzzz'
 
 expected_region_highlight=(
-  "1 1 builtin" # :
-  "3 9 default" # not precommand
+  "1 1 builtin"   # :
+  "3 9 default"   # not precommand
   "11 16 default" # not unknown-token (since 'zzzzzz' is not a command)
 )

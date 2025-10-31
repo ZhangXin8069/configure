@@ -11,7 +11,6 @@ This is the `main` highlighter, that highlights:
 
 This highlighter is active by default.
 
-
 ### How to tweak it
 
 This highlighter defines the following styles:
@@ -98,7 +97,7 @@ ZSH_HIGHLIGHT_DIRS_BLACKLIST+=(/mnt/slow_share)
 
 ### Useless trivia
 
-#### Forward compatibility.
+#### Forward compatibility
 
 zsh-syntax-highlighting attempts to be forward-compatible with zsh.
 Specifically, we attempt to facilitate highlighting _command word_ types that

@@ -1,4 +1,4 @@
-if (( ! $+commands[brew] )); then
+if ((!$ + commands[brew])); then
   if [[ -n "$BREW_LOCATION" ]]; then
     if [[ ! -x "$BREW_LOCATION" ]]; then
       echo "[oh-my-zsh] $BREW_LOCATION is not executable"

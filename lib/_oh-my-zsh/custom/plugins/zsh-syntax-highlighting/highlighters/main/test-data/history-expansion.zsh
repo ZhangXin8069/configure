@@ -30,10 +30,10 @@
 BUFFER='!foo bar !baz ! ; !'
 
 expected_region_highlight=(
-  "1 4 history-expansion" # !foo
-  "6 8 default" # bar
+  "1 4 history-expansion"   # !foo
+  "6 8 default"             # bar
   "10 13 history-expansion" # !baz
-  "15 15 default" # !
-  "17 17 commandseparator" # ;
-  "19 19 reserved-word" # !
+  "15 15 default"           # !
+  "17 17 commandseparator"  # ;
+  "19 19 reserved-word"     # !
 )

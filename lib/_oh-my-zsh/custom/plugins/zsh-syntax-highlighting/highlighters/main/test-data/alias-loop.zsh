@@ -37,8 +37,8 @@ expected_region_highlight=(
   # An alias is ineligible for expansion whilst it's being expanded.
   # Therefore, the "b" in the expansion of the alias "c" is not considered
   # as an alias.
-  '1 1 alias' # a
-  '3 5 default' # foo
+  '1 1 alias'            # a
+  '3 5 default'          # foo
   '6 6 commandseparator' # ;
-  '8 8 builtin' # :
+  '8 8 builtin'          # :
 )

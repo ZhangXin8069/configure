@@ -31,12 +31,12 @@ BUFFER='>/tmp >/tmp command echo >/tmp foo'
 
 expected_region_highlight=(
   "1  1  redirection" # >
-  "2  5  path"       # /tmp
+  "2  5  path"        # /tmp
   "7  7  redirection" # >
-  "8  11 path"       # /tmp
-  "13 19 precommand" # command
-  "21 24 builtin"    # echo
+  "8  11 path"        # /tmp
+  "13 19 precommand"  # command
+  "21 24 builtin"     # echo
   "26 26 redirection" # >
-  "27 30 path"       # /tmp
-  "32 34 default"    # foo
+  "27 30 path"        # /tmp
+  "32 34 default"     # foo
 )

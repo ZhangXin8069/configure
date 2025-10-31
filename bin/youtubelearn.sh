@@ -1,1 +1,1 @@
-firefox --new-window https://www.youtube.com/feed/library 
+firefox --new-window https://www.youtube.com/feed/library

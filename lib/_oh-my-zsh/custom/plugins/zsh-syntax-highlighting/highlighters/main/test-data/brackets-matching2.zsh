@@ -31,8 +31,8 @@
 BUFFER='[ -n foo ]'
 
 expected_region_highlight=(
-  '1 1 builtin' # [
+  '1 1 builtin'              # [
   '3 4 single-hyphen-option' # -n
-  '6 8 default' # foo
-  '10 10 builtin' # ]
+  '6 8 default'              # foo
+  '10 10 builtin'            # ]
 )

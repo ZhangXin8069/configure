@@ -3,6 +3,7 @@
 This plugin adds single char shortcuts (and combinations) for some commands.
 
 To use it, add `singlechar` to the plugins array of your zshrc file:
+
 ```
 plugins=(... singlechar)
 ```

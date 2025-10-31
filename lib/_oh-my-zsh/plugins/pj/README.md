@@ -5,7 +5,7 @@ folders where you store your projects, so that you can jump there directly
 by just using the name of the project directory.
 
 Original idea and code by Jan De Poorter ([@DefV](https://github.com/DefV))
-Source: https://gist.github.com/pjaspers/368394#gistcomment-1016
+Source: <https://gist.github.com/pjaspers/368394#gistcomment-1016>
 
 ## Usage
 
@@ -23,13 +23,14 @@ Source: https://gist.github.com/pjaspers/368394#gistcomment-1016
 
 You can now use one of the following commands:
 
-##### `pj my-project`:
+##### `pj my-project`
 
 `cd` to the directory named "my-project" found in one of the `$PROJECT_PATHS`
 directories. If there are several directories named the same, the first one
 to appear in `$PROJECT_PATHS` has preference.
 
 For example:
+
 ```zsh
 PROJECT_PATHS=(~/code ~/work)
 $ ls ~/code    # ~/code/blog ~/code/react

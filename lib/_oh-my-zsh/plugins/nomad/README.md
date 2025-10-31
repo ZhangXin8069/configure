@@ -10,6 +10,6 @@ The `nomad` plugin provides a simple autocompletion for [Nomad](https://nomadpro
    plugins=(... nomad)
    ```
 
-2.  Install [Nomad](https://nomadproject.io/)
+2. Install [Nomad](https://nomadproject.io/)
 
-3.  Type `nomad` into your prompt and hit `TAB` to see available completion options.
+3. Type `nomad` into your prompt and hit `TAB` to see available completion options.

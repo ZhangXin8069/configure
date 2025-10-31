@@ -44,18 +44,18 @@ BUFFER=$'test  ; builtin test  ; builtin command test  ; nice test  '
 : =test
 
 expected_region_highlight=(
-  '1 4 builtin' # test
+  '1 4 builtin'          # test
   '7 7 commandseparator' # ;
 
-  '9 15 precommand' # builtin
-  '17 20 builtin' # test
+  '9 15 precommand'        # builtin
+  '17 20 builtin'          # test
   '23 23 commandseparator' # ;
 
-  '25 31 precommand' # builtin
-  '33 39 precommand' # command
+  '25 31 precommand'           # builtin
+  '33 39 precommand'           # command
   '41 44 command "issue #608"' # test
-  '47 47 commandseparator' # ;
+  '47 47 commandseparator'     # ;
 
-  '49 52 precommand' # nice
+  '49 52 precommand'           # nice
   '54 57 command "issue #608"' # test
 )

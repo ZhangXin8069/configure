@@ -31,9 +31,9 @@
 BUFFER=$'echo \\ \'foo\' ; ls'
 
 expected_region_highlight=(
-  '1 4 builtin' # echo
-  '6 12 default' # \ \'foo\'
+  '1 4 builtin'                 # echo
+  '6 12 default'                # \ \'foo\'
   '8 12 single-quoted-argument' # 'foo'
-  '14 14 commandseparator' # ;
-  '16 17 command' # ls
+  '14 14 commandseparator'      # ;
+  '16 17 command'               # ls
 )

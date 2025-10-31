@@ -32,10 +32,10 @@ BUFFER=$'() { echo }\n}'
 setopt ignorebraces
 
 expected_region_highlight=(
-  '1 2 reserved-word' # ()
-  '4 4 reserved-word' # {
-  '6 9 builtin' # echo
-  '11 11 default' # }
+  '1 2 reserved-word'      # ()
+  '4 4 reserved-word'      # {
+  '6 9 builtin'            # echo
+  '11 11 default'          # }
   '12 12 commandseparator' # \n
-  '13 13 reserved-word' # }
+  '13 13 reserved-word'    # }
 )

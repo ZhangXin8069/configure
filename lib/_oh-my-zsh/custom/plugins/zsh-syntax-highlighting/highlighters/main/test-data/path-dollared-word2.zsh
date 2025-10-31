@@ -33,5 +33,5 @@ BUFFER=': \$lambda'
 
 expected_region_highlight=(
   "1 1 builtin" # :
-  "3 10 path" # \$lambda
+  "3 10 path"   # \$lambda
 )

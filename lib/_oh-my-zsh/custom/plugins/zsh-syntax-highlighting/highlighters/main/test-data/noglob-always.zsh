@@ -31,15 +31,15 @@
 BUFFER=$'{ noglob echo * } always { echo * }'
 
 expected_region_highlight=(
-  '1 1 reserved-word' # {
-  '3 8 precommand' # noglob
-  '10 13 builtin' # echo
-  '15 15 default' # *
+  '1 1 reserved-word'   # {
+  '3 8 precommand'      # noglob
+  '10 13 builtin'       # echo
+  '15 15 default'       # *
   '17 17 reserved-word' # }
   '19 24 reserved-word' # always
   '26 26 reserved-word' # {
-  '28 31 builtin' # echo
-  '33 33 default' # *
-  '33 33 globbing' # *
+  '28 31 builtin'       # echo
+  '33 33 default'       # *
+  '33 33 globbing'      # *
   '35 35 reserved-word' # }
 )

@@ -1,5 +1,5 @@
 # rails command wrapper
-function _rails_command () {
+function _rails_command() {
   if [ -e "bin/stubs/rails" ]; then
     bin/stubs/rails $@
   elif [ -e "bin/rails" ]; then
@@ -17,12 +17,12 @@ alias rails='_rails_command'
 compdef _rails_command=rails
 
 # rake command wrapper
-function _rake_command () {
+function _rake_command() {
   if [ -e "bin/stubs/rake" ]; then
     bin/stubs/rake $@
   elif [ -e "bin/rake" ]; then
     bin/rake $@
-  elif type bundle &> /dev/null && [[ -e "Gemfile" || -e "gems.rb" ]]; then
+  elif type bundle &>/dev/null && [[ -e "Gemfile" || -e "gems.rb" ]]; then
     bundle exec rake $@
   else
     command rake $@

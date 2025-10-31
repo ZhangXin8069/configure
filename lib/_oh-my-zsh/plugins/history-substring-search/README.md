@@ -11,7 +11,6 @@ press chosen keys, such as the UP and DOWN arrows, to cycle through matches.
 [5]: https://github.com/zsh-users/zsh-history-substring-search
 [6]: https://github.com/zsh-users/zsh-syntax-highlighting
 
-
 Requirements
 ------------------------------------------------------------------------------
 
@@ -57,13 +56,13 @@ Using [antigen](https://github.com/zsh-users/antigen):
 
 1. Add the `antigen bundle` command just before `antigen apply`, like this:
 
-``` 
+```
 antigen bundle zsh-users/zsh-history-substring-search
 antigen apply
 ```
- 
+
 2. Then, **after** `antigen apply`, add the key binding configurations, like this:
- 
+
 ```
 # zsh-history-substring-search configuration
 bindkey '^[[A' history-substring-search-up # or '\eOA'
@@ -89,7 +88,7 @@ Using [Zinit](https://github.com/zdharma-continuum/zinit):
 Usage
 ------------------------------------------------------------------------------
 
-1.  Load this script into your interactive ZSH session:
+1. Load this script into your interactive ZSH session:
 
         source zsh-history-substring-search.zsh
 
@@ -99,7 +98,7 @@ Usage
         source zsh-syntax-highlighting.zsh
         source zsh-history-substring-search.zsh
 
-2.  Bind keyboard shortcuts to this script's functions.
+2. Bind keyboard shortcuts to this script's functions.
 
     Users typically bind their UP and DOWN arrow keys to this script, thus:
     * Run `cat -v` in your favorite terminal emulator to observe key codes.
@@ -120,8 +119,8 @@ Usage
           bindkey "$terminfo[kcuu1]" history-substring-search-up
           bindkey "$terminfo[kcud1]" history-substring-search-down
 
-      Users have also observed that `[OA` and `[OB` are correct values, 
-      _even if_ these were not the observed values. If you are having trouble
+      Users have also observed that `[OA` and `[OB` are correct values,
+      *even if* these were not the observed values. If you are having trouble
       with the observed values, give these a try.
 
       You might also want to bind the Control-P/N keys for use in EMACS mode:
@@ -134,7 +133,7 @@ Usage
           bindkey -M vicmd 'k' history-substring-search-up
           bindkey -M vicmd 'j' history-substring-search-down
 
-3.  Type any part of any previous command and then:
+3. Type any part of any previous command and then:
 
     * Press the `history-substring-search-up` key, which was configured in
       step 2 above, to select the nearest command that (1) contains your query
@@ -146,7 +145,7 @@ Usage
 
     * Press `^U` the Control and U keys simultaneously to abort the search.
 
-4.  If a matching command spans more than one line of text, press the LEFT
+4. If a matching command spans more than one line of text, press the LEFT
     arrow key to move the cursor away from the end of the command, and then:
 
     * Press the `history-substring-search-up` key, which was configured in
@@ -160,7 +159,6 @@ Usage
       When the cursor reaches the last line of the command, pressing the
       `history-substring-search-down` key, which was configured in step 2
       above, again will cause this script to perform another search.
-
 
 Configuration
 ------------------------------------------------------------------------------
@@ -199,12 +197,12 @@ default values.
   ls`; if it is non-empty, `ls` will only match `ls -l`.
 
 * `HISTORY_SUBSTRING_SEARCH_ENSURE_UNIQUE` is a global variable that defines
-  whether all search results returned are _unique_. If set to a non-empty
+  whether all search results returned are *unique*. If set to a non-empty
   value, then only unique search results are presented. This behaviour is off
   by default. An alternative way to ensure that search results are unique is
   to use `setopt HIST_IGNORE_ALL_DUPS`. If this configuration variable is off
   and `setopt HIST_IGNORE_ALL_DUPS` is unset, then `setopt HIST_FIND_NO_DUPS`
-  is still respected and it makes this script skip duplicate _adjacent_ search
+  is still respected and it makes this script skip duplicate *adjacent* search
   results as you cycle through them, but this does not guarantee that search
   results are unique: if your search results were "Dog", "Dog", "HotDog",
   "Dog", then cycling them gives "Dog", "HotDog", "Dog". Notice that the "Dog"
@@ -214,7 +212,6 @@ default values.
 
 * `HISTORY_SUBSTRING_SEARCH_HIGHLIGHT_TIMEOUT` is a global variable that
   defines a timeout in seconds for clearing the search highlight.
-
 
 History
 ------------------------------------------------------------------------------
@@ -243,7 +240,7 @@ What you are looking at now is Oh My Zsh's repackaging of zsh-history-substring-
 the Oh My Zsh distribution.
 
 The upstream repo, zsh-users/zsh-history-substring-search, can be found on GitHub at
-https://github.com/zsh-users/zsh-history-substring-search.
+<https://github.com/zsh-users/zsh-history-substring-search>.
 
 Everything above this section is a copy of the original upstream's README, so things may differ slightly when
 you're using this inside OMZ. In particular, you do not need to set up key bindings for the up and down arrows
