@@ -30,10 +30,10 @@
 BUFFER='repeat 42; ls; pwd'
 
 expected_region_highlight+=(
-  "1 6 reserved-word" # repeat
-  "8 9 default" # 42
+  "1 6 reserved-word"      # repeat
+  "8 9 default"            # 42
   "10 10 commandseparator" # ;
-  "12 13 command" # ls
+  "12 13 command"          # ls
   "14 14 commandseparator" # ;
-  "16 18 builtin" # pwd
+  "16 18 builtin"          # pwd
 )

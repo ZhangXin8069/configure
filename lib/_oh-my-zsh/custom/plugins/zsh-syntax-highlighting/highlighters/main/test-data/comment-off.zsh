@@ -33,6 +33,6 @@ BUFFER='# echo foo'
 
 expected_region_highlight=(
   "1 1 unknown-token" # #
-  "3 6 default" # " echo foo"
-  "8 10 default" # " echo foo"
+  "3 6 default"       # " echo foo"
+  "8 10 default"      # " echo foo"
 )

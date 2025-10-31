@@ -30,13 +30,13 @@
 BUFFER=$': \'foo\'bar"baz$quux/foo\\\\bar"baz$\'quux\\nfoo\\001bar\'baz'
 
 expected_region_highlight=(
-  "1 1 builtin" # :
-  "3 54 default" # 'foo'bar"baz$quux/foo\\bar"baz$'quux\nfoo\001'baz
-  "3 7 single-quoted-argument" # 'foo'
-  "11 29 double-quoted-argument" #"baz
+  "1 1 builtin"                         # :
+  "3 54 default"                        # 'foo'bar"baz$quux/foo\\bar"baz$'quux\nfoo\001'baz
+  "3 7 single-quoted-argument"          # 'foo'
+  "11 29 double-quoted-argument"        #"baz
   "15 19 dollar-double-quoted-argument" # $quux
-  "24 25 back-double-quoted-argument" # \\
-  "33 51 dollar-quoted-argument" # $'quux\nfoo\001bar'
-  "39 40 back-dollar-quoted-argument" # \n
-  "44 47 back-dollar-quoted-argument" # \001
+  "24 25 back-double-quoted-argument"   # \\
+  "33 51 dollar-quoted-argument"        # $'quux\nfoo\001bar'
+  "39 40 back-dollar-quoted-argument"   # \n
+  "44 47 back-dollar-quoted-argument"   # \001
 )

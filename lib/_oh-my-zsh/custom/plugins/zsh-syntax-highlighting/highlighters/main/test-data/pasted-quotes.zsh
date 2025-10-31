@@ -31,8 +31,8 @@
 BUFFER=$': \'foo\'bar"baz"'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 15 default' # \'foo\'bar"baz"
-  '3 7 single-quoted-argument' # \'foo\'
+  '1 1 builtin'                  # :
+  '3 15 default'                 # \'foo\'bar"baz"
+  '3 7 single-quoted-argument'   # \'foo\'
   '11 15 double-quoted-argument' # "baz"
 )

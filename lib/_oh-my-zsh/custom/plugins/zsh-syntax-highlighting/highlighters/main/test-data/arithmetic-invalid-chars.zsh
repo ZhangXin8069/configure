@@ -31,9 +31,9 @@
 BUFFER=$': $(( 0 * 1\'\'000 ))'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 19 default' # $(( 0 * 1\'\'000 ))
+  '1 1 builtin'               # :
+  '3 19 default'              # $(( 0 * 1\'\'000 ))
   '3 19 arithmetic-expansion' # $(( 0 * 1\'\'000 ))
-  '12 12 unknown-token' # \'
-  '13 13 unknown-token' # \'
+  '12 12 unknown-token'       # \'
+  '13 13 unknown-token'       # \'
 )

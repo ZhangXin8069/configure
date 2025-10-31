@@ -1,4 +1,4 @@
-if (( $+commands[starship] )); then
+if (($ + commands[starship])); then
   # ignore oh-my-zsh theme
   unset ZSH_THEME
 

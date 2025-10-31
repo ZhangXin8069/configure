@@ -9,7 +9,7 @@ plugins=(... docker)
 ```
 
 A copy of the completion script from the docker/cli git repo:
-https://github.com/docker/cli/blob/master/contrib/completion/zsh/_docker
+<https://github.com/docker/cli/blob/master/contrib/completion/zsh/_docker>
 
 ## Settings
 
@@ -33,7 +33,7 @@ file**, but be aware of the side effects:
 ### Use old-style completion
 
 If the current completion does not work well for you, you can enable legacy completion instead with the
-following setting. See https://github.com/ohmyzsh/ohmyzsh/issues/11789 for more information.
+following setting. See <https://github.com/ohmyzsh/ohmyzsh/issues/11789> for more information.
 
 ```zsh
 zstyle ':omz:plugins:docker' legacy-completion yes

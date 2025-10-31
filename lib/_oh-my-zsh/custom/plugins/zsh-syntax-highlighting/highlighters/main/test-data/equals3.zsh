@@ -31,6 +31,6 @@
 BUFFER=$': =nosuchcommand'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
+  '1 1 builtin'        # :
   '3 16 unknown-token' # =nosuchcommand
 )

@@ -31,15 +31,15 @@
 BUFFER='echo "$(echo)$(echo)'
 
 expected_region_highlight=(
-  '1 4 builtin' # echo
-  '6 20 default' # "$(echo)$(echo)
-  '6 6 double-quoted-argument-unclosed' # "
-  '7 13 command-substitution-quoted' # $(echo)
-  '7 8 command-substitution-delimiter-quoted' # $(
-  '9 12 builtin' # echo
+  '1 4 builtin'                                 # echo
+  '6 20 default'                                # "$(echo)$(echo)
+  '6 6 double-quoted-argument-unclosed'         # "
+  '7 13 command-substitution-quoted'            # $(echo)
+  '7 8 command-substitution-delimiter-quoted'   # $(
+  '9 12 builtin'                                # echo
   '13 13 command-substitution-delimiter-quoted' # )
-  '14 20 command-substitution-quoted' # $(echo)
+  '14 20 command-substitution-quoted'           # $(echo)
   '14 15 command-substitution-delimiter-quoted' # $(
-  '16 19 builtin' # echo
+  '16 19 builtin'                               # echo
   '20 20 command-substitution-delimiter-quoted' # )
 )

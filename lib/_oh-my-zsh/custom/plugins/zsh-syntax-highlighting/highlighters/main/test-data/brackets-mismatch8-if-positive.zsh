@@ -31,23 +31,23 @@
 BUFFER='if false; then echo one; elif true; then echo two; else echo three; fi'
 
 expected_region_highlight=(
-  '1 2 reserved-word' # if
-  '4 8 builtin' # false
-  '9 9 commandseparator' # ;
-  '11 14 reserved-word' # then
-  '16 19 builtin' # echo
-  '21 23 default' # one
+  '1 2 reserved-word'      # if
+  '4 8 builtin'            # false
+  '9 9 commandseparator'   # ;
+  '11 14 reserved-word'    # then
+  '16 19 builtin'          # echo
+  '21 23 default'          # one
   '24 24 commandseparator' # ;
-  '26 29 reserved-word' # elif
-  '31 34 builtin' # true
+  '26 29 reserved-word'    # elif
+  '31 34 builtin'          # true
   '35 35 commandseparator' # ;
-  '37 40 reserved-word' # then
-  '42 45 builtin' # echo
-  '47 49 default' # two
+  '37 40 reserved-word'    # then
+  '42 45 builtin'          # echo
+  '47 49 default'          # two
   '50 50 commandseparator' # ;
-  '52 55 reserved-word' # else
-  '57 60 builtin' # echo
-  '62 66 default' # three
+  '52 55 reserved-word'    # else
+  '57 60 builtin'          # echo
+  '62 66 default'          # three
   '67 67 commandseparator' # ;
-  '69 70 reserved-word' # fi
+  '69 70 reserved-word'    # fi
 )

@@ -31,6 +31,6 @@
 BUFFER='echo }'
 
 expected_region_highlight=(
-  '1 4 builtin' # echo
+  '1 4 builtin'       # echo
   '6 6 unknown-token' # }
 )

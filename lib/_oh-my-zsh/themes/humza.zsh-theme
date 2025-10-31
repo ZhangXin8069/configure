@@ -1,11 +1,10 @@
 # ZSH THEME Preview: https://skitch.com/huyy/rk979/humza.zshtheme
 
 let TotalBytes=0
-for Bytes in $(ls -l | grep "^-" | awk '{ print $5 }')
-do
+for Bytes in $(ls -l | grep "^-" | awk '{ print $5 }'); do
    let TotalBytes=$TotalBytes+$Bytes
 done
-		# should it say b, kb, Mb, or Gb
+# should it say b, kb, Mb, or Gb
 if [ $TotalBytes -lt 1024 ]; then
    TotalSize=$(echo -e "scale=3 \n$TotalBytes \nquit" | bc)
    suffix="b"

@@ -31,9 +31,9 @@
 BUFFER='() ( echo foo }'
 
 expected_region_highlight=(
-  '1 2 reserved-word' # ()
-  '4 4 reserved-word' # (
-  '6 9 builtin' # echo
-  '11 13 default' # foo
+  '1 2 reserved-word'   # ()
+  '4 4 reserved-word'   # (
+  '6 9 builtin'         # echo
+  '11 13 default'       # foo
   '15 15 unknown-token' # }
 )

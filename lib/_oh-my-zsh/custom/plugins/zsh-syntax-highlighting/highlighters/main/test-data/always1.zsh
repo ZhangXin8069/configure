@@ -31,11 +31,11 @@
 BUFFER='{ ls } always { pwd }'
 
 expected_region_highlight=(
-  '1 1 reserved-word' # {
-  '3 4 command' # ls
-  '6 6 reserved-word' # }
-  '8 13 reserved-word' # always
+  '1 1 reserved-word'   # {
+  '3 4 command'         # ls
+  '6 6 reserved-word'   # }
+  '8 13 reserved-word'  # always
   '15 15 reserved-word' # {
-  '17 19 builtin' # pwd
+  '17 19 builtin'       # pwd
   '21 21 reserved-word' # }
 )

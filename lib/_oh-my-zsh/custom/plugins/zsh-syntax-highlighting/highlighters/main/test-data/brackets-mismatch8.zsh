@@ -31,8 +31,8 @@
 BUFFER='(ls&)'
 
 expected_region_highlight=(
-  '1 1 reserved-word' # (
-  '2 3 command' # ls
+  '1 1 reserved-word'    # (
+  '2 3 command'          # ls
   '4 4 commandseparator' # &
-  '5 5 reserved-word' # )
+  '5 5 reserved-word'    # )
 )

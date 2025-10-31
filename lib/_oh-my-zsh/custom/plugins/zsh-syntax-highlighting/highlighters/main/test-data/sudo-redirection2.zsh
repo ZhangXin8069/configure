@@ -27,15 +27,15 @@
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
 
-sudo(){}
+sudo() {}
 
 BUFFER='sudo >/tmp -u otheruser ls'
 
 expected_region_highlight=(
-  "1 4 precommand" # sudo
-  "6 6 redirection" # >
-  "7 10 path" # /tmp
+  "1 4 precommand"             # sudo
+  "6 6 redirection"            # >
+  "7 10 path"                  # /tmp
   "12 13 single-hyphen-option" # -u
-  "15 23 default" # otheruser
-  "25 26 command" # ls
+  "15 23 default"              # otheruser
+  "25 26 command"              # ls
 )

@@ -31,14 +31,14 @@
 BUFFER='f() pwd; f() { balanced braces }'
 
 expected_region_highlight=(
-  '1 1 TBD "issue #223"' # f
-  '2 3 reserved-word' # ()
-  '5 7 builtin' # pwd
-  '8 8 commandseparator' # ;
+  '1 1 TBD "issue #223"'   # f
+  '2 3 reserved-word'      # ()
+  '5 7 builtin'            # pwd
+  '8 8 commandseparator'   # ;
   '10 10 TBD "issue #223"' # f
-  '11 12 reserved-word' # ()
-  '14 14 reserved-word' # {
-  '16 23 unknown-token' # balanced
-  '25 30 default' # braces
-  '32 32 reserved-word' # }
+  '11 12 reserved-word'    # ()
+  '14 14 reserved-word'    # {
+  '16 23 unknown-token'    # balanced
+  '25 30 default'          # braces
+  '32 32 reserved-word'    # }
 )

@@ -28,9 +28,9 @@ hcfile() {
   read platform
   echo 'Which file ?'
   read file
-  while read line;
-    do heroku config:set "$platform" "$line";
-  done < "$file"
+  while read line; do
+    heroku config:set "$platform" "$line"
+  done <"$file"
 }
 
 # apps and favorites

@@ -32,7 +32,7 @@ hash sudo='false'
 BUFFER='sudo --askpass ls'
 
 expected_region_highlight=(
-  '1 4 precommand' # sudo
+  '1 4 precommand'            # sudo
   '6 14 double-hyphen-option' # --askpass
-  '16 17 command' # ls (we don't know whether --askpass takes an argument)
+  '16 17 command'             # ls (we don't know whether --askpass takes an argument)
 )

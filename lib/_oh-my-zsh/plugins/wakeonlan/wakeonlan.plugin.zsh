@@ -5,7 +5,7 @@ function wake() {
     return 1
   fi
 
-  if (( ! $+commands[wakeonlan] )); then
+  if ((!$ + commands[wakeonlan])); then
     echo "ERROR: Can't find \"wakeonlan\".  Are you sure it's installed?"
     return 1
   fi

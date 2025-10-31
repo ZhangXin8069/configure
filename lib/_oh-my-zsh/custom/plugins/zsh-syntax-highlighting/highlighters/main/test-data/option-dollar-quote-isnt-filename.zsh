@@ -33,7 +33,7 @@ BUFFER=$': -$\'n\''
 touch ./-n
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 7 single-hyphen-option' # -$'n'
+  '1 1 builtin'                # :
+  '3 7 single-hyphen-option'   # -$'n'
   '4 7 dollar-quoted-argument' # $'n'
 )

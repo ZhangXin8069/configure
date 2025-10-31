@@ -31,7 +31,7 @@
 BUFFER=$'echo foo\\\nbar"baz"'
 
 expected_region_highlight=(
-  '1 4 builtin' # echo
-  '6 18 default "issue #705"' # foo\\\nbar"baz"
+  '1 4 builtin'                               # echo
+  '6 18 default "issue #705"'                 # foo\\\nbar"baz"
   '14 18 double-quoted-argument "issue #705"' # "baz"
 )

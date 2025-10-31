@@ -17,11 +17,14 @@ plugins=(... jenv)
 You can modify your `$PROMPT` or `$RPROMPT` variables to run `jenv_prompt_info`.
 
 For example:
+
 ```
 PROMPT="%~$ "
 RPROMPT='$(jenv_prompt_info)'
 ```
+
 changes your prompt to:
+
 ```
 ~/java/project$ ▋                                       oracle64-1.6.0.39
 ```

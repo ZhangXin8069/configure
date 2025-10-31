@@ -14,7 +14,7 @@ plugins=(... wp-cli)
 
 ## Aliases
 
-The entire list of `wp-cli` commands can be found here: https://developer.wordpress.org/cli/commands/
+The entire list of `wp-cli` commands can be found here: <https://developer.wordpress.org/cli/commands/>
 
 | Alias     | Command                     |
 |-----------|-----------------------------|

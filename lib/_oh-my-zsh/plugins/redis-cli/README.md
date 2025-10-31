@@ -12,4 +12,4 @@ plugins=(... redis-cli)
 
 In order to make this work, you will need to have redis installed.
 
-More info on the usage and install: https://redis.io/topics/quickstart
+More info on the usage and install: <https://redis.io/topics/quickstart>

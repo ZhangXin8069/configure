@@ -16,7 +16,7 @@ GIT_PROMPT_INFO=$FG[148]
 
 # Hash
 ROOT_ICON="# "
-if [[ $EUID -ne 0 ]] ; then
+if [[ $EUID -ne 0 ]]; then
 	ROOT_ICON=""
 fi
 

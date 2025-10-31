@@ -29,14 +29,14 @@
 
 unsorted=1
 
-ZSH_HIGHLIGHT_STYLES[bracket-level-1]=
-ZSH_HIGHLIGHT_STYLES[bracket-level-2]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 1]=
+ZSH_HIGHLIGHT_STYLES[bracket - level - 2]=
 
 BUFFER='echo ({x}]'
 
 expected_region_highlight=(
-  "6  6  bracket-error" # (
+  "6  6  bracket-error"   # (
   "7  7  bracket-level-2" # {
   "9  9  bracket-level-2" # }
-  "10 10 bracket-error" # )
+  "10 10 bracket-error"   # )
 )

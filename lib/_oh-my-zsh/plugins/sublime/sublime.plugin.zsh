@@ -4,14 +4,13 @@ alias st=subl
 alias stt='subl .'
 
 # Define sst only if sudo exists
-(( $+commands[sudo] )) && alias sst='sudo -EH subl'
+(($ + commands[sudo])) && alias sst='sudo -EH subl'
 
 alias stp=find_project
 alias stn=create_project
 
-
 # Search for the Sublime Text command if not found
-(( $+commands[subl] )) || {
+(($ + commands[subl])) || {
   declare -a _sublime_paths
 
   if [[ "$OSTYPE" == linux* ]]; then
@@ -60,9 +59,9 @@ alias stn=create_project
   fi
 
   for _sublime_path in $_sublime_paths; do
-    if [[ -a $_sublime_path ]]; then
+    if [[ -e $_sublime_path ]]; then
       alias subl="'$_sublime_path'"
-      (( $+commands[sudo] )) && alias sst="sudo -EH '$_sublime_path'"
+      (($ + commands[sudo])) && alias sst="sudo -EH '$_sublime_path'"
       break
     fi
   done
@@ -100,7 +99,7 @@ function create_project() {
   local _target=$1
 
   if [[ "${_target}" == "" ]]; then
-    _target=$(pwd);
+    _target=$(pwd)
   elif [[ ! -d ${_target} ]]; then
     echo "${_target} is not a valid directory"
     return 1
@@ -111,13 +110,13 @@ function create_project() {
   if [[ ! -f $_sublime_project_file ]]; then
     touch $_sublime_project_file
 
-    echo -e "{"                         >> $_sublime_project_file
-    echo -e "\t\"folders\":"            >> $_sublime_project_file
-    echo -e "\t\t[{"                    >> $_sublime_project_file
-    echo -e "\t\t\t\"path\": \".\","    >> $_sublime_project_file
-    echo -e "\t\t\t\"file_exclude_patterns\": []" >> $_sublime_project_file
-    echo -e "\t\t}]"                    >> $_sublime_project_file
-    echo -e "}"                         >> $_sublime_project_file
+    echo -e "{" >>$_sublime_project_file
+    echo -e "\t\"folders\":" >>$_sublime_project_file
+    echo -e "\t\t[{" >>$_sublime_project_file
+    echo -e "\t\t\t\"path\": \".\"," >>$_sublime_project_file
+    echo -e "\t\t\t\"file_exclude_patterns\": []" >>$_sublime_project_file
+    echo -e "\t\t}]" >>$_sublime_project_file
+    echo -e "}" >>$_sublime_project_file
 
     echo -e "New Sublime Text project created:\n\t${_sublime_project_file}"
   fi

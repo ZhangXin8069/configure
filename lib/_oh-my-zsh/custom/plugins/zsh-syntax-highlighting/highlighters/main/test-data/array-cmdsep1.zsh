@@ -29,17 +29,17 @@
 # -------------------------------------------------------------------------------------------------
 
 BUFFER=$'a=( foo | bar )'
-bar(){}
+bar() {}
 
 expected_region_highlight=(
-  '1 3 assign' # a=(
+  '1 3 assign'        # a=(
   '3 3 reserved-word' # (
-  '5 7 default' # foo
+  '5 7 default'       # foo
   '9 9 unknown-token' # |
   # zsh reports a parse error at this point.  Nevertheless, we test how we
   # highlight the remainder of $BUFFER.  Currently we recover by treating the pipe
   # as a command separator.  That's not the only reasonable behaviour, though; if
   # we change the behaviour, we should adjust the following expectations accordingly.
-  '11 13 function' # bar
+  '11 13 function'      # bar
   '15 15 unknown-token' # )
 )

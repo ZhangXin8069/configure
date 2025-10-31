@@ -21,10 +21,10 @@ ZSH_THEME_GIT_PROMPT_SHA_BEFORE="➤ %{$fg_bold[yellow]%}"
 ZSH_THEME_GIT_PROMPT_SHA_AFTER="%{$reset_color%}"
 
 function prompt_char() {
-  command git branch &>/dev/null && echo "%{$fg[green]%}±%{$reset_color%}" && return
-  command hg root &>/dev/null && echo "%{$fg_bold[red]%}☿%{$reset_color%}" && return
-  command darcs show repo &>/dev/null && echo "%{$fg_bold[green]%}❉%{$reset_color%}" && return
-  echo "%{$fg[cyan]%}◯%{$reset_color%}"
+    command git branch &>/dev/null && echo "%{$fg[green]%}±%{$reset_color%}" && return
+    command hg root &>/dev/null && echo "%{$fg_bold[red]%}☿%{$reset_color%}" && return
+    command darcs show repo &>/dev/null && echo "%{$fg_bold[green]%}❉%{$reset_color%}" && return
+    echo "%{$fg[cyan]%}◯%{$reset_color%}"
 }
 
 # Colors vary depending on time lapsed.
@@ -46,14 +46,14 @@ function git_time_since_commit() {
     fi
 
     # Totals
-    seconds_since_last_commit=$(( EPOCHSECONDS - last_commit ))
-    MINUTES=$(( seconds_since_last_commit / 60 ))
-    HOURS=$(( MINUTES / 60 ))
+    seconds_since_last_commit=$((EPOCHSECONDS - last_commit))
+    MINUTES=$((seconds_since_last_commit / 60))
+    HOURS=$((MINUTES / 60))
 
     # Sub-hours and sub-minutes
-    DAYS=$(( HOURS / 24 ))
-    SUB_HOURS=$(( HOURS % 24 ))
-    SUB_MINUTES=$(( MINUTES % 60 ))
+    DAYS=$((HOURS / 24))
+    SUB_HOURS=$((HOURS % 24))
+    SUB_MINUTES=$((MINUTES % 60))
 
     if [[ -z "$(command git status -s 2>/dev/null)" ]]; then
         COLOR="$ZSH_THEME_GIT_TIME_SINCE_COMMIT_NEUTRAL"

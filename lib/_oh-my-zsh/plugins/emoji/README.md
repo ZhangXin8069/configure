@@ -26,23 +26,31 @@ Function         | Description
 ## Usage and Examples
 
 To output a specific emoji, use:
+
 ```
 $> echo $emoji[<name>]
 ```
+
 E.g.:
+
 ```
 $> echo $emoji[mouse_face]
 ```
 
 To output a random emoji, use:
+
 ```
 $> random_emoji
 ```
+
 To output a random emoji from a particular group, use:
+
 ```
 $> random_emoji <group>
 ```
+
 E.g.:
+
 ```
 $> random_emoji fruits
 $> random_emoji animals
@@ -53,6 +61,7 @@ $> random_emoji faces
 The defined group names can be found with `echo ${(k)emoji_groups}`.
 
 To list all available emoji with their names, use:
+
 ```
 $> display_emoji
 $> display_emoji faces
@@ -60,6 +69,7 @@ $> display_emoji people
 ```
 
 To use emoji in a prompt:
+
 ```
 PROMPT="$emoji[penguin]  > ""
 PROMPT='$(random_emoji fruits)  > '
@@ -67,9 +77,9 @@ surfer=$emoji[surfer]
 PROMPT="$surfer  > "
 ```
 
-##  Technical Details
+## Technical Details
 
-The emoji names and codes are sourced from Unicode Technical Report \#51, which provides information on emoji support in Unicode. It can be found at https://www.unicode.org/reports/tr51/index.html.
+The emoji names and codes are sourced from Unicode Technical Report \#51, which provides information on emoji support in Unicode. It can be found at <https://www.unicode.org/reports/tr51/index.html>.
 
 The group definitions are added by this OMZ plugin. They are not based on external definitions.
 
@@ -79,8 +89,7 @@ The emoji in the main `$emoji` map are standalone character sequences which can 
 
 The exception to this is the skin tone / hair style variation selectors. These are included in the main `$emoji` map because they can be displayed on their own, as well as used as combining characters. (If they follow a character that is not one of the emoji characters they combine with, they are displayed as color swatches.)
 
-
-##  Experimental Features
+## Experimental Features
 
 This defines some additional variables and functions, but these are experimental and subject to change at any time. You shouldn't rely on them being available. They're mostly for the use of emoji plugin developers to help decide what to include in future revisions.
 
@@ -89,7 +98,6 @@ Variables:
 Variable          | Description
 ----------------- | --------------------------------
   $emoji_skintone | Skin tone modifiers (from Unicode 8.0)
-
 
 #### Skin Tone Variation Selection
 
@@ -107,7 +115,7 @@ echo $emoji[waving_hand]$emoji_skintone[5]
 
 Note that `$emoji_skintone` is an associative array, and its keys are the *names* of "Fitzpatrick Skin Type" groups, not linear indexes into a normal array. The names are `1_2`, `3`, `4`, `5`, and `6`. (Types 1 and 2 are combined into a single color.) See the [Diversity section in Unicode TR 51](https://www.unicode.org/reports/tr51/index.html#Diversity) for details.
 
-####  Gemoji support
+#### Gemoji support
 
 The [gemoji project](https://github.com/github/gemoji) seems to be the de facto main source for short names and other emoji-related metadata that isn't included in the official Unicode reports. So, our list of emojis incorporates some of their aliases to make your life more convenient:
 
@@ -118,7 +126,7 @@ echo $emoji[smile]
 
 These two commands yield the same emoji (😄). The first name is the official one, in the Unicode reference, and the second one is the alias that was in Gemoji's database.
 
-##  TODO
+## TODO
 
 These are things that could be enhanced in future revisions of the plugin.
 

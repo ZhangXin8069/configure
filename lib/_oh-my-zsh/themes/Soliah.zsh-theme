@@ -16,12 +16,11 @@ ZSH_THEME_GIT_TIME_SHORT_COMMIT_MEDIUM="%{$fg[yellow]%}"
 ZSH_THEME_GIT_TIME_SINCE_COMMIT_LONG="%{$fg[red]%}"
 ZSH_THEME_GIT_TIME_SINCE_COMMIT_NEUTRAL="%{$fg[cyan]%}"
 
-
 # Git sometimes goes into a detached head state. git_prompt_info doesn't
 # return anything in this case. So wrap it in another function and check
 # for an empty string.
 function check_git_prompt_info() {
-    if git rev-parse --git-dir > /dev/null 2>&1; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then
         if [[ -z $(git_prompt_info) ]]; then
             echo "%{$fg[magenta]%}detached-head%{$reset_color%})"
         else
@@ -33,7 +32,7 @@ function check_git_prompt_info() {
 # Determine if we are using a gemset.
 function rvm_gemset() {
     if hash rvm 2>/dev/null; then
-        GEMSET=`rvm gemset list | grep '=>' | cut -b4-`
+        GEMSET=$(rvm gemset list | grep '=>' | cut -b4-)
         if [[ -n $GEMSET ]]; then
             echo "%{$fg[yellow]%}$GEMSET%{$reset_color%}|"
         fi
@@ -43,22 +42,22 @@ function rvm_gemset() {
 # Determine the time since last commit. If branch is clean,
 # use a neutral color, otherwise colors will vary according to time.
 function git_time_since_commit() {
-    if git rev-parse --git-dir > /dev/null 2>&1; then
+    if git rev-parse --git-dir >/dev/null 2>&1; then
         # Only proceed if there is actually a commit.
-        if last_commit=`git -c log.showSignature=false log --pretty=format:'%at' -1 2> /dev/null`; then
-            now=`date +%s`
-            seconds_since_last_commit=$((now-last_commit))
+        if last_commit=$(git -c log.showSignature=false log --pretty=format:'%at' -1 2>/dev/null); then
+            now=$(date +%s)
+            seconds_since_last_commit=$((now - last_commit))
 
             # Totals
             MINUTES=$((seconds_since_last_commit / 60))
-            HOURS=$((seconds_since_last_commit/3600))
+            HOURS=$((seconds_since_last_commit / 3600))
 
             # Sub-hours and sub-minutes
             DAYS=$((seconds_since_last_commit / 86400))
             SUB_HOURS=$((HOURS % 24))
             SUB_MINUTES=$((MINUTES % 60))
 
-            if [[ -n $(git status -s 2> /dev/null) ]]; then
+            if [[ -n $(git status -s 2>/dev/null) ]]; then
                 if [ "$MINUTES" -gt 30 ]; then
                     COLOR="$ZSH_THEME_GIT_TIME_SINCE_COMMIT_LONG"
                 elif [ "$MINUTES" -gt 10 ]; then

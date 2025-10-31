@@ -17,7 +17,7 @@ Besides oh-my-zsh, `scd` can be used with *bash*, *dash* or *tcsh*
 shells and is also available as Vim plugin
 [scd.vim](https://github.com/pavoljuhas/scd.vim) and
 [IPython](https://ipython.org) extension.  For installation details, see
-https://github.com/pavoljuhas/smart-change-directory.
+<https://github.com/pavoljuhas/smart-change-directory>.
 
 ## SYNOPSIS
 
@@ -43,7 +43,6 @@ PAT$</dt><dd>
 :PAT</dt><dd>
   require PAT to match over the tail component, ":doc", ":re/doc"</dd>
 </dl>
-
 
 ## OPTIONS
 
@@ -83,7 +82,6 @@ PAT$</dt><dd>
 -h, --help</dt><dd>
   display this options summary and exit.</dd>
 </dl>
-
 
 ## Examples
 
@@ -127,7 +125,6 @@ scd xray
     starting with "#" are skipped as comments.  The .scdignore patterns
     are not applied in the <em>--all</em> mode.</dd>
 </dl>
-
 
 ## ENVIRONMENT
 

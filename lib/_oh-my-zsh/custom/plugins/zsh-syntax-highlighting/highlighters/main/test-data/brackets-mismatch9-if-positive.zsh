@@ -31,12 +31,12 @@
 BUFFER='if false; then echo one; fi'
 
 expected_region_highlight=(
-  '1 2 reserved-word' # if
-  '4 8 builtin' # false
-  '9 9 commandseparator' # ;
-  '11 14 reserved-word' # then
-  '16 19 builtin' # echo
-  '21 23 default' # one
+  '1 2 reserved-word'      # if
+  '4 8 builtin'            # false
+  '9 9 commandseparator'   # ;
+  '11 14 reserved-word'    # then
+  '16 19 builtin'          # echo
+  '21 23 default'          # one
   '24 24 commandseparator' # ;
-  '26 27 reserved-word' # fi
+  '26 27 reserved-word'    # fi
 )

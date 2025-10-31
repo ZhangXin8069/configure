@@ -5,9 +5,9 @@
 # Author : Alexandre Lacheze (@al3xstrat)
 # Inspiration : https://weblog.rubyonrails.org/2006/3/9/fast-rake-task-completion-for-zsh
 
-function _jake () {
+function _jake() {
   if [ -f Jakefile ] || [ -f jakefile ] || [ -f Jakefile.js ] || [ -f jakefile.js ]; then
-    compadd `jake -T | cut -d " " -f 2 | sed -E "s/.\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g"`
+    compadd $(jake -T | cut -d " " -f 2 | sed -E "s/.\[([0-9]{1,2}(;[0-9]{1,2})?)?[m|K]//g")
   fi
 }
 

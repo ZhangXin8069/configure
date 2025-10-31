@@ -1,36 +1,36 @@
 function my_git_prompt() {
-  tester=$(git rev-parse --git-dir 2> /dev/null) || return
+  tester=$(git rev-parse --git-dir 2>/dev/null) || return
 
-  INDEX=$(git status --porcelain 2> /dev/null)
+  INDEX=$(git status --porcelain 2>/dev/null)
   STATUS=""
 
   # is branch ahead?
-  if $(echo "$(git log origin/$(git_current_branch)..HEAD 2> /dev/null)" | grep '^commit' &> /dev/null); then
+  if $(echo "$(git log origin/$(git_current_branch)..HEAD 2>/dev/null)" | grep '^commit' &>/dev/null); then
     STATUS="$STATUS$ZSH_THEME_GIT_PROMPT_AHEAD"
   fi
 
   # is branch behind?
-  if $(echo "$(git log HEAD..origin/$(git_current_branch) 2> /dev/null)" | grep '^commit' &> /dev/null); then
+  if $(echo "$(git log HEAD..origin/$(git_current_branch) 2>/dev/null)" | grep '^commit' &>/dev/null); then
     STATUS="$STATUS$ZSH_THEME_GIT_PROMPT_BEHIND"
   fi
 
   # is anything staged?
-  if $(echo "$INDEX" | command grep -E -e '^(D[ M]|[MARC][ MD]) ' &> /dev/null); then
+  if $(echo "$INDEX" | command grep -E -e '^(D[ M]|[MARC][ MD]) ' &>/dev/null); then
     STATUS="$STATUS$ZSH_THEME_GIT_PROMPT_STAGED"
   fi
 
   # is anything unstaged?
-  if $(echo "$INDEX" | command grep -E -e '^[ MARC][MD] ' &> /dev/null); then
+  if $(echo "$INDEX" | command grep -E -e '^[ MARC][MD] ' &>/dev/null); then
     STATUS="$STATUS$ZSH_THEME_GIT_PROMPT_UNSTAGED"
   fi
 
   # is anything untracked?
-  if $(echo "$INDEX" | grep '^?? ' &> /dev/null); then
+  if $(echo "$INDEX" | grep '^?? ' &>/dev/null); then
     STATUS="$STATUS$ZSH_THEME_GIT_PROMPT_UNTRACKED"
   fi
 
   # is anything unmerged?
-  if $(echo "$INDEX" | command grep -E -e '^(A[AU]|D[DU]|U[ADU]) ' &> /dev/null); then
+  if $(echo "$INDEX" | command grep -E -e '^(A[AU]|D[DU]|U[ADU]) ' &>/dev/null); then
     STATUS="$STATUS$ZSH_THEME_GIT_PROMPT_UNMERGED"
   fi
 
@@ -52,7 +52,7 @@ function ssh_connection() {
 }
 
 function _toolbox_prompt_info() {
-  if typeset -f toolbox_prompt_info > /dev/null; then
+  if typeset -f toolbox_prompt_info >/dev/null; then
     toolbox_prompt_info
   fi
 }

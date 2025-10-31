@@ -32,10 +32,10 @@ BUFFER=$'() { echo }\n}'
 # no special setopts
 
 expected_region_highlight=(
-  '1 2 reserved-word' # ()
-  '4 4 reserved-word' # {
-  '6 9 builtin' # echo
-  '11 11 reserved-word' # }
+  '1 2 reserved-word'      # ()
+  '4 4 reserved-word'      # {
+  '6 9 builtin'            # echo
+  '11 11 reserved-word'    # }
   '12 12 commandseparator' # \n
-  '13 13 unknown-token' # }
+  '13 13 unknown-token'    # }
 )

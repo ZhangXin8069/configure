@@ -28,12 +28,12 @@
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
 
-doas(){}
+doas() {}
 BUFFER=$'doas -nu phy1729 ls'
 
 expected_region_highlight=(
-  '1 4 precommand' # doas
+  '1 4 precommand'           # doas
   '6 8 single-hyphen-option' # -nu
-  '10 16 default' # phy1729
-  '18 19 command' # ls
+  '10 16 default'            # phy1729
+  '18 19 command'            # ls
 )

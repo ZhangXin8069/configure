@@ -18,8 +18,8 @@ You can use the `web-search` plugin in these two forms:
 For example, these two are equivalent:
 
 ```zsh
-$ web_search google oh-my-zsh
-$ google oh-my-zsh
+web_search google oh-my-zsh
+google oh-my-zsh
 ```
 
 Available search contexts are:

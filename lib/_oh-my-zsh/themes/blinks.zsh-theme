@@ -14,8 +14,8 @@ function _prompt_char() {
 # using the "dark" variant.
 
 case ${SOLARIZED_THEME:-dark} in
-    light) bkg=white;;
-    *)     bkg=black;;
+light) bkg=white ;;
+*) bkg=black ;;
 esac
 
 ZSH_THEME_GIT_PROMPT_PREFIX=" [%{%B%F{blue}%}"

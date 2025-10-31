@@ -31,15 +31,15 @@
 BUFFER='for n in *; do echo $n; end'
 
 expected_region_highlight=(
-  '1 3 reserved-word' # for
-  '5 5 default' # n
-  '7 8 default' # in
-  '10 10 default' # *
-  '10 10 globbing' # *
+  '1 3 reserved-word'      # for
+  '5 5 default'            # n
+  '7 8 default'            # in
+  '10 10 default'          # *
+  '10 10 globbing'         # *
   '11 11 commandseparator' # ;
-  '13 14 reserved-word' # do
-  '16 19 builtin' # echo
-  '21 22 default' # $n
+  '13 14 reserved-word'    # do
+  '16 19 builtin'          # echo
+  '21 22 default'          # $n
   '23 23 commandseparator' # ;
-  '25 27 unknown-token' # end
+  '25 27 unknown-token'    # end
 )

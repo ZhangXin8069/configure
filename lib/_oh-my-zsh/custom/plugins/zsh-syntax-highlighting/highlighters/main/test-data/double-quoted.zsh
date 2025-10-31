@@ -31,12 +31,12 @@ BUFFER=': "foo$bar:\`:\":\$:'
 BUFFER+=\\\\:\"
 
 expected_region_highlight=(
-  "1 1 builtin" # :
-  "3 24 default" # "foo$bar:\`:\":\$:\\:"
-  "3 24 double-quoted-argument" # "foo$bar:\`:\":\$:\\:"
+  "1 1 builtin"                        # :
+  "3 24 default"                       # "foo$bar:\`:\":\$:\\:"
+  "3 24 double-quoted-argument"        # "foo$bar:\`:\":\$:\\:"
   "7 10 dollar-double-quoted-argument" # $bar
-  "12 13 back-double-quoted-argument" # \`
-  "15 16 back-double-quoted-argument" # \$
-  "18 19 back-double-quoted-argument" # \"
-  "21 22 back-double-quoted-argument" # \\
+  "12 13 back-double-quoted-argument"  # \`
+  "15 16 back-double-quoted-argument"  # \$
+  "18 19 back-double-quoted-argument"  # \"
+  "21 22 back-double-quoted-argument"  # \\
 )

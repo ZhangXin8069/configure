@@ -33,6 +33,6 @@ alias echo='echo foo'
 BUFFER='echo bar'
 
 expected_region_highlight=(
-  '1 4 alias' # echo
+  '1 4 alias'   # echo
   '6 8 default' # bar
 )

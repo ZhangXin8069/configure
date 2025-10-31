@@ -31,7 +31,7 @@
 BUFFER=$': $(( 1'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 7 default' # $(( 1
+  '1 1 builtin'              # :
+  '3 7 default'              # $(( 1
   '3 7 arithmetic-expansion' # $(( 1
 )

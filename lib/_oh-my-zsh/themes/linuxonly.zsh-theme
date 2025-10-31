@@ -32,19 +32,19 @@ zstyle ':vcs_info:*' enable git
 
 add-zsh-hook precmd prompt_jnrowe_precmd
 
-prompt_jnrowe_precmd () {
+prompt_jnrowe_precmd() {
     vcs_info
 
     if [ "${vcs_info_msg_0_}" = "" ]; then
         dir_status="%{$c1%}%n%{$c4%}@%{$c2%}%m%{$c0%}:%{$c3%}%l%{$c6%}->%{$c4%}%/ %{$c0%}(%{$c5%}%?%{$c0%})"
         PROMPT='${dir_status} ${ret_status}%{$reset_color%}
 > '
-    elif [[ $(git diff --cached --name-status 2>/dev/null ) != "" ]]; then
+    elif [[ $(git diff --cached --name-status 2>/dev/null) != "" ]]; then
         dir_status="%{$c1%}%n%{$c4%}@%{$c2%}%m%{$c0%}:%{$c3%}%l%{$c6%}->%{$c4%}%/ %{$c0%}(%{$c5%}%?%{$c0%})"
         PROMPT='${vcs_info_msg_0_}
 ${dir_status} ${vcs_info_msg_0_}%{$reset_color%}
 > '
-    elif [[ $(git diff --name-status 2>/dev/null ) != "" ]]; then
+    elif [[ $(git diff --name-status 2>/dev/null) != "" ]]; then
         dir_status="%{$c1%}%n%{$c4%}@%{$c2%}%m%{$c0%}:%{$c3%}%l%{$c6%}->%{$c4%}%/ %{$c0%}(%{$c5%}%?%{$c0%})"
         PROMPT='${vcs_info_msg_0_}
 ${dir_status}%{$reset_color%}

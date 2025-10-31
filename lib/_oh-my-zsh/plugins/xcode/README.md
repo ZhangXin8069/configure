@@ -10,7 +10,6 @@ To start using it, add the `xcode` plugin to your `plugins` array in `~/.zshrc`:
 plugins=(... xcode)
 ```
 
-
 ## Aliases
 
 | Alias | Description                              | Command                                        |
@@ -21,19 +20,18 @@ plugins=(... xcode)
 | xcsel | Select different Xcode directory by path | sudo xcode-select --switch                     |
 | xx    | Opens the files listed in Xcode          | open -a "Xcode.app"                            |
 
-
 ## Functions
 
-###  `xc`
+### `xc`
 
 Opens the current directory in Xcode as an Xcode project or a Swift package. This will open one of the `.xcworkspace`, `.xcodeproj`, `.swiftpm` and `Package.swift` files that it can find in the current working directory. You can also specify a directory to look in for the Xcode files.
 Returns 1 if it didn't find any relevant files.
 
-###  `xx`
+### `xx`
 
 Opens the files listed in Xcode, multiple files are opened in a multi-file browser.
 
-###  `simulator`
+### `simulator`
 
 Opens the iOS Simulator from your command line, dependent on whichever is the active developer directory for Xcode. (That is, it respects the `xcsel` setting.)
 
@@ -42,7 +40,7 @@ Opens the iOS Simulator from your command line, dependent on whichever is the ac
 Selects different Xcode installations by version name. This is like `xcsel`, except it takes just a version name as an argument instead of the full path to the Xcode installation. Uses the naming conventions described below.
 
 * `xcselv <version>` selects a version
- * Example: `xcselv 6.2`
+* Example: `xcselv 6.2`
 * `xcselv default` selects the default unversioned `Applications/Xcode.app`
 * `xcselv` with no argument lists the available Xcode versions in a human-readable format
 * `xcselv -l` lists the installed Xcode versions
@@ -67,14 +65,14 @@ We've adopted the following naming convention:
 * The versioned name may be applied to the `Xcode.app` itself, or a subdirectory underneath `Applications/` containing it.
 * You cannot version both the `Xcode.app` filename itself and the containing subfolder.
 * Thus, all of the following are equivalent.
- * `Applications/Xcode-<version>.app`
- * `Applications/Xcode-<version>/Xcode.app`
- * `Applications/Xcode<version>.app`
- * `Applications/Xcode <version>.app`
- * `Applications/Xcode <version>/Xcode.app`
+* `Applications/Xcode-<version>.app`
+* `Applications/Xcode-<version>/Xcode.app`
+* `Applications/Xcode<version>.app`
+* `Applications/Xcode <version>.app`
+* `Applications/Xcode <version>/Xcode.app`
 * Both the system `/Applications/` and user `$HOME/Applications/` directories are searched.
- * The user's `$HOME/Applications/` takes precedence over `/Applications` for a given version.
- * If multiple naming variants within the same `Applications/` folder indicate the same version (for example, `Xcode-3.2.1.app`, `Xcode3.2.1.app`, and `Xcode-3.2.1/Xcode.app`), the precedence order is unspecified and implementation-dependent.
+* The user's `$HOME/Applications/` takes precedence over `/Applications` for a given version.
+* If multiple naming variants within the same `Applications/` folder indicate the same version (for example, `Xcode-3.2.1.app`, `Xcode3.2.1.app`, and `Xcode-3.2.1/Xcode.app`), the precedence order is unspecified and implementation-dependent.
 * The `<version>` may be any string that is valid in a filename.
 * The special version name `"default"` refers to the "default" unversioned Xcode at `Applications/Xcode.app` (in either `/Applications/` or `$HOME/Applications/`).
 * Version names may not start with ``"-"`` or whitespace.

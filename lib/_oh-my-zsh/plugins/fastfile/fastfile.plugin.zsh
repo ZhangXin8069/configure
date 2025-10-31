@@ -5,7 +5,7 @@
 # If they are not set yet, they will be
 # overwritten with their default values
 
-default fastfile_dir        "${HOME}/.fastfile"
+default fastfile_dir "${HOME}/.fastfile"
 default fastfile_var_prefix "§"
 
 ###########################
@@ -27,9 +27,8 @@ function fastfile() {
     test "$1" || 1="$(basename "$file")"
     name=$(echo "$1" | tr " " "_")
 
-
     mkdir -p "${fastfile_dir}"
-    echo "$file" > "$(fastfile_resolv "$name")"
+    echo "$file" >"$(fastfile_resolv "$name")"
 
     fastfile_sync
     fastfile_print "$name"

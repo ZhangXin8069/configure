@@ -8,7 +8,7 @@ if [[ ! -f "$ASDF_DIR/asdf.sh" || ! -f "$ASDF_COMPLETIONS/_asdf" ]]; then
     ASDF_DIR="/opt/asdf-vm"
     ASDF_COMPLETIONS="$ASDF_DIR"
   # If not found, check for Homebrew package
-  elif (( $+commands[brew] )); then
+  elif (($ + commands[brew])); then
     _ASDF_PREFIX="$(brew --prefix asdf)"
     ASDF_DIR="${_ASDF_PREFIX}/libexec"
     ASDF_COMPLETIONS="${_ASDF_PREFIX}/share/zsh/site-functions"

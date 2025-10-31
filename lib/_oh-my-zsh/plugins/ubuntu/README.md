@@ -40,7 +40,6 @@ Commands that use `$APT` will use `apt` if installed or defer to `apt-get` other
 | mydeb   | `time dpkg-buildpackage -rfakeroot -us -uc`                              | Create a basic .deb package                                                                       |
 | ppap    | `sudo ppa-purge <ppa>`                                                   | Remove the specified PPA                                                                          |
 
-
 ## Functions
 
 | Function          | Usage                                 |Description                                                               |
@@ -50,7 +49,7 @@ Commands that use `$APT` will use `apt` if installed or defer to `apt-get` other
 | apt-list-packages | `apt-list-packages`                   | List packages by size                                                    |
 | kerndeb           | `kerndeb`                             | Kernel-package building shortcut                                         |
 
-## Authors:
+## Authors
 
 - [@AlexBio](https://github.com/AlexBio)
 - [@dbb](https://github.com/dbb)

@@ -31,15 +31,15 @@
 BUFFER=$'noglob cat <(print -r -- *)'
 
 expected_region_highlight=(
-  '1 6 precommand' # noglob
-  '8 10 command' # cat
-  '12 27 default' # <(print -r -- *)
-  '12 27 process-substitution' # <(print -r -- *)
+  '1 6 precommand'                       # noglob
+  '8 10 command'                         # cat
+  '12 27 default'                        # <(print -r -- *)
+  '12 27 process-substitution'           # <(print -r -- *)
   '12 13 process-substitution-delimiter' # <(
-  '14 18 builtin' # print
-  '20 21 single-hyphen-option' # -r
-  '23 24 double-hyphen-option' # --
-  '26 26 default' # *
-  '26 26 globbing' # *
+  '14 18 builtin'                        # print
+  '20 21 single-hyphen-option'           # -r
+  '23 24 double-hyphen-option'           # --
+  '26 26 default'                        # *
+  '26 26 globbing'                       # *
   '27 27 process-substitution-delimiter' # )
 )

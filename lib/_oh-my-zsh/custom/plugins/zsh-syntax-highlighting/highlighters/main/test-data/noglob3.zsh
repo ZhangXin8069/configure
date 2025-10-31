@@ -33,6 +33,6 @@ BUFFER='noglob echo *'
 
 expected_region_highlight=(
   "1 6 precommand" # noglob
-  "8 11 builtin" # echo
-  "13 13 path" # *
+  "8 11 builtin"   # echo
+  "13 13 path"     # *
 )

@@ -33,7 +33,7 @@ touch foo
 BUFFER=$': \'f\'oo'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 7 path' # \'f\'oo
+  '1 1 builtin'                # :
+  '3 7 path'                   # \'f\'oo
   '3 5 single-quoted-argument' # \'f\'
 )

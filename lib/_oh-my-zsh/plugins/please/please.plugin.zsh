@@ -1,4 +1,4 @@
-if (( $+commands[plz] )); then
+if (($ + commands[plz])); then
     source <(plz --completion_script)
 fi
 

@@ -1,3 +1,1 @@
 systemctl reboot -i
-
-

@@ -33,10 +33,10 @@ alias a=: b='a $(a)'
 BUFFER='b $(b)'
 
 expected_region_highlight=(
-  '1 1 alias' # b
-  '3 6 default' # $(b)
-  '3 6 command-substitution-unquoted' # $(b)
+  '1 1 alias'                                   # b
+  '3 6 default'                                 # $(b)
+  '3 6 command-substitution-unquoted'           # $(b)
   '3 4 command-substitution-delimiter-unquoted' # $(
-  '5 5 alias' # b
+  '5 5 alias'                                   # b
   '6 6 command-substitution-delimiter-unquoted' # )
 )

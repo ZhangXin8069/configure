@@ -46,8 +46,8 @@ if zmodload -e zsh/parameter || [[ "$(type -w x.alias2)" == *suffix* ]]; then
   )
 fi
 expected_region_highlight+=(
-  "9 9 commandseparator" # ;
-  "11 16 alias" # alias1
+  "9 9 commandseparator"   # ;
+  "11 16 alias"            # alias1
   "17 17 commandseparator" # ;
-  "19 24 unknown-token" # alias2
+  "19 24 unknown-token"    # alias2
 )

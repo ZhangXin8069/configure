@@ -10,7 +10,7 @@ plugins=(... poetry)
 
 ## Aliases
 
-| Alias | Command                                            | Description    
+| Alias | Command                                            | Description
 |:----- |--------------------------------------------------- |:--------------------------------------------------------------------------------------- |
 | pad   | `poetry add`                                       | Add packages to `pyproject.toml` and install them                                       |
 | pbld  | `poetry build`                                     | Build the source and wheels archives                                                    |

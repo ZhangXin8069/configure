@@ -33,8 +33,8 @@ f() {}
 BUFFER='a;f;'
 
 expected_region_highlight=(
-  "1 1 alias" # a
+  "1 1 alias"            # a
   "2 2 commandseparator" # ;
-  "3 3 function" # f
+  "3 3 function"         # f
   "4 4 commandseparator" # ;
 )

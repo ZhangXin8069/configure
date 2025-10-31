@@ -31,8 +31,8 @@
 BUFFER=$'cat < *'
 
 expected_region_highlight=(
-  '1 3 command' # cat
+  '1 3 command'     # cat
   '5 5 redirection' # <
-  '7 7 default' # *
-  '7 7 globbing' # *
+  '7 7 default'     # *
+  '7 7 globbing'    # *
 )

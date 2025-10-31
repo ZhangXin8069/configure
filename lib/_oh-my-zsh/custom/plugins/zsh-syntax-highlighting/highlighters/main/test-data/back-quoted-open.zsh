@@ -32,10 +32,10 @@ touch foo
 BUFFER=$': `ls fo'
 
 expected_region_highlight=(
-  '1 1 builtin' # :
-  '3 8 default' # `ls fo
-  '3 8 back-quoted-argument-unclosed' # `ls fo
+  '1 1 builtin'                        # :
+  '3 8 default'                        # `ls fo
+  '3 8 back-quoted-argument-unclosed'  # `ls fo
   '3 3 back-quoted-argument-delimiter' # `
-  '4 5 command' # ls
-  '7 8 path_prefix' # fo
+  '4 5 command'                        # ls
+  '7 8 path_prefix'                    # fo
 )

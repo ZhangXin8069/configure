@@ -32,7 +32,7 @@ setopt interactive_comments
 BUFFER=': <<#foo'
 
 expected_region_highlight=(
-  "1 1 builtin" # :
+  "1 1 builtin"     # :
   "3 4 redirection" # <<
-  "5 8 comment" # #foo
+  "5 8 comment"     # #foo
 )

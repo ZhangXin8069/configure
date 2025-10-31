@@ -32,7 +32,7 @@ BUFFER=$'<$foo cat cat'
 
 expected_region_highlight=(
   '1 1 redirection' # <
-  '2 5 default' # $foo
-  '7 9 command' # cat
-  '11 13 default' # cat
+  '2 5 default'     # $foo
+  '7 9 command'     # cat
+  '11 13 default'   # cat
 )

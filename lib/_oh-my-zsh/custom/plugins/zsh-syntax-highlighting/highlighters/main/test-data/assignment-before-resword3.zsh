@@ -31,7 +31,7 @@
 BUFFER=$'foo=bar (( foo ))'
 
 expected_region_highlight=(
-  '1 7 assign' # foo=bar
-  '5 7 default' # bar
+  '1 7 assign'         # foo=bar
+  '5 7 default'        # bar
   '9 17 unknown-token' # (( foo ))
 )

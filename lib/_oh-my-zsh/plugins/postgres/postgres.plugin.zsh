@@ -1,6 +1,6 @@
 # Aliases to control Postgres
 # Paths noted below are for Postgres installed via Homebrew on OSX
-if (( ! $+commands[brew] )); then
+if ((!$ + commands[brew])); then
   return
 fi
 

@@ -31,8 +31,8 @@
 BUFFER=$'{ a=42 }'
 
 expected_region_highlight=(
-  '1 1 reserved-word' # {
-  '3 6 assign' # a=42
-  '5 6 default' # 42
+  '1 1 reserved-word'              # {
+  '3 6 assign'                     # a=42
+  '5 6 default'                    # 42
   '8 8 reserved word "issue #854"' # }
 )

@@ -3,6 +3,7 @@
 This plugin adds a few functions for searching files used in Front-End web development.
 
 To use it, add `sfffe` to the plugins array in your zshrc file:
+
 ```zsh
 plugins=(... sfffe)
 ```

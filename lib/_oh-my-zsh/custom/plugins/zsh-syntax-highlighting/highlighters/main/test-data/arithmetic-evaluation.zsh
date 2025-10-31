@@ -35,6 +35,6 @@
 BUFFER='(( x == 42 ))'
 
 expected_region_highlight=(
-  "1 2 reserved-word" # ((
+  "1 2 reserved-word"   # ((
   "12 13 reserved-word" # ))
 )

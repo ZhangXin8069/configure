@@ -32,9 +32,9 @@ setopt ignorebraces
 BUFFER='echo { foo } always { bar }'
 
 expected_region_highlight=(
-  '1 4 builtin' # echo
-  '6 6 default' # {
-  '8 10 default' # foo
+  '1 4 builtin'   # echo
+  '6 6 default'   # {
+  '8 10 default'  # foo
   '12 12 default' # }
   '14 19 default' # always
   '21 21 default' # {

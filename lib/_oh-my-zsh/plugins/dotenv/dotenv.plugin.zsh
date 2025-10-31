@@ -7,7 +7,6 @@
 : ${ZSH_DOTENV_ALLOWED_LIST:="${ZSH_CACHE_DIR:-$ZSH/cache}/dotenv-allowed.list"}
 : ${ZSH_DOTENV_DISALLOWED_LIST:="${ZSH_CACHE_DIR:-$ZSH/cache}/dotenv-disallowed.list"}
 
-
 ## Functions
 
 source_env() {
@@ -31,8 +30,8 @@ source_env() {
     if ! command grep -Fx -q "$dirpath" "$ZSH_DOTENV_ALLOWED_LIST" &>/dev/null; then
       # get cursor column and print new line before prompt if not at line beginning
       local column
-      echo -ne "\e[6n" > /dev/tty
-      read -t 1 -s -d R column < /dev/tty
+      echo -ne "\e[6n" >/dev/tty
+      read -t 1 -s -d R column </dev/tty
       column="${column##*\[*;}"
       [[ $column -eq 1 ]] || echo
 
@@ -43,10 +42,13 @@ source_env() {
 
       # check input
       case "$confirmation" in
-        [nN]) return ;;
-        [aA]) echo "$dirpath" >> "$ZSH_DOTENV_ALLOWED_LIST" ;;
-        [eE]) echo "$dirpath" >> "$ZSH_DOTENV_DISALLOWED_LIST"; return ;;
-        *) ;; # interpret anything else as a yes
+      [nN]) return ;;
+      [aA]) echo "$dirpath" >>"$ZSH_DOTENV_ALLOWED_LIST" ;;
+      [eE])
+        echo "$dirpath" >>"$ZSH_DOTENV_DISALLOWED_LIST"
+        return
+        ;;
+      *) ;; # interpret anything else as a yes
       esac
     fi
   fi

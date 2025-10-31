@@ -31,16 +31,16 @@
 BUFFER=$'< <(pwd) > >(nl)'
 
 expected_region_highlight=(
-  '1 1 redirection' # <
-  '3 8 default' # <(pwd)
-  '3 8 process-substitution' # <(pwd)
-  '3 4 process-substitution-delimiter' # <(
-  '5 7 builtin' # pwd
-  '8 8 process-substitution-delimiter' # )
-  '10 10 redirection' # >
-  '12 16 default' # >(nl)
-  '12 16 process-substitution' # >(nl)
+  '1 1 redirection'                      # <
+  '3 8 default'                          # <(pwd)
+  '3 8 process-substitution'             # <(pwd)
+  '3 4 process-substitution-delimiter'   # <(
+  '5 7 builtin'                          # pwd
+  '8 8 process-substitution-delimiter'   # )
+  '10 10 redirection'                    # >
+  '12 16 default'                        # >(nl)
+  '12 16 process-substitution'           # >(nl)
   '12 13 process-substitution-delimiter' # >(
-  '14 15 command' # nl
+  '14 15 command'                        # nl
   '16 16 process-substitution-delimiter' # )
 )

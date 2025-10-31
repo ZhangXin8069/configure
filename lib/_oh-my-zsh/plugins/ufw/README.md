@@ -4,6 +4,7 @@ This plugin adds completion for managing everybody's favorite Uncomplicated Fire
 a simple interface for managing iptables. Learn more about [`UFW`](https://wiki.ubuntu.com/UncomplicatedFirewall).
 
 To use it, add ufw to the plugins array of your zshrc file:
+
 ```
 plugins=(... ufw)
 ```

@@ -1,11 +1,11 @@
 #!/bin/zsh
 
 # compile a string of coffeescript and print to output
-cf () {
+cf() {
   coffee -peb "$1"
 }
 # compile & copy to clipboard
-cfc () {
+cfc() {
   cf "$1" | clipcopy
 }
 

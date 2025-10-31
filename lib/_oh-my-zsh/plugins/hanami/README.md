@@ -41,5 +41,5 @@ these commands [on the official website](https://hanamirb.org/guides/command-lin
 \* You should use these at the beginning of a command, for example:
 
 ```console
-$ HED hdd # equivalent to 'HANAMI_ENV=development hanami db drop'
+HED hdd # equivalent to 'HANAMI_ENV=development hanami db drop'
 ```

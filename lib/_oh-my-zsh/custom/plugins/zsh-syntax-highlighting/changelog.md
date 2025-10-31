@@ -1,14 +1,11 @@
 # Changes in HEAD
 
-
 - Highlight `&>` `>&|` `>&!` `&>|` and `&>!` as redirection.
   [#942]
-
 
 # Changes in 0.8.0
 
 This is a stable bugfix and feature release.  Major new features and changes include:
-
 
 ## Changes fixed as part of the switch to zle-line-pre-redraw
 
@@ -60,7 +57,6 @@ Whilst under development, the new implementation was known as the
 - Fixed: First completed filename doesn't get `path` highlighting
   [#632]
 
-
 ## Other changes
 
 - Add issue #712 to the previous release's changelog (hereinafter).
@@ -90,7 +86,6 @@ Whilst under development, the new implementation was known as the
 
 - Recognize `ktrace` as a precommand
 
-
 # Changes in 0.8.0-alpha1-pre-redrawhook
 
 ## Notice about an improbable-but-not-impossible forward incompatibility
@@ -108,8 +103,7 @@ z-sy-h dogfoods the new, unreleased zsh feature because that feature was
 added to zsh at z-sy-h's initiative.  The new feature is used in the fix
 to issue #418.
 
-
-## Incompatible changes:
+## Incompatible changes
 
 - An unsuccessful completion (a <kbd>⮀ Tab</kbd> press that doesn't change the
   command line) no longer causes highlighting to be lost.  Visual feedback can
@@ -123,12 +117,9 @@ to issue #418.
 
     (#90, part of #245 (feature/redrawhook))
 
-[zshcompsys-Standard-Styles]: https://zsh.sourceforge.io/Doc/Release/Completion-System.html#Standard-Styles
 [zshcompsys-Standard-Styles-format]: https://zsh.sourceforge.io/Doc/Release/Completion-System.html#index-format_002c-completion-style
   
-
-
-## Other changes:
+## Other changes
 
 - Document `$ZSH_HIGHLIGHT_MAXLENGTH`.
   [#698]
@@ -186,7 +177,7 @@ to issue #418.
 - Highlight global aliases
   [#700]
 
-- Highlight `: =nosuchcommand' as an error (when the `EQUALS` option hasn't been unset).
+- Highlight `: =nosuchcommand' as an error (when the`EQUALS` option hasn't been unset).
   [#430]
 
 - Highlight reserved word after assignments as errors (e.g., `foo=bar (ls;)`)
@@ -231,11 +222,9 @@ to issue #418.
 - Fix highlighting of pre-command redirections (e.g., the `$fn` in `<$fn cat`)
   [#712]
 
-
 # Changes in version 0.7.1
 
 - Remove out-of-date information from the 0.7.0 changelog.
-
 
 # Changes in version 0.7.0
 
@@ -285,7 +274,6 @@ This is a stable bugfix and feature release.  Major new features and changes inc
 - The 'brackets' highlighting no longer treats quotes specially.
   [ecdda36ef56f]
 
-
 Selected bugfixes include:
 
 - Highlight `sudo` correctly when it's not installed
@@ -300,7 +288,6 @@ Selected bugfixes include:
 - The 'yank-pop' widget is not wrapped
   [#183]
 
-
 Known issues include:
 
 - A multiline alias that uses a simple command terminator (such as `;`, `|`, `&&`)
@@ -309,18 +296,15 @@ Known issues include:
   [#677]
   [UPDATE: Fixed in 0.8.0]
 
-
 # Changes in version 0.6.0
 
 This is a stable release, featuring bugfixes and minor improvements.
 
-
-## Performance improvements:
+## Performance improvements
 
 (none)
 
-
-## Added highlighting of:
+## Added highlighting of
 
 - The `isearch` and `suffix` [`$zle_highlight` settings][zshzle-Character-Highlighting].
   (79e4d3d12405, 15db71abd0cc, b56ee542d619; requires zsh 5.3 for `$ISEARCHMATCH_ACTIVE` / `$SUFFIX_ACTIVE` support)
@@ -333,8 +317,7 @@ This is a stable release, featuring bugfixes and minor improvements.
 - Mismatched `if`/`then`/`elif`/`else`/`fi`.
   (73cb83270262)
 
-
-## Fixed highlighting of:
+## Fixed highlighting of
 
 - A comment line followed by a non-comment line.
   (#385, 9396ad5c5f9c)
@@ -345,19 +328,16 @@ This is a stable release, featuring bugfixes and minor improvements.
 - history-incremental-pattern-search-backward under zsh 5.3.1.
   (#407, #415, 462779629a0c)
 
-
-## API changes (for highlighter authors):
+## API changes (for highlighter authors)
 
 (none)
 
-
-## Developer-visible changes:
+## Developer-visible changes
 
 - tests: Set the `ALIAS_FUNC_DEF` option for zsh 5.4 compatibility.
   (9523d6d49cb3)
 
-
-## Other changes:
+## Other changes
 
 - docs: Added before/after screenshots.
   (cd9ec14a65ec..b7e277106b49)
@@ -383,11 +363,9 @@ This is a stable release, featuring bugfixes and minor improvements.
 - Fix printing of "failed loading highlighters" error message.
   (#426, ad522a091429)
 
-
 # Changes in version 0.5.0
 
-
-## Performance improvements:
+## Performance improvements
 
 We thank Sebastian Gniazdowski and "m0viefreak" for significant contributions
 in this area.
@@ -402,8 +380,7 @@ in this area.
 - Avoid forks in the driver and in the `root` highlighter.
   (b9112aec798a, 38c8fbea2dd2)
 
-
-## Added highlighting of:
+## Added highlighting of
 
 - `pkexec` (a precommand).
   (#248, 4f3910cbbaa5)
@@ -457,8 +434,7 @@ in this area.
 - Escaped history expansions inside double quotes: `: "\!"`
   (28d7056a7a06, et seq)
 
-
-## Fixed highlighting of:
+## Fixed highlighting of
 
 - Command separator tokens in syntactically-invalid positions.
   (09c4114eb980)
@@ -512,8 +488,7 @@ in this area.
 - Command word after array assignment, `a=(lorem ipsum) pwd`.
   (#330, 7fb6f9979121)
 
-
-## API changes (for highlighter authors):
+## API changes (for highlighter authors)
 
 - New interface `_zsh_highlight_add_highlight`.
   (341a3ae1f015, c346f6eb6fb6)
@@ -538,8 +513,7 @@ in this area.
 - tests: consider a test that writes to stderr to have failed.
   (#291, 1082067f9315)
 
-
-## Developer-visible changes:
+## Developer-visible changes
 
 - Add `make quiet-test`.
   (9b64ad750f35)
@@ -559,8 +533,7 @@ in this area.
 - tests: Create a script that generates a test file.
   (8013dc3b8db6, et seq; `tests/generate.zsh`)
 
-
-## Other changes:
+## Other changes
 
 - Under zsh≤5.2, widgets whose names start with a `_` are no longer excluded
   from highlighting.
@@ -603,20 +576,17 @@ in this area.
 - Warn only once, rather than once per keypress, when a highlighter is unavailable.
   (0a9b347483ae)
 
-
 # Changes in version 0.4.1
 
-## Fixes:
+## Fixes
 
 - Arguments to widgets were not properly dash-escaped.  Only matters for widgets
   that take arguments (i.e., that are invoked as `zle ${widget} -- ${args}`).
   (282c7134e8ac, reverts c808d2187a73)
 
-
 # Changes in version 0.4.0
 
-
-## Added highlighting of:
+## Added highlighting of
 
 - incomplete sudo commands
   (a3047a912100, 2f05620b19ae)
@@ -682,8 +652,7 @@ in this area.
     view file.pdf &!  ls
     ```
 
-
-## Fixed highlighting of:
+## Fixed highlighting of
 
 - precommand modifiers at non-command-word position
   (#209, 2c9f8c8c95fa)
@@ -719,14 +688,12 @@ in this area.
 - cursor highlighter: Remove the cursor highlighting when accepting a line.
   (#109, 4f0c293fdef0)
 
-
-## Removed features:
+## Removed features
 
 - Removed highlighting of approximate paths (`path_approx`).
   (#187, 98aee7f8b9a3)
 
-
-## Other changes:
+## Other changes
 
 - main highlighter refactored to use states rather than booleans.
   (2080a441ac49, et seq)
@@ -768,8 +735,7 @@ in this area.
 - driver: Report `$ZSH_HIGHLIGHT_REVISION` when running from git
   (84734ba95026)
 
-
-## Developer-visible changes:
+## Developer-visible changes
 
 - Test harness converted to [TAP](https://testanything.org/tap-specification.html) format
   (d99aa58aaaef, et seq)
@@ -795,11 +761,9 @@ in this area.
 - tests: Run each test in a sandbox directory
   (c01533920245)
 
-
 # Changes in version 0.3.0
 
-
-## Added highlighting of:
+## Added highlighting of
 
 - suffix aliases (requires zsh 5.1.1 or newer):
 
@@ -844,13 +808,14 @@ in this area.
     ```zsh
     % echo "Hello, world
     ```
+
 - command words that involve tilde expansion:
 
     ```zsh
     % ~/bin/foo
     ```
 
-## Fixed highlighting of:
+## Fixed highlighting of
 
 - quoted command words:
 
@@ -893,8 +858,7 @@ in this area.
     % echo \*
     ```
 
-
-## Other changes:
+## Other changes
 
 - implemented compatibility with zsh's paste highlighting (issue #175)
 
@@ -902,8 +866,7 @@ in this area.
 
 - don't leak $REPLY into global scope
 
-
-## Developer-visible changes:
+## Developer-visible changes
 
 - added makefile with `install` and `test` targets
 
@@ -911,10 +874,6 @@ in this area.
 
 - document release process
 
-
-
-
 # Version 0.2.1
 
 (Start of changelog.)
-

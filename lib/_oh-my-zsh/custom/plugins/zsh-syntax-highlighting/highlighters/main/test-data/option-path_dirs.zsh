@@ -33,8 +33,8 @@ else
   setopt PATH_DIRS
   mkdir -p foo/bar
   touch foo/bar/testing-issue-228
-  chmod  +x foo/bar/testing-issue-228
-  path+=( "$PWD"/foo )
+  chmod +x foo/bar/testing-issue-228
+  path+=("$PWD"/foo)
 
   BUFFER='bar/testing-issue-228'
 

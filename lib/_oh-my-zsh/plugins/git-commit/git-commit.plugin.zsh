@@ -1,5 +1,5 @@
-local _rev="$(git -C $ZSH rev-parse HEAD 2> /dev/null)"
-if [[ $_rev == $(git config --global --get oh-my-zsh.git-commit-alias 2> /dev/null) ]]; then
+local _rev="$(git -C $ZSH rev-parse HEAD 2>/dev/null)"
+if [[ $_rev == $(git config --global --get oh-my-zsh.git-commit-alias 2>/dev/null) ]]; then
   return
 fi
 git config --global oh-my-zsh.git-commit-alias "$_rev"
@@ -25,8 +25,8 @@ for _type in "${_git_commit_aliases[@]}"; do
   # an alias can't be named "revert" because the git command takes precedence
   # https://stackoverflow.com/a/3538791
   case "$_type" in
-    revert) _alias=rev ;;
-    *) _alias=$_type ;;
+  revert) _alias=rev ;;
+  *) _alias=$_type ;;
   esac
 
   local _func='!a() {

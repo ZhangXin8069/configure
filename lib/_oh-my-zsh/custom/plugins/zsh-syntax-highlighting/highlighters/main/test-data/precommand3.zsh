@@ -30,12 +30,12 @@
 BUFFER='nice -n10 ls; nice -n 10 ls'
 
 expected_region_highlight=(
-  "1 4 precommand" # nice
-  "6 9 single-hyphen-option" # -n10
-  "11 12 command" # ls
-  "13 13 commandseparator" # ;
-  "15 18 precommand" # nice
+  "1 4 precommand"             # nice
+  "6 9 single-hyphen-option"   # -n10
+  "11 12 command"              # ls
+  "13 13 commandseparator"     # ;
+  "15 18 precommand"           # nice
   "20 21 single-hyphen-option" # -n
-  "23 24 default" # 10
-  "26 27 command" # ls
+  "23 24 default"              # 10
+  "26 27 command"              # ls
 )

@@ -1,4 +1,5 @@
 # heroku-alias
+
 🧬 Full alias for heroku cli
 
 |🚀 last maj|📡 source|
@@ -8,6 +9,7 @@
 # Alias list
 
 ## general
+
 | Alias  | Command |
 | ------------- | ------------- |
 | h | heroku |
@@ -15,6 +17,7 @@
 | hl | heroku local |
 
 ## config
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hc | heroku config |
@@ -37,6 +40,7 @@ hcfile() {
 ```
 
 ## apps and favorites
+
 | Alias  | Command |
 | ------------- | ------------- |
 | ha | heroku apps |
@@ -51,12 +55,14 @@ hcfile() {
 | haia | heroku apps:info -a |
 
 # auth
+
 | Alias  | Command |
 | ------------- | ------------- |
 | h2fa | heroku auth:2fa |
 | h2far | heroku auth:2fa:disable |
 
 # access
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hac | heroku access |
@@ -67,6 +73,7 @@ hcfile() {
 | hup | heroku access:update |
 
 ## addons
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hads | heroku addons -A |
@@ -79,6 +86,7 @@ hcfile() {
 | hadoc | heroku addons:docs |
 
 ## login
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hin | heroku login |
@@ -87,6 +95,7 @@ hcfile() {
 | hwho | heroku auth:whoami |
 
 ## authorizations
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hth | heroku authorizations |
@@ -97,17 +106,20 @@ hcfile() {
 | hthup | heroku authorizations:update |
 
 ## plugins
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hp | heroku plugins |
 
 # log
+
 | Alias  | Command |
 | ------------- | ------------- |
 |hg | heroku logs|
 | hgt | heroku log tail |
 
 # database
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hpg | heroku pg |
@@ -118,6 +130,7 @@ hcfile() {
 | hpbr | heroku pg:backups:restore |
 
 # certs
+
 | Alias  | Command |
 | ------------- | ------------- |
 | hssl | heroku certs |
