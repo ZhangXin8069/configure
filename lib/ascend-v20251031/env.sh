@@ -1,6 +1,7 @@
 pushd /home/phyww/zhangxin
 pushd ./configure
 source env.sh
+zsh
 export ZSH="{$PWD}/lib/_oh-my-zsh"
 ZSH_THEME="robbyrussell"
 plugins=(
