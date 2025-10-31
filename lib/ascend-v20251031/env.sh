@@ -1,5 +1,9 @@
-pushd /home/phyww/zhangxin/configure
+pushd /home/phyww/zhangxin
+pushd ./configure
 source env.sh
+popd
+ln -s ./configure/lib/ascend-v20251031/_zshrc .zshrc
+zsh
 popd
 export LD_LIBRARY_PATH=/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:$LD_LIBRARY_PATH
 export ASCEND_TOOLKIT_HOME=/home/phyww/Ascend/ascend-toolkit/latest
