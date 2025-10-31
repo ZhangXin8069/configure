@@ -15,6 +15,7 @@ mkdir ${_HOME}/scripts -p
 mkdir ${_HOME}/test -p
 mkdir ${_HOME}/tmp -p
 # source
+echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >> ${_HOME}/tmp/scripts.sh
 source ${_HOME}/tmp/scripts.sh
 # export
 ## zhangxin
