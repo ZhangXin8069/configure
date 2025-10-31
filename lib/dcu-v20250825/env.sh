@@ -1,5 +1,9 @@
-# BASH
-# unset
+# CONFIGURE
+pushd /home/phyww/zhangxin
+pushd ./configure
+source env.sh
+popd
+popd
 # MODULE
 module use /public/software/modules
 module use /opt/hpc/software/modules
@@ -9,6 +13,8 @@ module purge
 module load sghpc-mpi-gcc/25.6
 module list
 # EXPORT
+export http_proxy=http://b09r1n17:Bo9r1ni1@172.16.0.19:3128
+export https_proxy=http://b09r1n17:Bo9r1ni1@172.16.0.19:3128
 export PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/bin:$PATH
 export LD_LIBRARY_PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/public/home/zhangxin80699/PyQCU:${PYTHONPATH}
