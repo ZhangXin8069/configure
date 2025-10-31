@@ -16,7 +16,6 @@ if [[ -f "$_ssh_configfile" ]]; then
   unset _ssh_hosts
 fi
 unset _ssh_configfile
-
 ############################################################
 # Remove host key from known hosts based on a host section
 # name from .ssh/config
@@ -27,7 +26,6 @@ function ssh_rmhkey {
   ssh-keygen -R $(grep -A10 "$ssh_host" "$ssh_configfile" | grep -i HostName | head -n 1 | awk '{print $2}')
 }
 compctl -k hosts ssh_rmhkey
-
 ############################################################
 # Load SSH key into agent
 function ssh_load_key() {
@@ -39,7 +37,6 @@ function ssh_load_key() {
     ssh-add "$keyfile"
   fi
 }
-
 ############################################################
 # Remove SSH key from agent
 function ssh_unload_key {

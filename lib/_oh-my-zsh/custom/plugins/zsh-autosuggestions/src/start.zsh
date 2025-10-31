@@ -1,8 +1,6 @@
-
 #--------------------------------------------------------------------#
 # Start                                                              #
 #--------------------------------------------------------------------#
-
 # Start the autosuggestion widgets
 _zsh_autosuggest_start() {
 	# By default we re-bind widgets on every precmd to ensure we wrap other
@@ -14,13 +12,10 @@ _zsh_autosuggest_start() {
 	if (( ${+ZSH_AUTOSUGGEST_MANUAL_REBIND} )); then
 		add-zsh-hook -d precmd _zsh_autosuggest_start
 	fi
-
 	_zsh_autosuggest_bind_widgets
 }
-
 # Mark for auto-loading the functions that we use
 autoload -Uz add-zsh-hook is-at-least
-
 # Automatically enable asynchronous mode in newer versions of zsh. Disable for
 # older versions because there is a bug when using async mode where ^C does not
 # work immediately after fetching a suggestion.
@@ -28,6 +23,5 @@ autoload -Uz add-zsh-hook is-at-least
 if is-at-least 5.0.8; then
 	typeset -g ZSH_AUTOSUGGEST_USE_ASYNC=
 fi
-
 # Start the autosuggestion widgets on the next precmd
 add-zsh-hook precmd _zsh_autosuggest_start

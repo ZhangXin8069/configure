@@ -3,19 +3,15 @@ function zsh_stats() {
     | awk '{ CMD[$2]++; count++; } END { for (a in CMD) print CMD[a] " " CMD[a]*100/count "% " a }' \
     | grep -v "./" | sort -nr | head -n 20 | column -c3 -s " " -t | nl
 }
-
 function uninstall_oh_my_zsh() {
   command env ZSH="$ZSH" sh "$ZSH/tools/uninstall.sh"
 }
-
 function upgrade_oh_my_zsh() {
   echo >&2 "${fg[yellow]}Note: \`$0\` is deprecated. Use \`omz update\` instead.$reset_color"
   omz update
 }
-
 function open_command() {
   local open_cmd
-
   # define the open command
   case "$OSTYPE" in
     darwin*)  open_cmd='open' ;;
@@ -29,24 +25,19 @@ function open_command() {
               return 1
               ;;
   esac
-
   # If a URL is passed, $BROWSER might be set to a local browser within SSH.
   # See https://github.com/ohmyzsh/ohmyzsh/issues/11098
   if [[ -n "$BROWSER" && "$1" = (http|https)://* ]]; then
     "$BROWSER" "$@"
     return
   fi
-
   ${=open_cmd} "$@" &>/dev/null
 }
-
 # take functions
-
 # mkcd is equivalent to takedir
 function mkcd takedir() {
   mkdir -p $@ && cd ${@:$#}
 }
-
 function takeurl() {
   local data thedir
   data="$(mktemp)"
@@ -56,12 +47,10 @@ function takeurl() {
   rm "$data"
   cd "$thedir"
 }
-
 function takegit() {
   git clone "$1"
   cd "$(basename ${1%%.git})"
 }
-
 function take() {
   if [[ $1 =~ ^(https?|ftp).*\.(tar\.(gz|bz2|xz)|tgz)$ ]]; then
     takeurl "$1"
@@ -71,7 +60,6 @@ function take() {
     takedir "$@"
   fi
 }
-
 #
 # Get the value of an alias.
 #
@@ -86,7 +74,6 @@ function take() {
 function alias_value() {
     (( $+aliases[$1] )) && echo $aliases[$1]
 }
-
 #
 # Try to get the value of an alias,
 # otherwise return the input.
@@ -101,7 +88,6 @@ function alias_value() {
 function try_alias_value() {
     alias_value "$1" || echo "$1"
 }
-
 #
 # Set variable "$1" to default value "$2" if "$1" is not yet defined.
 #
@@ -115,7 +101,6 @@ function default() {
     (( $+parameters[$1] )) && return 0
     typeset -g "$1"="$2"   && return 3
 }
-
 #
 # Set environment variable "$1" to default value "$2" if "$1" is not yet defined.
 #
@@ -129,11 +114,8 @@ function env_default() {
     [[ ${parameters[$1]} = *-export* ]] && return 0
     export "$1=$2" && return 3
 }
-
-
 # Required for $langinfo
 zmodload zsh/langinfo
-
 # URL-encode a string
 #
 # Encodes a string using RFC 2396 URL-encoding (%-escaped).
@@ -161,16 +143,13 @@ zmodload zsh/langinfo
 function omz_urlencode() {
   emulate -L zsh
   setopt norematchpcre
-
   local -a opts
   zparseopts -D -E -a opts r m P
-
   local in_str="$@"
   local url_str=""
   local spaces_as_plus
   if [[ -z $opts[(r)-P] ]]; then spaces_as_plus=1; fi
   local str="$in_str"
-
   # URLs must use UTF-8 encoding; convert str to UTF-8 if required
   local encoding=$langinfo[CODESET]
   local safe_encodings
@@ -182,7 +161,6 @@ function omz_urlencode() {
       return 1
     fi
   fi
-
   # Use LC_CTYPE=C to process text byte-by-byte
   # Note that this doesn't work in Termux, as it only has UTF-8 locale.
   # Characters will be processed as UTF-8, which is fine for URLs.
@@ -199,7 +177,6 @@ function omz_urlencode() {
     dont_escape+=$mark
   fi
   dont_escape+="]"
-
   # Implemented to use a single printf call and avoid subshells in the loop,
   # for performance (primarily on Windows).
   local url_str=""
@@ -221,7 +198,6 @@ function omz_urlencode() {
   done
   echo -E "$url_str"
 }
-
 # URL-decode a string
 #
 # Decodes a RFC 2396 URL-encoded (%-escaped) string.
@@ -239,12 +215,10 @@ function omz_urlencode() {
 function omz_urldecode {
   emulate -L zsh
   local encoded_url=$1
-
   # Work bytewise, since URLs escape UTF-8 octets
   local caller_encoding=$langinfo[CODESET]
   local LC_ALL=C
   export LC_ALL
-
   # Change + back to ' '
   local tmp=${encoded_url:gs/+/ /}
   # Protect other escapes to pass through the printf unchanged
@@ -252,7 +226,6 @@ function omz_urldecode {
   # Handle %-escapes by turning them into `\xXX` printf escapes
   tmp=${tmp:gs/%/\\x/}
   local decoded="$(printf -- "$tmp")"
-
   # Now we have a UTF-8 encoded string in the variable. We need to re-encode
   # it if caller is in a non-UTF-8 locale.
   local -a safe_encodings
@@ -264,6 +237,5 @@ function omz_urldecode {
       return 1
     fi
   fi
-
   echo -E "$decoded"
 }

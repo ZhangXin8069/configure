@@ -26,12 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Issue #263 (more-pathological case): aliases[x=y]=z works; the ${(z)} splitter considers
 # that a single word; but it's not looked up as an alias.  Hence, highlight it as an error.
 aliases[x = y]='lorem ipsum dolor sit amet'
 BUFFER='x=y ls'
-
 expected_region_highlight=(
   "1 3 unknown-token" # x=y
   "5 6 default"       # ls

@@ -27,11 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # This used to be an infinite loop.
-
 BUFFER=$'l+=( $1'
-
 expected_region_highlight=(
   '1 4 assign'        # l+=(
   '4 4 reserved-word' # (

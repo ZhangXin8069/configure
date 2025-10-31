@@ -1,15 +1,10 @@
 # Laravel 5 plugin
-
 This plugin adds some aliases for common [Laravel 5](https://laravel.com/docs) commands.
-
 To use it, add `laravel5` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... laravel5)
 ```
-
 ## Aliases
-
 | Alias     | Command                      | Description                                        |
 |-----------|------------------------------|----------------------------------------------------|
 | la5       | `php artisan`                | Main Artisan command                               |

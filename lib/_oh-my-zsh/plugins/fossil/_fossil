@@ -1,17 +1,13 @@
 #compdef fossil
-
 function _fossil_get_command_list () {
   fossil help -a | grep -v "Usage|Common|This is"
 }
-
 function _fossil () {
   local context state state_descr line
   typeset -A opt_args
-
   _arguments \
     '1: :->command'\
     '2: :->subcommand'
-
   case $state in
     command)
       local _OUTPUT=$(fossil branch 2>&1 | grep "use --repo")
@@ -28,5 +24,4 @@ function _fossil () {
       esac ;;
   esac
 }
-
 _fossil "$@"

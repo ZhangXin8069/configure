@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='echo `echo \`42\`` "is `echo equal` to" `echo 6 times 9'
-
 expected_region_highlight=(
   "1 4 builtin"                          # echo
   "6 18 default"                         # `echo \`42\``

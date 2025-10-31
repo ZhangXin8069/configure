@@ -3,7 +3,6 @@ _paver_does_target_list_need_generating() {
   [ pavement.py -nt .paver_targets ] && return 0
   return 1
 }
-
 _paver() {
   if [ -f pavement.py ]; then
     if _paver_does_target_list_need_generating; then
@@ -12,5 +11,4 @@ _paver() {
     compadd $(cat .paver_targets)
   fi
 }
-
 compdef _paver paver

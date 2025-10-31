@@ -26,11 +26,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Similar to double-quoted2.zsh
 # This test checks that the '1' gets highlighted correctly.  Do not append to the BUFFER.
 BUFFER=": \$'\xa1"
-
 expected_region_highlight=(
   "1 1 builtin"                         # :
   "3 8 default"                         # $'\xa1

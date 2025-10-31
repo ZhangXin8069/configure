@@ -1,5 +1,4 @@
 #!/usr/bin/env zsh
-
 # common grc.zsh paths
 files=(
   /etc/grc.zsh              # default
@@ -7,7 +6,6 @@ files=(
   /opt/homebrew/etc/grc.zsh # homebrew darwin-arm64
   /usr/share/grc/grc.zsh    # Gentoo Linux (app-misc/grc)
 )
-
 # verify the file is readable and source it
 for file in $files; do
   if [[ -r "$file" ]]; then
@@ -15,5 +13,4 @@ for file in $files; do
     break
   fi
 done
-
 unset file files

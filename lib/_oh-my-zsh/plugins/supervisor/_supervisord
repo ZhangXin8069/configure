@@ -1,8 +1,6 @@
 #compdef supervisord
-
 typeset -A opt_args
 local context state line
-
 _arguments \
     {--configuration,-c}"[configuration file]:FILENAME:_files" \
     {--nodaemon,-n}"[run in the foreground (same as 'nodaemon true' in config file)]" \
@@ -24,7 +22,6 @@ _arguments \
     "--minprocs[the minimum number of processes available for start success]" \
     "--profile_options[run supervisord under profiler and output results based on OPTIONS, which is a comma-sep'd list of 'cumulative', 'calls', and/or 'callers', e.g. 'cumulative,callers')]" \
     "*::args:_gnu_generic"
-
 case $state in
 levels)
     levels=("debug" "info" "warn" "error" "critical")

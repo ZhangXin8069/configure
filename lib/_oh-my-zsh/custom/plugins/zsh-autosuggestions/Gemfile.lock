@@ -28,14 +28,11 @@ GEM
     rspec-wait (0.0.9)
       rspec (>= 3, < 4)
     slop (3.6.0)
-
 PLATFORMS
   ruby
-
 DEPENDENCIES
   pry-byebug
   rspec
   rspec-wait
-
 BUNDLED WITH
    1.13.6

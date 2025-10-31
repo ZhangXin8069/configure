@@ -2,10 +2,8 @@ if ! (( $+commands[eza] )); then
   print "zsh eza plugin: eza not found. Please install eza before using this plugin." >&2
   return 1
 fi
-
 typeset -a _EZA_HEAD
 typeset -a _EZA_TAIL
-
 function _configure_eza() {
   local _val
   # Get the head flags
@@ -42,15 +40,12 @@ function _configure_eza() {
     _EZA_TAIL+=("--hyperlink")
   fi
 }
-
 _configure_eza
-
 function _alias_eza() {
   local _head="${(j::)_EZA_HEAD}$2"
   local _tail="${(j: :)_EZA_TAIL}"
   alias "$1"="eza${_head:+ -}${_head}${_tail:+ }${_tail}${3:+ }$3"
 }
-
 _alias_eza la   la
 _alias_eza ldot ld ".*"
 _alias_eza lD   lD
@@ -61,7 +56,6 @@ _alias_eza lsd  d
 _alias_eza lsdl dl
 _alias_eza lS   "l -ssize"
 _alias_eza lT   "l -snewest"
-
 unfunction _alias_eza
 unfunction _configure_eza
 unset _EZA_HEAD

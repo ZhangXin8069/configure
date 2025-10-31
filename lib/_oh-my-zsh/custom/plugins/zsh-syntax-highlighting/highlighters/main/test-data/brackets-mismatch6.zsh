@@ -27,9 +27,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='(repeat 1; do)'
-
 expected_region_highlight=(
   '1 1 reserved-word'      # (
   '2 7 reserved-word'      # repeat

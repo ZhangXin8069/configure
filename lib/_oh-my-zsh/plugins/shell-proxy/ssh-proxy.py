@@ -3,12 +3,9 @@ import os
 import subprocess
 import sys
 from urllib.parse import urlparse
-
 proxy = next(os.environ[_]
              for _ in ("HTTP_PROXY", "HTTPS_PROXY") if _ in os.environ)
-
 parsed = urlparse(proxy)
-
 proxy_protocols = {
     "http": "connect",
     "https": "connect",
@@ -17,11 +14,8 @@ proxy_protocols = {
     "socks4": "4",
     "socks4a": "4",
 }
-
 if parsed.scheme not in proxy_protocols:
     raise TypeError('unsupported proxy protocol: "{}"'.format(parsed.scheme))
-
-
 def make_argv():
     yield "nc"
     if sys.platform in {'linux', 'cygwin'}:
@@ -35,6 +29,4 @@ def make_argv():
     yield parsed.netloc  # proxy-host:proxy-port
     yield sys.argv[1]  # host
     yield sys.argv[2]  # port
-
-
 subprocess.call(make_argv())

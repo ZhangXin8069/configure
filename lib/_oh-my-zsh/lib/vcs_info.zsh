@@ -6,7 +6,6 @@
 # There is no release yet that does this right, since it requires changing
 # how what vcs_info hooks expect to receive. Even so, I'd rather be correct
 # and break custom vcs_info hooks than have a broken prompt.
-
 # Quote necessary $hook_com[<field>] items just before they are used
 # in the line "VCS_INFO_hook 'post-backend'" of the VCS_INFO_formats
 # function, where <field> is:
@@ -39,7 +38,6 @@
 # zsh versions from 5.0.3 to 5.8.
 #
 autoload -Uz +X regexp-replace VCS_INFO_formats 2>/dev/null || return 0
-
 # We use $tmp here because it's already a local variable in VCS_INFO_formats
 typeset PATCH='for tmp (base base-name branch misc revision subdir) hook_com[$tmp]="${hook_com[$tmp]//\%/%%}"'
 # Unique string to avoid reapplying the patch if this code gets called twice

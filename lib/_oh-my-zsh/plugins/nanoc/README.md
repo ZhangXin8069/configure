@@ -1,15 +1,10 @@
 # Nanoc plugin
-
 This plugin adds some aliases and autocompletion for common [Nanoc](https://nanoc.ws) commands.
-
 To use it, add `nanoc` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... nanoc)
 ```
-
 ## Aliases
-
 | Alias | Command               | Description                                                                       |
 |-------|-----------------------|-----------------------------------------------------------------------------------|
 | n     | `nanoc`               | Main Nanoc command                                                                |

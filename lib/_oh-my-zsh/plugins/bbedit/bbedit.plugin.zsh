@@ -1,7 +1,5 @@
 alias bbpb='pbpaste | bbedit --clean --view-top'
-
 alias bbd=bbdiff
-
 #
 # If the bb command is called without an argument, launch BBEdit
 # If bb is passed a directory, cd to it and open it in BBEdit

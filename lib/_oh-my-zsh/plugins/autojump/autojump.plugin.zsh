@@ -17,7 +17,6 @@ autojump_paths=(
   /etc/profiles/per-user/$USER/etc/profile.d/autojump.sh                       # macOS Nix, Home Manager and flakes
   /nix/var/nix/gcroots/current-system/sw/share/zsh/site-functions/autojump.zsh # macOS Nix, nix-darwin
 )
-
 for file in $autojump_paths; do
   if [[ -f "$file" ]]; then
     source "$file"
@@ -25,7 +24,6 @@ for file in $autojump_paths; do
     break
   fi
 done
-
 # if no path found, try Homebrew
 if ((!found && $ + commands[brew])); then
   file=$(brew --prefix)/etc/profile.d/autojump.sh
@@ -34,7 +32,5 @@ if ((!found && $ + commands[brew])); then
     found=1
   fi
 fi
-
 ((!found)) && echo '[oh-my-zsh] autojump not found. Please install it first.'
-
 unset autojump_paths file found

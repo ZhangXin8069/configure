@@ -26,11 +26,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 hash -d D=/usr/bin
-
 BUFFER='~D/env foo'
-
 expected_region_highlight=(
   "1 6  command" # ~D/env [= /usr/bin/env
   "8 10 default" # foo

@@ -4,13 +4,11 @@
 #   https://github.com/babakks
 #   https://github.com/SteelShot
 #   https://github.com/AliSajid
-
 # Verify if any manual user choice of VS Code exists first.
 if [[ -n "$VSCODE" ]] && ! which $VSCODE &>/dev/null; then
   echo "'$VSCODE' flavour of VS Code not detected."
   unset VSCODE
 fi
-
 # Otherwise, try to detect a flavour of VS Code.
 if [[ -z "$VSCODE" ]]; then
   if which code &>/dev/null; then
@@ -23,7 +21,6 @@ if [[ -z "$VSCODE" ]]; then
     return
   fi
 fi
-
 function vsc {
   if (($#)); then
     $VSCODE $@
@@ -31,7 +28,6 @@ function vsc {
     $VSCODE .
   fi
 }
-
 alias vsca="$VSCODE --add"
 alias vscd="$VSCODE --diff"
 alias vscg="$VSCODE --goto"
@@ -40,11 +36,9 @@ alias vscr="$VSCODE --reuse-window"
 alias vscw="$VSCODE --wait"
 alias vscu="$VSCODE --user-data-dir"
 alias vscp="$VSCODE --profile"
-
 alias vsced="$VSCODE --extensions-dir"
 alias vscie="$VSCODE --install-extension"
 alias vscue="$VSCODE --uninstall-extension"
-
 alias vscv="$VSCODE --verbose"
 alias vscl="$VSCODE --log"
 alias vscde="$VSCODE --disable-extensions"

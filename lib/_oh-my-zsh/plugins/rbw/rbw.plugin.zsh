@@ -1,7 +1,6 @@
 if (( ! $+commands[rbw] )); then
   return
 fi
-
 # If the completion file doesn't exist yet, we need to autoload it and
 # bind it to `rbw`. Otherwise, compinit will have already done that.
 if [[ ! -f "$ZSH_CACHE_DIR/completions/_rbw" ]]; then
@@ -9,9 +8,7 @@ if [[ ! -f "$ZSH_CACHE_DIR/completions/_rbw" ]]; then
   autoload -Uz _rbw
   _comps[rbw]=_rbw
 fi
-
 rbw gen-completions zsh >| "$ZSH_CACHE_DIR/completions/_rbw" &|
-
 # rbwpw function copies the password of a service to the clipboard
 # and clears it after 20 seconds
 function rbwpw {
@@ -33,11 +30,9 @@ function rbwpw {
   echo "password for $service copied!"
   {sleep 20 && clipcopy </dev/null 2>/dev/null} &|
 }
-
 function _rbwpw {
   local -a services
   services=("${(@f)$(rbw ls 2>/dev/null)}")
   [[ -n "$services" ]] && compadd -a -- services
 }
-
 compdef _rbwpw rbwpw

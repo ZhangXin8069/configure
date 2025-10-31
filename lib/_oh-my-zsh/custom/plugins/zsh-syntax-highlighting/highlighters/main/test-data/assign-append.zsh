@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='a+=(lorem ipsum)'
-
 expected_region_highlight=(
   "1 4 assign"          # a+=(
   "4 4 reserved-word"   # (

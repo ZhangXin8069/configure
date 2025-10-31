@@ -27,16 +27,12 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # This is a stdin-to-stdout filter that takes TAP output (such as 'make test')
 # on stdin and passes it, colorized, to stdout.
-
 emulate -LR zsh
-
 if [[ ! -t 1 ]] ; then
   exec cat
 fi
-
 while read -r line;
 do
   case $line in

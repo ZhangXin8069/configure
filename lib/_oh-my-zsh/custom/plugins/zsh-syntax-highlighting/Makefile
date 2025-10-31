@@ -1,17 +1,14 @@
 NAME=zsh-syntax-highlighting
-
 INSTALL?=install -c
 PREFIX?=/usr/local
 SHARE_DIR?=$(DESTDIR)$(PREFIX)/share/$(NAME)
 DOC_DIR?=$(DESTDIR)$(PREFIX)/share/doc/$(NAME)
 ZSH?=zsh # zsh binary to run tests with
-
 all:
 	cd docs && \
 	cp highlighters.md all.md && \
 	printf '\n\nIndividual highlighters documentation\n=====================================' >> all.md && \
 	for doc in highlighters/*.md; do printf '\n\n'; cat "$$doc"; done >> all.md
-
 install: all
 	$(INSTALL) -d $(SHARE_DIR)
 	$(INSTALL) -d $(DOC_DIR)
@@ -31,10 +28,8 @@ install: all
 		for fname in "$$dirname"/*.zsh ; do [ -e "$$fname" ] && cp "$$fname" $(SHARE_DIR)"/$$dirname"; done; \
 	done
 	cp -R docs/* $(DOC_DIR)
-
 clean:
 	rm -f docs/all.md
-
 test:
 	@$(ZSH) -fc 'echo ZSH_PATCHLEVEL=$$ZSH_PATCHLEVEL'
 	@result=0; \
@@ -46,10 +41,8 @@ test:
 		fi \
 	done; \
 	exit $$result
-
 quiet-test:
 	$(MAKE) test QUIET=y
-
 perf:
 	@result=0; \
 	for test in highlighters/*; do \
@@ -60,5 +53,4 @@ perf:
 		fi \
 	done; \
 	exit $$result
-
 .PHONY: all install clean test perf

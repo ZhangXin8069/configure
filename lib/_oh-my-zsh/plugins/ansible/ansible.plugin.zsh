@@ -2,7 +2,6 @@
 function ansible-version() {
     ansible --version
 }
-
 function ansible-role-init() {
     if ! [ -z $1 ]; then
         echo "Ansible Role : $1 Creating...."
@@ -13,7 +12,6 @@ function ansible-role-init() {
         echo "Example : ansible-role-init role1"
     fi
 }
-
 # Alias
 alias a='ansible '
 alias aconf='ansible-config '

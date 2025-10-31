@@ -26,11 +26,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # This tests for a regression during development of issue #328: an interim version
 # of that branch failed that test with "Bail out! output on stderr".
 BUFFER='${'
-
 expected_region_highlight=(
   "1 2 unknown-token" # ${
 )

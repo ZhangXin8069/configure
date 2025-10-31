@@ -1,6 +1,5 @@
 # Don't continue if direnv is not found
 command -v direnv &>/dev/null || return
-
 _direnv_hook() {
   trap -- '' SIGINT;
   eval "$(direnv export zsh)";

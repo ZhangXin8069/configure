@@ -27,10 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 touch '$foo'
 BUFFER=': $foo \$foo'
-
 expected_region_highlight=(
   '1 1 builtin' # :
   '3 6 default' # $foo - if we add a "unquoted parameter expansion" style then this expectation should change

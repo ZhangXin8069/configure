@@ -1,18 +1,15 @@
 #!zsh
 alias artisan='php artisan'
 alias bob='php artisan bob::build'
-
 # Development
 alias pas='php artisan serve'
 alias pats='php artisan test'
-
 # Database
 alias pam='php artisan migrate'
 alias pamf='php artisan migrate:fresh'
 alias pamfs='php artisan migrate:fresh --seed'
 alias pamr='php artisan migrate:rollback'
 alias pads='php artisan db:seed'
-
 # Makers
 alias pamm='php artisan make:model'
 alias pamc='php artisan make:controller'
@@ -29,13 +26,11 @@ alias pamcl='php artisan make:class'
 alias pamen='php artisan make:enum'
 alias pami='php artisan make:interface'
 alias pamtr='php artisan make:trait'
-
 # Clears
 alias pacac='php artisan cache:clear'
 alias pacoc='php artisan config:clear'
 alias pavic='php artisan view:clear'
 alias paroc='php artisan route:clear'
-
 # queues
 alias paqf='php artisan queue:failed'
 alias paqft='php artisan queue:failed-table'

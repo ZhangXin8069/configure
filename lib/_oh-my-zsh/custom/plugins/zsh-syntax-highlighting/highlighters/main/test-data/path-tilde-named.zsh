@@ -26,13 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 mkdir mydir
 touch mydir/path-tilde-named.test
 hash -d D=mydir
-
 BUFFER='ls ~D/path-tilde-named.test'
-
 expected_region_highlight=(
   "1 2  command" # ls
   "4 27 path"    # ~D/path-tilde-named.test

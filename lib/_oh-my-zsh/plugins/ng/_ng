@@ -1,7 +1,5 @@
 #compdef ng
-
 setopt localoptions extendedglob
-
 if (( CURRENT == 2 )); then
   local -a cmds alias
   # Sample output (ng help):
@@ -34,7 +32,6 @@ elif (( CURRENT == 3 )); then
     done
   done
   _describe flags flags
-
   case "$words[2]" in
   b|build|l|lint|t|test)
     # Sample output (ng config projects):

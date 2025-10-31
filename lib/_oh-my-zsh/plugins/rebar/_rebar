@@ -1,8 +1,6 @@
 #compdef rebar
-
 local curcontext=$curcontext state ret=1
 typeset -ga _rebar_global_opts
-
 _rebar_global_opts=(
   '(--help -h)'{--help,-h}'[Show the program options]'
   '(--commands -c)'{--commands,-c}'[Show available commands]'
@@ -18,12 +16,10 @@ _rebar_global_opts=(
   '(--profile -p)'{--profile,-p}'[Profile this run of rebar]'
   '(--keep-going -k)'{--keep-going,-k}'[Keep running after a command fails]'
 )
-
 _rebar () {
   _arguments -C $_rebar_global_opts \
     '*::command and variable:->cmd_and_var' \
     && return
-
   case $state in
     cmd_and_var)
       _values -S = 'variables' \
@@ -67,9 +63,7 @@ _rebar () {
       ;;
   esac
 }
-
 _rebar
-
 # Local variables:
 # mode: shell-script
 # sh-basic-offset: 2

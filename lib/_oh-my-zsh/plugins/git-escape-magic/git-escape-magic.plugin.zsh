@@ -4,6 +4,5 @@
 #
 # This trick is detailed at https://github.com/knu/zsh-git-escape-magic and is
 # what allowed this plugin to exist.
-
 autoload -Uz git-escape-magic
 git-escape-magic

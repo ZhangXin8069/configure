@@ -38,7 +38,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
 # SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #
-
 # Short-option stacking can be enabled with:
 #  zstyle ':completion:*:*:docker:*' option-stacking yes
 #  zstyle ':completion:*:*:docker-*:*' option-stacking yes
@@ -47,19 +46,15 @@ __docker_arguments() {
         print -- -s
     fi
 }
-
 __docker_get_containers() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local kind type line s
     declare -a running stopped lines args names
-
     kind=$1; shift
     type=$1; shift
     [[ $kind = (stopped|all) ]] && args=($args -a)
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options ps --format 'table' --no-trunc $args)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -72,7 +67,6 @@ __docker_get_containers() {
     done
     end[${header[$i,$((j-1))]}]=-1 # Last column, should go to the end of the line
     lines=(${lines[2,-1]})
-
     # Container ID
     if [[ $type = (ids|all) ]]; then
         for line in $lines; do
@@ -86,7 +80,6 @@ __docker_get_containers() {
             fi
         done
     fi
-
     # Names: we only display the one without slash. All other names
     # are generated and may clutter the completion. However, with
     # Swarm, all names may be prefixed by the swarm node name.
@@ -108,37 +101,30 @@ __docker_get_containers() {
             fi
         done
     fi
-
     [[ $kind = (running|all) ]] && _describe -t containers-running "running containers" running "$@" && ret=0
     [[ $kind = (stopped|all) ]] && _describe -t containers-stopped "stopped containers" stopped "$@" && ret=0
     return ret
 }
-
 __docker_complete_stopped_containers() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_containers stopped all "$@"
 }
-
 __docker_complete_running_containers() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_containers running all "$@"
 }
-
 __docker_complete_containers() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_containers all all "$@"
 }
-
 __docker_complete_containers_ids() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_containers all ids "$@"
 }
-
 __docker_complete_containers_names() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_containers all names "$@"
 }
-
 __docker_complete_info_plugins() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
@@ -149,7 +135,6 @@ __docker_complete_info_plugins() {
     _describe -t plugins "$1 plugins" plugins && ret=0
     return ret
 }
-
 __docker_complete_images() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
@@ -159,7 +144,6 @@ __docker_complete_images() {
     __docker_complete_repositories_with_tags && ret=0
     return ret
 }
-
 __docker_complete_repositories() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
@@ -169,7 +153,6 @@ __docker_complete_repositories() {
     _describe -t docker-repos "repositories" repos && ret=0
     return ret
 }
-
 __docker_complete_repositories_with_tags() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
@@ -190,10 +173,8 @@ __docker_complete_repositories_with_tags() {
     # No, only complete repositories
     onlyrepos=(${${repos%:::*}/:/\\:})
     _describe -t docker-repos "repositories" onlyrepos -qS : && ret=0
-
     return ret
 }
-
 __docker_search() {
     [[ $PREFIX = -* ]] && return 1
     local cache_policy
@@ -201,11 +182,9 @@ __docker_search() {
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __docker_caching_policy
     fi
-
     local searchterm cachename
     searchterm="${words[$CURRENT]%/}"
     cachename=_docker-search-$searchterm
-
     local expl
     local -a result
     if ( [[ ${(P)+cachename} -eq 0 ]] || _cache_invalid ${cachename#_} ) \
@@ -216,14 +195,11 @@ __docker_search() {
     fi
     _wanted dockersearch expl 'available images' compadd -a result
 }
-
 __docker_get_log_options() {
     [[ $PREFIX = -* ]] && return 1
-
     integer ret=1
     local log_driver=${opt_args[--log-driver]:-"all"}
     local -a common_options common_options2 awslogs_options fluentd_options gelf_options journald_options json_file_options logentries_options syslog_options splunk_options
-
     common_options=("max-buffer-size" "mode")
     common_options2=("env" "env-regex" "labels")
     awslogs_options=($common_options "awslogs-create-group" "awslogs-datetime-format" "awslogs-group" "awslogs-multiline-pattern" "awslogs-region" "awslogs-stream" "tag")
@@ -235,7 +211,6 @@ __docker_get_log_options() {
     logentries_options=($common_options $common_options2 "logentries-token" "tag")
     syslog_options=($common_options $common_options2 "syslog-address" "syslog-facility" "syslog-format" "syslog-tls-ca-cert" "syslog-tls-cert" "syslog-tls-key" "syslog-tls-skip-verify" "tag")
     splunk_options=($common_options $common_options2 "splunk-caname" "splunk-capath" "splunk-format" "splunk-gzip" "splunk-gzip-level" "splunk-index" "splunk-insecureskipverify" "splunk-source" "splunk-sourcetype" "splunk-token" "splunk-url" "splunk-verify-connection" "tag")
-
     [[ $log_driver = (awslogs|all) ]] && _describe -t awslogs-options "awslogs options" awslogs_options "$@" && ret=0
     [[ $log_driver = (fluentd|all) ]] && _describe -t fluentd-options "fluentd options" fluentd_options "$@" && ret=0
     [[ $log_driver = (gcplogs|all) ]] && _describe -t gcplogs-options "gcplogs options" gcplogs_options "$@" && ret=0
@@ -245,10 +220,8 @@ __docker_get_log_options() {
     [[ $log_driver = (logentries|all) ]] && _describe -t logentries-options "logentries options" logentries_options "$@" && ret=0
     [[ $log_driver = (syslog|all) ]] && _describe -t syslog-options "syslog options" syslog_options "$@" && ret=0
     [[ $log_driver = (splunk|all) ]] && _describe -t splunk-options "splunk options" splunk_options "$@" && ret=0
-
     return ret
 }
-
 __docker_complete_log_drivers() {
     [[ $PREFIX = -*  ]] && return 1
     integer ret=1
@@ -256,11 +229,9 @@ __docker_complete_log_drivers() {
     _describe -t log-drivers "log drivers" drivers && ret=0
     return ret
 }
-
 __docker_complete_log_options() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (syslog-format)
@@ -278,29 +249,23 @@ __docker_complete_log_options() {
     else
         __docker_get_log_options -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_detach_keys() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     compset -P "*,"
     keys=(${:-{a-z}})
     ctrl_keys=(${:-ctrl-{{a-z},{@,'[','\\','^',']',_}}})
     _describe -t detach_keys "[a-z]" keys -qS "," && ret=0
     _describe -t detach_keys-ctrl "'ctrl-' + 'a-z @ [ \\\\ ] ^ _'" ctrl_keys -qS "," && ret=0
 }
-
 __docker_complete_pid() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local -a opts vopts
-
     opts=('host')
     vopts=('container')
-
     if compset -P '*:'; then
         case "${${words[-1]%:*}#*=}" in
             (container)
@@ -314,25 +279,20 @@ __docker_complete_pid() {
         _describe -t pid-value-opts "PID Options with value" vopts -qS ":" && ret=0
         _describe -t pid-opts "PID Options" opts && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_runtimes() {
     [[ $PREFIX = -*  ]] && return 1
     integer ret=1
-
     emulate -L zsh
     setopt extendedglob
     local -a runtimes_opts
     runtimes_opts=(${(ps: :)${(f)${${"$(_call_program commands docker $docker_options info)"##*$'\n'Runtimes: }%%$'\n'^ *}}})
     _describe -t runtimes-opts "runtimes options" runtimes_opts && ret=0
 }
-
 __docker_complete_ps_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (ancestor)
@@ -372,18 +332,14 @@ __docker_complete_ps_filters() {
         opts=('ancestor' 'before' 'exited' 'expose' 'health' 'id' 'label' 'name' 'network' 'publish' 'since' 'status' 'volume')
         _describe -t filter-opts "Filter Options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_search_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     declare -a boolean_opts opts
-
     boolean_opts=('true' 'false')
     opts=('is-automated' 'is-official' 'stars')
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (is-automated|is-official)
@@ -396,18 +352,14 @@ __docker_complete_search_filters() {
     else
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_images_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     declare -a boolean_opts opts
-
     boolean_opts=('true' 'false')
     opts=('before' 'dangling' 'label' 'reference' 'since')
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (before|reference|since)
@@ -423,17 +375,13 @@ __docker_complete_images_filters() {
     else
         _describe -t filter-opts "Filter Options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_events_filter() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     declare -a opts
-
     opts=('container' 'daemon' 'event' 'image' 'label' 'network' 'scope' 'type' 'volume')
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (container)
@@ -482,17 +430,13 @@ __docker_complete_events_filter() {
     else
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_prune_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     declare -a opts
-
     opts=('until')
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             *)
@@ -502,12 +446,9 @@ __docker_complete_prune_filters() {
     else
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 # BO checkpoint
-
 __docker_checkpoint_commands() {
     local -a _docker_checkpoint_subcommands
     _docker_checkpoint_subcommands=(
@@ -517,14 +458,11 @@ __docker_checkpoint_commands() {
     )
     _describe -t docker-checkpoint-commands "docker checkpoint command" _docker_checkpoint_subcommands
 }
-
 __docker_checkpoint_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (create)
             _arguments $(__docker_arguments) \
@@ -551,14 +489,10 @@ __docker_checkpoint_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_checkpoint_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO checkpoint
-
 # BO container
-
 __docker_container_commands() {
     local -a _docker_container_subcommands
     _docker_container_subcommands=(
@@ -590,12 +524,10 @@ __docker_container_commands() {
     )
     _describe -t docker-container-commands "docker container command" _docker_container_subcommands
 }
-
 __docker_container_subcommand() {
     local -a _command_args opts_help opts_attach_exec_run_start opts_create_run opts_create_run_update
     local expl help="--help"
     integer ret=1
-
     opts_attach_exec_run_start=(
         "($help)--detach-keys=[Escape key sequence used to detach a container]:sequence:__docker_complete_detach_keys"
     )
@@ -685,7 +617,6 @@ __docker_container_subcommand() {
         "($help)--restart=[Restart policy]:restart policy:(no on-failure always unless-stopped)"
     )
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (attach)
             _arguments $(__docker_arguments) \
@@ -957,14 +888,10 @@ __docker_container_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_container_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO container
-
 # BO image
-
 __docker_image_commands() {
     local -a _docker_image_subcommands
     _docker_image_subcommands=(
@@ -983,14 +910,11 @@ __docker_image_commands() {
     )
     _describe -t docker-image-commands "docker image command" _docker_image_subcommands
 }
-
 __docker_image_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (build)
             _arguments $(__docker_arguments) \
@@ -1111,18 +1035,13 @@ __docker_image_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_container_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO image
-
 # BO network
-
 __docker_network_complete_ls_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (driver)
@@ -1150,20 +1069,15 @@ __docker_network_complete_ls_filters() {
         opts=('driver' 'id' 'label' 'name' 'scope' 'type')
         _describe -t filter-opts "Filter Options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_get_networks() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local line s
     declare -a lines networks
-
     type=$1; shift
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options network ls)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -1176,7 +1090,6 @@ __docker_get_networks() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # Network ID
     if [[ $type = (ids|all) ]]; then
         for line in $lines; do
@@ -1186,7 +1099,6 @@ __docker_get_networks() {
             networks=($networks $s)
         done
     fi
-
     # Names
     if [[ $type = (names|all) ]]; then
         for line in $lines; do
@@ -1196,26 +1108,21 @@ __docker_get_networks() {
             networks=($networks $s)
         done
     fi
-
     _describe -t networks-list "networks" networks "$@" && ret=0
     return ret
 }
-
 __docker_complete_networks() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_networks all "$@"
 }
-
 __docker_complete_networks_ids() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_networks ids "$@"
 }
-
 __docker_complete_networks_names() {
     [[ $PREFIX = -* ]] && return 1
     __docker_get_networks names "$@"
 }
-
 __docker_network_commands() {
     local -a _docker_network_subcommands
     _docker_network_subcommands=(
@@ -1229,14 +1136,11 @@ __docker_network_commands() {
     )
     _describe -t docker-network-commands "docker network command" _docker_network_subcommands
 }
-
 __docker_network_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (connect)
             _arguments $(__docker_arguments) \
@@ -1248,7 +1152,6 @@ __docker_network_subcommand() {
                 "($help)*--link-local-ip=[Add a link-local address for the container]:IPv4/IPv6: " \
                 "($help -)1:network:__docker_complete_networks" \
                 "($help -)2:containers:__docker_complete_containers" && ret=0
-
             case $state in
                 (link)
                     if compset -P "*:"; then
@@ -1312,18 +1215,13 @@ __docker_network_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_network_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO network
-
 # BO node
-
 __docker_node_complete_ls_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (id)
@@ -1348,14 +1246,11 @@ __docker_node_complete_ls_filters() {
         opts=('id' 'label' 'membership' 'name' 'node.label' 'role')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_node_complete_ps_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (desired-state)
@@ -1370,20 +1265,16 @@ __docker_node_complete_ps_filters() {
         opts=('desired-state' 'id' 'label' 'name')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_nodes() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local line s
     declare -a lines nodes args
-
     type=$1; shift
     filter=$1; shift
     [[ $filter != "none" ]] && args=("-f $filter")
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options node ls $args)"$'\n'}})
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
@@ -1397,7 +1288,6 @@ __docker_nodes() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # Node ID
     if [[ $type = (ids|all) ]]; then
         for line in $lines; do
@@ -1405,7 +1295,6 @@ __docker_nodes() {
             nodes=($nodes $s)
         done
     fi
-
     # Names
     if [[ $type = (names|all) ]]; then
         for line in $lines; do
@@ -1413,41 +1302,33 @@ __docker_nodes() {
             nodes=($nodes $s)
         done
     fi
-
     _describe -t nodes-list "nodes" nodes "$@" && ret=0
     return ret
 }
-
 __docker_complete_nodes() {
     [[ $PREFIX = -* ]] && return 1
     __docker_nodes all none "$@"
 }
-
 __docker_complete_nodes_ids() {
     [[ $PREFIX = -* ]] && return 1
     __docker_nodes ids none "$@"
 }
-
 __docker_complete_nodes_names() {
     [[ $PREFIX = -* ]] && return 1
     __docker_nodes names none "$@"
 }
-
 __docker_complete_pending_nodes() {
     [[ $PREFIX = -* ]] && return 1
     __docker_nodes all "membership=pending" "$@"
 }
-
 __docker_complete_manager_nodes() {
     [[ $PREFIX = -* ]] && return 1
     __docker_nodes all "role=manager" "$@"
 }
-
 __docker_complete_worker_nodes() {
     [[ $PREFIX = -* ]] && return 1
     __docker_nodes all "role=worker" "$@"
 }
-
 __docker_node_commands() {
     local -a _docker_node_subcommands
     _docker_node_subcommands=(
@@ -1461,14 +1342,11 @@ __docker_node_commands() {
     )
     _describe -t docker-node-commands "docker node command" _docker_node_subcommands
 }
-
 __docker_node_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (rm|remove)
              _arguments $(__docker_arguments) \
@@ -1523,18 +1401,13 @@ __docker_node_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_node_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO node
-
 # BO plugin
-
 __docker_plugin_complete_ls_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (capability)
@@ -1553,21 +1426,16 @@ __docker_plugin_complete_ls_filters() {
         opts=('capability' 'enabled')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_plugins() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local line s
     declare -a lines plugins args
-
     filter=$1; shift
     [[ $filter != "none" ]] && args=("-f $filter")
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options plugin ls $args)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -1580,33 +1448,27 @@ __docker_plugins() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # Name
     for line in $lines; do
         s="${line[${begin[NAME]},${end[NAME]}]%% ##}"
         s="$s:${(l:7:: :::)${${line[${begin[TAG]},${end[TAG]}]}%% ##}}"
         plugins=($plugins $s)
     done
-
     _describe -t plugins-list "plugins" plugins "$@" && ret=0
     return ret
 }
-
 __docker_complete_plugins() {
     [[ $PREFIX = -* ]] && return 1
     __docker_plugins none "$@"
 }
-
 __docker_complete_enabled_plugins() {
     [[ $PREFIX = -* ]] && return 1
     __docker_plugins enabled=true "$@"
 }
-
 __docker_complete_disabled_plugins() {
     [[ $PREFIX = -* ]] && return 1
     __docker_plugins enabled=false "$@"
 }
-
 __docker_plugin_commands() {
     local -a _docker_plugin_subcommands
     _docker_plugin_subcommands=(
@@ -1622,14 +1484,11 @@ __docker_plugin_commands() {
     )
     _describe -t docker-plugin-commands "docker plugin command" _docker_plugin_subcommands
 }
-
 __docker_plugin_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (disable)
             _arguments $(__docker_arguments) \
@@ -1698,24 +1557,17 @@ __docker_plugin_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_plugin_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO plugin
-
 # BO secret
-
 __docker_secrets() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local line s
     declare -a lines secrets
-
     type=$1; shift
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options secret ls)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -1728,7 +1580,6 @@ __docker_secrets() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # ID
     if [[ $type = (ids|all) ]]; then
         for line in $lines; do
@@ -1736,7 +1587,6 @@ __docker_secrets() {
             secrets=($secrets $s)
         done
     fi
-
     # Names
     if [[ $type = (names|all) ]]; then
         for line in $lines; do
@@ -1744,16 +1594,13 @@ __docker_secrets() {
             secrets=($secrets $s)
         done
     fi
-
     _describe -t secrets-list "secrets" secrets "$@" && ret=0
     return ret
 }
-
 __docker_complete_secrets() {
     [[ $PREFIX = -* ]] && return 1
     __docker_secrets all "$@"
 }
-
 __docker_secret_commands() {
     local -a _docker_secret_subcommands
     _docker_secret_subcommands=(
@@ -1764,14 +1611,11 @@ __docker_secret_commands() {
     )
     _describe -t docker-secret-commands "docker secret command" _docker_secret_subcommands
 }
-
 __docker_secret_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (create)
             _arguments $(__docker_arguments) -A '-*' \
@@ -1800,18 +1644,13 @@ __docker_secret_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_secret_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO secret
-
 # BO service
-
 __docker_service_complete_ls_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (id)
@@ -1832,14 +1671,11 @@ __docker_service_complete_ls_filters() {
         opts=('id' 'label' 'mode' 'name')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_service_complete_ps_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (desired-state)
@@ -1854,14 +1690,11 @@ __docker_service_complete_ps_filters() {
         opts=('desired-state' 'id' 'label' 'name')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_service_complete_placement_pref() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (spread)
@@ -1876,20 +1709,15 @@ __docker_service_complete_placement_pref() {
         opts=('spread')
         _describe -t pref-opts "placement pref options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_services() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local line s
     declare -a lines services
-
     type=$1; shift
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options service ls)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -1902,7 +1730,6 @@ __docker_services() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # Service ID
     if [[ $type = (ids|all) ]]; then
         for line in $lines; do
@@ -1911,7 +1738,6 @@ __docker_services() {
             services=($services $s)
         done
     fi
-
     # Names
     if [[ $type = (names|all) ]]; then
         for line in $lines; do
@@ -1920,26 +1746,21 @@ __docker_services() {
             services=($services $s)
         done
     fi
-
     _describe -t services-list "services" services "$@" && ret=0
     return ret
 }
-
 __docker_complete_services() {
     [[ $PREFIX = -* ]] && return 1
     __docker_services all "$@"
 }
-
 __docker_complete_services_ids() {
     [[ $PREFIX = -* ]] && return 1
     __docker_services ids "$@"
 }
-
 __docker_complete_services_names() {
     [[ $PREFIX = -* ]] && return 1
     __docker_services names "$@"
 }
-
 __docker_service_commands() {
     local -a _docker_service_subcommands
     _docker_service_subcommands=(
@@ -1955,12 +1776,10 @@ __docker_service_commands() {
     )
     _describe -t docker-service-commands "docker service command" _docker_service_subcommands
 }
-
 __docker_service_subcommand() {
     local -a _command_args opts_help opts_create_update
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
     opts_create_update=(
         "($help)*--cap-add=[Add Linux capabilities]:capability: "
@@ -2009,7 +1828,6 @@ __docker_service_subcommand() {
         "($help)--with-registry-auth[Send registry authentication details to swarm agents]"
         "($help -w --workdir)"{-w=,--workdir=}"[Working directory inside the container]:directory:_directories"
     )
-
     case "$words[1]" in
         (create)
             _arguments $(__docker_arguments) \
@@ -2120,18 +1938,13 @@ __docker_service_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_service_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO service
-
 # BO stack
-
 __docker_stack_complete_ps_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (desired-state)
@@ -2146,14 +1959,11 @@ __docker_stack_complete_ps_filters() {
         opts=('desired-state' 'id' 'name')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_stack_complete_services_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             *)
@@ -2164,18 +1974,14 @@ __docker_stack_complete_services_filters() {
         opts=('id' 'label' 'name')
         _describe -t filter-opts "filter options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_stacks() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     local line s
     declare -a lines stacks
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options stack ls)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -2188,22 +1994,18 @@ __docker_stacks() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # Service NAME
     for line in $lines; do
         s="${line[${begin[NAME]},${end[NAME]}]%% ##}"
         stacks=($stacks $s)
     done
-
     _describe -t stacks-list "stacks" stacks "$@" && ret=0
     return ret
 }
-
 __docker_complete_stacks() {
     [[ $PREFIX = -* ]] && return 1
     __docker_stacks "$@"
 }
-
 __docker_stack_commands() {
     local -a _docker_stack_subcommands
     _docker_stack_subcommands=(
@@ -2215,14 +2017,11 @@ __docker_stack_commands() {
     )
     _describe -t docker-stack-commands "docker stack command" _docker_stack_subcommands
 }
-
 __docker_stack_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (deploy|up)
             _arguments $(__docker_arguments) \
@@ -2263,14 +2062,10 @@ __docker_stack_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_stack_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO stack
-
 # BO swarm
-
 __docker_swarm_commands() {
     local -a _docker_swarm_subcommands
     _docker_swarm_subcommands=(
@@ -2284,14 +2079,11 @@ __docker_swarm_commands() {
     )
     _describe -t docker-swarm-commands "docker swarm command" _docker_swarm_subcommands
 }
-
 __docker_swarm_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (init)
             _arguments $(__docker_arguments) \
@@ -2359,14 +2151,10 @@ __docker_swarm_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_network_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO swarm
-
 # BO system
-
 __docker_system_commands() {
     local -a _docker_system_subcommands
     _docker_system_subcommands=(
@@ -2377,14 +2165,11 @@ __docker_system_commands() {
     )
     _describe -t docker-system-commands "docker system command" _docker_system_subcommands
 }
-
 __docker_system_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (df)
             _arguments $(__docker_arguments) \
@@ -2416,18 +2201,13 @@ __docker_system_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_volume_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO system
-
 # BO volume
-
 __docker_volume_complete_ls_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (dangling)
@@ -2448,17 +2228,13 @@ __docker_volume_complete_ls_filters() {
         opts=('dangling' 'driver' 'label' 'name')
         _describe -t filter-opts "Filter Options" opts -qS "=" && ret=0
     fi
-
     return ret
 }
-
 __docker_complete_volumes() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     declare -a lines volumes
-
     lines=(${(f)${:-"$(_call_program commands docker $docker_options volume ls)"$'\n'}})
-
     # Parse header line to find columns
     local i=1 j=1 k header=${lines[1]}
     declare -A begin end
@@ -2471,7 +2247,6 @@ __docker_complete_volumes() {
     done
     end[${header[$i,$((j-1))]}]=-1
     lines=(${lines[2,-1]})
-
     # Names
     local line s
     for line in $lines; do
@@ -2479,11 +2254,9 @@ __docker_complete_volumes() {
         s="$s:${(l:7:: :::)${${line[${begin[DRIVER]},${end[DRIVER]}]}%% ##}}"
         volumes=($volumes $s)
     done
-
     _describe -t volumes-list "volumes" volumes && ret=0
     return ret
 }
-
 __docker_volume_commands() {
     local -a _docker_volume_subcommands
     _docker_volume_subcommands=(
@@ -2495,14 +2268,11 @@ __docker_volume_commands() {
     )
     _describe -t docker-volume-commands "docker volume command" _docker_volume_subcommands
 }
-
 __docker_volume_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (create)
             _arguments $(__docker_arguments) -A '-*' \
@@ -2542,25 +2312,18 @@ __docker_volume_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_volume_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO volume
-
 # BO context
-
 __docker_complete_contexts() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
     declare -a contexts
-
     contexts=(${(f)${:-"$(_call_program commands docker $docker_options context ls -q)"$'\n'}})
-
     _describe -t context-list "context" contexts && ret=0
     return ret
 }
-
 __docker_context_commands() {
     local -a _docker_context_subcommands
     _docker_context_subcommands=(
@@ -2574,14 +2337,11 @@ __docker_context_commands() {
     )
     _describe -t docker-context-commands "docker context command" _docker_context_subcommands
 }
-
 __docker_context_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (create)
             _arguments $(__docker_arguments) \
@@ -2614,39 +2374,31 @@ __docker_context_subcommand() {
                 "($help -):name:" && ret=0
             ;;
     esac
-
     return ret
 }
-
 # EO context
-
 __docker_caching_policy() {
   oldp=( "$1"(Nmh+1) )     # 1 hour
   (( $#oldp ))
 }
-
 __docker_commands() {
     local cache_policy
     integer force_invalidation=0
-
     zstyle -s ":completion:${curcontext}:" cache-policy cache_policy
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __docker_caching_policy
     fi
-
     if ( (( ! ${+_docker_hide_legacy_commands} )) || _cache_invalid docker_hide_legacy_commands ) \
        && ! _retrieve_cache docker_hide_legacy_commands;
     then
         _docker_hide_legacy_commands="${DOCKER_HIDE_LEGACY_COMMANDS}"
         _store_cache docker_hide_legacy_commands _docker_hide_legacy_commands
     fi
-
     if [[ "${_docker_hide_legacy_commands}" != "${DOCKER_HIDE_LEGACY_COMMANDS}" ]]; then
         force_invalidation=1
         _docker_hide_legacy_commands="${DOCKER_HIDE_LEGACY_COMMANDS}"
         _store_cache docker_hide_legacy_commands _docker_hide_legacy_commands
     fi
-
     if ( [[ ${+_docker_subcommands} -eq 0 ]] || _cache_invalid docker_subcommands ) \
         && ! _retrieve_cache docker_subcommands || [[ ${force_invalidation} -eq 1 ]];
     then
@@ -2658,14 +2410,11 @@ __docker_commands() {
     fi
     _describe -t docker-commands "docker command" _docker_subcommands
 }
-
 __docker_subcommand() {
     local -a _command_args opts_help
     local expl help="--help"
     integer ret=1
-
     opts_help=("(: -)--help[Print usage]")
-
     case "$words[1]" in
         (attach|commit|cp|create|diff|exec|export|kill|logs|pause|unpause|port|rename|restart|rm|run|start|stats|stop|top|update|wait)
             __docker_container_subcommand && ret=0
@@ -2679,7 +2428,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_checkpoint_commands && ret=0
@@ -2696,7 +2444,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_container_commands && ret=0
@@ -2713,7 +2460,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_context_commands && ret=0
@@ -2790,7 +2536,6 @@ __docker_subcommand() {
                 "($help)--userland-proxy[Use userland proxy for loopback traffic]" \
                 "($help)--userland-proxy-path=[Path to the userland proxy binary]:binary:_files" \
                 "($help)--validate[Validate daemon configuration and exit]" && ret=0
-
             case $state in
                 (users-groups)
                     if compset -P '*:'; then
@@ -2811,7 +2556,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_image_commands && ret=0
@@ -2834,7 +2578,6 @@ __docker_subcommand() {
                 "($help -s --size)"{-s,--size}"[Display total file sizes if the type is container]" \
                 "($help)--type=[Return JSON for specified type]:type:(container image network node plugin service volume)" \
                 "($help -)*: :->values" && ret=0
-
             case $state in
                 (values)
                     if [[ ${words[(r)--type=container]} == --type=container ]]; then
@@ -2885,7 +2628,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_network_commands && ret=0
@@ -2902,7 +2644,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_node_commands && ret=0
@@ -2919,7 +2660,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_plugin_commands && ret=0
@@ -2952,7 +2692,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_secret_commands && ret=0
@@ -2969,7 +2708,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_service_commands && ret=0
@@ -2986,7 +2724,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_stack_commands && ret=0
@@ -3003,7 +2740,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_swarm_commands && ret=0
@@ -3020,7 +2756,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_system_commands && ret=0
@@ -3042,7 +2777,6 @@ __docker_subcommand() {
                 $opts_help \
                 "($help -): :->command" \
                 "($help -)*:: :->option-or-argument" && ret=0
-
             case $state in
                 (command)
                     __docker_volume_commands && ret=0
@@ -3057,10 +2791,8 @@ __docker_subcommand() {
             _arguments $(__docker_arguments) ":subcommand:__docker_commands" && ret=0
             ;;
     esac
-
     return ret
 }
-
 _docker() {
     # Support for subservices, which allows for `compdef _docker docker-shell=_docker_containers`.
     # Based on /usr/share/zsh/functions/Completion/Unix/_git without support for `ret`.
@@ -3068,11 +2800,9 @@ _docker() {
         _call_function - _$service
         return
     fi
-
     local curcontext="$curcontext" state line help="-h --help"
     integer ret=1
     typeset -A opt_args
-
     _arguments $(__docker_arguments) -C \
         "(: -)"{-h,--help}"[Print usage]" \
         "($help)--config[Location of client config files]:path:_directories" \
@@ -3089,12 +2819,10 @@ _docker() {
         "($help -v --version)"{-v,--version}"[Print version information and quit]" \
         "($help -): :->command" \
         "($help -)*:: :->option-or-argument" && ret=0
-
     local host=${opt_args[-H]}${opt_args[--host]}
     local config=${opt_args[--config]}
     local context=${opt_args[-c]}${opt_args[--context]}
     local docker_options="${host:+--host $host} ${config:+--config $config} ${context:+--context $context} "
-
     case $state in
         (command)
             __docker_commands && ret=0
@@ -3104,19 +2832,15 @@ _docker() {
             __docker_subcommand && ret=0
             ;;
     esac
-
     return ret
 }
-
 _dockerd() {
     integer ret=1
     words[1]='daemon'
     __docker_subcommand && ret=0
     return ret
 }
-
 _docker "$@"
-
 # Local Variables:
 # mode: Shell-Script
 # sh-indentation: 4

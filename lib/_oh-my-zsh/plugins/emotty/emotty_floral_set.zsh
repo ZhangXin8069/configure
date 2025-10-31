@@ -1,6 +1,5 @@
 #!/usr/bin/env zsh
 # vim:ft=zsh ts=2 sw=2 sts=2
-
 _emotty_sets[floral]="
   hibiscus
   cherry_blossom

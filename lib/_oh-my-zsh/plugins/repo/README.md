@@ -1,16 +1,11 @@
 # repo plugin
-
 This plugin mainly adds some aliases and support for automatic completion for
 the [repo command line tool](https://code.google.com/p/git-repo/).
-
 To use it, add `repo` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... repo)
 ```
-
 ## Aliases
-
 | Alias   | Command                                |
 |---------|----------------------------------------|
 | `r`     | `repo`                                 |

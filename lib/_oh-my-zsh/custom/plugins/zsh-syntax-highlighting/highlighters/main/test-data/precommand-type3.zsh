@@ -27,29 +27,23 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Test an external command that does not exist as a builtin.
 # The spaces in $BUFFER are to align precommand-type*.zsh test files.
 BUFFER=$'ls    ; builtin ls    ; builtin command ls    ; nice ls    '
-
 # Verify that the 'ls' command isn't shadowed.
 if [[ $(type -w ls) != "ls: command" ]]; then
   echo >&2 "precommand-type3: error: the 'ls' command is shadowed (or possibly missing altogether)"
 fi
-
 expected_region_highlight=(
   '1 2 command'          # ls
   '7 7 commandseparator' # ;
-
   '9 15 precommand'                  # builtin
   '17 18 unknown-token "issue #608"' # ls
   '23 23 commandseparator'           # ;
-
   '25 31 precommand'       # builtin
   '33 39 precommand'       # command
   '41 42 command'          # ls
   '47 47 commandseparator' # ;
-
   '49 52 precommand' # nice
   '54 55 command'    # ls
 )

@@ -1,21 +1,13 @@
 # WP-CLI
-
 The [WordPress CLI](https://wp-cli.org/) is a command-line tool for managing WordPress installations. You can update plugins, set up multisite installs and much more, without using a web browser.
-
 This plugin adds [tab completion](https://wp-cli.org/#tab-completions) for `wp-cli` as well as several aliases for commonly used commands.
-
 To use it, add `wp-cli` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... wp-cli)
 ```
-
 **Maintainer:** [joshmedeski](https://github.com/joshmedeski)
-
 ## Aliases
-
 The entire list of `wp-cli` commands can be found here: <https://developer.wordpress.org/cli/commands/>
-
 | Alias     | Command                     |
 |-----------|-----------------------------|
 | **Core**                                |

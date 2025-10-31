@@ -1,16 +1,11 @@
 # Ionic plugin
-
 This plugin adds completion for the [Ionic CLI](https://ionicframework.com/docs/cli),
 as well as some aliases for common Ionic commands.
-
 To use it, add `ionic` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... ionic)
 ```
-
 ## Aliases
-
 | Alias | Command                              | Description                                                      |
 |-------|--------------------------------------|------------------------------------------------------------------|
 | iv    | `ionic --version`                    | Check Ionic version                                              |

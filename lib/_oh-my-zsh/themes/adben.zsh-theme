@@ -29,30 +29,25 @@
 # # This theme's look and feel is based on the Aaron Toponce's zsh theme, more info:
 # # https://pthree.org/2008/11/23/727/
 # # enjoy!
-
 ########## COLOR ###########
 for COLOR in CYAN WHITE YELLOW MAGENTA BLACK BLUE RED DEFAULT GREEN GREY; do
   typeset -g PR_$COLOR="%b%{$fg[${(L)COLOR}]%}"
   typeset -g PR_BRIGHT_$COLOR="%B%{$fg[${(L)COLOR}]%}"
 done
 PR_RESET="%{$reset_color%}"
-
 RED_START="${PR_GREY}<${PR_RED}<${PR_BRIGHT_RED}<${PR_RESET} "
 RED_END="${PR_BRIGHT_RED}>${PR_RED}>${PR_GREY}>${PR_RESET} "
 GREEN_START="${PR_GREY}>${PR_GREEN}>${PR_BRIGHT_GREEN}>${PR_RESET}"
 GREEN_END="${PR_BRIGHT_GREEN}>${PR_GREEN}>${PR_GREY}>${PR_RESET} "
-
 ########## VCS ###########
 VCS_DIRTY_COLOR="${PR_YELLOW}"
 VCS_CLEAN_COLOR="${PR_GREEN}"
 VCS_SUFFIX_COLOR="${PR_RED}› ${PR_RESET}"
-
 ########## SVN ###########
 ZSH_THEME_SVN_PROMPT_PREFIX="${PR_RED}‹svn:"
 ZSH_THEME_SVN_PROMPT_SUFFIX="${VCS_SUFFIX_COLOR}"
 ZSH_THEME_SVN_PROMPT_DIRTY="${VCS_DIRTY_COLOR} ✘"
 ZSH_THEME_SVN_PROMPT_CLEAN="${VCS_CLEAN_COLOR} ✔"
-
 ########## GIT ###########
 ZSH_THEME_GIT_PROMPT_PREFIX="${PR_RED}‹git:"
 ZSH_THEME_GIT_PROMPT_SUFFIX="${VCS_SUFFIX_COLOR}"
@@ -64,14 +59,12 @@ ZSH_THEME_GIT_PROMPT_DELETED="${PR_YELLOW} ✖"
 ZSH_THEME_GIT_PROMPT_RENAMED="${PR_YELLOW} ➜"
 ZSH_THEME_GIT_PROMPT_UNMERGED="${PR_YELLOW} ═"
 ZSH_THEME_GIT_PROMPT_UNTRACKED="${PR_YELLOW} ✭"
-
 # Get a fortune quote
 ps1_fortune() {
   if (( ${+commands[fortune]} )); then
     fortune
   fi
 }
-
 # Obtain a command tip
 ps1_command_tip() {
   {
@@ -82,7 +75,6 @@ ps1_command_tip() {
     fi
   } | sed '1d;/^$/d'
 }
-
 # Show prompt header (fortune / command tip)
 prompt_header() {
   local header=$(
@@ -91,23 +83,18 @@ prompt_header() {
     *) ps1_fortune ;;
     esac
   )
-
   # Make sure to quote % so that they're not expanded by the prompt
   echo -n "${header:gs/%/%%}"
 }
-
 # Context: user@directory or just directory
 prompt_context() {
   if [[ "$USERNAME" != "$DEFAULT_USER" || -n "$SSH_CLIENT" ]]; then
     echo -n "${PR_RESET}${PR_RED}%n@%m"
   fi
 }
-
 ########## SETUP ###########
-
 # Required for the prompt
 setopt prompt_subst
-
 # Prompt: header, context (user@host), directory
 PROMPT="${RED_START}${PR_YELLOW}\$(prompt_header)${PR_RESET}
 ${RED_START}\$(prompt_context)${PR_BRIGHT_YELLOW}%~${PR_RESET}

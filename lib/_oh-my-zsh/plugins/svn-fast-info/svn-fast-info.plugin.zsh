@@ -2,7 +2,6 @@ function svn_prompt_info() {
   local info
   info=$(LANG= svn info 2>&1) || return 1 # capture stdout and stderr
   local repo_need_upgrade=$(svn_repo_need_upgrade $info)
-
   if [[ -n $repo_need_upgrade ]]; then
     printf '%s%s%s%s%s%s%s\n' \
       "$ZSH_PROMPT_BASE_COLOR" \
@@ -29,26 +28,21 @@ function svn_prompt_info() {
       "$ZSH_PROMPT_BASE_COLOR"
   fi
 }
-
 function svn_repo_need_upgrade() {
   command grep -q "E155036" <<< "${1:-$(LANG= svn info 2>/dev/null)}" && \
     echo "E155036: upgrade repo with svn upgrade"
 }
-
 function svn_current_branch_name() {
   omz_urldecode "$(
     command grep '^URL:' <<< "${1:-$(svn info 2>/dev/null)}" | command grep -Eo '(tags|branches)/[^/]+|trunk'
   )"
 }
-
 function svn_repo_root_name() {
   command grep '^Repository\ Root:' <<< "${1:-$(LANG= svn info 2>/dev/null)}" | sed 's#.*/##'
 }
-
 function svn_current_revision() {
   echo "${1:-$(LANG= svn info 2>/dev/null)}" | sed -n 's/Revision: //p'
 }
-
 function svn_status_info() {
   local svn_status_string="$ZSH_THEME_SVN_PROMPT_CLEAN"
   local svn_status="$(svn status 2>/dev/null)";

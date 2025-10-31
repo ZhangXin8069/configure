@@ -26,12 +26,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 mkdir foo
 touch foo/bar
 BUFFER=": foo/bar $PWD/foo foo/b"
 ZSH_HIGHLIGHT_DIRS_BLACKLIST=($PWD/foo $PWD/bar)
-
 expected_region_highlight=(
   '1 1 builtin'                             # :
   '3 9 default'                             # foo/bar

@@ -27,10 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER=$'time ls; nocorrect ls'
 alias time=':' nocorrect=':'
-
 expected_region_highlight=(
   '1 4 alias'            # time
   '6 7 default'          # ls

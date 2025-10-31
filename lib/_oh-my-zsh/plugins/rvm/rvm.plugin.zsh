@@ -1,16 +1,12 @@
 # Completion
 fpath+=("${rvm_path}/scripts/zsh/Completion")
-
 typeset -g -A _comps
 autoload -Uz _rvm
 _comps[rvm]=_rvm
-
 # Aliases
 alias rubies='rvm list rubies'
 alias rvms='rvm gemset'
 alias gemsets='rvms list'
-
-
 # rb{version} utilities
 # From `rvm list known`
 typeset -A rubies
@@ -29,7 +25,6 @@ rubies=(
   31  'ruby-3.1'
   32  'ruby-3.2'
 )
-
 for v in ${(k)rubies}; do
   version="${rubies[$v]}"
   functions[rb${v}]="rvm use ${version}\${1+"@\$1"}"
@@ -37,17 +32,13 @@ for v in ${(k)rubies}; do
   compdef _rb$v rb$v
 done
 unset rubies v version
-
-
 function rvm-update {
   rvm get head
 }
-
 # TODO: Make this usable w/o rvm.
 function gems {
   local current_ruby=`rvm-prompt i v p`
   local current_gemset=`rvm-prompt g`
-
   gem list $@ | sed -E \
     -e "s/\([0-9, \.]+( .+)?\)/$fg[blue]&$reset_color/g" \
     -e "s|$(echo $rvm_path)|$fg[magenta]\$rvm_path$reset_color|g" \

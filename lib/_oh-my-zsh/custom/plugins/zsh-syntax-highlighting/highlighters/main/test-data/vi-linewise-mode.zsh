@@ -26,13 +26,11 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # See issue #267 for the magic numbers
 BUFFER=$'foo foo\nbar bar'
 REGION_ACTIVE=2
 CURSOR=4
 MARK=12
-
 expected_region_highlight=(
   "1 3 unknown-token"    # foo
   "5 7 default"          # foo

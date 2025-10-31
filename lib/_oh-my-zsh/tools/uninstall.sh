@@ -9,24 +9,20 @@ if hash chsh >/dev/null 2>&1 && [ -f ~/.shell.pre-oh-my-zsh ]; then
     exit
   fi
 fi
-
 read -r -p "Are you sure you want to remove Oh My Zsh? [y/N] " confirmation
 if [ "$confirmation" != y ] && [ "$confirmation" != Y ]; then
   echo "Uninstall cancelled"
   exit
 fi
-
 echo "Removing ~/.oh-my-zsh"
 if [ -d ~/.oh-my-zsh ]; then
   rm -rf ~/.oh-my-zsh
 fi
-
 if [ -e ~/.zshrc ]; then
   ZSHRC_SAVE=~/.zshrc.omz-uninstalled-$(date +%Y-%m-%d_%H-%M-%S)
   echo "Found ~/.zshrc -- Renaming to ${ZSHRC_SAVE}"
   mv ~/.zshrc "${ZSHRC_SAVE}"
 fi
-
 echo "Looking for original zsh config..."
 ZSHRC_ORIG=~/.zshrc.pre-oh-my-zsh
 if [ -e "$ZSHRC_ORIG" ]; then
@@ -36,6 +32,5 @@ if [ -e "$ZSHRC_ORIG" ]; then
 else
   echo "No original zsh config found"
 fi
-
 echo "Thanks for trying out Oh My Zsh. It's been uninstalled."
 echo "Don't forget to restart your terminal!"

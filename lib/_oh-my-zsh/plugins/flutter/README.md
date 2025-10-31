@@ -1,15 +1,10 @@
 ## Flutter plugin
-
 The Flutter plugin provides completion and useful aliases
-
 To use it, add `flutter` to the plugins array of your zshrc file:
-
 ```zsh
 plugins=(... flutter)
 ```
-
 ## Aliases
-
 | Alias      | Command                 | Description                                                                |
 | :--------- | :---------------------- | :------------------------------------------------------------------------- |
 | `fl`       | `flutter`               | Shorthand for flutter command                                              |

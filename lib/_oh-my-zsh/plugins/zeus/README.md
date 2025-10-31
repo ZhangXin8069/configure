@@ -1,17 +1,12 @@
 # zeus plugin
-
 [Zeus](https://github.com/burke/zeus) preloads your Rails environment and forks that
 process whenever needed. This effectively speeds up Rails' boot process to under 1 sec.
 This plugin adds autocompletion for zeus and aliases for common usage.
-
 To use it, add `zeus` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... zeus)
 ```
-
 You also need to have the `zeus` gem installed.
-
 | Alias        | Command                                                            |
 |:-------------|:-------------------------------------------------------------------|
 | _zi_         | `zeus init`                                                        |

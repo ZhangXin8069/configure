@@ -27,16 +27,13 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 if type global_alias >/dev/null; then
   skip_test="Test is written on the assumption that 'global_alias' is not a valid command name, but that assumption does not hold"
   return 0
 fi
 alias -g global_alias=y
 local s=global_alias
-
 BUFFER=$'$s'
-
 expected_region_highlight=(
   '1 2 unknown-token' # $s
 )

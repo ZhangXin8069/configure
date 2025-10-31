@@ -37,15 +37,11 @@
 #  * Peter Eisentraut (https://github.com/petere)
 #
 # ------------------------------------------------------------------------------
-
-
 _kitchen() {
   local curcontext="$curcontext" state line
   typeset -A opt_args
-
   _arguments '1: :->cmds'\
              '2: :->args'
-
   case $state in
     cmds)
       _kitchen_commands
@@ -63,14 +59,11 @@ _kitchen() {
       ;;
   esac
 }
-
 _kitchen_commands() {
   local commands
-
   commands=("${(@f)$(_call_program commands $service help | sed -n 's/^  kitchen \([[:alpha:]]*\) [ A-Z[].*# \(.*\)$/\1:\2/p')}")
   _describe -t commands 'kitchen commands' commands
 }
-
 _kitchen_instances() {
   if [[ $_kitchen_instances_cache_dir != $PWD ]]; then
     unset _kitchen_instances_cache
@@ -81,5 +74,4 @@ _kitchen_instances() {
   fi
   _wanted instances expl 'instance' compadd -a _kitchen_instances_cache
 }
-
 _kitchen "$@"

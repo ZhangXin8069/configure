@@ -1,14 +1,10 @@
 #compdef gem
 #autoload
-
 # gem zsh completion, based on homebrew completion
-
 _gem_installed() {
   installed_gems=(${(f)"$(gem list --local --no-versions)"})
 }
-
 local -a _1st_arguments
-
 _1st_arguments=(
   'build:Build a gem from a gemspec'
   'cert:Manage RubyGems certificates and signing settings'
@@ -41,20 +37,16 @@ _1st_arguments=(
   'which:Find the location of a library file you can require'
   'yank:Remove a specific gem version release from RubyGems.org'
 )
-
 local expl
 local -a gems installed_gems
-
 _arguments \
   '(-v --version)'{-v,--version}'[show version]' \
   '(-h --help)'{-h,--help}'[show help]' \
   '*:: :->subcmds' && return 0
-
 if (( CURRENT == 1 )); then
   _describe -t commands "gem subcommand" _1st_arguments
   return
 fi
-
 case "$words[1]" in
   build)
     _files -g "*.gemspec"

@@ -1,9 +1,7 @@
 #compdef lein
-
 # Lein ZSH completion function
 # Drop this somewhere in your $fpath (like /usr/share/zsh/site-functions)
 # and rename it _lein
-
 _lein() {
   if (( CURRENT > 2 )); then
     # shift words so _arguments doesn't have to be concerned with second command
@@ -44,26 +42,20 @@ _lein() {
       "with-profile[Apply the given task with the profile(s) specified.]"
   fi
 }
-
 _lein_plugin() {
   _values "lein plugin commands" \
     "install[Download, package, and install plugin jarfile into ~/.lein/plugins]" \
     "uninstall[Delete the plugin jarfile: \[GROUP/\]ARTIFACT-ID VERSION]"
 }
-
-
 _lein_namespaces() {
   if [ -f "./project.clj" -a -d "$1" ]; then
     _values "lein valid namespaces" \
       $(find "$1" -type f -name "*.clj" -exec awk '/^\(ns */ {gsub("\\)", "", $2); print $2}' '{}' '+')
   fi
 }
-
-
 _lein_run() {
   _lein_namespaces "src/"
 }
-
 _lein_test() {
   _lein_namespaces "test/"
 }

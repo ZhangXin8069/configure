@@ -34,16 +34,13 @@ alias dvls='docker volume ls'
 alias dvprune='docker volume prune'
 alias dxc='docker container exec'
 alias dxcit='docker container exec -it'
-
 if (( ! $+commands[docker] )); then
   return
 fi
-
 # Standarized $0 handling
 # https://zdharma-continuum.github.io/Zsh-100-Commits-Club/Zsh-Plugin-Standard.html
 0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
-
 # If the completion file doesn't exist yet, we need to autoload it and
 # bind it to `docker`. Otherwise, compinit will have already done that.
 if [[ ! -f "$ZSH_CACHE_DIR/completions/_docker" ]]; then
@@ -51,7 +48,6 @@ if [[ ! -f "$ZSH_CACHE_DIR/completions/_docker" ]]; then
   autoload -Uz _docker
   _comps[docker]=_docker
 fi
-
 {
   # `docker completion` is only available from 23.0.0 on
   # docker version returns `Docker version 24.0.2, build cb74dfcd85`

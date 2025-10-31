@@ -26,7 +26,6 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 if [[ $OSTYPE == msys ]]; then
   skip_test='Cannot chmod +x in msys2'
 else
@@ -35,9 +34,7 @@ else
   touch foo/bar/testing-issue-228
   chmod +x foo/bar/testing-issue-228
   path+=("$PWD"/foo)
-
   BUFFER='bar/testing-issue-228'
-
   expected_region_highlight=(
     "1 21 command" # bar/testing-issue-228
   )

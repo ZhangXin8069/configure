@@ -1,9 +1,7 @@
 #!/bin/zsh -f
 #compdef pm2
 #autoload
-
 local -a _1st_arguments
-
 _1st_arguments=(
     "start:start and daemonize an app"
     "trigger:trigger process action"
@@ -72,34 +70,27 @@ _1st_arguments=(
     "serve:serve a directory over http via port"
     "examples:display pm2 usage examples"
 )
-
 local -a id_names
-
 _id_names() {
     local app_list
     app_list=$(pm2 list -m)
-
     local -a names ids
     names=($(echo $app_list | grep '+---' | awk '{print $2}'))
     ids=($(echo $app_list | grep 'pm2 id' | awk '{print $4}'))
-
     if ((${#ids} > 0)); then
         for i in {1..${#ids}}; do
             id_names+=("${ids[i]}:${names[i]}")
         done
     fi
 }
-
 _arguments \
     '(-v --version)'{-v,--version}'[output version]' \
     '(-h --help)'{-h,--help}'[output usage information]' \
     '*:: :->subcmds' && return 0
-
 if ((CURRENT == 1)); then
     _describe "command" _1st_arguments
     return
 fi
-
 local -a id_comp id_all_comp id_all_files_comp start_options logs_options
 id_comp=('1: :->id_comp')
 id_all_comp=('1: :->id_all_comp')
@@ -128,7 +119,6 @@ logs_options=(
     '(-h --help)'{-h,--help}'[output usage information]'
     $id_all_comp
 )
-
 case "$words[1]" in
 start)
     _arguments $start_options && return 0
@@ -146,7 +136,6 @@ deploy | startOrRestart | startOrReload)
     _files
     ;;
 esac
-
 case "$state" in
 id_comp)
     _id_names

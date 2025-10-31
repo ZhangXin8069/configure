@@ -26,9 +26,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER='ps aux | grep java | sort | uniq | tail | head'
-
 expected_region_highlight=(
   "1  2  command"          # ps
   "4  6  default"          # aux

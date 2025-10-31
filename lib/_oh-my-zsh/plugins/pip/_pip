@@ -1,9 +1,7 @@
 #compdef pip pip2 pip-2.7 pip3 pip-3.2 pip-3.3 pip-3.4
 #autoload
-
 # pip zsh completion, based on last stable release (pip8)
 # homebrew completion and backwards compatibility
-
 _pip_all() {
   # we cache the list of packages (originally from the macports plugin)
   if (( ! $+piplist )); then
@@ -11,11 +9,9 @@ _pip_all() {
       piplist=($(cat $ZSH_PIP_CACHE_FILE))
   fi
 }
-
 _pip_installed() {
   installed_pkgs=($($service freeze | cut -d '=' -f 1))
 }
-
 local -a _1st_arguments
 _1st_arguments=(
   'install:install packages'
@@ -32,10 +28,8 @@ _1st_arguments=(
   'unzip:unzip individual packages(deprecated)'
   'zip:zip individual packages(deprecated)'
 )
-
 local expl
 local -a all_pkgs installed_pkgs
-
 _arguments \
   '(-h --help)'{-h,--help}'[show help]' \
   '(--isolated)--isolated[run pip in isolated mode, ignores environment variables and user configuration]' \
@@ -56,12 +50,10 @@ _arguments \
   '(-E --environment)'{-E,--environment}'[virtualenv environment to run pip in (deprecated)]' \
   '(-s --enable-site-packages)'{-s,--enable-site-packages}'[include site-packages in virtualenv (deprecated)]' \
   '*:: :->subcmds' && return 0
-
 if (( CURRENT == 1 )); then
   _describe -t commands "pip subcommand" _1st_arguments
   return
 fi
-
 case "$words[1]" in
   search)
     _arguments \
@@ -85,7 +77,6 @@ case "$words[1]" in
       '(-r --requirement)'{-r,--requirement}'[requirements file]: :_files'\
       '(-e --editable)'{-e,--editable}'[path of or url to source to link to instead of installing.]: :_files -/'\
       '1: :->packages' &&  return 0
-
       if [[ "$state" == packages ]]; then
         _pip_all
         _wanted piplist expl 'packages' compadd -a piplist

@@ -1,7 +1,6 @@
 alias HED='HANAMI_ENV=development '
 alias HEP='HANAMI_ENV=production '
 alias HET='HANAMI_ENV=test '
-
 alias hc='hanami console'
 alias hd='hanami destroy'
 alias hg='hanami generate'

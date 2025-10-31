@@ -1,15 +1,10 @@
 # lol
-
 Plugin for adding catspeak aliases, because why not.
-
 To use it, add `lol` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... lol)
 ```
-
 ## Aliases
-
 | Alias        | Command                                                         |
 | ------------ | --------------------------------------------------------------- |
 | `:3`         | `echo`                                                          |
@@ -50,22 +45,16 @@ plugins=(... lol)
 | `visible`    | `echo`                                                          |
 | `wtf`        | `dmesg`                                                         |
 | `yolo`       | `git commit -m "$(curl -s https://whatthecommit.com/index.txt)"` |
-
 ## Usage Examples
-
 ```sh
 # mkdir new-directory
 icanhas new-directory
-
 # killall firefox
 nomnom firefox
-
 # chmod u=r,go= some.file
 nowai u=r,go= some.file
-
 # ssh root@catserver.org
 pwned root@catserver.org
-
 # git commit -m "$(curl -s https://whatthecommit.com/index.txt)"
 yolo
 ```

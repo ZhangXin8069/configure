@@ -1,7 +1,6 @@
 # ---------------------------------------------------------- #
 # Aliases and functions for juju (https://juju.is)           #
 # ---------------------------------------------------------- #
-
 # Load TAB completions
 # You need juju's bash completion script installed. By default bash-completion's
 # location will be used (i.e. pkg-config --variable=completionsdir bash-completion).
@@ -9,7 +8,6 @@ completion_file="$(pkg-config --variable=completionsdir bash-completion 2>/dev/n
   completion_file="/usr/share/bash-completion/completions/juju"
 [[ -f "$completion_file" ]] && source "$completion_file"
 unset completion_file
-
 # ---------------------------------------------------------- #
 # Aliases (in alphabetic order)                              #
 #                                                            #
@@ -77,11 +75,9 @@ alias jstj='juju status --format=json'
 alias jst='juju status --relations --color'
 alias jsts='juju status --relations --storage --color'
 alias jsw='juju switch'
-
 # ---------------------------------------------------------- #
 # Functions (in alphabetic order)                            #
 # ---------------------------------------------------------- #
-
 # Get app or unit address
 jaddr() {
   # $1 = app name
@@ -90,7 +86,6 @@ jaddr() {
     echo "jq is required but could not be found." >&2
     return 1
   fi
-
   if [[ $# -eq 1 ]]; then
     # Get app address
     juju status "$1" --format=json \
@@ -107,30 +102,25 @@ jaddr() {
     return 1
   fi
 }
-
 # Destroy all controllers
 jclean() {
   if (( ! ${+commands[jq]} )); then
     echo "jq is required but could not be found." >&2
     return 1
   fi
-
   local controllers=$(juju controllers --format=json | jq -r '.controllers | keys[]' 2>/dev/null)
   if [[ -z "$controllers" ]]; then
     echo "No controllers registered"
     return 0
   fi
-
   echo "This will forcefully destroy all storages, models and controllers."
   echo "Controllers to be destroyed:"
   echo "$controllers"
-
   if ! read -q '?Are you sure (y/n)? '; then
     echo
     echo "Aborted."
     return 0
   fi
-
   echo
   for controller in ${=controllers}; do
     timeout 2m juju destroy-controller --destroy-all-models --destroy-storage --force --no-wait -y $controller
@@ -138,7 +128,6 @@ jclean() {
     timeout 10s juju unregister $controller 2>/dev/null
   done
 }
-
 # Display app and unit relation data
 jreld() {
   # $1 = relation name
@@ -150,50 +139,40 @@ jreld() {
     echo "Example: jreld karma-dashboard alertmanager 0"
     return 1
   fi
-
   local relid="$(juju run "relation-ids $1" --unit $2/$3)"
   if [[ -z "$relid" ]]; then
     return 1
   fi
-
   echo "App data:"
   juju run "relation-get -r $relid --app - $2" --unit $2/$3
   echo
   echo "Unit data:"
   juju run "relation-get -r $relid - $2" --unit $2/$3
 }
-
 # Return Juju current controller
 jcontroller() {
   local controller="$(awk '/current-controller/ {print $2}' ~/.local/share/juju/controllers.yaml)"
   if [[ -z "$controller" ]]; then
     return 1
   fi
-
   echo $controller
   return 0
 }
-
 # Return Juju current model
 jmodel() {
   local yqbin="$(whereis yq | awk '{print $2}')"
-
   if [[ -z "$yqbin" ]]; then
     echo "--"
     return 1
   fi
-
   local model="$(yq e ".controllers.$(jcontroller).current-model" < ~/.local/share/juju/models.yaml | cut -d/ -f2)"
-
   if [[ -z "$model" ]]; then
     echo "--"
     return 1
   fi
-
   echo $model
   return 0
 }
-
 # Watch juju status, with optional interval (default: 5 sec)
 wjst() {
   local interval="${1:-5}"

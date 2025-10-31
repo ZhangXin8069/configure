@@ -27,39 +27,30 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Load the main script.
 typeset -a region_highlight
 . ${0:h:h}/zsh-syntax-highlighting.zsh
-
 # Activate the highlighter.
 ZSH_HIGHLIGHT_HIGHLIGHTERS=(main)
-
 source_file=0.7.1:highlighters/$1/$1-highlighter.zsh
-
 # Runs a highlighting test
 # $1: data file
 run_test_internal() {
   setopt interactivecomments
-
   local -a highlight_zone
-
   local tests_tempdir="$1"; shift
   local srcdir="$PWD"
   builtin cd -q -- "$tests_tempdir" || { echo >&2 "Bail out! cd failed: $?"; return 1 }
-
   # Load the data and prepare checking it.
   PREBUFFER=
   BUFFER=$(cd -- "$srcdir" && git cat-file blob $source_file)
   expected_region_highlight=()
-
   zmodload zsh/zprof
   zprof -c
   # Set $? for _zsh_highlight
   true && _zsh_highlight
   zprof
 }
-
 run_test() {
   # Do not combine the declaration and initialization: «local x="$(false)"» does not set $?.
   local __tests_tempdir
@@ -67,12 +58,10 @@ run_test() {
     echo >&2 "Bail out! mktemp failed"; return 1
   }
   typeset -r __tests_tempdir # don't allow tests to override the variable that we will 'rm -rf' later on
-
   {
     (run_test_internal "$__tests_tempdir" "$@")
   } always {
     rm -rf -- "$__tests_tempdir"
   }
 }
-
 run_test

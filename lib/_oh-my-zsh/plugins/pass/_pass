@@ -1,14 +1,11 @@
 #compdef pass
 #autoload
-
 # Copyright (C) 2012 - 2014:
 #    Johan Venant <jvenant@invicem.pro>
 #    Brian Mattern <rephorm@rephorm.com>
 #    Jason A. Donenfeld <Jason@zx2c4.com>.
 # All Rights Reserved.
 # This file is licensed under the GPLv2+. Please see COPYING for more information.
-
-
 # If you use multiple repositories, you can configure completion like this:
 #
 # compdef _pass workpass
@@ -16,8 +13,6 @@
 # workpass() {
 #   PASSWORD_STORE_DIR=$HOME/work/pass pass $@
 # }
-
-
 _pass () {
 	local cmd
   local rootcontext
@@ -115,7 +110,6 @@ _pass () {
 		_pass_cmd_show
 	fi
 }
-
 _pass_cmd_show () {
 	_arguments : \
 		"-c[put it on the clipboard]" \
@@ -129,19 +123,15 @@ _pass_complete_entries_helper () {
 prefix="${PASSWORD_STORE_DIR:-$HOME/.password-store}"
   _values -C 'passwords' ${$(find -L "$prefix" \( -name .git -o -name .gpg-id \) -prune -o $@ -print 2>/dev/null | sed -e "s#${prefix}/\{0,1\}##" -e 's#\.gpg##' -e 's#\\#\\\\#g' -e 's#:#\\:#g' | sort):-""}
 }
-
 _pass_complete_entries_with_subdirs () {
 	_pass_complete_entries_helper
 }
-
 _pass_complete_entries () {
 	_pass_complete_entries_helper -type f
 }
-
 _pass_complete_keys () {
 	local IFS=$'\n'
 	# Extract names and email addresses from gpg --list-keys
 	_values 'gpg keys' $(gpg2 --list-secret-keys --with-colons | cut -d : -f 10 | sort -u | sed '/^$/d')
 }
-
 _pass

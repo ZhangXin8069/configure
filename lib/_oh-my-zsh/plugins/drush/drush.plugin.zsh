@@ -2,15 +2,12 @@
 function dren() {
   drush en "$@" -y
 }
-
 function dris() {
   drush pm-disable "$@" -y
 }
-
 function drpu() {
   drush pm-uninstall "$@" -y
 }
-
 function drf() {
   if [[ -z "$1" ]]; then
     drush core-config
@@ -18,7 +15,6 @@ function drf() {
     drush core-config --choice=$1
   fi
 }
-
 function drfi() {
   case "$1" in
   fields) drush field-info fields ;;
@@ -26,49 +22,38 @@ function drfi() {
   *) drush field-info ;;
   esac
 }
-
 function drnew() {
   (
     cd
     echo "Website's name: "
     read WEBSITE_NAME
-
     HOST=http://$(hostname -i)/
-
     if [[ $WEBSITE_NAME == "" ]]; then
       MINUTES=$(date +%M:%S)
       WEBSITE_NAME="Drupal-$MINUTES"
       echo "Your website will be named: $WEBSITE_NAME"
     fi
-
     drush dl drupal --drupal-project-rename=$WEBSITE_NAME
-
     echo "Type your localhost directory: (Leave empty for /var/www/html/)"
     read DIRECTORY
-
     if [[ $DIRECTORY == "" ]]; then
       DIRECTORY="/var/www/html/"
     fi
-
     echo "Moving to $DIRECTORY$WEBSITE_NAME"
     sudo mv $WEBSITE_NAME $DIRECTORY
     cd $DIRECTORY$WEBSITE_NAME
-
     echo "Database's user: "
     read DATABASE_USR
     echo "Database's password: "
     read -s DATABASE_PWD
     echo "Database's name for your project: "
     read DATABASE
-
     DB_URL="mysql://$DATABASE_USR:$DATABASE_PWD@localhost/$DATABASE"
     drush site-install standard --db-url=$DB_URL --site-name=$WEBSITE_NAME
-
     open_command $HOST$WEBSITE_NAME
     echo "Done"
   )
 }
-
 # Aliases
 alias dr="drush"
 alias drca="drush cc all"   # Deprecated for Drush 8
@@ -100,7 +85,6 @@ alias drvs="drush variable-set"
 alias drws="drush watchdog:show"
 alias drwse="drush watchdog:show --extended"
 alias drwst="drush watchdog:tail"
-
 # Enable drush autocomplete support
 autoload bashcompinit
 bashcompinit

@@ -26,10 +26,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 # Redirection before and after the command word are implemented differently; test both.
 BUFFER='<<<foo echo >>&!bar'
-
 expected_region_highlight=(
   "1 3 redirection"   # <<<
   "4 6 default"       # foo

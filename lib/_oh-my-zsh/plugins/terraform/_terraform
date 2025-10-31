@@ -1,6 +1,5 @@
 #compdef terraform
 compdef _terraform terraform
-
 (( ${+functions[_terraform_commands]} )) || _terraform_commands() {
   local -a _terraform_cmds
   _terraform_cmds=(
@@ -33,20 +32,16 @@ compdef _terraform terraform
     _describe -t commands 'terraform commands' _terraform_cmds
     return
   fi
-
   local curcontext="${curcontext}"
   cmd="${${_terraform_cmds[(r)$words[1]:*]%%:*}}"
   curcontext="${curcontext%:*:*}:terraform-${cmd}:"
-
   local __chdir="${opt_args[-chdir]:-.}"
-
   if (( ${+functions[_terraform_$cmd]} )); then
     "_terraform_${cmd}"
   else
     _message "no more options"
   fi
 }
-
 (( ${+functions[_terraform_apply]} )) || _terraform_apply() {
   _arguments \
     '-auto-approve[Skip interactive approval of plan before applying.]' \
@@ -67,7 +62,6 @@ compdef _terraform terraform
     '*-var-file=[(foo) Load variable values from the given file, in addition to the default files terraform.tfvars and *.auto.tfvars. Use this option more than once to include more than one variables file.]:file:_files -W __chdir -g "*.tfvars{,.json}"' \
     ':plan:_files -W __chdir -'
 }
-
 (( ${+functions[_terraform_console]} )) || _terraform_console() {
   _arguments \
     '-state=[(terraform.tfstate) Legacy option for the local backend only. See the local backend'\''s documentation for more information.]:statefile:_files -W __chdir -g "*.tfstate"' \
@@ -75,7 +69,6 @@ compdef _terraform terraform
     '*-var=[(for=bar) Set a variable in the Terraform configuration. This flag can be set multiple times.]:var:' \
     '*-var-file=[(foo) Set variables in the Terraform configuration from a file. If "terraform.tfvars" or any ".auto.tfvars" files are present, they will be automatically loaded.]:file:_files -W __chdir -g "*.tfvars{,.json}"'
 }
-
 (( ${+functions[_terraform_destroy]} )) || _terraform_destroy() {
   _arguments \
     '-auto-approve[Skip interactive approval of plan before applying.]' \
@@ -93,7 +86,6 @@ compdef _terraform terraform
     '*-var=[(for=bar) Set a value for one of the input variables in the root module of the configuration. Use this option more than once to set more than one variable.]:var:' \
     '*-var-file=[(foo) Load variable values from the given file, in addition to the default files terraform.tfvars and *.auto.tfvars. Use this option more than once to include more than one variables file.]:file:_files -W __chdir -g "*.tfvars{,.json}"'
 }
-
 (( ${+functions[_terraform_fmt]} )) || _terraform_fmt() {
   _arguments \
     '-list=[(true) Don'\''t list files whose formatting differs (always disabled if using STDIN)]:list:(true false)' \
@@ -104,20 +96,17 @@ compdef _terraform terraform
     '-recursive[Also process files in subdirectories. By default, only the given directory (or current directory) is processed.]' \
     '*:targets:_files -W __chdir -'
 }
-
 (( ${+functions[_terraform_force-unlock]} )) || _terraform_force-unlock() {
   _arguments \
     '-force[Don'\''t ask for input for unlock confirmation.]' \
     ':lock_id:'
 }
-
 (( ${+functions[_terraform_get]} )) || _terraform_get() {
   _arguments \
     '-update[Check already-downloaded modules for available updates and install the newest versions available.]' \
     '-no-color[Disable text coloring in the output.]' \
     '-test-directory=[(tests) Set the Terraform test directory, defaults to "tests".]:test_directory:_files -W __chdir -/'
 }
-
 (( ${+functions[_terraform_graph]} )) || _terraform_graph() {
   _arguments \
     '-draw-cycles[Highlight any cycles in the graph with colored edges. This helps when diagnosing cycle errors. This option is supported only when illustrating a real evaluation graph, selected using the -type=TYPE option.]' \
@@ -125,7 +114,6 @@ compdef _terraform terraform
     '-plan=[Render graph using the specified plan file instead of the configuration in the current directory. Implies -type=apply.]:plan:_files -W __chdir -' \
     '-type=[(plan) Type of operation graph to output. Can be: plan, plan-refresh-only, plan-destroy, or apply. By default Terraform just summarizes the relationships between the resources in your configuration, without any particular operation in mind. Full operation graphs are more detailed but therefore often harder to read.]:type:(plan plan-refresh-only plan-destroy apply)'
 }
-
 (( ${+functions[_terraform_import]} )) || _terraform_import() {
   _arguments \
     '-backup=[(path) Path to backup the existing state file before modifying. Defaults to the "-state-out" path with ".backup" extension. Set to "-" to disable backup.]:backupfile:_files -W __chdir -g "*.backup"' \
@@ -141,7 +129,6 @@ compdef _terraform terraform
     ':addr:' \
     ':id:'
 }
-
 (( ${+functions[_terraform_init]} )) || _terraform_init() {
   _arguments \
     '-backend=[(true) Disable backend or Terraform Cloud initialization for this configuration and use what was previously initialized instead.]:backend:(true false)' \
@@ -161,22 +148,18 @@ compdef _terraform terraform
     '-ignore-remote-version[A rare option used for Terraform Cloud and the remote backend only. Set this to ignore checking that the local and remote Terraform versions use compatible state representations, making an operation proceed even when there is a potential mismatch. See the documentation on configuring Terraform with Terraform Cloud for more information.]' \
     '-test-directory=[(tests) Set the Terraform test directory, defaults to "tests".]:test_directory:_files -W __chdir -/'
 }
-
 (( ${+functions[_terraform_login]} )) || _terraform_login() {
   _arguments \
     ':hostname:'
 }
-
 (( ${+functions[_terraform_logout]} )) || _terraform_logout() {
   _arguments \
     ':hostname:'
 }
-
 (( ${+functions[_terraform_metadata]} )) || _terraform_metadata() {
   _arguments \
     '*::terraform metadata command:_terraform_metadata_commands'
 }
-
 (( ${+functions[_terraform_metadata_commands]} )) || _terraform_metadata_commands() {
   local -a _metadata_cmds
   _metadata_cmds=(
@@ -186,23 +169,19 @@ compdef _terraform terraform
     _describe -t commands "terraform metadata commands" _metadata_cmds
     return
   fi
-
   local curcontext="${curcontext}"
   cmd="${${_metadata_cmds[(r)$words[1]:*]%%:*}}"
   curcontext="${curcontext%:*:*}:terraform-metadata-${cmd}:"
-
   if (( ${+functions[_terraform_metadata_$cmd]} )); then
     "_terraform_metadata_${cmd}"
   else
     _message "no more options"
   fi
 }
-
 (( ${+functions[_terraform_metadata_functions]} )) || _terraform_metadata_functions() {
   _arguments \
     '-json[]'
 }
-
 (( ${+functions[_terraform_output]} )) || _terraform_output() {
   _arguments \
     '-state=[(path) Path to the state file to read. Defaults to "terraform.tfstate". Ignored when remote state is used.]:statefile:_files -W __chdir -g "*.tfstate"' \
@@ -211,7 +190,6 @@ compdef _terraform terraform
     '-raw[For value types that can be automatically converted to a string, will print the raw string directly, rather than a human-oriented representation of the value.]' \
     ':name:'
 }
-
 (( ${+functions[_terraform_plan]} )) || _terraform_plan() {
   _arguments \
     '-compact-warnings[If Terraform produces any warnings that are not accompanied by errors, show them in a more compact form that includes only the summary messages.]' \
@@ -232,13 +210,11 @@ compdef _terraform terraform
     '*-var=[(for=bar) Set a value for one of the input variables in the root module of the configuration. Use this option more than once to set more than one variable.]:var:' \
     '*-var-file=[(foo) Load variable values from the given file, in addition to the default files terraform.tfvars and *.auto.tfvars. Use this option more than once to include more than one variables file.]:file:_files -W __chdir -g "*.tfvars{,.json}"'
 }
-
 (( ${+functions[_terraform_providers]} )) || _terraform_providers() {
   _arguments \
     '-test-directory=[(path) Set the Terraform test directory, defaults to "tests".]:test_directory:_files -W __chdir -/' \
     '*::terraform providers command:_terraform_providers_commands'
 }
-
 (( ${+functions[_terraform_providers_commands]} )) || _terraform_providers_commands() {
   local -a _providers_cmds
   _providers_cmds=(
@@ -250,18 +226,15 @@ compdef _terraform terraform
     _describe -t commands "terraform providers commands" _providers_cmds
     return
   fi
-
   local curcontext="${curcontext}"
   cmd="${${_providers_cmds[(r)$words[1]:*]%%:*}}"
   curcontext="${curcontext%:*:*}:terraform-providers-${cmd}:"
-
   if (( ${+functions[_terraform_providers_$cmd]} )); then
     "_terraform_providers_${cmd}"
   else
     _message "no more options"
   fi
 }
-
 (( ${+functions[_terraform_providers_lock]} )) || _terraform_providers_lock() {
   _arguments \
     '-fs-mirror=[(dir) Consult the given filesystem mirror directory instead of the origin registry for each of the given providers.]:fs_mirror:_files -W __chdir -/' \
@@ -269,19 +242,16 @@ compdef _terraform terraform
     '*-platform=[(os_arch) Choose a target platform to request package checksums for.]:platform:' \
     '*:provider:'
 }
-
 (( ${+functions[_terraform_providers_mirror]} )) || _terraform_providers_mirror() {
   _arguments \
     '*-platform=[(os_arch) Choose which target platform to build a mirror for.]:platform:' \
     '::' \
     ':target_dir:_files -W __chdir -/'
 }
-
 (( ${+functions[_terraform_providers_schema]} )) || _terraform_providers_schema() {
   _arguments \
     '-json[]'
 }
-
 (( ${+functions[_terraform_refresh]} )) || _terraform_refresh() {
   _arguments \
     '-backup=[(path) Path to backup the existing state file before modifying. Defaults to the "-state-out" path with ".backup" extension. Set to "-" to disable backup.]::backupfile:_files -W __chdir -g "*.backup"' \
@@ -297,19 +267,16 @@ compdef _terraform terraform
     '*-var=[(for=bar) Set a variable in the Terraform configuration. This flag can be set multiple times.]:var:' \
     '*-var-file=[(foo) Set variables in the Terraform configuration from a file. If "terraform.tfvars" or any ".auto.tfvars" files are present, they will be automatically loaded.]:file:_files -W __chdir -g "*.tfvars{,.json}"'
 }
-
 (( ${+functions[_terraform_show]} )) || _terraform_show() {
   _arguments \
     '-json[If specified, output the Terraform plan or state in a machine-readable form.]' \
     '-no-color[If specified, output will not contain any color.]' \
     ':path:_files -W __chdir -g "*.tfstate"'
 }
-
 (( ${+functions[_terraform_state]} )) || _terraform_state() {
   _arguments \
     '*::terraform state command:_terraform_state_commands'
 }
-
 (( ${+functions[_terraform_state_commands]} )) || _terraform_state_commands() {
   local -a _state_cmds
   _state_cmds=(
@@ -325,25 +292,21 @@ compdef _terraform terraform
     _describe -t commands "terraform state commands" _state_cmds
     return
   fi
-
   local curcontext="${curcontext}"
   cmd="${${_state_cmds[(r)$words[1]:*]%%:*}}"
   curcontext="${curcontext%:*:*}:terraform-state-${cmd}:"
-
   if (( ${+functions[_terraform_state_$cmd]} )); then
     "_terraform_state_${cmd}"
   else
     _message "no more options"
   fi
 }
-
 (( ${+functions[_terraform_state_list]} )) || _terraform_state_list() {
   _arguments \
     '-state=[(statefile) Path to a Terraform state file to use to look up Terraform-managed resources. By default, Terraform will consult the state of the currently-selected workspace.]:statefile:_files -W __chdir -g "*.tfstate"' \
     '-id=[(id) Filters the results to include only instances whose resource types have an attribute named id whose value equals the given id string.]:id:' \
     '*:address:__terraform_state_resources'
 }
-
 (( ${+functions[_terraform_state_mv]} )) || _terraform_state_mv() {
   _arguments \
     '-dry-run[If set, prints out what would'\''ve been moved but doesn'\''t actually move anything.]' \
@@ -358,7 +321,6 @@ compdef _terraform terraform
     ':source:__terraform_state_resources' \
     ':destination: '
 }
-
 (( ${+functions[_terraform_state_push]} )) || _terraform_state_push() {
   _arguments \
     '-force[Write the state even if lineages don'\''t match or the remote serial is higher.]' \
@@ -367,7 +329,6 @@ compdef _terraform terraform
     '::' \
     ':destination:_files'
 }
-
 (( ${+functions[_terraform_state_replace-provider]} )) || _terraform_state_replace-provider() {
   _arguments \
     '-auto-approve[Skip interactive approval.]' \
@@ -379,7 +340,6 @@ compdef _terraform terraform
     ':from_provider_fqn:' \
     ':to_provider_fqn:'
 }
-
 (( ${+functions[_terraform_state_rm]} )) || _terraform_state_rm() {
   _arguments \
     '-dry-run[If set, prints out what would'\''ve been removed but doesn'\''t actually remove anything.]' \
@@ -390,13 +350,11 @@ compdef _terraform terraform
     '-state=[(PATH) Path to the state file to update. Defaults to the current workspace state.]:statefile:_files -W __chdir -g "*.tfstate"' \
     '*:address:__terraform_state_resources'
 }
-
 (( ${+functions[_terraform_state_show]} )) || _terraform_state_show() {
   _arguments \
     '-state=[(statefile) Path to a Terraform state file to use to look up Terraform-managed resources. By default it will use the state "terraform.tfstate" if it exists.]:statefile:_files -W __chdir -g "*.tfstate"' \
     "*:address:__terraform_state_resources"
 }
-
 (( ${+functions[__terraform_state_resources]} )) || __terraform_state_resources() {
   local resource
   local -a resources
@@ -405,7 +363,6 @@ compdef _terraform terraform
   done
   compadd "${@}" - "${resources[@]}"
 }
-
 (( ${+functions[_terraform_taint]} )) || _terraform_taint() {
   _arguments \
     '-allow-missing[If specified, the command will succeed (exit code 0) even if the resource is missing.]' \
@@ -417,7 +374,6 @@ compdef _terraform terraform
     '-state-out=[(path) Path to write updated state file. By default, the "-state" path will be used.]:statefile:_files -W __chdir -g "*.tfstate"' \
     '*:address:__terraform_state_resources'
 }
-
 (( ${+functions[_terraform_test]} )) || _terraform_test() {
   _arguments \
     '-cloud-run=[(source) If specified, Terraform will execute this test run remotely using Terraform Cloud. You must specify the source of a module registered in a private module registry as the argument to this flag. This allows Terraform to associate the cloud run with the correct Terraform Cloud module and organization.]:cloud_run:' \
@@ -429,7 +385,6 @@ compdef _terraform terraform
     '*-var-file=[(foo) Load variable values from the given file, in addition to the default files terraform.tfvars and *.auto.tfvars. Use this option more than once to include more than one variables file.]:file:_files -W __chdir -g "*.tfvars{,.json}"' \
     '-verbose[Print the plan or state for each test run block as it executes.]' \
 }
-
 (( ${+functions[_terraform_untaint]} )) || _terraform_untaint() {
   _arguments \
     '-allow-missing[If specified, the command will succeed (exit code 0) even if the resource is missing.]' \
@@ -440,7 +395,6 @@ compdef _terraform terraform
     '-state-out=[(path) Path to write updated state file. By default, the "-state" path will be used.]:statefile:_files -W __chdir -g "*.tfstate"' \
     ':name:__terraform_state_resources'
 }
-
 (( ${+functions[_terraform_validate]} )) || _terraform_validate() {
   _arguments \
     '-json[Produce output in a machine-readable JSON format, suitable for use in text editor integrations and other automated systems.]' \
@@ -449,18 +403,15 @@ compdef _terraform terraform
     '-test-directory=[(path) Set the Terraform test directory, defaults to "tests".]:test_directory:_files -W __chdir -/' \
     ':dir:_files -W __chdir -/'
 }
-
 (( ${+functions[_terraform_version]} )) || _terraform_version() {
   _arguments \
     '-json[Output the version information as a JSON object.]' \
     '::'
 }
-
 (( ${+functions[_terraform_workspace]} )) || _terraform_workspace() {
   _arguments \
     '*::terraform workspace command:_terraform_workspace_commands'
 }
-
 (( ${+functions[_terraform_workspace_commands]} )) || _terraform_workspace_commands() {
   local -a _workspace_cmds
   _workspace_cmds=(
@@ -474,18 +425,15 @@ compdef _terraform terraform
     _describe -t commands "terraform workspace commands" _workspace_cmds
     return
   fi
-
   local curcontext="${curcontext}"
   cmd="${${_workspace_cmds[(r)$words[1]:*]%%:*}}"
   curcontext="${curcontext%:*:*}:terraform-workspace-${cmd}:"
-
   if (( ${+functions[_terraform_workspace_$cmd]} )); then
     "_terraform_workspace_${cmd}"
   else
     _message "no more options"
   fi
 }
-
 (( ${+functions[_terraform_workspace_delete]} )) || _terraform_workspace_delete() {
   _arguments \
     '-force[Remove a workspace even if it is managing resources. Terraform can no longer track or manage the workspace'\''s infrastructure.]' \
@@ -494,11 +442,9 @@ compdef _terraform terraform
     '::' \
     ':name:__terraform_workspaces'
 }
-
 (( ${+functions[_terraform_workspace_list]} )) || _terraform_workspace_list() {
   _arguments
 }
-
 (( ${+functions[_terraform_workspace_new]} )) || _terraform_workspace_new() {
   _arguments \
     '-lock=[(true) Don'\''t hold a state lock during the operation. This is dangerous if others might concurrently run commands against the same workspace.]:lock:(true false)' \
@@ -507,18 +453,15 @@ compdef _terraform terraform
     '::' \
     ':name:'
 }
-
 (( ${+functions[_terraform_workspace_select]} )) || _terraform_workspace_select() {
   _arguments \
     '-or-create=[(false) Create the Terraform workspace if it doesn'\''t exist.]:or_create:(true false)' \
     '::' \
     ':name:__terraform_workspaces'
 }
-
 (( ${+functions[_terraform_workspace_show]} )) || _terraform_workspace_show() {
   _arguments
 }
-
 (( ${+functions[__terraform_workspaces]} )) || __terraform_workspaces() {
   local workspace
   local -a workspaces
@@ -530,7 +473,6 @@ compdef _terraform terraform
   done
   compadd "${@}" - "${workspaces[@]}"
 }
-
 _terraform() {
   _arguments \
     '-chdir=[(DIR) Switch to a different working directory before executing the given subcommand.]:chdir:_files -W __chdir -/' \
@@ -538,7 +480,6 @@ _terraform() {
     '-version[An alias for the "version" subcommand.]' \
     '*::terraform command:_terraform_commands'
 }
-
 # don't run the completion function when being source-ed or eval-ed
 if [ "${funcstack[1]}" = '_terraform' ]; then
   _terraform

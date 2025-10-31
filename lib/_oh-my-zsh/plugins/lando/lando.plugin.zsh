@@ -11,7 +11,6 @@
   wp
   yarn
 "}
-
 # Enable multiple commands with lando.
 function ${=LANDO_ZSH_WRAPPED_COMMANDS} {
   # If the lando task is available in `lando --help`, then it means:
@@ -28,7 +27,6 @@ function ${=LANDO_ZSH_WRAPPED_COMMANDS} {
     command "$0" "$@"
   fi
 }
-
 # Check for the file in the current and parent directories.
 _lando_file_exists() {
   # Only bother checking for lando within the Sites directory.
@@ -36,7 +34,6 @@ _lando_file_exists() {
     # Not within $LANDO_ZSH_SITES_DIRECTORY
     return 1
   fi
-
   local curr_dir="$PWD"
   # Checking for file: $LANDO_ZSH_CONFIG_FILE within $LANDO_ZSH_SITES_DIRECTORY...
   while [[ "$curr_dir" != "$LANDO_ZSH_SITES_DIRECTORY" ]]; do
@@ -45,7 +42,6 @@ _lando_file_exists() {
     fi
     curr_dir="${curr_dir:h}"
   done
-
   # Could not find $LANDO_ZSH_CONFIG_FILE in the current directory
   # or in any of its parents up to $LANDO_ZSH_SITES_DIRECTORY.
   return 1

@@ -27,9 +27,7 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 BUFFER=$'">" foo ls'
-
 expected_region_highlight=(
   '1 3 unknown-token' # ">" - not "redirection"
   '5 7 default'       # foo

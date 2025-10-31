@@ -2,8 +2,6 @@
 #autoload
 # setopt XTRACE VERBOSE
 # vim: ft=zsh sw=2 ts=2 et
-
-
 # -----------------------------------------------------------------------------
 #          FILE:  _pod
 #   DESCRIPTION:  CocoaPods (0.33.1) autocomplete plugin for Oh-My-Zsh
@@ -14,10 +12,8 @@
 #       TWITTER:  @jolyAlexandre
 #       VERSION:  0.0.5
 # -----------------------------------------------------------------------------
-
 local -a _subcommands
 local -a _options
-
 case "$words[2]" in
   help)
     case "$words[3]" in

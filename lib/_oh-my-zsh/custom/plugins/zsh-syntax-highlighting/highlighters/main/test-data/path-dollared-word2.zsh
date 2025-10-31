@@ -26,11 +26,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 local lambda="''"
 touch \$lambda
 BUFFER=': \$lambda'
-
 expected_region_highlight=(
   "1 1 builtin" # :
   "3 10 path"   # \$lambda

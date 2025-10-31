@@ -27,10 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 doas() {}
 BUFFER=$'doas -nu phy1729 ls'
-
 expected_region_highlight=(
   '1 4 precommand'           # doas
   '6 8 single-hyphen-option' # -nu

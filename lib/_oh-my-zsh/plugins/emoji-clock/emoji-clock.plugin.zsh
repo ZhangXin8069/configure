@@ -6,7 +6,6 @@
 #        AUTHOR: Alexis Hildebrandt (afh[at]surryhill.net)
 #       VERSION: 1.0.0
 # -----------------------------------------------------------------------------
-
 function emoji-clock() {
   # Add 15 minutes to the current time and save the value as $minutes.
   ((minutes = $(date '+%M') + 15))
@@ -14,7 +13,6 @@ function emoji-clock() {
   # make sure minutes and hours don't exceed 60 nor 12 respectively
   ((minutes %= 60))
   ((hour %= 12))
-
   case $hour in
   0)
     clock="🕛"

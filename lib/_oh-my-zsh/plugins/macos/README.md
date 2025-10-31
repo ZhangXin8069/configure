@@ -1,22 +1,15 @@
 # MacOS plugin
-
 This plugin provides a few utilities to make it more enjoyable on macOS (previously named OSX).
-
 To start using it, add the `macos` plugin to your plugins array in `~/.zshrc`:
-
 ```zsh
 plugins=(... macos)
 ```
-
 ## Supported Terminals
-
 - [iTerm](https://iterm.sourceforge.net/)
 - [iTerm2](https://iterm2.com/)
 - [Hyper](https://hyper.is/)
 - [Tabby](https://tabby.sh/)
-
 ## Commands
-
 | Command       | Description                                              |
 | :------------ | :------------------------------------------------------- |
 | `tab`         | Open the current directory in a new tab                  |
@@ -39,17 +32,11 @@ plugins=(... macos)
 | `rmdsstore`   | Remove .DS_Store files recursively in a directory        |
 | `btrestart`   | Restart the Bluetooth daemon                             |
 | `freespace`   | Erases purgeable disk space with 0s on the selected disk |
-
 ## Acknowledgements
-
 Original author: [Sorin Ionescu](https://github.com/sorin-ionescu)
-
 This application makes use of the following third-party scripts:
-
 [shpotify](https://github.com/hnarayanan/shpotify)
-
 Copyright (c) 2012–2019 [Harish Narayanan](https://harishnarayanan.org/).
-
 Permission is hereby granted, free of charge, to any person obtaining
 a copy of this software and associated documentation files (the
 "Software"), to deal in the Software without restriction, including
@@ -57,10 +44,8 @@ without limitation the rights to use, copy, modify, merge, publish,
 distribute, sublicense, and/or sell copies of the Software, and to
 permit persons to whom the Software is furnished to do so, subject to
 the following conditions:
-
 The above copyright notice and this permission notice shall be
 included in all copies or substantial portions of the Software.
-
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
 EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
 MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND

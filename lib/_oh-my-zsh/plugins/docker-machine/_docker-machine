@@ -16,8 +16,6 @@
 # -----------
 #  * @sdurrheimer docker-compose-zsh-completion https://github.com/sdurrheimer/docker-compose-zsh-completion
 #  * @ilkka _docker-machine
-
-
 __docker-machine_get_hosts() {
     [[ $PREFIX = -* ]] && return 1
     local state
@@ -31,35 +29,28 @@ __docker-machine_get_hosts() {
     _describe 'host' hosts "$@" && ret=0
     return ret
 }
-
 __docker-machine_hosts_with_state() {
     declare -a hosts
     hosts=(${(f)"$(_call_program commands docker-machine ls -f '{{.Name}}\:{{.DriverName}}\({{.State}}\)\ {{.URL}}')"})
     _describe 'host' hosts
 }
-
 __docker-machine_hosts_all() {
     __docker-machine_get_hosts all "$@"
 }
-
 __docker-machine_hosts_running() {
     __docker-machine_get_hosts Running "$@"
 }
-
 __docker-machine_get_swarm() {
     declare -a swarms
     swarms=(${(f)"$(_call_program commands docker-machine ls -f {{.Swarm}} | awk '{print $1}')"})
     _describe 'swarm' swarms
 }
-
 __docker-machine_hosts_and_files() {
     _alternative "hosts:host:__docker-machine_hosts_all -qS ':'" 'files:files:_path_files'
 }
-
 __docker-machine_filters() {
     [[ $PREFIX = -* ]] && return 1
     integer ret=1
-
     if compset -P '*='; then
         case "${${words[-1]%=*}#*=}" in
             (driver)
@@ -88,7 +79,6 @@ __docker-machine_filters() {
     fi
     return ret
 }
-
 __get_swarm_discovery() {
     declare -a masters services
     local service
@@ -101,7 +91,6 @@ __get_swarm_discovery() {
     _describe -t services "swarm service" services && ret=0
     return ret
 }
-
 __get_create_argument() {
     typeset -g docker_machine_driver
     if [[ CURRENT -le 2 ]]; then
@@ -164,8 +153,6 @@ __get_create_argument() {
     esac
     return ret
 }
-
-
 __docker-machine_subcommand() {
     local -a opts_help
     opts_help=("(- :)--help[Print usage]")
@@ -177,7 +164,6 @@ __docker-machine_subcommand() {
     opts_driver=('amazonec2' 'azure' 'digitalocean' 'exoscale' 'generic' 'google' 'hyperv' 'none' 'openstack' 'rackspace' 'softlayer' 'virtualbox' 'vmwarefusion' 'vmwarevcloudair' 'vmwarevsphere')
     opts_storage_driver=('overlay' 'aufs' 'btrfs' 'devicemapper' 'vfs' 'zfs')
     integer ret=1
-
     case "$words[1]" in
         (active)
             _arguments \
@@ -288,19 +274,14 @@ __docker-machine_subcommand() {
                 '*:host:__docker-machine_hosts_running' && ret=0
             ;;
     esac
-
     return ret
 }
-
-
 __docker-machine_commands() {
     local cache_policy
-
     zstyle -s ":completion:${curcontext}:" cache-policy cache_policy
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __docker-machine_caching_policy
     fi
-
     if ( [[ ${+_docker_machine_subcommands} -eq 0 ]] || _cache_invalid docker_machine_subcommands) \
         && ! _retrieve_cache docker_machine_subcommands;
     then
@@ -311,22 +292,18 @@ __docker-machine_commands() {
     fi
     _describe -t docker-machine-commands "docker-machine command" _docker_machine_subcommands
 }
-
 __docker-machine_caching_policy() {
     oldp=( "$1"(Nmh+1) )
     (( $#oldp ))
 }
-
 _docker-machine() {
     if [[ $service != docker-machine ]]; then
         _call_function - _$service
         return
     fi
-
     local curcontext="$curcontext" state line
     integer ret=1
     typeset -A opt_args
-
     _arguments -C \
         "(- :)"{-h,--help}"[Show help]" \
         "(-D --debug)"{-D,--debug}"[Enable debug mode]" \
@@ -341,7 +318,6 @@ _docker-machine() {
         '(- :)'{-v,--version}'[Print the version]' \
         "(-): :->command" \
         "(-)*:: :->option-or-argument" && ret=0
-
     case $state in
         (command)
             __docker-machine_commands && ret=0
@@ -352,8 +328,6 @@ _docker-machine() {
             ret=0
             ;;
     esac
-
     return ret
 }
-
 _docker-machine "$@"

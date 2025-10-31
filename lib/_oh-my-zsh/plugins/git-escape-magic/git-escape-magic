@@ -18,13 +18,11 @@
 #     autoload -Uz git-escape-magic
 #     git-escape-magic
 #
-
 git-escape-magic.self-insert() {
     emulate -L zsh
     setopt extendedglob
     local self_insert_function
     zstyle -s ':git-escape-magic' self-insert-function self_insert_function
-
     if [[ "$KEYS" == [{}~^]* ]] && {
         local qkey="${(q)KEYS}"
         [[ "$KEYS" != "$qkey" ]]
@@ -92,44 +90,32 @@ git-escape-magic.self-insert() {
         esac &&
         LBUFFER="$LBUFFER\\"
     fi
-
     zle "$self_insert_function"
 }
-
 git-escape-magic.on() {
     emulate -L zsh
     local self_insert_function="${$(zle -lL | awk \
         '$1=="zle"&&$2=="-N"&&$3=="self-insert"{print $4;exit}'):-.self-insert}"
-
     [[ "$self_insert_function" == git-escape-magic.self-insert ]] &&
         return 0
-
     # For url-quote-magic which does not zle -N itself
     zle -la "$self_insert_function" || zle -N "$self_insert_function"
-
     zstyle ':git-escape-magic' self-insert-function "$self_insert_function"
-
     zle -A git-escape-magic.self-insert self-insert
     return 0
 }
-
 git-escape-magic.off() {
     emulate -L zsh
     local self_insert_function
     zstyle -s ':git-escape-magic' self-insert-function self_insert_function
-
     [[ -n "$self_insert_function" ]] &&
         zle -A "$self_insert_function" self-insert
     return 0
 }
-
 zle -N git-escape-magic.self-insert
 zle -N git-escape-magic.on
 zle -N git-escape-magic.off
-
 git-escape-magic() {
         git-escape-magic.on
 }
-
 [[ -o kshautoload ]] || git-escape-magic "$@"
-

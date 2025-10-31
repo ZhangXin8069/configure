@@ -25,12 +25,10 @@ alias pvinf='poetry env info'
 alias pvoff='poetry config virtualenvs.create false'
 alias pvrm='poetry env remove'
 alias pvu='poetry env use'
-
 # Return immediately if poetry is not found
 if (( ! $+commands[poetry] )); then
   return
 fi
-
 # If the completion file doesn't exist yet, we need to autoload it and
 # bind it to `poetry`. Otherwise, compinit will have already done that.
 if [[ ! -f "$ZSH_CACHE_DIR/completions/_poetry" ]]; then
@@ -38,5 +36,4 @@ if [[ ! -f "$ZSH_CACHE_DIR/completions/_poetry" ]]; then
   autoload -Uz _poetry
   _comps[poetry]=_poetry
 fi
-
 poetry completions zsh >| "$ZSH_CACHE_DIR/completions/_poetry" &|

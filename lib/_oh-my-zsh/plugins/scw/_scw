@@ -3,60 +3,49 @@
 # zsh completion for scw (https://www.scaleway.com)
 #
 # Inspired by https://github.com/felixr/docker-zsh-completion
-
 __scw_get_servers() {
     local expl
     declare -a servers
     servers=(${(f)"$(_call_program commands scw _completion servers-names)"})
     _describe -t servers "servers" servers
 }
-
 __scw_stoppedservers() {
     __scw_get_servers
 }
-
 __scw_runningservers() {
     __scw_get_servers
 }
-
 __scw_servers () {
     __scw_get_servers
 }
-
 __scw_images () {
     local expl
     declare -a images
     images=(${(f)"$(_call_program commands scw _completion images-names)"})
     _describe -t images "images" images
 }
-
 __scw_images_and_snapshots () {
     __scw_images
     __scw_snapshots
 }
-
 __scw_snapshots () {
     local expl
     declare -a snapshots
     snapshots=(${(f)"$(_call_program commands scw _completion --prefix snapshots-names)"})
     _describe -t snapshots "snapshots" snapshots
 }
-
 __scw_bootscripts () {
     local expl
     declare -a bootscripts
     bootscripts=(${(f)"$(_call_program commands scw _completion bootscripts-names)"})
     _describe -t bootscripts "bootscripts" bootscripts
 }
-
 __scw_tags() {
     __scw_images
 }
-
 __scw_repositories_with_tags() {
     __scw_images
 }
-
 __scw_search() {
     # declare -a scwsearch
     local cache_policy
@@ -64,11 +53,9 @@ __scw_search() {
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __scw_caching_policy
     fi
-
     local searchterm cachename
     searchterm="${words[$CURRENT]%/}"
     cachename=_scw-search-$searchterm
-
     local expl
     local -a result
     if ( [[ ${(P)+cachename} -eq 0 ]] || _cache_invalid ${cachename#_} ) \
@@ -79,27 +66,21 @@ __scw_search() {
     fi
     _wanted scwsearch expl 'available images' compadd -a result
 }
-
 __scw_caching_policy()
 {
   oldp=( "$1"(Nmh+1) )     # 1 hour
   (( $#oldp ))
 }
-
-
 __scw_repositories () {
     __scw_images
 }
-
 __scw_commands () {
     # local -a  _scw_subcommands
     local cache_policy
-
     zstyle -s ":completion:${curcontext}:" cache-policy cache_policy
     if [[ -z "$cache_policy" ]]; then
         zstyle ":completion:${curcontext}:" cache-policy __scw_caching_policy
     fi
-
     if ( [[ ${+_scw_subcommands} -eq 0 ]] || _cache_invalid scw_subcommands) \
         && ! _retrieve_cache scw_subcommands;
     then
@@ -111,7 +92,6 @@ __scw_commands () {
     fi
     _describe -t scw-commands "scw command" _scw_subcommands
 }
-
 __scw_subcommand () {
     local -a _command_args
     case "$words[1]" in
@@ -147,7 +127,6 @@ __scw_subcommand () {
                 {-w,--wait}'[Wait for SSH to be ready]' \
                 ':servers:__scw_runningservers' \
                 '*::command:->anycommand' && ret=0
-
             case $state in
                 (anycommand)
                     shift 1 words
@@ -155,7 +134,6 @@ __scw_subcommand () {
                     _normal
                     ;;
             esac
-
             return ret
             ;;
         (history)
@@ -259,7 +237,6 @@ __scw_subcommand () {
                 '(-):images:__scw_images_and_snapshots' \
                 '(-):command: _command_names -e' \
                 '*::arguments: _normal'
-
             case $state in
                 (link)
                     if compset -P '*:'; then
@@ -289,9 +266,7 @@ __scw_subcommand () {
         (*)
             _message 'Unknown sub command'
     esac
-
 }
-
 _scw () {
     # Support for subservices, which allows for `compdef _scw scw-shell=_scw_servers`.
     # Based on /usr/share/zsh/functions/Completion/Unix/_git without support for `ret`.
@@ -299,17 +274,13 @@ _scw () {
         _call_function - _$service
         return
     fi
-
     local curcontext="$curcontext" state line
     typeset -A opt_args
-
     _arguments -C \
       '-H[tcp://host:port to bind/connect to]:socket: ' \
          '(-): :->command' \
          '(-)*:: :->option-or-argument'
-
     if (( CURRENT == 1 )); then
-
     fi
     case $state in
         (command)
@@ -321,9 +292,7 @@ _scw () {
             ;;
     esac
 }
-
 _scw "$@"
-
 # Local Variables:
 # mode: Shell-Script
 # sh-indentation: 4

@@ -2,7 +2,6 @@
 # gcloud plugin for oh-my-zsh                       #
 # Author: Ian Chesal (github.com/ianchesal)         #
 #####################################################
-
 if [[ -z "${CLOUDSDK_HOME}" ]]; then
   search_locations=(
     "$HOME/google-cloud-sdk"
@@ -20,7 +19,6 @@ if [[ -z "${CLOUDSDK_HOME}" ]]; then
     "/opt/local/libexec/google-cloud-sdk"
     "$HOME/.asdf/installs/gcloud/*/"
   )
-
   for gcloud_sdk_location in $search_locations; do
     if [[ -d "${gcloud_sdk_location}" ]]; then
       CLOUDSDK_HOME="${gcloud_sdk_location}"
@@ -29,13 +27,11 @@ if [[ -z "${CLOUDSDK_HOME}" ]]; then
   done
   unset search_locations gcloud_sdk_location
 fi
-
 if (( ${+CLOUDSDK_HOME} )); then
   # Source path file
   if [[ -f "${CLOUDSDK_HOME}/path.zsh.inc" ]]; then
     source "${CLOUDSDK_HOME}/path.zsh.inc"
   fi
-
   # Look for completion file in different paths
   for comp_file (
     "${CLOUDSDK_HOME}/completion.zsh.inc"             # default location
@@ -47,6 +43,5 @@ if (( ${+CLOUDSDK_HOME} )); then
     fi
   done
   unset comp_file
-
   export CLOUDSDK_HOME
 fi

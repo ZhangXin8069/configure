@@ -1,44 +1,33 @@
 #!/usr/bin/env python3
 from __future__ import print_function
-
 import os
 import sys
 import re
 from subprocess import Popen, PIPE, check_output
-
-
 def get_tagname_or_hash():
     """return tagname if exists else hash"""
     # get hash
     hash_cmd = ['git', 'rev-parse', '--short', 'HEAD']
     hash_ = check_output(hash_cmd).decode('utf-8').strip()
-
     # get tagname
     tags_cmd = ['git', 'for-each-ref', '--points-at=HEAD', '--count=2',
                 '--sort=-version:refname', '--format=%(refname:short)', 'refs/tags']
     tags = check_output(tags_cmd).decode('utf-8').split()
-
     if tags:
         return tags[0] + ('+' if len(tags) > 1 else '')
     elif hash_:
         return hash_
     return None
-
 # Re-use method from https://github.com/magicmonty/bash-git-prompt to get stashs count
-
-
 def get_stash():
     cmd = Popen(['git', 'rev-parse', '--git-dir'], stdout=PIPE, stderr=PIPE)
     so, se = cmd.communicate()
     stash_file = '%s%s' % (so.decode('utf-8').rstrip(), '/logs/refs/stash')
-
     try:
         with open(stash_file) as f:
             return sum(1 for _ in f)
     except IOError:
         return 0
-
-
 # `git status --porcelain --branch` can collect all information
 # branch, remote_branch, untracked, staged, changed, conflicts, ahead, behind
 po = Popen(['git', 'status', '--porcelain', '--branch'],
@@ -46,7 +35,6 @@ po = Popen(['git', 'status', '--porcelain', '--branch'],
 stdout, sterr = po.communicate()
 if po.returncode != 0:
     sys.exit(0)  # Not a git repository
-
 # collect git status information
 untracked, staged, changed, deleted, conflicts = [], [], [], [], []
 ahead, behind = 0, 0
@@ -86,13 +74,11 @@ for st in status:
             conflicts.append(st)
         elif st[0] != ' ':
             staged.append(st)
-
 stashed = get_stash()
 if not changed and not deleted and not staged and not conflicts and not untracked:
     clean = 1
 else:
     clean = 0
-
 out = ' '.join([
     branch,
     str(ahead),

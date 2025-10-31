@@ -6,15 +6,12 @@ describe 'using `zle -U`' do
         run_command('foo() { zle -U - "echo hello" }; zle -N foo; bindkey ^B foo')
     end
   end
-
   let(:options) { ['unset ZSH_AUTOSUGGEST_USE_ASYNC', 'ZSH_AUTOSUGGEST_STRATEGY=test'] }
-
   # TODO: This is only possible with the $KEYS_QUEUED_COUNT widget parameter, coming soon...
   xit 'does not fetch a suggestion for every inserted character' do
     session.send_keys('C-b')
     wait_for { session.content }.to eq('echo hello')
   end
-
   it 'shows a suggestion when the widget completes' do
     with_history('echo hello world') do
       session.send_keys('C-b')

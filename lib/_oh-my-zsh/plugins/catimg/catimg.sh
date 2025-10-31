@@ -6,19 +6,15 @@
 # terminal.                                                                    #
 # GitHub: https://github.com/posva/catimg                                      #
 ################################################################################
-
 function help() {
   echo "Usage catimg [-h] [-w width] [-c char] img"
   echo "By default char is \"  \" and w is the terminal width"
 }
-
 # VARIABLES
 COLOR_FILE=$(dirname $0)/colors.png
 CHAR="  "
-
 WIDTH=""
 IMG=""
-
 while getopts qw:c:h opt; do
   case "$opt" in
   w) WIDTH="$OPTARG" ;;
@@ -33,17 +29,14 @@ while getopts qw:c:h opt; do
     ;;
   esac
 done
-
 while [ "$1" ]; do
   IMG="$1"
   shift
 done
-
 if [ "$IMG" = "" -o ! -f "$IMG" ]; then
   help
   exit 1
 fi
-
 if [ ! "$WIDTH" ]; then
   COLS=$(expr $(tput cols) "/" $(echo -n "$CHAR" | wc -c))
 else
@@ -53,7 +46,6 @@ WIDTH=$(convert "$IMG" -print "%w\n" /dev/null)
 if [ "$WIDTH" -gt "$COLS" ]; then
   WIDTH=$COLS
 fi
-
 REMAP=""
 if convert "$IMG" -resize $COLS\> +dither -remap $COLOR_FILE /dev/null; then
   REMAP="-remap $COLOR_FILE"
@@ -62,7 +54,6 @@ else
   #convert "$IMG" -colors 256 PNG8:tmp.png
   #IMG="tmp.png"
 fi
-
 # Display the image
 I=0
 convert "$IMG" -resize $COLS\> +dither $(echo $REMAP) txt:- 2>/dev/null |
@@ -73,7 +64,6 @@ convert "$IMG" -resize $COLS\> +dither $(echo $REMAP) txt:- 2>/dev/null |
         ((\
         I++, \
         IDX = 232 + R * 23 / 255))
-
       else
         ((\
         I++, \
@@ -81,7 +71,6 @@ convert "$IMG" -resize $COLS\> +dither $(echo $REMAP) txt:- 2>/dev/null |
         R * 5 / 255 * 36 + \
         G * 5 / 255 * 6 + \
         B * 5 / 255))
-
       fi
       #echo "$R,$G,$B: $IDX"
       echo -ne "\e[48;5;${IDX}m${CHAR}"

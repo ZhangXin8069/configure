@@ -27,11 +27,9 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 touch foo
 chmod -x foo
 BUFFER=$'./foo; ./foo'
-
 expected_region_highlight=(
   '1 5 unknown-token'    # ./foo (in middle)
   '6 6 commandseparator' # ;

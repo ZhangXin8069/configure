@@ -27,11 +27,8 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 alias p='print -r --'
-
 BUFFER=$'s=$(p foo)'
-
 expected_region_highlight=(
   '1 10 assign'                                   # s=$(p foo)
   '3 10 default'                                  # $(p foo)

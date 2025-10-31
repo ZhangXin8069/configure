@@ -1,13 +1,11 @@
 _enumerateGrailsScripts() {
     # Default directories
     directories=($GRAILS_HOME/scripts ~/.grails/scripts ./scripts)
-
     # Check all of the plugins directories, if they exist
     if [ -d plugins ]
     then
         directories+=(plugins/*/scripts)
     fi
-
     # Enumerate all of the Groovy files
     files=()
     for dir in $directories;
@@ -17,13 +15,11 @@ _enumerateGrailsScripts() {
             files+=($dir/[^_]*.groovy)
         fi
     done
-
     # Don't try to basename ()
     if [ ${#files} -eq 0 ];
     then
         return
     fi
-
     scripts=()
     for file in $files
     do
@@ -42,19 +38,15 @@ _enumerateGrailsScripts() {
     done
     echo $scripts
 }
-
 _grails() {
     if (( CURRENT == 2 )); then
         scripts=( $(_enumerateGrailsScripts) )
-
         if [ ${#scripts} -ne 0 ];
         then
             _multi_parts / scripts
             return
         fi
     fi
-
     _files
 }
-
 compdef _grails grails

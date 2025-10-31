@@ -28,19 +28,14 @@
 # hostname to whether the last call exited with an error to whether background
 # jobs are running in this shell will all be displayed automatically when
 # appropriate.
-
 ### Segment drawing
 # A few utility functions to make it easy and re-usable to draw segmented prompts
-
 CURRENT_BG='NONE'
-
 case ${SOLARIZED_THEME:-dark} in
     light) CURRENT_FG='white';;
     *)     CURRENT_FG='black';;
 esac
-
 # Special Powerline characters
-
 () {
   local LC_ALL="" LC_CTYPE="en_US.UTF-8"
   # NOTE: This segment separator character is correct.  In 2012, Powerline changed
@@ -55,7 +50,6 @@ esac
   # Do not change this! Do not make it '\u2b80'; that is the old, wrong code point.
   SEGMENT_SEPARATOR=$'\ue0b0'
 }
-
 # Begin a segment
 # Takes two arguments, background and foreground. Both can be omitted,
 # rendering default background/foreground.
@@ -71,7 +65,6 @@ prompt_segment() {
   CURRENT_BG=$1
   [[ -n $3 ]] && echo -n $3
 }
-
 # End the prompt, closing any open segments
 prompt_end() {
   if [[ -n $CURRENT_BG ]]; then
@@ -82,17 +75,14 @@ prompt_end() {
   echo -n "%{%f%}"
   CURRENT_BG=''
 }
-
 ### Prompt components
 # Each component will draw itself, and hide itself if no information needs to be shown
-
 # Context: user@hostname (who am I and where am I)
 prompt_context() {
   if [[ "$USERNAME" != "$DEFAULT_USER" || -n "$SSH_CLIENT" ]]; then
     prompt_segment black default "%(!.%{%F{yellow}%}.)%n@%m"
   fi
 }
-
 # Git: branch/detached head, dirty status
 prompt_git() {
   (( $+commands[git] )) || return
@@ -105,7 +95,6 @@ prompt_git() {
     PL_BRANCH_CHAR=$'\ue0a0'         # 
   }
   local ref dirty mode repo_path
-
    if [[ "$(command git rev-parse --is-inside-work-tree 2>/dev/null)" = "true" ]]; then
     repo_path=$(command git rev-parse --git-dir 2>/dev/null)
     dirty=$(parse_git_dirty)
@@ -117,7 +106,6 @@ prompt_git() {
     else
       prompt_segment green $CURRENT_FG
     fi
-
     local ahead behind
     ahead=$(command git log --oneline @{upstream}.. 2>/dev/null)
     behind=$(command git log --oneline ..@{upstream} 2>/dev/null)
@@ -128,7 +116,6 @@ prompt_git() {
     elif [[ -n "$behind" ]]; then
       PL_BRANCH_CHAR=$'\u21b0'
     fi
-
     if [[ -e "${repo_path}/BISECT_LOG" ]]; then
       mode=" <B>"
     elif [[ -e "${repo_path}/MERGE_HEAD" ]]; then
@@ -136,10 +123,8 @@ prompt_git() {
     elif [[ -e "${repo_path}/rebase" || -e "${repo_path}/rebase-apply" || -e "${repo_path}/rebase-merge" || -e "${repo_path}/../.dotest" ]]; then
       mode=" >R>"
     fi
-
     setopt promptsubst
     autoload -Uz vcs_info
-
     zstyle ':vcs_info:*' enable git
     zstyle ':vcs_info:*' get-revision true
     zstyle ':vcs_info:*' check-for-changes true
@@ -151,17 +136,14 @@ prompt_git() {
     echo -n "${${ref:gs/%/%%}/refs\/heads\//$PL_BRANCH_CHAR }${vcs_info_msg_0_%% }${mode}"
   fi
 }
-
 prompt_bzr() {
   (( $+commands[bzr] )) || return
-
   # Test if bzr repository in directory hierarchy
   local dir="$PWD"
   while [[ ! -d "$dir/.bzr" ]]; do
     [[ "$dir" = "/" ]] && return
     dir="${dir:h}"
   done
-
   local bzr_status status_mod status_all revision
   if bzr_status=$(command bzr status 2>&1); then
     status_mod=$(echo -n "$bzr_status" | head -n1 | grep "modified" | wc -m)
@@ -178,7 +160,6 @@ prompt_bzr() {
     fi
   fi
 }
-
 prompt_hg() {
   (( $+commands[hg] )) || return
   local rev st branch
@@ -214,33 +195,27 @@ prompt_hg() {
     fi
   fi
 }
-
 # Dir: current working directory
 prompt_dir() {
   prompt_segment blue $CURRENT_FG '%~'
 }
-
 # Virtualenv: current working virtualenv
 prompt_virtualenv() {
   if [[ -n "$VIRTUAL_ENV" && -n "$VIRTUAL_ENV_DISABLE_PROMPT" ]]; then
     prompt_segment blue black "(${VIRTUAL_ENV:t:gs/%/%%})"
   fi
 }
-
 # Status:
 # - was there an error
 # - am I root
 # - are there background jobs?
 prompt_status() {
   local -a symbols
-
   [[ $RETVAL -ne 0 ]] && symbols+="%{%F{red}%}✘"
   [[ $UID -eq 0 ]] && symbols+="%{%F{yellow}%}⚡"
   [[ $(jobs -l | wc -l) -gt 0 ]] && symbols+="%{%F{cyan}%}⚙"
-
   [[ -n "$symbols" ]] && prompt_segment black default "$symbols"
 }
-
 #AWS Profile:
 # - display current AWS_PROFILE name
 # - displays yellow on red if profile name contains 'production' or
@@ -253,7 +228,6 @@ prompt_aws() {
     *) prompt_segment green black "AWS: ${AWS_PROFILE:gs/%/%%}" ;;
   esac
 }
-
 ## Main prompt
 build_prompt() {
   RETVAL=$?
@@ -267,5 +241,4 @@ build_prompt() {
   prompt_hg
   prompt_end
 }
-
 PROMPT='%{%f%b%k%}$(build_prompt) '

@@ -1,8 +1,6 @@
 # web_search from terminal
-
 function web_search() {
   emulate -L zsh
-
   # define search engine URLS
   typeset -A urls
   urls=(
@@ -32,20 +30,17 @@ function web_search() {
     packagist       "https://packagist.org/?query="
     gopkg           "https://pkg.go.dev/search?m=package&q="
   )
-
   # check whether the search engine is supported
   if [[ -z "$urls[$1]" ]]; then
     echo "Search engine '$1' not supported."
     return 1
   fi
-
   # search or go to main page depending on number of arguments passed
   if [[ $# -gt 1 ]]; then
     # if search goes in the query string ==> space as +, otherwise %20
     # see https://stackoverflow.com/questions/1634271/url-encoding-the-space-character-or-20
     local param="-P"
     [[ "$urls[$1]" == *\?*= ]] && param=""
-
     # build search url:
     # join arguments passed with '+', then append to search engine URL
     url="${urls[$1]}$(omz_urlencode $param ${@[2,-1]})"
@@ -54,11 +49,8 @@ function web_search() {
     # split by '/', then rejoin protocol (1) and domain (2) parts with '//'
     url="${(j://:)${(s:/:)urls[$1]}[1,2]}"
   fi
-
   open_command "$url"
 }
-
-
 alias bing='web_search bing'
 alias brs='web_search brave'
 alias google='web_search google'
@@ -83,14 +75,12 @@ alias dockerhub='web_search dockerhub'
 alias npmpkg='web_search npmpkg'
 alias packagist='web_search packagist'
 alias gopkg='web_search gopkg'
-
 #add your own !bang searches here
 alias wiki='web_search duckduckgo \!w'
 alias news='web_search duckduckgo \!n'
 alias map='web_search duckduckgo \!m'
 alias image='web_search duckduckgo \!i'
 alias ducky='web_search duckduckgo \!'
-
 # other search engine aliases
 if [[ ${#ZSH_WEB_SEARCH_ENGINES} -gt 0 ]]; then
   typeset -A engines

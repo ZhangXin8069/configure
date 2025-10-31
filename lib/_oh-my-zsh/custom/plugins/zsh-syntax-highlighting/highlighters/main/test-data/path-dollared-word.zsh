@@ -26,7 +26,6 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 if [[ $OSTYPE == msys ]]; then
   skip_test='Cannot chmod +x in msys2' # cargo culted from option-path_dirs.zsh
 else
@@ -34,9 +33,7 @@ else
   touch kappa.exe
   chmod +x kappa.exe
   cd kappa
-
   BUFFER='$PWD.exe; ${PWD}.exe'
-
   expected_region_highlight=(
     "1 8 unknown-token"    # $PWD.exe - not eval'd; issue #328
     "9 9 commandseparator" # ;

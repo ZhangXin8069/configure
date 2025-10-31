@@ -1,12 +1,9 @@
 # Run sudo gem on the system ruby, not the active ruby
 alias sgem='sudo gem'
-
 # Find ruby file
 alias rfind='find . -name "*.rb" | xargs grep -n'
-
 # Shorthand Ruby
 alias rb="ruby"
-
 # Gem Command Shorthands
 alias gein="gem install"
 alias geun="gem uninstall"

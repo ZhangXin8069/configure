@@ -5,7 +5,6 @@
 #include <ctime>
 #include <iostream>
 using namespace std;
-
 class lattice_fermi
 {
 public:
@@ -38,7 +37,6 @@ public:
             this->lattice_vec[i] = this->lattice_vec[i] - a.lattice_vec[i];
         return *this;
     }
-
     lattice_fermi &operator+(const lattice_fermi &a)
     {
         for (int i = 0; i < size; i++)
@@ -46,7 +44,6 @@ public:
         return *this;
     }
 };
-
 class lattice_gauge
 {
 public:
@@ -64,13 +61,11 @@ public:
     }
     lattice_gauge &operator=(lattice_gauge a)
     {
-
         for (int i = 0; i < size; i++)
             this->lattice_vec_c[i] = a.lattice_vec_c[i];
         return *this;
     }
 };
-
 class lattice_propagator
 {
 public:
@@ -97,13 +92,11 @@ public:
     }
     lattice_propagator &operator=(lattice_propagator a)
     {
-
         for (int i = 0; i < size; i++)
             this->lattice_vec_c[i] = a.lattice_vec_c[i];
         return *this;
     }
 };
-
 class Gamma
 {
 public:
@@ -126,15 +119,12 @@ public:
     }
     Gamma &operator=(Gamma a)
     {
-
         for (int i = 0; i < size; i++)
             this->lattice_vec_c[i] = a.lattice_vec_c[i];
         return *this;
     }
 };
-
 lattice_propagator operator*(Gamma G, lattice_propagator prop)
-
 {
     lattice_propagator prop1(prop);
     prop1.clean();
@@ -149,9 +139,7 @@ lattice_propagator operator*(Gamma G, lattice_propagator prop)
                 }
     return prop1;
 }
-
 lattice_propagator operator*(lattice_propagator prop, Gamma G)
-
 {
     lattice_propagator prop1(prop);
     prop1.clean();
@@ -166,7 +154,6 @@ lattice_propagator operator*(lattice_propagator prop, Gamma G)
                 }
     return prop1;
 }
-
 double norm_2(lattice_fermi s)
 {
     complex<double> s1(0.0, 0.0);
@@ -176,10 +163,8 @@ double norm_2(lattice_fermi s)
     }
     return s1.real();
 };
-
 double norm_2(lattice_propagator f)
 {
-
     complex<double> f1(0.0, 0.0);
     for (int i = 0; i < f.size; i++)
     {
@@ -187,7 +172,6 @@ double norm_2(lattice_propagator f)
     }
     return f1.real();
 };
-
 complex<double> vector_p(lattice_fermi r1, lattice_fermi r2)
 {
     complex<double> ro(0.0, 0.0);
@@ -197,10 +181,8 @@ complex<double> vector_p(lattice_fermi r1, lattice_fermi r2)
     }
     return ro;
 };
-
 void Dslash2(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const double mass, const bool dag)
 {
-
     dest.clean();
     const double a = 2.0;
     const complex<double> i(0.0, 1.0);
@@ -210,31 +192,26 @@ void Dslash2(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const doub
     for (int x = 0; x < src.lat_x; x++)
         for (int t = 0; t < src.lat_t; t++)
         {
-
             // mass term
             for (int s = 0; s < src.lat_spin; s++)
             {
                 dest[(x * src.lat_t + t) * 2 + s] += -(a + mass) * src[(x * src.lat_t + t) * 2 + s];
             }
-
             // backward x
             int b_x = (x + src.lat_x - 1) % src.lat_x;
             tmp = (src[(x * src.lat_t + t) * 2 + 0] + flag * src[(x * src.lat_t + t) * 2 + 1]) * Half * U[(b_x * src.lat_t + t) * 2 + 0];
             dest[(b_x * src.lat_t + t) * 2 + 0] += tmp;
             dest[(b_x * src.lat_t + t) * 2 + 1] += flag * tmp;
-
             // forward x
             int f_x = (x + 1) % src.lat_x;
             tmp = (src[(x * src.lat_t + t) * 2 + 0] - flag * src[(x * src.lat_t + t) * 2 + 1]) * Half * conj(U[(x * src.lat_t + t) * 2 + 0]);
             dest[(f_x * src.lat_t + t) * 2 + 0] += tmp;
             dest[(f_x * src.lat_t + t) * 2 + 1] -= flag * tmp;
-
             // backward t
             int b_t = (t + src.lat_t - 1) % src.lat_t;
             tmp = (src[(x * src.lat_t + t) * 2 + 0] + flag * i * src[(x * src.lat_t + t) * 2 + 1]) * Half * U[(x * src.lat_t + b_t) * 2 + 1];
             dest[(x * src.lat_t + b_t) * 2 + 0] += tmp;
             dest[(x * src.lat_t + b_t) * 2 + 1] -= flag * i * tmp;
-
             // forward t
             int f_t = (t + 1) % src.lat_t;
             tmp = (src[(x * src.lat_t + t) * 2 + 0] - flag * i * src[(x * src.lat_t + t) * 2 + 1]) * Half * conj(U[(x * src.lat_t + t) * 2 + 1]);
@@ -242,7 +219,6 @@ void Dslash2(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const doub
             dest[(x * src.lat_t + f_t) * 2 + 1] += flag * i * tmp;
         }
 }
-
 void fermi_to_prop(lattice_fermi dest, lattice_propagator &prop, int i)
 {
     for (int x = 0; x < dest.lat_x; x++)
@@ -254,7 +230,6 @@ void fermi_to_prop(lattice_fermi dest, lattice_propagator &prop, int i)
                 //
             }
 }
-
 int CG(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const double mass, const int max)
 {
     lattice_fermi r0(src.lat_x, src.lat_t, src.lat_spin);
@@ -275,7 +250,6 @@ int CG(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const double mas
     {
         dest[i] = 0;
     }
-
     Dslash2(dest, rr0, U, mass, false);
     Dslash2(rr0, r0, U, mass, true);
     for (int i = 0; i < src.size; i++)
@@ -285,10 +259,8 @@ int CG(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const double mas
     }
     for (int f = 1; f < max; f++)
     {
-
         std::complex<double> rho;
         rho = vector_p(r0, r0);
-
         std::complex<double> rho1;
         rho1 = vector_p(r1, r1);
         for (int i = 0; i < z0.size; i++)
@@ -305,16 +277,12 @@ int CG(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const double mas
         else
         {
             beta = rho / rho1;
-
             for (int i = 0; i < P.size; i++)
                 P[i] = z0[i] + beta * P[i];
         }
         Dslash2(P, qq, U, mass, false);
-
         Dslash2(qq, q, U, mass, true);
-
         aphi = rho / vector_p(P, q);
-
         for (int i = 0; i < dest.size; i++)
             dest[i] = dest[i] + aphi * P[i];
         for (int i = 0; i < r1.size; i++)
@@ -327,20 +295,16 @@ int CG(lattice_fermi src, lattice_fermi &dest, lattice_gauge U, const double mas
             return 0;
         }
     } // for (f) end
-
 } // CG func end
-
 int main()
 {
     clock_t start = clock();
-
     // gird distance
     int nx = 40;
     int nt = 40;
     int ns = 4;
     int nd = 2;
     double mass = 1;
-
     lattice_fermi src(nx, nt, ns);
     lattice_fermi ssrc(nx, nt, ns);
     lattice_fermi dest(nx, nt, ns);
@@ -360,7 +324,6 @@ int main()
             src1[i] = 1;
         else
             src1[i] = 0;
-
     Dslash2(src, ssrc, U, mass, true);
     CG(ssrc, dest, U, mass, 1000);
     // Dslash2(src1, ssrc, U, mass, true);
@@ -368,7 +331,6 @@ int main()
     // Dslash2(dest,ssrc,U,mass,false);
     fermi_to_prop(dest, prop, 0);
     // fermi_to_prop(dest_1,prop,1);
-
     clock_t end = clock();
     cout
         // << "rank:"
@@ -379,7 +341,6 @@ int main()
         << "s"
         << endl;
     // MPI_Init(NULL, NULL);
-
     // MPI_Finalize();
     return 0;
 }

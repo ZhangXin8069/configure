@@ -8,11 +8,9 @@ function cabal_sandbox_info() {
         fi
     fi
 }
-
 function _cabal_commands() {
     local ret=1 state
     _arguments ':subcommand:->subcommand' && ret=0
-
     case $state in
       subcommand)
         subcommands=(
@@ -46,16 +44,12 @@ function _cabal_commands() {
         )
         _describe -t subcommands 'cabal subcommands' subcommands && ret=0
     esac
-
     return ret
 }
-
 compdef _cabal_commands cabal
-
 function _cab_commands() {
     local ret=1 state
     _arguments ':subcommand:->subcommand' && ret=0
-
     case $state in
       subcommand)
         subcommands=(
@@ -86,8 +80,6 @@ function _cab_commands() {
         )
         _describe -t subcommands 'cab subcommands' subcommands && ret=0
     esac
-
     return ret
 }
-
 command -v cab >/dev/null 2>&1 && { compdef _cab_commands cab }

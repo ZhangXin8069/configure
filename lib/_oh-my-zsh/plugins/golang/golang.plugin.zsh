@@ -1,14 +1,12 @@
 ## completion
 compctl -g "*.go" gofmt # standard go tools
 compctl -g "*.go" gccgo # gccgo
-
 # gc
 for p in 5 6 8; do
   compctl -g "*.${p}" ${p}l
   compctl -g "*.go" ${p}g
 done
 unset p
-
 ## aliases
 alias gob='go build'
 alias goc='go clean'

@@ -1,17 +1,11 @@
 # Ubuntu plugin
-
 This plugin adds completions and aliases for [Ubuntu](https://www.ubuntu.com/).
-
 To use it, add `ubuntu` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... ubuntu)
 ```
-
 ## Aliases
-
 Commands that use `$APT` will use `apt` if installed or defer to `apt-get` otherwise.
-
 | Alias   | Command                                                                  | Description                                                                                       |
 |---------|--------------------------------------------------------------------------|---------------------------------------------------------------------------------------------------|
 | age     | `sudo $APT`                                                              | Run apt-get with sudo                                                                             |
@@ -39,18 +33,14 @@ Commands that use `$APT` will use `apt` if installed or defer to `apt-get` other
 | kclean  | `sudo aptitude remove -P ?and(~i~nlinux-(ima\|hea) ?not(~n$(uname -r)))` |Remove ALL kernel images and headers EXCEPT the one in use                                         |
 | mydeb   | `time dpkg-buildpackage -rfakeroot -us -uc`                              | Create a basic .deb package                                                                       |
 | ppap    | `sudo ppa-purge <ppa>`                                                   | Remove the specified PPA                                                                          |
-
 ## Functions
-
 | Function          | Usage                                 |Description                                                               |
 |-------------------|---------------------------------------|--------------------------------------------------------------------------|
 | aar               | `aar ppa:xxxxxx/xxxxxx [packagename]` | apt-add-repository with automatic install/upgrade of the desired package |
 | apt-history       | `apt-history <action>`                | Prints the Apt history of the specified action                           |
 | apt-list-packages | `apt-list-packages`                   | List packages by size                                                    |
 | kerndeb           | `kerndeb`                             | Kernel-package building shortcut                                         |
-
 ## Authors
-
 - [@AlexBio](https://github.com/AlexBio)
 - [@dbb](https://github.com/dbb)
 - [@Mappleconfusers](https://github.com/Mappleconfusers)

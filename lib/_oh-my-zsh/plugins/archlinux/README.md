@@ -1,17 +1,11 @@
 # Arch Linux plugin
-
 This plugin adds some aliases and functions to work with Arch Linux.
-
 To use it, add `archlinux` to the plugins array in your zshrc file:
-
 ```zsh
 plugins=(... archlinux)
 ```
-
 ## Features
-
 ### Pacman
-
 | Alias        | Command                                | Description                                                      |
 |--------------|----------------------------------------|------------------------------------------------------------------|
 | pacin        | `sudo pacman -S`                       | Install packages from the repositories                           |
@@ -35,7 +29,6 @@ plugins=(... archlinux)
 | pacls        | `pacman -Ql`                           | List files in a package                                          |
 | pacown       | `pacman -Qo`                           | Show which package owns a file                                   |
 | upgrade[¹](#f1) | `sudo pacman -Syu`                  | Sync with repositories before upgrading packages                 |
-
 | Function       | Description                                               |
 |----------------|-----------------------------------------------------------|
 | pacdisowned    | List all disowned files in your system                    |
@@ -43,15 +36,11 @@ plugins=(... archlinux)
 | pacmanallkeys  | Get all keys for developers and trusted users             |
 | pacmansignkeys | Locally trust all keys passed as parameters               |
 | pacweb         | Open the website of an ArchLinux package                  |
-
 Note: paclist used to print packages with a description which are (1) explicitly installed
 and (2) available for upgrade. Due to flawed scripting, it also printed all packages if no
 upgrades were available. Use `pacman -Que` instead.
-
 ### AUR helpers
-
 #### Aura
-
 | Alias   | Command                                         | Description                                                             |
 |---------|-------------------------------------------------|-------------------------------------------------------------------------|
 | auclean | `sudo aura -Sc`                                 | Clean out old and unused caches and packages                            |
@@ -78,14 +67,11 @@ upgrades were available. Use `pacman -Que` instead.
 | auupg   | `sudo sh -c "aura -Syu              && aura -Au"` | Sync with repositories before upgrading all packages (from AUR too)   |
 | ausu    | `sudo sh -c "aura -Syu --no-confirm && aura -Au --no-confirm"` | Same as `auupg`, but without confirmation                |
 | upgrade[¹](#f1) | `sudo aura -Syu`                        | Sync with repositories before upgrading packages                        |
-
 | Function        | Description                                                         |
 |-----------------|---------------------------------------------------------------------|
 | auownloc _file_ | Display information about a package that owns the specified file(s) |
 | auownls  _file_ | List all files owned by a package that owns the specified file(s)   |
-
 #### Pacaur
-
 | Alias   | Command                           | Description                                                         |
 |---------|-----------------------------------|---------------------------------------------------------------------|
 | pacclean| `pacaur -Sc`                      | Clean out old and unused caches and packages                        |
@@ -106,9 +92,7 @@ upgrades were available. Use `pacman -Que` instead.
 | paupg   | `pacaur -Syua`                    | Sync with repositories before upgrading all packages (from AUR too) |
 | pasu    | `pacaur -Syua --no-confirm`       | Same as `paupg`, but without confirmation                           |
 | upgrade[¹](#f1) | `pacaur -Syu`             | Sync with repositories before upgrading packages                    |
-
 #### Trizen
-
 | Alias   | Command                           | Description                                                         |
 |---------|-----------------------------------|---------------------------------------------------------------------|
 | trconf  | `trizen -C`                       | Fix all configuration files with vimdiff                            |
@@ -130,9 +114,7 @@ upgrades were available. Use `pacman -Que` instead.
 | trupg   | `trizen -Syua`                    | Sync with repositories before upgrading all packages (from AUR too) |
 | trsu    | `trizen -Syua --no-confirm`       | Same as `trupg`, but without confirmation                           |
 | upgrade[¹](#f1) | `trizen -Syu`             | Sync with repositories before upgrading packages                    |
-
 #### Yay
-
 | Alias   | Command                        | Description                                                       |
 |---------|--------------------------------|-------------------------------------------------------------------|
 | yaconf  | `yay -Pg`                      | Print current configuration                                       |
@@ -154,21 +136,16 @@ upgrades were available. Use `pacman -Que` instead.
 | yaupg   | `yay -Syu`                     | Sync with repositories before upgrading packages                  |
 | yasu    | `yay -Syu --no-confirm`        | Same as `yaupg`, but without confirmation                         |
 | upgrade[¹](#f1) | `yay -Syu`             | Sync with repositories before upgrading packages                  |
-
 ---
-
 <span id="f1">¹</span>
 The `upgrade` alias is set for all package managers. Its value will depend on
 whether the package manager is installed, checked in the following order:
-
 1. `yay`
 2. `trizen`
 3. `pacaur`
 4. `aura`
 5. `pacman`
-
 ## Contributors
-
 - Benjamin Boudreau - <dreurmail@gmail.com>
 - Celso Miranda - <contacto@celsomiranda.net>
 - ratijas (ivan tkachenko) - <me@ratijas.tk>

@@ -12,10 +12,8 @@ function _rails_command() {
     command rails $@
   fi
 }
-
 alias rails='_rails_command'
 compdef _rails_command=rails
-
 # rake command wrapper
 function _rake_command() {
   if [ -e "bin/stubs/rake" ]; then
@@ -28,20 +26,16 @@ function _rake_command() {
     command rake $@
   fi
 }
-
 alias rake='_rake_command'
 compdef _rake_command=rake
-
 # Log aliases
 alias devlog='tail -f log/development.log'
 alias prodlog='tail -f log/production.log'
 alias testlog='tail -f log/test.log'
-
 # Environment settings
 alias -g RED='RAILS_ENV=development'
 alias -g REP='RAILS_ENV=production'
 alias -g RET='RAILS_ENV=test'
-
 # Rails aliases
 alias rc='rails console'
 alias rcs='rails console --sandbox'
@@ -80,10 +74,8 @@ alias rsts='rails stats'
 alias rt='rails test'
 alias rta='rails test:all'
 alias ru='rails runner'
-
 # Foreman aliases
 alias fmns='foreman start'
-
 # Rake aliases
 alias rkdc='rake db:create'
 alias rkdd='rake db:drop'
@@ -104,7 +96,6 @@ alias rkmd='rake middleware'
 alias rkn='rake notes'
 alias rksts='rake stats'
 alias rkt='rake test'
-
 # legacy stuff
 alias sc='ruby script/console'
 alias sd='ruby script/destroy'
@@ -114,7 +105,6 @@ alias sp='ruby script/plugin'
 alias sr='ruby script/runner'
 alias ssp='ruby script/spec'
 alias sstat='thin --stats "/thin/stats" start'
-
 function remote_console() {
   /usr/bin/env ssh $1 "( cd $2 && ruby script/console production )"
 }

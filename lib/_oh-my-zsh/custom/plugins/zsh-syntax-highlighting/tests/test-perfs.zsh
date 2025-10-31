@@ -27,56 +27,43 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
-
 # Required for add-zle-hook-widget.
 zmodload zsh/zle
-
 # Check an highlighter was given as argument.
 [[ -n "$1" ]] || {
   echo >&2 "Bail out! You must provide the name of a valid highlighter as argument."
   exit 2
 }
-
 # Check the highlighter is valid.
 [[ -f ${0:h:h}/highlighters/$1/$1-highlighter.zsh ]] || {
   echo >&2 "Bail out! Could not find highlighter ${(qq)1}."
   exit 2
 }
-
 # Check the highlighter has test data.
 [[ -d ${0:h:h}/highlighters/$1/test-data ]] || {
   echo >&2 "Bail out! Highlighter ${(qq)1} has no test data."
   exit 2
 }
-
 # Load the main script.
 typeset -a region_highlight
 . ${0:h:h}/zsh-syntax-highlighting.zsh
-
 # Activate the highlighter.
 ZSH_HIGHLIGHT_HIGHLIGHTERS=($1)
-
 # Runs a highlighting test
 # $1: data file
 run_test_internal() {
   local -a highlight_zone
-
   local tests_tempdir="$1"; shift
   local srcdir="$PWD"
   builtin cd -q -- "$tests_tempdir" || { echo >&2 "Bail out! cd failed: $?"; return 1 }
-
   # Load the data and prepare checking it.
   PREBUFFER= BUFFER= ;
   . "$srcdir"/"$1"
-
   # Check the data declares $PREBUFFER or $BUFFER.
   [[ -z $PREBUFFER && -z $BUFFER ]] && { echo >&2 "Bail out! Either 'PREBUFFER' or 'BUFFER' must be declared and non-blank"; return 1; }
-
   # Set $? for _zsh_highlight
   true && _zsh_highlight
 }
-
 run_test() {
   # Do not combine the declaration and initialization: «local x="$(false)"» does not set $?.
   local __tests_tempdir
@@ -84,14 +71,12 @@ run_test() {
     echo >&2 "Bail out! mktemp failed"; return 1
   }
   typeset -r __tests_tempdir # don't allow tests to override the variable that we will 'rm -rf' later on
-
   {
     (run_test_internal "$__tests_tempdir" "$@")
   } always {
     rm -rf -- "$__tests_tempdir"
   }
 }
-
 # Process each test data file in test data directory.
 local data_file
 TIMEFMT="%*Es"
@@ -99,5 +84,4 @@ TIMEFMT="%*Es"
   run_test "$data_file"
   (( $pipestatus[1] )) && exit 2
 done) } 2>&1 || exit $?
-
 exit 0

@@ -27,13 +27,10 @@
 # -*- mode: zsh; sh-indentation: 2; indent-tabs-mode: nil; sh-basic-offset: 2; -*-
 # vim: ft=zsh sw=2 ts=2 et
 # -------------------------------------------------------------------------------------------------
-
 emulate -LR zsh
 setopt localoptions extendedglob
-
 # Required for add-zle-hook-widget.
 zmodload zsh/zle
-
 # Argument parsing.
 if (( $# * $# - 7 * $# + 12 )) || [[ $1 == -* ]]; then
   print -r -- >&2 "$0: usage: $0 BUFFER HIGHLIGHTER BASENAME [PREAMBLE]"
@@ -46,17 +43,13 @@ buffer=$1
 ZSH_HIGHLIGHT_HIGHLIGHTERS=( $2 )
 fname=${0:A:h:h}/highlighters/$2/test-data/${3%.zsh}.zsh
 preamble=${4:-""}
-
 # Load the main script.
 . ${0:A:h:h}/zsh-syntax-highlighting.zsh
-
 # Overwrite _zsh_highlight_add_highlight so we get the key itself instead of the style
 _zsh_highlight_add_highlight()
 {
   region_highlight+=("$1 $2 $3")
 }
-
-
 # Copyright block
 year="`LC_ALL=C date +%Y`"
 if ! { read -q "?Set copyright year to $year? " } always { echo "" }; then
@@ -66,12 +59,10 @@ fi
 # Assumes stdout is line-buffered
 git add -- $fname
 exec > >(tee -a $fname)
-
 # Preamble
 if [[ -n $preamble ]]; then
   print -rl -- "$preamble" ""
 fi
-
 # Buffer
 print -n 'BUFFER='
 if [[ $buffer != (#s)[$'\t -~']#(#e) ]]; then
@@ -80,7 +71,6 @@ else
   print -r -- ${(qq)buffer}
 fi
 echo ""
-
 # Expectations
 print 'expected_region_highlight=('
 () {
@@ -102,7 +92,6 @@ print 'expected_region_highlight=('
       rm -rf -- ${__tests_tmpdir}
     }
   )
-
   for ((i=1; i<=${#region_highlight}; i++)); do
     local -a highlight_zone; highlight_zone=( ${(z)region_highlight[$i]} )
     integer start=$highlight_zone[1] end=$highlight_zone[2]

@@ -50,7 +50,6 @@
 #
 function detect-clipboard() {
   emulate -L zsh
-
   if [[ "${OSTYPE}" == darwin* ]] && (( ${+commands[pbcopy]} )) && (( ${+commands[pbpaste]} )); then
     function clipcopy() { cat "${1:-/dev/stdin}" | pbcopy; }
     function clippaste() { pbpaste; }
@@ -99,7 +98,6 @@ function detect-clipboard() {
     return 1
   fi
 }
-
 function clipcopy clippaste {
   unfunction clipcopy clippaste
   detect-clipboard || true # let one retry

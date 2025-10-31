@@ -1,10 +1,8 @@
 zmodload zsh/datetime
-
 __timer_current_time() {
   zmodload zsh/datetime
   echo $EPOCHREALTIME
 }
-
 __timer_format_duration() {
   local mins=$(printf '%.0f' $(($1 / 60)))
   local secs=$(printf "%.${TIMER_PRECISION:-1}f" $(($1 - 60 * mins)))
@@ -12,11 +10,9 @@ __timer_format_duration() {
   local format="${TIMER_FORMAT:-/%d}"
   echo "${format//\%d/${duration_str#0m}}"
 }
-
 __timer_save_time_preexec() {
   __timer_cmd_start_time=$(__timer_current_time)
 }
-
 __timer_display_timer_precmd() {
   if [ -n "${__timer_cmd_start_time}" ]; then
     local cmd_end_time=$(__timer_current_time)
@@ -32,7 +28,6 @@ __timer_display_timer_precmd() {
     fi
   fi
 }
-
 autoload -U add-zsh-hook
 add-zsh-hook preexec __timer_save_time_preexec
 add-zsh-hook precmd __timer_display_timer_precmd
