@@ -17,8 +17,8 @@ tmp_path=${_HOME}/${tmp_name}
 # do
 pushd ${work_path}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-echo "pip install $(cat requirement.txt)"
-pip install -r requirement.txt
+echo "pip install $(cat pip_requirement.txt)"
+pip install -r pip_requirement.txt
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
 
