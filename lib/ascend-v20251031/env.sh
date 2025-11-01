@@ -17,6 +17,7 @@ else
     fi
 fi
 unset __conda_setup
+conda activate qcu
 # <<< conda initialize <<<
 # wget https://gitee.com/ascend/pytorch/releases/download/v7.1.0.2-pytorch2.5.1/torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 # python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
