@@ -49,6 +49,7 @@ source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
 # ./configure --prefix=/home/phyww/zhangxin/lib/openmpi-4.1.5
 # make -j$(nproc)
 # make install
+export MPI_DIR=/home/phyww/zhangxin/lib/openmpi-4.1.5
 export PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/bin:$PATH
 export MPI_INCLUDE_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/include
 export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PATH
@@ -56,15 +57,20 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PA
 # HDF5
 # wget https://github.com/HDFGroup/hdf5/releases/download/hdf5-1_14_2/hdf5-1_14_2.tar.gz
 # tar -xzf hdf5-1_14_2.tar.gz
-# CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/home/phyww/zhangxin/lib/hdfsrc --enable-fortran --enable-static=yes --enable-parallel --enable-shared 
+# CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/home/phyww/zhangxin/lib/hdfsrc --enable-fortran --enable-static=yes --enable-parallel --enable-shared
 # make -j$(nproc)
 # make install
 export HDF5_DIR=/home/phyww/zhangxin/lib/hdfsrc
 export PATH=/home/phyww/zhangxin/lib/hdfsrc/bin:$PATH
+export HDF5_INCLUDE_PATH=/home/phyww/zhangxin/lib/hdfsrc/include
 export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## H5PY
-# export HDF5_MPI="ON" && pip install --no-binary=h5py h5py
+export HDF5_MPI="ON"
+# export CFLAGS="-I/path/to/include"
+export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH}"
+# export LDFLAGS="-L/path/to/lib"
+pip install --no-binary=h5py h5py
 
 ## PYTHON PACKAGES
 # pip install cython matplotlib
