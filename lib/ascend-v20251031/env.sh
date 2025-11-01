@@ -24,3 +24,4 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
+# python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
