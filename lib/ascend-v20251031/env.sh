@@ -1,4 +1,5 @@
 pushd /home/phyww/zhangxin
+source ./miniconda3/Ascend/ascend-toolkit/set_env.sh
 pushd ./configure
 source env.sh
 popd
@@ -7,7 +8,7 @@ popd
 # https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/82RC1/softwareinst/instg/instg_quick.html
 # conda config --add channels https://repo.huaweicloud.com/ascend/repos/conda/ 
 # conda install ascend::cann-toolkit
-source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
+# source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
 # conda install ascend::a3-cann-kernels
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
