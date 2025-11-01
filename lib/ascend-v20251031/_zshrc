@@ -16,5 +16,4 @@ if [[ -n $SSH_CONNECTION ]]; then
 else
     export EDITOR='mvim'
 fi
-export ARCHFLAGS="-arch x86_64"
 prompt_context() {}
