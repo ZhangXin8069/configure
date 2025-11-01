@@ -21,7 +21,6 @@ popd
 # source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # chmod +x Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run
 # ./Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run --install
-
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
 __conda_setup="$('/home/phyww/zhangxin/miniconda3/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
@@ -43,3 +42,14 @@ source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
 # pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 # pip install pyyaml
 # python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
+# MPI
+# wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
+# tar -xzf openmpi-4.1.5.tar.gz
+# ./configure --prefix=/home/phyww/zhangxin/lib/openmpi-4.1.5
+# make -j$(nproc)
+# make install
+export PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/bin:$PATH
+export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PATH
+
+# HDF5
+# wget https://github.com/HDFGroup/hdf5/releases/download/hdf5-1_14_2/hdf5-1_14_2.tar.gz
