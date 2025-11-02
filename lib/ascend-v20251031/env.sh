@@ -66,11 +66,11 @@ export HDF5_INCLUDE_PATH=/home/phyww/zhangxin/lib/hdfsrc/include
 export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## H5PY
-export HDF5_MPI="ON"
-# export CFLAGS="-I/path/to/include"
-export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH}"
-# export LDFLAGS="-L/path/to/lib"
-pip install --no-binary=h5py h5py
+# export HDF5_MPI="ON"
+# # export CFLAGS="-I/path/to/include"
+# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH}"
+# # export LDFLAGS="-L/path/to/lib"
+# pip install --no-binary=h5py h5py
 
 ## PYTHON PACKAGES
 # pip install cython matplotlib
