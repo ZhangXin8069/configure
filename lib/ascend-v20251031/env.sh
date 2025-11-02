@@ -57,9 +57,11 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PA
 # HDF5
 # wget https://github.com/HDFGroup/hdf5/releases/download/hdf5-1_14_2/hdf5-1_14_2.tar.gz
 # tar -xzf hdf5-1_14_2.tar.gz
-# CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/home/phyww/zhangxin/lib/hdfsrc --enable-fortran --enable-static=yes --enable-parallel --enable-shared
+# CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/home/phyww/zhangxin/lib/hdfsrc --enable-parallel --enable-shared --enable-hl --enable-build-hl-shared
 # make -j$(nproc)
 # make install
+# cp ./hl/src/hdf5_hl* include/
+# cp ./hl/src/.libs/libhdf5_hl* lib
 export HDF5_DIR=/home/phyww/zhangxin/lib/hdfsrc
 export PATH=/home/phyww/zhangxin/lib/hdfsrc/bin:$PATH
 export HDF5_INCLUDE_PATH=/home/phyww/zhangxin/lib/hdfsrc/include
@@ -68,7 +70,7 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 ## H5PY
 # export HDF5_MPI="ON"
 # # export CFLAGS="-I/path/to/include"
-# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH}"
+# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
 # # export LDFLAGS="-L/path/to/lib"
 # pip install --no-binary=h5py h5py
 
