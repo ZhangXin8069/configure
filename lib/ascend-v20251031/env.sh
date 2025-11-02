@@ -41,6 +41,7 @@ source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
 # wget https://gitee.com/ascend/pytorch/releases/download/v7.1.0.2-pytorch2.5.1/torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 # pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 # pip install pyyaml
+# pip install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py
 # python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
 
 ## MPI
@@ -76,4 +77,3 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## PYTHON PACKAGES
 # pip install cython matplotlib
-# pip install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py
