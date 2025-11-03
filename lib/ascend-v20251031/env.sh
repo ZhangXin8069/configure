@@ -77,3 +77,6 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## PYTHON PACKAGES
 # pip install cython matplotlib
+
+## PROXY
+git config --global http.proxy http://10.147.32.201:3128
