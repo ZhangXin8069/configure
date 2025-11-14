@@ -1,9 +1,9 @@
 # source
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "PATH:"$_PATH
-# pushd ${_PATH}/../
-# source ./env.sh
-# popd
+pushd ${_PATH}/../
+source ./env.sh
+popd
 # init
 _NAME=$(basename "$0")
 name='test'
