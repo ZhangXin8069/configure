@@ -26,8 +26,8 @@ export PATH='/root/venv/bin':$PATH
 # reboot
 # git clone git@gitee.com:zhangxin8069/configure.git
 # git clone git@gitee.com:zhangxin8069/PyQCU.git
-pushd /root/configure
-source env.sh
-popd
+# pushd /root/configure
+# source env.sh
+# popd
 # sh_init.sh
 # reboot
