@@ -15,7 +15,7 @@ mkdir ${_HOME}/scripts -p
 mkdir ${_HOME}/test -p
 mkdir ${_HOME}/tmp -p
 # source
-echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >> ${_HOME}/tmp/scripts.sh
+echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_HOME}/tmp/scripts.sh
 source ${_HOME}/tmp/scripts.sh
 # export
 ## zhangxin
@@ -321,7 +321,8 @@ alias lsa='ls -lah'
 alias md='mkdir -p'
 # alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
 alias ohmyzsh='mate ~/.oh-my-zsh'
-# alias python=python3
+alias python=python3
+alias pip=pip3
 alias rd=rmdir
 alias which-command=whence
 alias zshconfig='mate ~/.zshrc'
