@@ -1,9 +1,12 @@
 # termux-change-repo
-# pkg update
-# pkg install which git file wget zsh openssh vim htop tree make cmake autoconf automake clang flang openmpi libhdf5 python-torch fftw libjpeg-turbo zlib libpng -y
+# mv /data/data/vn.vhn.vsc/files/usr/var/lib/dpkg/status /data/data/vn.vhn.vsc/files/usr/var/lib/dpkg/status.old
+# pkg install which git file wget zsh openssh vim htop tree
+# pkg install make cmake autoconf automake lfortran clang
+# pkg install openmpi libhdf5 python-torch python-numpy python-scipy python-pillow
+# pkg install fftw libjpeg-turbo zlib libpng
 # pkg install libandroid-spawn
 # export LDFLAGS+=" -landroid-spawn"
-# pip install patchelf h5py cython scipy mpi4py matplotlib
+# pip install h5py cython mpi4py matplotlib
 # # reboot
 # git config --global user.name "zhangxin"
 # git config --global user.email "zhangxin8069@qq.com"
