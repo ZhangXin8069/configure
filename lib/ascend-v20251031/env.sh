@@ -42,6 +42,7 @@ source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
 # pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 # pip install pyyaml
 # pip install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py
+# pip3 install torch-npu==2.1.0.post17
 # python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
 
 ## MPI
