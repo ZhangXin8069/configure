@@ -8,12 +8,12 @@ tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
 # mkdir
-mkdir ${_HOME}/bin -p
-mkdir ${_HOME}/include -p
-mkdir ${_HOME}/lib -p
-mkdir ${_HOME}/scripts -p
-mkdir ${_HOME}/test -p
-mkdir ${_HOME}/tmp -p
+mkdir -p ${_HOME}/bin
+mkdir -p ${_HOME}/include
+mkdir -p ${_HOME}/lib
+mkdir -p ${_HOME}/scripts
+mkdir -p ${_HOME}/test
+mkdir -p ${_HOME}/tmp
 # source
 echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_HOME}/tmp/scripts.sh
 source ${_HOME}/tmp/scripts.sh
