@@ -18,7 +18,7 @@ wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
 tar -xzf quda-develop.tar.gz
 mv quda-develop quda
 pushd ./quda
-mkdir build -p && pushd build
+mkdir -p build && pushd build
 cmake .. -DQUDA_DIRAC_DOMAIN_WALL=OFF -DQUDA_CLOVER_DYNAMIC=OFF -DQUDA_CLOVER_RECONSTRUCT=OFF -DQUDA_DIRAC_NDEG_TWISTED_CLOVER=OFF -DQUDA_DIRAC_NDEG_TWISTED_MASS=OFF -DQUDA_DIRAC_TWISTED_CLOVER=OFF -DQUDA_DIRAC_TWISTED_MASS=OFF -DQUDA_INTERFACE_MILC=OFF -DQUDA_LAPLACE=ON -DQUDA_MULTIGRID=ON -DQUDA_GPU_ARCH=sm_80 -DQUDA_MPI=ON
 cmake --build . -j6
 cmake --install .
