@@ -1,4 +1,4 @@
-# init
+# @INIT@
 _HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo 'HOME:'${_HOME}
 # _NAME=$(basename "$0")
@@ -7,56 +7,33 @@ work_name="test"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
-# mkdir
+# @MKDIR@
 mkdir -p ${_HOME}/bin
 mkdir -p ${_HOME}/include
 mkdir -p ${_HOME}/lib
 mkdir -p ${_HOME}/scripts
 mkdir -p ${_HOME}/test
 mkdir -p ${_HOME}/tmp
-# source
+# @SOURCE@
 echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_HOME}/tmp/scripts.sh
 source ${_HOME}/tmp/scripts.sh
-# export
-## zhangxin
+# @EXPORT@
 # export TERM=xterm-256color
 export PATH=$PATH:${_HOME}/bin
 # export PATH=$PATH:${HOME}/.local/bin
-# openmpi
+# @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
-# # export PATH=${MPI_HOME}/bin:$PATH
-# # # export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
-# # export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
+# export PATH=${MPI_HOME}/bin:$PATH
+# export LD_LIBRARY_PATH=${MPI_HOME}/lib:$LD_LIBRARY_PATH
+# export MPI_INCLUDE_PATH=${MPI_HOME}/include:$MPI_INCLUDE_PATH
 # export MANPATH=${MPI_HOME}/share/man:$MANPATH
-# cuda
+# @@CUDA@@
 # CUDA_HOME=/usr/local/cuda
 # export PATH=${CUDA_HOME}/bin:$PATH
 # export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
 # export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
 # export MANPATH=${CUDA_HOME}/share/man:$MANPATH
-# alias
-# alias noita="pushd ${HOME}/Game/Noita\ v20230311 && wine noita.exe && popd"
-# alias dwarf="pushd ${HOME}/Game/Dwarf\ Fortress && wine Dwarf\ Fortress.exe && popd"
-# alias rain="pushd ${HOME}/Game/Rain\ World\ v1.9.07b && wine RainWorld.exe && popd"
-# alias oriwotw="pushd ${HOME}/Game/Ori\ and\ the\ Will\ of\ the\ Wisps && wine oriwotw.exe && popd"
-# alias deadcells="pushd ${HOME}/Game/Dead\ Cells2 && wine deadcells.exe && popd"
-# alias cchess="pushd ${HOME}/Package && wine ChineseChess.exe && popd"
-# alias gchess="pushd ${HOME}/Package && wine GoChess.exe && popd"
-# alias gomoku="pushd ${HOME}/Package && wine Gomoku.exe && popd"
-# alias space="pushd ${HOME}/Package && wine SpaceSniffer.exe && popd"
-# alias clash="pushd ${HOME}/Package/Clash\ for\ Windows && ./cfw --no-sandbox && popd"
-# alias joplin="pushd ${HOME}/Package/Joplin && ./Joplin.AppImage --no-sandbox && popd"
-# alias krita="pushd ${HOME}/Package/Krita && ./krita.appimage --no-sandbox && popd"
-# alias onenote="pushd ${HOME}/Package/OneNote && ./onenote-desktop.AppImage --no-sandbox && popd"
-# alias winrar="pushd ${HOME}/Package/WinRARPortable && wine WinRARPortable.exe && popd"
-# alias matlab="pushd ${HOME}/Package/MATLAB/R2023b/bin && bash matlab && popd"
-# alias -='cd -'
-alias cchess="pushd ${_HOME}/lib/Package && wine ChineseChess.exe && popd"
-alias gchess="pushd ${_HOME}/lib/Package && wine GoChess.exe && popd"
-alias gomoku="pushd ${_HOME}/lib/Package && wine Gomoku.exe && popd"
-alias space="pushd ${_HOME}/lib/Package && wine SpaceSniffer.exe && popd"
-# alias qcu="conda activate qcu && cd ${HOME}/qcu"
-# alias base="conda deactivate && cd ${HOME}"
+# @ALIAS@
 alias ...=../..
 alias ....=../../..
 alias .....=../../../..
@@ -312,20 +289,22 @@ alias gwta='git worktree add'
 alias gwtls='git worktree list'
 alias gwtmv='git worktree move'
 alias gwtrm='git worktree remove'
-# alias history=omz_history
+alias history=omz_history
 alias l='ls -lah'
 alias la='ls -lAh'
 alias ll='ls -lh'
 alias ls='ls --color=tty'
 alias lsa='ls -lah'
 alias md='mkdir -p'
-# alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
 alias ohmyzsh='mate ~/.oh-my-zsh'
-alias python=python3
-alias pip=pip3
 alias rd=rmdir
 alias which-command=whence
 alias zshconfig='mate ~/.zshrc'
+# @@ZHANGXIN@@
+# alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
+alias python=python3
+alias pip=pip3
 alias gsize='git count-objects -vH'
 alias py='python'
 alias clc='clear'
+alias his='history'
