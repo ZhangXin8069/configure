@@ -307,4 +307,4 @@ alias pip=pip3
 alias gsize='git count-objects -vH'
 alias py='python'
 alias clc='clear'
-alias his='history'
+alias his='history | tail'
