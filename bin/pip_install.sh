@@ -8,7 +8,7 @@ source ./env.sh
 popd
 # init
 _NAME=$(basename "$0")
-work_name="lib"
+work_name="doc"
 tmp_name="tmp"
 work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
