@@ -50,23 +50,7 @@ find "$search_dir" -name "*${search_pattern}*" -type f 2>/dev/null | \
         echo -e "${YELLOW}$file${RESET}"
     done
 
-# 3. 如果安装了ag或ack，使用它们（参考ag.md、ack.md）
-echo -e "${GREEN}\nUsing advanced tools (if available):${RESET}"
-if command -v ag &> /dev/null; then
-    echo -e "${YELLOW}Using ag (The Silver Searcher):${RESET}"
-    ag --color "$search_pattern" "$search_dir"
-elif command -v ack &> /dev/null; then
-    echo -e "${YELLOW}Using ack:${RESET}"
-    ack --color "$search_pattern" "$search_dir"
-else
-    echo -e "${RED}ag/ack not found. Using grep only.${RESET}"
-fi
-
-# 4. 配合工具显示颜色（参考ls.md、dircolors.md）
-echo -e "${GREEN}\nColored file list with matching names:${RESET}"
-find "$search_dir" -name "*${search_pattern}*" -type f -exec ls --color=always {} \; 2>/dev/null
-
-# 5. 错误处理（参考exit.md）
+# 3. 错误处理（参考exit.md）
 if [ $? -ne 0 ]; then
     echo -e "${RED}Some errors occurred during search.${RESET}"
 fi
