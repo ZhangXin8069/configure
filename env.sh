@@ -1,18 +1,11 @@
 # @INIT@
 _HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo 'HOME:'${_HOME}
-# _NAME=$(basename "$0")
-name='test'
-work_name="test"
-tmp_name="tmp"
-work_path=${_HOME}/${work_name}
-tmp_path=${_HOME}/${tmp_name}
 # @MKDIR@
 mkdir -p ${_HOME}/bin
-mkdir -p ${_HOME}/include
+mkdir -p ${_HOME}/doc
 mkdir -p ${_HOME}/lib
 mkdir -p ${_HOME}/scripts
-mkdir -p ${_HOME}/test
 mkdir -p ${_HOME}/tmp
 # @SOURCE@
 echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_HOME}/tmp/scripts.sh
