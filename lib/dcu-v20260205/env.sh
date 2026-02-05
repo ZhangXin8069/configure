@@ -13,7 +13,7 @@ module list
 # @EXPORT@
 export PYTHONPATH=/public/home/zhangxin80699/PyQCU:${PYTHONPATH}
 export ROCM_HOME="/public/home/sghpc_sdk/Linux_x86_64/25.8/dtk/dtk-25.04.2"
-source ${ROCM_HOME}/env.sh
+source ${ROCM_HOME}/cuda/env.sh
 # @CONDA@
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
@@ -31,8 +31,3 @@ unset __conda_setup
 # <<< conda initialize <<<
 conda activate pytorch-python3.10
 # @@TILELANG@@
-# git clone https://gitee.com/zhangxin8069/tilelang-ascend.git
-pushd ./tilelang-ascend
-# bash ./install_ascend.sh
-source ./set_env.sh
-popd
