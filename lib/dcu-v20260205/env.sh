@@ -1,10 +1,10 @@
-# @UNALIAS@
-unalias history
-unalias his
 # @CONFIGURE@
 pushd /public/home/zhangxin80699
 pushd ./configure
 source env.sh
+# @@UNALIAS@@
+unalias history
+unalias his
 popd
 popd
 # @MODULE@
