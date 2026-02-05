@@ -31,3 +31,4 @@ unset __conda_setup
 # <<< conda initialize <<<
 conda activate pytorch-python3.10
 # @@TILELANG@@
+# pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple tilelang --resume-retries
