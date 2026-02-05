@@ -1,3 +1,6 @@
+# @UNALIAS@
+unalias history
+unalias his
 # @CONFIGURE@
 pushd /public/home/zhangxin80699
 pushd ./configure
@@ -7,7 +10,6 @@ popd
 # @MODULE@
 module purge
 module list
-
 # @EXPORT@
 export PYTHONPATH=/public/home/zhangxin80699/PyQCU:${PYTHONPATH}
 export ROCM_HOME="/public/home/sghpc_sdk/Linux_x86_64/25.8/dtk/dtk-25.04.2"
