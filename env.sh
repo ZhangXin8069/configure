@@ -290,13 +290,13 @@ alias ls='ls --color=tty'
 alias lsa='ls -lah'
 alias md='mkdir -p'
 alias ohmyzsh='mate ~/.oh-my-zsh'
-alias rd=rmdir
-alias which-command=whence
+alias rd='rmdir'
+alias which-command='whence'
 alias zshconfig='mate ~/.zshrc'
 # @@ZHANGXIN@@
 # alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
-alias python=python3
-alias pip=pip3
+alias python='python3'
+alias pip='pip3'
 alias gsize='git count-objects -vH'
 alias py='python'
 alias clc='clear'
