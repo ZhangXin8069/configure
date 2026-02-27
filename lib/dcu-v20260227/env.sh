@@ -33,6 +33,6 @@ fi
 unset __conda_setup
 # <<< conda initialize <<<
 # conda create -n qcu python=3.10.12
-# conda activate qcu
+conda activate qcu
 # conda install pytorch h5py mpi4py
 # pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple tilelang --resume-retries 10
