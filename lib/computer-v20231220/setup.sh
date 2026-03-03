@@ -16,7 +16,7 @@ firefox 'https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x6
 git clone https://gitee.com/zhangxin8069/configure.git
 git clone https://gitee.com/zhangxin8069/qcu.git
 pushd ~/configure
-source env.sh
+source ./env.sh
 bash ./scripts/script_alias.sh
 bash ./bin/sh_init.sh
 popd
