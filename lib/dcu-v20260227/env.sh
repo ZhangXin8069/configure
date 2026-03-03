@@ -1,7 +1,7 @@
 # @CONFIGURE@
 pushd /public/home/scnethpc2623
 pushd ./configure
-source env.sh
+source ./env.sh
 # @@UNALIAS@@
 unalias history
 unalias his

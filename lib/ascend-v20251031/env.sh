@@ -1,7 +1,7 @@
 ## CONFIGURE
 pushd /home/phyww/zhangxin
 pushd ./configure
-source env.sh
+source ./env.sh
 popd
 popd
 
@@ -81,3 +81,11 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## PROXY
 # git config --global http.proxy http://10.147.32.201:3128
+
+## TILELANG
+# git clone --recursive https://gitee.com/zhangxin8069/tilelang-ascend.git
+pushd /home/phyww/zhangxin/tilelang-ascend
+# bash ./install_ascend.sh
+source ./set_env.sh
+popd
+

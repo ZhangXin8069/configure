@@ -10,7 +10,7 @@
 # echo -e "\nput this to gitee's ssh.then run\"ssh -T git@gitee.com\""
 # git clone git@gitee.com:zhangxin8069/configure.git
 # git clone git@gitee.com:zhangxin8069/PyQCU.git
-# source env.sh
+# source ./env.sh
 # sh_init.sh
 
 ## BUILD LIBRARIES DIR
