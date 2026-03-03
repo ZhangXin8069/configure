@@ -67,3 +67,5 @@ export KMP_DUPLICATE_LIB_OK=TRUE
 export PYTORCH_ENABLE_MPS_FALLBACK=1
 export PATH=/Library/TeX/texbin:$PATH
 
+## PYTHONPATH
+export PYTHONPATH=/Users/zhangxin/PyQCU:$PYTHONPATH
