@@ -20,7 +20,7 @@
 # git clone git@gitee.com:zhangxin8069/configure.git
 # git clone git@gitee.com:zhangxin8069/PyQCU.git
 # pushd ~/configure
-# source env.sh
+# source ./env.sh
 # popd
 # sh_init.sh
 # # reboot
