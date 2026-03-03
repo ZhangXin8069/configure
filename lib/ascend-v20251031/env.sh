@@ -4,7 +4,8 @@ pushd ./configure
 source ./env.sh
 popd
 pushd ./PyQCU
-source ./env.sh
+# source ./env.sh
+export PYTHONPATH=/home/phyww/zhangxin/PyQCU:$PYTHONPATH
 popd
 popd
 
@@ -89,6 +90,6 @@ export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 # git clone --recursive https://gitee.com/zhangxin8069/tilelang-ascend.git
 pushd /home/phyww/zhangxin/tilelang-ascend
 # bash ./install_ascend.sh
-source ./set_env.sh
+# source ./set_env.sh
+export PYTHONPATH=/home/phyww/zhangxin/tilelang-ascend:$PYTHONPATH
 popd
-
