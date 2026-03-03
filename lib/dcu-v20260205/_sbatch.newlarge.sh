@@ -9,7 +9,7 @@
 #SBATCH -o %j #输出日志
 #SBATCH -e %j #错误日志
 module purge #清空module
-source env.sh
+source ./env.sh
 pushd ~/PyQCU/test
 # bash test.clover.bistabcg-npX-test6.sh
 # bash test.clover.bistabcg-npX-test7.sh
