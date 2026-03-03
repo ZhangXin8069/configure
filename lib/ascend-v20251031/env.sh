@@ -3,6 +3,9 @@ pushd /home/phyww/zhangxin
 pushd ./configure
 source ./env.sh
 popd
+pushd ./PyQCU
+source ./env.sh
+popd
 popd
 
 ## CONDA
