@@ -9,6 +9,8 @@ unalias his
 module purge
 module load anaconda3/2023.09
 module load compiler/dtk/25.04
+module load compiler/gcc/12.2.0
+module load mpi/openmpi/4.1.8/gcc-12.2.0/mlnx 
 module list
 # @EXPORT@
 export PYTHONPATH=/public/home/scnethpc2623/PyQCU:${PYTHONPATH}
@@ -39,5 +41,4 @@ unset __conda_setup
 # <<< conda initialize <<<
 # conda create -n qcu python=3.10.12
 conda activate qcu
-# conda install pytorch h5py mpi4py
-# pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple tilelang --resume-retries 10
+# pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple pytest mpi4py h5py tilelang --resume-retries 10
