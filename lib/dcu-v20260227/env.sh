@@ -8,19 +8,19 @@ unalias his
 # @MODULE@
 module purge
 module load anaconda3/2023.09
-module load compiler/dtk/25.04.4
+module load compiler/dtk/25.04.1
 module load compiler/gcc/12.2.0
 module load mpi/openmpi/4.1.8/gcc-12.2.0/mlnx 
 module list
 # @EXPORT@
 export PYTHONPATH=/public/home/scnethpc2623/PyQCU:${PYTHONPATH}
-export CUDA_HOME=${ROCM_PATH}/cuda/cuda-12
+export CUDA_PATH=${ROCM_PATH}/cuda/cuda-12
 export CUDA_BIN_PATH=$CUDA_PATH/bin
-export PATH=$CUDA_BIN_PATH${PATH:+:${PATH}}
-export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
-export LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64${LIBRARY_PATH:+:${LIBRARY_PATH}}
-export C_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include${C_INCLUDE_PATH:+:${C_INCLUDE_PATH}}
-export CPLUS_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}
+export PATH=$CUDA_BIN_PATH:${PATH}
+export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64:${LD_LIBRARY_PATH}
+export LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64:${LIBRARY_PATH}
+export C_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include:${C_INCLUDE_PATH}
+export CPLUS_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include:${CPLUS_INCLUDE_PATH}
 export CUDAARCHS=75
 # @CONDA@
 # >>> conda initialize >>>
@@ -37,7 +37,7 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
-# conda create -n qcu python=3.10.12
+# conda create -n qcu python=3.10.10
 conda activate qcu
 # pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple ninja pytest mpi4py h5py --resume-retries 10
 # wget https://download.sourcefind.cn:65024/file/4/tilelang/DAS1.7/tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl
