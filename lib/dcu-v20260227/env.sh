@@ -1,12 +1,10 @@
 # @CONFIGURE@
-pushd /public/home/scnethpc2623
-pushd ./configure
+pushd /public/home/scnethpc2623/configure
 source ./env.sh
+popd
 # @@UNALIAS@@
 unalias history
 unalias his
-popd
-popd
 # @MODULE@
 module purge
 module load anaconda3/2023.09
@@ -14,11 +12,16 @@ module load compiler/dtk/25.04
 module list
 # @EXPORT@
 export PYTHONPATH=/public/home/scnethpc2623/PyQCU:${PYTHONPATH}
-export ROCM_HOME="/public/software/compiler/dtk-25.04"
-pushd ${ROCM_HOME}/cuda
-source ./env.sh
-popd
+export CUDA_PATH="/public/software/compiler/dtk-25.04/cuda"
+export CUDA_BIN_PATH=$CUDA_PATH/bin
+export PATH=$CUDA_BIN_PATH:$PATH
+export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64
+export LIBRARY_PATH=$LIBRARY_PATH:$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64
+export C_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include${C_INCLUDE_PATH:+:${C_INCLUDE_PATH}}
 
+export CPLUS_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}
+export CUDAARCHS=75
+export DCC_PLATFORM=nvcc
 # @CONDA@
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
