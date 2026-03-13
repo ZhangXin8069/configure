@@ -15,7 +15,9 @@ module list
 # @EXPORT@
 export PYTHONPATH=/public/home/scnethpc2623/PyQCU:${PYTHONPATH}
 export ROCM_HOME="/public/software/compiler/dtk-25.04"
-source ${ROCM_HOME}/cuda/env.sh
+pushd ${ROCM_HOME}/cuda
+source ./env.sh
+popd
 
 # @CONDA@
 # >>> conda initialize >>>
