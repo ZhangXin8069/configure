@@ -9,14 +9,19 @@ unalias his
 module purge
 module load anaconda3/2023.09
 module load compiler/dtk/25.04.4
-pushd ${ROCM_PATH}/cuda/cuda-12
-source ./env.sh
-popd
 module load compiler/gcc/12.2.0
 module load mpi/openmpi/4.1.8/gcc-12.2.0/mlnx 
 module list
 # @EXPORT@
 export PYTHONPATH=/public/home/scnethpc2623/PyQCU:${PYTHONPATH}
+export CUDA_HOME=${ROCM_PATH}/cuda/cuda-12
+export CUDA_BIN_PATH=$CUDA_PATH/bin
+export PATH=$CUDA_BIN_PATH${PATH:+:${PATH}}
+export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}
+export LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64${LIBRARY_PATH:+:${LIBRARY_PATH}}
+export C_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include${C_INCLUDE_PATH:+:${C_INCLUDE_PATH}}
+export CPLUS_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}
+export CUDAARCHS=75
 # @CONDA@
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
