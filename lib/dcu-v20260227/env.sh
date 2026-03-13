@@ -40,5 +40,5 @@ unset __conda_setup
 # conda create -n qcu python=3.10.10
 conda activate qcu
 # pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple ninja pytest mpi4py h5py --resume-retries 10
-# wget https://download.sourcefind.cn:65024/file/4/tilelang/DAS1.7/tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl
-# pip install tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
+# wget https://download.sourcefind.cn:65024/file/4/tilelang/DAS1.7/tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-linux_x86_64.whl
+# pip install tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-linux_x86_64.whl -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple
