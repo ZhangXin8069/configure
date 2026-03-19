@@ -1,2 +1,2 @@
 # systemctl poweroff -i
-sudo shutdown
+sudo shutdown -q
