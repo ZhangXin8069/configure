@@ -7,15 +7,6 @@ module load mpi/openmpi/4.1.8/gcc-12.2.0/shca
 module list
 # @EXPORT@
 export PYTHONPATH=/public/home/scnethpc2623/PyQCU:${PYTHONPATH}
-
-export CUDA_PATH=${ROCM_PATH}/cuda/cuda-12
-export CUDA_BIN_PATH=$CUDA_PATH/bin
-export PATH=$CUDA_BIN_PATH:${PATH}
-export LD_LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64:${LD_LIBRARY_PATH}
-export LIBRARY_PATH=$CUDA_PATH/lib64:$CUDA_PATH/extras/CUPTI/lib64:${LIBRARY_PATH}
-export C_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include:${C_INCLUDE_PATH}
-export CPLUS_INCLUDE_PATH=$CUDA_PATH/include:$CUDA_PATH/extras/CUPTI/include:${CPLUS_INCLUDE_PATH}
-export CUDAARCHS=75
 # @CONDA@
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
@@ -31,12 +22,19 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
-# conda create -n qcu python=3.10.10
+# conda create -n qcu python=3.10.20
 # conda create -n qcu --clone qcu_base
 conda activate qcu
 # @TILELANG@
-# pip install ninja pytest mpi4py h5py -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --force-reinstall -v
-# wget https://download.sourcefind.cn:65024/file/4/tilelang/DAS1.7/tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl
-# pip install tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --force-reinstall -v
+
 # wget https://download.sourcefind.cn:65024/file/4/pytorch/DAS1.7/torch-2.7.1+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl
-# pip install torch-2.7.1+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl numpy==1.26.4 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --force-reinstall -v
+# pip install torch-2.7.1+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
+
+# wget https://download.sourcefind.cn:65024/file/4/tilelang/DAS1.7/tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl
+# pip install tilelang-0.1.6.post2+das.opt1.dtk25042-cp310-cp310-manylinux_2_28_x86_64.whl --verbose
+
+# pip install numpy==1.26.4 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
+
+# DO NOT INSTALL NINJA!!!
+
+# pip install pytest mpi4py h5py -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --no-dependencies --verbose
