@@ -15,18 +15,18 @@ tmp_path=${_HOME}/${tmp_name}
 # do
 pushd ~
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-echo "ln -s ${work_path}/_bashrc .bashrc"
-echo "ln -s ${work_path}/_zshrc .zshrc"
-echo "ln -s ${work_path}/_oh-my-zsh .oh-my-zsh"
-mv ./.bashrc .bashrc.bak
-mv ./.zshrc .zshrc.bak
+echo "cp -r ${work_path}/_bashrc .bashrc"
+echo "cp -r ${work_path}/_zshrc .zshrc"
+echo "cp -r ${work_path}/_oh-my-zsh .oh-my-zsh"
+mv ./.bashrc .bashrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak
+mv ./.zshrc .zshrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak
 # apt install zsh wget
 # sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
 mkdir -p .oh-my-zsh
-mv .oh-my-zsh .oh-my-zsh.bak
-ln -s ${work_path}/_bashrc .bashrc
-ln -s ${work_path}/_zshrc .zshrc
-ln -s ${work_path}/_oh-my-zsh .oh-my-zsh
+mv .oh-my-zsh .oh-my-zsh."$(date "+%Y-%m-%d-%H-%M-%S")".bak
+cp -r ${work_path}/_bashrc .bashrc
+cp -r ${work_path}/_zshrc .zshrc
+cp -r ${work_path}/_oh-my-zsh .oh-my-zsh
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
 # done
