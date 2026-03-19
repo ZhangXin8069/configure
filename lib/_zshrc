@@ -1,12 +1,11 @@
-# @ENV@
-# export DONT_PROMPT_WSL_INSTALL=1
+# zhangxin
+export DONT_PROMPT_WSL_INSTALL=1
 pushd ${HOME}/configure
 source ./env.sh
 popd
 pushd ${HOME}
 source ./env.sh
 popd
-# @ZSH@
 # Enable Powerlevel10k instant prompt. Should stay close to the top of ~/.zshrc.
 # Initialization code that may require console input (password prompts, [y/n]
 # confirmations, etc.) must go above this block; everything else may go below.
@@ -15,7 +14,6 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
 fi
 # If you come from bash you might have to change your $PATH.
 export PATH=$HOME/bin:/usr/local/bin:$PATH
-export PATH=$HOME/sbin:/usr/local/sbin:$PATH
 # Path to your oh-my-zsh installation.
 export ZSH="$HOME/.oh-my-zsh"
 # Set name of the theme to load --- if set to "random", it will
@@ -97,7 +95,7 @@ else
   export EDITOR='mvim'
 fi
 # Compilation flags
-# export ARCHFLAGS="-arch x86_64"
+export ARCHFLAGS="-arch x86_64"
 # Set personal aliases, overriding those provided by oh-my-zsh libs,
 # plugins, and themes. Aliases can be placed here, though oh-my-zsh
 # users are encouraged to define aliases within the ZSH_CUSTOM folder.
@@ -106,6 +104,5 @@ fi
 # Example aliases
 alias zshconfig="mate ~/.zshrc"
 alias ohmyzsh="mate ~/.oh-my-zsh"
-# @ZHANGXIN@
-# prompt_context() {}
+prompt_context() {}
 clear
