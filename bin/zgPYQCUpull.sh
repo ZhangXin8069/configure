@@ -1,4 +1,4 @@
 pushd ${HOME}/PyQCU
 git stash push
-bash ./bin/gpull.sh
+bash ../configure/bin/gpull.sh
 popd
