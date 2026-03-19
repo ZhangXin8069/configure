@@ -1,5 +1,5 @@
 tmp/*
-lib/_oh-my-zsh/cache/*
+lib/_oh-my-zsh/cache/completions/*
 *.sw*
 *.Identifier
 *.DS_Store
