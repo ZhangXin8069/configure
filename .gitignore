@@ -1,5 +1,5 @@
 tmp/*
-lib/_oh-my-zsh/cache/completions/*
+lib/_package/linux/2048
 *.sw*
 *.Identifier
 *.DS_Store
