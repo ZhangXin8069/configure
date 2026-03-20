@@ -91,10 +91,10 @@ good_game=(
     '                                                 '
     '                   Score:                        '
     '                                                 '
-    '          press   Q   to quit                    '
-    '          press   N   to start a new game        '
-    '          press   S   to change the level        '
-    '          press   R   to replay your game        '
+    '          press   q   to quit                    '
+    '          press   n   to start a new game        '
+    '          press   l   to change the level        '
+    '          press   r   to reload your game        '
     '                                                 '
 );
 start_game=(
@@ -103,12 +103,12 @@ start_game=(
     '                                                 '
     '                  Author:  LKJ                   '
     '                                                 '
-    '          press   S   to change the level        '
+    '          press   l   to change the level        '
     '                                                 '
     '             C H O O S E  L E V E L:             '
     '                        1                        '
     '                                                 '
-    '         Press <Enter> to start the game         '
+    '             Press e to start the game           '
     '                                                 '
 );
 blockarr=(); #记录name 和 flag
@@ -118,44 +118,44 @@ keyarray=(); #记录按键
 game_init() { # game_init
     SCLINES=`tput lines`;       # 屏幕的高
     SCCOLNS=`tput cols`;        # 屏幕的宽
-#主框的属性
-    mainw=59;               mainh=60;                   # 主框的宽和高
+    #主框的属性
+    mainw=59;               mainh=50;                   # 主框的宽和高
     mainctx=0;              maincty=4;                  # 主框中心打印点
     upx=1;                  dnx=$((SCLINES-1));         # 界面的上下 x
     lty=$((SCCOLNS/2-50));  rty=$((lty+61));            # 界面的左右 y
     ((lty<=0)) && lty=1;
-#next的属性
+    #next的属性
     nextw=40;           nexth=16;                 # next框的高和宽
     ntx=$((upx));       nty=$((rty+2));           # next框的位置
     ntctx=$((ntx+5));   ntcty=$((nty+12));        # next框的中心打印位置
-#score的属性
+    #score的属性
     scorw=$nextw;       scorh=5;
-    scx=$((ntx+20));    scy=$((nty));
+    scx=$((ntx+18));    scy=$((nty));
     scctx=$((scx+4));   sccty=$((scy+19));
-#level的属性
+    #level的属性
     levew=$nextw;       leveh=5;
-    lvx=$((scx+9));     lvy=$((scy));
+    lvx=$((scx+7));     lvy=$((scy));
     lvctx=$((lvx+4));   lvcty=$((lvy+20));
-#help的属性
-    helpw=$nextw;       helph=21;
-    hpx=$((lvx+10));    hpy=$((nty));
+    #help的属性
+    helpw=$nextw;       helph=18;
+    hpx=$((lvx+7));    hpy=$((nty));
     hpctx=$((hpx+4));   hpcty=$((hpy+10));
-#map
-MAP=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
-     0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 
-     0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-     0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
-     0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+    #map
+    MAP=(0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+        0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+        0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+        0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
+        0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0
     ); #所有的格子
-#paint_gui
+    #paint_gui
     clear; paint_gui;
     local x=$((RANDOM%7));
-    name=${NAME[$((x))]};  
-    flag=$((RANDOM%FLAG[$x]+1)); 
+    name=${NAME[$((x))]};
+    flag=$((RANDOM%FLAG[$x]+1));
     nname='I'; nflag=2; #下一个方块
     centerx=$mainctx; #每个图形的中心打印点
     centery=$maincty;
-#各个方块的相对坐标
+    #各个方块的相对坐标
     ax="Iax"; ay="Iay";
 }
 #------------------------------------------------------------------------#
@@ -213,21 +213,20 @@ paint_gui() {
     paint_box $lvx $lvy $levew $leveh 32; #画level框
     paint_box $scx $scy $scorw $scorh 36; #画分数框
     paint_box $hpx $hpy $helpw $helph 31; #画帮助框
-#打印score, help 等提示字符
+    #打印score, help 等提示字符
     echo -ne "\033[$((ntx+2));$((nty+17))H\033[34mN E X T\033[0m";
     echo -ne "\033[$((scx+2));$((scy+16))H\033[31mS C O R E\033[0m";
     echo -ne "\033[$((scx+4));$((scy+20))H\033[31m0\033[0m";
     echo -ne "\033[$((lvx+2));$((lvy+16))H\033[31mL E V E L\033[0m";
     echo -ne "\033[$((lvctx));$((lvcty))H\033[31m1\033[0m";
     echo -ne "\033[$((hpx+2));$((hpy+17))H\033[33mH E L P\033[0m";
-    echo -ne "\033[$((hpctx));$((hpcty))H\033[34mH --- Move Left\033[0m";
-    echo -ne "\033[$((hpctx+2));$((hpcty))H\033[34mL --- Move Right\033[0m";
-    echo -ne "\033[$((hpctx+4));$((hpcty))H\033[34mJ --- Soft Drop\033[0m";
-    echo -ne "\033[$((hpctx+6));$((hpcty))H\033[34mK --- Rotate\033[0m";
-    echo -ne "\033[$((hpctx+8));$((hpcty))H\033[34mSpace or Enter --- Hard Drop\033[0m";
-    echo -ne "\033[$((hpctx+11));$((hpcty))H\033[34mP --- Pause Game\033[0m";
-    echo -ne "\033[$((hpctx+13));$((hpcty))H\033[34mQ --- Quit Game\033[0m";
-    echo -ne "\033[$((hpctx+15));$((hpcty))H\033[34mE --- Exit Replay\033[0m";
+    echo -ne "\033[$((hpctx+0));$((hpcty))H\033[34mA --- Move Left\033[0m";
+    echo -ne "\033[$((hpctx+2));$((hpcty))H\033[34mD --- Move Right\033[0m";
+    echo -ne "\033[$((hpctx+4));$((hpcty))H\033[34mS --- Soft Drop\033[0m";
+    echo -ne "\033[$((hpctx+6));$((hpcty))H\033[34mW --- Rotate\033[0m";
+    echo -ne "\033[$((hpctx+8));$((hpcty))H\033[34mSpace  --- Hard Drop\033[0m";
+    echo -ne "\033[$((hpctx+10));$((hpcty))H\033[34mP --- Pause Game\033[0m";
+    echo -ne "\033[$((hpctx+12));$((hpcty))H\033[34mQ --- Quit Game\033[0m";
 }
 #---------------------------------------------------------
 #在next框中打印下一个方块图形
@@ -249,7 +248,7 @@ paint_score() {
     ((score>9000 )) && ((level=3)); ((score>14000)) && ((level=4));
     ((score>20000)) && ((level=5)); ((score>27000)) && ((level=6));
     ((score>35000)) && ((level=7)); ((score>44000)) && ((level=8));
-    ((level=olevel+level)); 
+    ((level=olevel+level));
     ((level>9)) && ((level=9));
     ((TIME=10-level));
     echo -ne "\033[$((lvctx));$((lvcty))H\033[31m$level\033[0m";
@@ -288,7 +287,7 @@ update() { #update the map
     #将上面的格子向下移动一行
     for (( i = 0; i < MAPY; i++ )); do
         for (( j = x; j > 0; j-- )); do
-            ((n=MAP[$(((j-1)*MAPY+i))])); 
+            ((n=MAP[$(((j-1)*MAPY+i))]));
             if ((n!=0)); then
                 erase_block $((j-1)) $i;
                 paint_block $j $i ${colorone[$((n-1))]} ${colortwo[$((n-1))]};
@@ -322,43 +321,43 @@ have_score() {
 find_array() {
     case $flag in
         1) ax="${name}ax"; ay="${name}ay";
-            ;;
+        ;;
         2) ax="${name}bx"; ay="${name}by";
-            ;;
+        ;;
         3) ax="${name}cx"; ay="${name}cy";
-            ;;
+        ;;
         4) ax="${name}dx"; ay="${name}dy";
-            ;;
+        ;;
     esac
 }
 # 检测方块首次出现时,是否会越界,并作出矫正或者游戏结束
-check_first() { 
+check_first() {
     local x=$centerx y=$centery minx=0 i
     find_array;
-# 检测是否越界
+    # 检测是否越界
     for (( i = 0; i < 4; i++ )); do
         (((x+${ax}[$i])<minx)) && ((minx=(x+${ax}[$i])));
     done
     ((centerx-=minx));
     paint_x;  #开始打印方块
     paint_score;
-# 检测是否会结束游戏
+    # 检测是否会结束游戏
     for (( i = 0; i < 4; i++ )); do
         ((x=centerx+${ax}[$i])); ((y=centery+${ay}[$i]))
         ((MAP[$((x*10+y))]!=0)) && return 1; #游戏结束
     done
- 
+    
     return 0;
 }
 #检测是否可以固定方块
 check_stop() {
     local sx=$centerx sy=$centery
     local x=0 y=0 n=0 i=0
-   
+    
     find_array;
     for (( i = 0; i < 4; i++ )); do
         ((x=(sx+${ax}[$i]))); ((y=(sy+${ay}[$i])));
-        ((x+1>19)) && break; #到底
+        ((x+1>16)) && break; #到底
         ((MAP[$((10*(x+1)+y))] != 0)) && break; #有方块挡住
     done
     
@@ -370,18 +369,18 @@ check_stop() {
         have_score;
         return 1;
     fi
- 
+    
     return 0;
 }
 #检测是否可以移到$1 $2这个格子
 check_next() {
-    local sx=$1 sy=$2 
+    local sx=$1 sy=$2
     local x=0 y=0 n=0 i=0
     
     find_array;
     for (( i = 0; i < 4; i++ )); do
         ((x=(sx+${ax}[$i]))); ((y=(sy+${ay}[$i])));
-        ((x<0 || x>19 || y<0 || y>9)) && return 1; 
+        ((x<0 || x>15 || y<0 || y>9)) && return 1;
         ((MAP[$((10*x+y))] != 0)) && return 1; #不能移到这个格子
     done
     return 0;
@@ -394,7 +393,7 @@ go_left() { #向左移一个
     erase_x; ((centery-=1));
     return 0;
 }
-    
+
 go_right() { #向右移一格
     check_next $centerx $((centery+1));
     (($?==1)) && return 1;
@@ -437,26 +436,26 @@ game_pause() {
     done
     echo -ne "\033[$((hpctx+17));$((hpcty+5))H\033[31m           \033[0m";
 }
-        
+
 # 根据按键作出选择
 keypress() {
     local result=0;
-    case ${key:-space} in
-        H|h) go_left;   result=$?; # 向左一个格子
-            ;;
-        J|j) go_down;   result=$?; # 向下, 加速向下一个格子
-            ;;
-        K|k) go_rotate; result=$?; # 向上, 旋转90度
-            ;;
-        L|l) go_right;  result=$?; # 向右一个格子
-            ;;
+    case ${key:-p} in
+        A|a) go_left;   result=$?; # 向左一个格子
+        ;;
+        S|s) go_down;   result=$?; # 向下, 加速向下一个格子
+        ;;
+        W|w) go_rotate; result=$?; # 向上, 旋转90度
+        ;;
+        D|d) go_right;  result=$?; # 向右一个格子
+        ;;
         Q|q) game_exit; # 退出游戏
-            ;;
+        ;;
         P|p) game_pause;
-            ;;
-        space)  
+        ;;
+        space)
             go_fast;    nextbk=1;
-            ;;
+        ;;
     esac
     ((result==0)) && paint_x;
 }
@@ -480,7 +479,7 @@ new_game() {
                 key="$(readkey)"
                 if ! [ -z "$key" ]; then
                     keypress;
-                    keyarray+=(${key:-space});
+                    keyarray+=(${key:-p});
                 else
                     keyarray+=("NUL");
                 fi
@@ -495,7 +494,7 @@ new_game() {
         ((score+=10));
     done
 }
-replay() {
+reload() {
     score=0; level=$olevel;
     local gmover=0 nextbk=0 i=0 j=0;
     local blocklen=$((${#blockarr[@]})) keylen=${#keyarray[@]};
@@ -509,19 +508,19 @@ replay() {
             local k=0 anykey;
             while ! [ -f $EXITFLAG ]; do
                 key=${keyarray[j++]}; [[ $key = [pP] ]] && continue;
-                keypress; 
+                keypress;
                 #((j+=1));
                 anykey="$(readkey)"
-                if ! [ -z "$anykey" ]; then 
+                if ! [ -z "$anykey" ]; then
                     [[ $anykey = [pP] ]] && game_pause;
                     [[ $anykey = [qQ] ]] && game_exit;
                     [[ $anykey = [eE] ]] && level=1 && return 0;
                 fi
                 ((nextbk==1)) && !((nextbk=0)) && break;
                 ((k+=1)) && ((k==TIME)) && break;
-                [[ -z "$key" ]] && sleep 0.05
+                [[ -z "$key" ]] && sleep 0.5
             done
- 
+            
             check_stop; (($?==1)) && break;
             erase_x; ((centerx+=1)); paint_x;
         done
@@ -545,8 +544,8 @@ game_over() {
         pkey="$(readkey)"
         [[ $pkey = 'q' ]] || [[ $pkey = 'Q' ]] && game_exit;
         [[ $pkey = 'n' ]] || [[ $pkey = 'N' ]] && break;
-        [[ $pkey = 's' ]] || [[ $pkey = 'S' ]] && ((level=level%9+1));
-        [[ $pkey = 'r' ]] || [[ $pkey = 'R' ]] && replay && paint_game_over;
+        [[ $pkey = 'l' ]] || [[ $pkey = 'L' ]] && ((level=level%9+1));
+        [[ $pkey = 'r' ]] || [[ $pkey = 'R' ]] && reload && paint_game_over;
         echo -ne "\033[$((lvctx));$((lvcty))H\033[31m$level\033[0m";
     done
     olevel=$level;
@@ -571,10 +570,9 @@ game_start() {
     local pkey='x';
     while ! [ -f $EXITFLAG ]; do
         pkey="$(readkey)"
-        [[ ${pkey} = 'enter' ]] && break;
-        [[ $pkey = 'b' ]] || [[ $pkey = 'B' ]] && break;
+        [[ $pkey = 'e' ]] || [[ $pkey = 'E' ]] && break;
         [[ $pkey = 'q' ]] || [[ $pkey = 'Q' ]] && game_exit;
-        [[ $pkey = 's' ]] || [[ $pkey = 'S' ]] && ((level=level%9+1));
+        [[ $pkey = 'l' ]] || [[ $pkey = 'L' ]] && ((level=level%9+1));
         echo -ne "\033[$((x+8));$((ycent/2-1))H\033[40m$level\033[0m";
         sleep 0.1
     done
@@ -597,7 +595,7 @@ trap 'game_exit;' SIGINT SIGTERM
 IFS=""
 while read -n 1 gkey; do
     [ "$gkey" = ' ' ] && gkey="space"
-    echo "${gkey:-enter}" >> $WRITEFILE
+    echo "${gkey:-p}" >> $WRITEFILE
     [[ "$gkey" = 'q' ]] || [[ "$gkey" = 'Q' ]] && break
 done
 game_exit
