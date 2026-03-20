@@ -1,0 +1,5 @@
+bastet
+depend
+Test
+*.o
+*~
