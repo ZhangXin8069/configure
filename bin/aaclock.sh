@@ -11,28 +11,28 @@ _PATH=$(
 _NAME=$(basename "$0")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 asciinumber=(
-    '    .XEEEEb           ,:LHL          :LEEEEEG        .CNEEEEE8                bMNj       NHKKEEEEEX           1LEEE1    KEEEEEEEKNMHH       8EEEEEL.         cEEEEEO    '
-    '   MEEEUXEEE8       jNEEEEE         EEEEHMEEEEU      EEEELLEEEEc             NEEEU      7EEEEEEEEEK        :EEEEEEN,    EEEEEEEEEEEEE     OEEEGC8EEEM      1EEELOLEEE3  '
-    '  NEE.    OEEC      EY" MEE         OC      LEEc     :"      EEE            EEGEE3      8EN               MEEM.                  :EE.    1EEj     :EEO    1EE3     DEEc '
-    ' ,EEj      EEE          HEE                  EEE             cEE:          EEU EEJ      NEC              EEE                     EEJ     EEE       EEE    EEN       KEE '
-    ' HEE       jEE1         NEE                  EEE             EEE          EEM  EEJ      EE              LEE   ..                EEK      DEEj     :EE7   ,EE1       jEE '
-    ' EEH        EEZ         KEE                 :EE1       .::jZEEG          EEU   EEJ     .EEEEEENC        EE77EEEEEEL            NEE        UEENj  bEE7    .EEX       :EE.'
-    '.EEZ        EEM         KEE                 EEK        EEEEEEC         .EEc    EEC     :X3DGMEEEEU     3EEEED.".GEEE.         CEE.          EEEEEEE       EEEj     :EEE '
-    ' EEZ        EEM         KEE               :EEK            "jNEEZ      :EE      EE7             MEEU    LEEb       EEE        .EE8         DEEL:.8EEEM      NEEENMEEEHEE '
-    ' EEN       .EEG         KEE              bEEG                7EEM    jEEN738ODDEEM3b            EEE    MEE        8EE,       EEE         EEE      ,EEE      .bEEEEC XEE '
-    ' LEE       3EE:         KEE            .EEE,                  EEE    LEEEEEEEEEEEEEE            XEE    8EE        cEE:      NEE         7EE1       jEE1            :EE: '
-    ' .EEc      EEE          KEE           bEED                    EEE              EE1              EEE     EEX       EEE      3EE:         cEEc       7EEj           CEEG  '
-    '  MEE7    NEE.          EEE         jEEK             C       EEE1              EEC     j      :EEE      CEEG     LEEj     .EEU           EEE:     .EEE          1EEEJ   '
-    '   bEEEEEEEE.           EEE        NEEEEEEEEEEEE    bEEEEEEEEEE7               EEd    JEEEEEEEEEN        jEEEEEEEEE7     .EEE             KEEEEHEEEEL      8EEEEEEX     '
-    '     DEEEL7             CGD        3GD3DOGGGGGUX     :DHEEEN8.                 bUd     7GNEEEMc            7LEEEX:       1XG                JHEEEM1        COLIN"       '
+    '    .ZHANGx           ,:XIN          :ZHANGNB        .LOVEXIN9                dOOp       ZHANGXINNB           1YYDS1    ILOVEZHANGXIN       5SHIREN.         iZXYYDS    '
+    '   ILOVEXINE3       iZXYYDS         RIPZHANGXIN      ZHANGXINNBb             ZHANG      5GONGCHNAGX        :ZHANGNB,    IZHANGTIANXIU     SHISHEN8SHI      1GETIANCAI5  '
+    '  XIN.    ZXNB      ZX" XIN         ZX      XINc     :"      XIN            ZHANG3      9NB               AWSL.                  :ZX.    1SEs     :XIN    6ZX9     XINc '
+    ' ,ZXc      XIN          XIN                  XIN             zNB:          XIN XIN      XIN              XIN                     XIN     XIN       XIN    XIN       XIN '
+    ' XIN       jBB8         XIN                  XIN             XIN          XIN  XIN      ZX              XIN   ..                XIN      XINc     :ZX6   ,ZX6       zNB '
+    ' XIN        XIN         XIN                 :ZX6       .::iYYDS          XIN   XIN     .ZHANGXIN        ZX66BUYANLE            XIN        LOVEi  bBB8    .XIN       :ZX.'
+    '.XIN        XIN         XIN                 XIN        ZHANGNB         .ZXc    XIN     :I2BFOREVER     4RENWC.".DDDD.         XIN.          ZHANGNB       XINc     :XIN '
+    ' XIN        XIN         XIN               :XIN            "iYYDS      :ZX      ZX6             ZXNB    XINc       XIN        .ZX6         ZXNB:.5SHUI      ZHANGXINYYDS '
+    ' XIN       .XIN         XIN              zXIN                7EEM    iSEE666ZHANGX2b            XIN    XIN        1TH,       XIN         XIN      ,XIN      .xZHANG XIN '
+    ' XIN       3EE:         XIN            .XIN,                  XIN    ILOVEXINFOREVER            XIN    5NB        zNB:      XIN         7ZX8       yES1            :ZX: '
+    ' .NBy      XIN          XIN           zXIN                    XIN              ZX6              XIN     XIN       XIN      1SB:         kWOc       4WOc           ZXNB  '
+    '  RIP9    XIN.          XIN         zXIN             Z       RIP9              XIN     j      :XIN      ZXNB     XINc     .XIN           XIN:     .XIN          1SHEN   '
+    '   iZHANGXIN.           XIN        ILOVEZHANGXIN    iDONTLOVEZB8               ZXc    RIPZHANGXIN        iSZHENSHUI8     .XIN             RIPZHANGXIN      5SHUOWAN     '
+    '     ZHANG3             RIP        7ZX8NBFOREVER     :IBUSHI0.                 xZx     9ZHANGXc            4RENMA:       1SB                WBUSHI1        ZHANG"       '
 );
 asciidot=(
     ' @@ '
     ' @@ '
 );
 len=${#asciinumber[@]};
-#共有三个参数, 
-#第一个是所要打印的数字, 
+#共有三个参数,
+#第一个是所要打印的数字,
 #第二个是之前打印的数字个数，
 #第三个是之前打印的点的个数
 function print_number {
@@ -53,7 +53,7 @@ function print_dot {
     done
 }
 function old_value {
-    orows=`tput lines`; beg_x=$((orows/2-6)); 
+    orows=`tput lines`; beg_x=$((orows/2-6));
     ocols=`tput cols`;  beg_y=$((ocols/2-54));
     ohur=$((10#`date +%H`));
     omin=$((10#`date +%M`));
@@ -94,8 +94,8 @@ function print_all {
         omsd=$msd;
     fi
     sec=$((10#`date +%S`)); #出现(())bug的原因：date +%S < 10 的时候会有前置0
-                    #所以((08/10))会出错,但是使用expr不会出现错误,let也会有此错误
-                    #解决方法是$((10#08/10));
+    #所以((08/10))会出错,但是使用expr不会出现错误,let也会有此错误
+    #解决方法是$((10#08/10));
     sft=$((sec/10)); ssd=$((sec%10));
     if [[ $osft -ne $sft ]]; then
         print_number $sft 4 2;
@@ -132,9 +132,9 @@ while true; do
         EXIT;
     fi
     print_all;
-#    if sleep 0.3 &> /dev/null; then
-#	sleep 1; 
-#    fi;
+    #    if sleep 0.3 &> /dev/null; then
+    #	sleep 1;
+    #    fi;
 done
 exit 0;
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
