@@ -35,7 +35,6 @@ good_game=(
     '                   Score:                        '
     '          press   q   to quit                    '
     '          press   n   to start a new game        '
-    # '          press   s   to change the speed        '
     '          press   p   to change the speed        '
     '                                                 '
 );
@@ -44,12 +43,11 @@ game_start=(
     '                ~~~ S N A K E ~~~                '
     '                                                 '
     '                  Author:  LKJ                   '
-    '         space or enter   pause/play             '
+    '         e                pause/play             '
     '         q                quit at any time       '
-    # '         s                change the speed       '
     '         p                change the speed       '
     '                                                 '
-    '         Press <Enter> to start the game         '
+    '         Press e to start the game               '
     '                                                 '
 );
 snake_exit() {  #退出游戏
@@ -73,7 +71,7 @@ draw_gui() {                                  # 画边框
     done
     ch_speed 0;
     echo -ne "\033[$Lines;$((yscore-10))H\033[36mScores: 0\033[0m";
-    echo -en "\033[$Lines;$((Cols-50))H\033[33mPress <space> or enter to pause game\033[0m";
+    echo -en "\033[$Lines;$((Cols-50))H\033[33mPress e to pause game\033[0m";
 }
 snake_init() {
     Lines=`tput lines`; Cols=`tput cols`;     #得到屏幕的长宽
@@ -92,12 +90,12 @@ snake_init() {
     draw_gui $((Lines-1)) $Cols
 }
 game_pause() {                                #暂停游戏
-    echo -en "\033[$Lines;$((Cols-50))H\033[33mGame paused, Use space or enter key to continue\033[0m";
+    echo -en "\033[$Lines;$((Cols-50))H\033[33mGame paused, Use e key to continue\033[0m";
     while ! [ -f $EXITFLAG ]; do
-        space="$(readkey)"
-        [[ ${space:-enter} = enter ]] && \
-            echo -en "\033[$Lines;$((Cols-50))H\033[33mPress <space> or enter to pause game           \033[0m" && return;
-        [[ ${space:-enter} = q ]] && snake_exit;
+        input="$(readkey)"
+        [[ $input = e ]] && \
+            echo -en "\033[$Lines;$((Cols-50))H\033[33mPress e to pause game           \033[0m" && return;
+        [[ $input = q ]] && snake_exit;
         sleep 0.05;
     done
 }
@@ -119,17 +117,7 @@ ch_speed() {                                  #更新速度
      esac
      echo -ne "\033[$Lines;3H\033[33mSpeed: $temp\033[0m";
 }
-# Gooooo() {                                   #更新方向
-#     case ${key:-enter} in
-#         j|J) [[ ${pos[0]} != "up"    ]] && pos[0]="down";;
-#         k|K) [[ ${pos[0]} != "down"  ]] && pos[0]="up";;
-#         h|H) [[ ${pos[0]} != "right" ]] && pos[0]="left";;
-#         l|L) [[ ${pos[0]} != "left"  ]] && pos[0]="right";;
-#         s|S) ch_speed;;
-#         q|Q) snake_exit;;
-#       enter) game_pause;;
-#     esac
-# }
+
 Gooooo() {                                   #更新方向
     case ${key:-enter} in
         w|W) [[ ${pos[0]} != "up"    ]] && pos[0]="up";;
@@ -138,7 +126,7 @@ Gooooo() {                                   #更新方向
         d|D) [[ ${pos[0]} != "left"  ]] && pos[0]="right";;
         p|P) ch_speed;;
         q|Q) snake_exit;;
-      enter) game_pause;;
+        e|E) game_pause;;
     esac
 }
 add_node() {                                 #增加节点
@@ -165,7 +153,7 @@ mk_random() {                               #产生随机点和随机数
 new_game() {                                #重新开始新游戏
     snake_init;
     while ! [ -f $EXITFLAG ]; do
-        #read -t ${speed[$spk]} -n 1 key;
+        # read -t ${speed[$spk]} -n 1 key;
         key="$(readkey)"
         if [[ -z "$key" ]]; then
             sleep ${speed[$spk]};
@@ -207,9 +195,8 @@ print_game_start() {
     done
     while ! [ -f $EXITFLAG ]; do
         anykey="$(readkey)"
-        [[ ${anykey:-enter} = enter ]] && break;
+        [[ ${anykey:-enter} = e ]] && break;
         [[ ${anykey:-enter} = q ]] && snake_exit;
-        # [[ ${anykey:-enter} = s ]] && ch_speed;
         [[ ${anykey:-enter} = p ]] && ch_speed;
         sleep 0.05;
     done
@@ -237,8 +224,7 @@ trap 'snake_exit;' SIGTERM SIGINT;
 } &
 IFS=""
 while read -n 1 gkey; do
-    [ "$gkey" = ' ' ] && gkey="space"
-    echo "${gkey:-enter}" >> $WRITEFILE
+    echo "${gkey}" >> $WRITEFILE
     [[ "$gkey" = 'q' ]] || [[ "$gkey" = 'Q' ]] && break
 done
 snake_exit
