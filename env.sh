@@ -3,7 +3,7 @@ _HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo 'HOME:'${_HOME}
 # @MKDIR@
 mkdir -p ${_HOME}/bin
-mkdir -p ${_HOME}/doc
+mkdir -p ${_HOME}/docs
 mkdir -p ${_HOME}/lib
 mkdir -p ${_HOME}/scripts
 mkdir -p ${_HOME}/tmp
