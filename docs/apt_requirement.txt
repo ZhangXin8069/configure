@@ -1,0 +1,10 @@
+# proot-distro
+wget
+htop
+man
+vim
+git
+python3
+openssh
+tree 
+# sshpass
