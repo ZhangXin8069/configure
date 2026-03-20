@@ -1,1 +1,1 @@
-watch -n 0.1 squeue -u zhangxin
+squeue -u zhangxin

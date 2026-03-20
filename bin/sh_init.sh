@@ -14,7 +14,7 @@ work_path=${_HOME}/${work_name}
 tmp_path=${_HOME}/${tmp_name}
 # do
 pushd ~
-echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 echo "cp -r ${work_path}/_bashrc .bashrc"
 echo "cp -r ${work_path}/_zshrc .zshrc"
 echo "cp -r ${work_path}/_oh-my-zsh .oh-my-zsh"
@@ -27,6 +27,6 @@ mv .oh-my-zsh .oh-my-zsh."$(date "+%Y-%m-%d-%H-%M-%S")".bak
 cp -r ${work_path}/_bashrc .bashrc
 cp -r ${work_path}/_zshrc .zshrc
 cp -r ${work_path}/_oh-my-zsh .oh-my-zsh
-echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
 # done

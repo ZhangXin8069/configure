@@ -14,7 +14,7 @@ tmp_path=${_HOME}/${tmp_name}
 # do
 pushd ${tmp_path}
 rm scripts.sh
-echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 echo "# >>> alias:$(date "+%Y-%m-%d-%H-%M-%S") >>>" >scripts.sh
 for i in $(find ${tmp_path} -type f -name "*.sh"); do
     i=$(basename ${i})
@@ -33,6 +33,6 @@ for i in $(find ${work_path} -type f -name "*.sh"); do
     echo "alias ${i}='bash ${work_path}/${i}'" >>scripts.sh
 done
 echo "# <<< alias:$(date "+%Y-%m-%d-%H-%M-%S") <<<" >>scripts.sh
-echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 popd
 # done
