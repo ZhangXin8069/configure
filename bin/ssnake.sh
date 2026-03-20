@@ -35,7 +35,7 @@ good_game=(
     '                   Score:                        '
     '          press   q   to quit                    '
     '          press   n   to start a new game        '
-    '          press   p   to change the speed        '
+    '          press   l   to change the speed level  '
     '                                                 '
 );
 game_start=(
@@ -43,9 +43,9 @@ game_start=(
     '                ~~~ S N A K E ~~~                '
     '                                                 '
     '                  Author:  LKJ                   '
-    '         e                pause/play             '
+    '         p                pause/play             '
     '         q                quit at any time       '
-    '         p                change the speed       '
+    '         l                change the speed level '
     '                                                 '
     '         Press e to start the game               '
     '                                                 '
@@ -58,7 +58,7 @@ snake_exit() {  #退出游戏
     tput cvvis; #恢复光标
     exit 0;
 }
-draw_gui() {                                  # 画边框 
+draw_gui() {                                  # 画边框
     clear;
     color="\033[34m*\033[0m";
     for (( i = 0; i < $1; i++ )); do
@@ -71,14 +71,14 @@ draw_gui() {                                  # 画边框
     done
     ch_speed 0;
     echo -ne "\033[$Lines;$((yscore-10))H\033[36mScores: 0\033[0m";
-    echo -en "\033[$Lines;$((Cols-50))H\033[33mPress e to pause game\033[0m";
+    echo -en "\033[$Lines;$((Cols-50))H\033[33mPress p to pause game\033[0m";
 }
 snake_init() {
     Lines=`tput lines`; Cols=`tput cols`;     #得到屏幕的长宽
     xline=$((Lines/2)); ycols=4;              #开始的位置
     xscore=$Lines;      yscore=$((Cols/2));   #打印分数的位置
     xcent=$xline;       ycent=$yscore;        #中心点位置
-    xrand=0;            yrand=0;              #随机点 
+    xrand=0;            yrand=0;              #随机点
     sumscore=0;         liveflag=1;           #总分和点存在标记
     sumnode=0;          foodscore=0;          #总共要加长的节点和点的分数
     
@@ -86,47 +86,47 @@ snake_init() {
     pos=(right right right right right);      #开始节点的方向
     xpt=($xline $xline $xline $xline $xline); #开始的各个节点的x坐标
     ypt=(5 4 3 2 1);                          #开始的各个节点的y坐标
-    speed=(0.05 0.1 0.15);  spk=${spk:-1};    #速度 默认速度
+    speed=(0.15 0.1 0.05);  spk=${spk:-1};    #速度 默认速度
     draw_gui $((Lines-1)) $Cols
 }
 game_pause() {                                #暂停游戏
-    echo -en "\033[$Lines;$((Cols-50))H\033[33mGame paused, Use e key to continue\033[0m";
+    echo -en "\033[$Lines;$((Cols-50))H\033[33mGame paused, Use p key to continue\033[0m";
     while ! [ -f $EXITFLAG ]; do
         input="$(readkey)"
-        [[ $input = e ]] && \
-            echo -en "\033[$Lines;$((Cols-50))H\033[33mPress e to pause game           \033[0m" && return;
+        [[ $input = p ]] && \
+        echo -en "\033[$Lines;$((Cols-50))H\033[33mPress p to pause game           \033[0m" && return;
         [[ $input = q ]] && snake_exit;
         sleep 0.05;
     done
 }
-# $1 节点位置 
+# $1 节点位置
 update() {                                    #更新各个节点坐标
     case ${pos[$1]} in
         right) ((ypt[$1]++));;
-         left) ((ypt[$1]--));;
-         down) ((xpt[$1]++));;
-           up) ((xpt[$1]--));;
+        left) ((ypt[$1]--));;
+        down) ((xpt[$1]++));;
+        up) ((xpt[$1]--));;
     esac
 }
 ch_speed() {                                  #更新速度
-     [[ $# -eq 0 ]] && spk=$(((spk+1)%3));
-     case $spk in
-         0) temp="Fast  ";;
-         1) temp="Medium";;
-         2) temp="Slow  ";;
-     esac
-     echo -ne "\033[$Lines;3H\033[33mSpeed: $temp\033[0m";
+    [[ $# -eq 0 ]] && spk=$(((spk+1)%3));
+    case $spk in
+        0) temp="Slow  ";;
+        1) temp="Medium";;
+        2) temp="Fast  ";;
+    esac
+    echo -ne "\033[$Lines;3H\033[33mSpeed: $temp\033[0m";
 }
 
 Gooooo() {                                   #更新方向
-    case ${key:-enter} in
-        w|W) [[ ${pos[0]} != "up"    ]] && pos[0]="up";;
-        s|S) [[ ${pos[0]} != "down"  ]] && pos[0]="down";;
+    case ${key:-p} in
+        s|S) [[ ${pos[0]} != "up"    ]] && pos[0]="down";;
+        w|W) [[ ${pos[0]} != "down"  ]] && pos[0]="up";;
         a|A) [[ ${pos[0]} != "right" ]] && pos[0]="left";;
         d|D) [[ ${pos[0]} != "left"  ]] && pos[0]="right";;
-        p|P) ch_speed;;
+        l|L) ch_speed;;
         q|Q) snake_exit;;
-        e|E) game_pause;;
+        p|P) game_pause;;
     esac
 }
 add_node() {                                 #增加节点
@@ -165,7 +165,7 @@ new_game() {                                #重新开始新游戏
             ((sumnode--));
             add_node; (($?==0)) || return 1;
         else
-            update 0; 
+            update 0;
             echo -ne "\033[${xpt[0]};${ypt[0]}H\033[32m${snake[@]:0:1}\033[0m";
             for (( i = $((${#snake}-1)); i > 0; i-- )); do
                 update $i;
@@ -195,9 +195,9 @@ print_game_start() {
     done
     while ! [ -f $EXITFLAG ]; do
         anykey="$(readkey)"
-        [[ ${anykey:-enter} = e ]] && break;
-        [[ ${anykey:-enter} = q ]] && snake_exit;
-        [[ ${anykey:-enter} = p ]] && ch_speed;
+        [[ ${anykey:-p} = e ]] && break;
+        [[ ${anykey:-p} = q ]] && snake_exit;
+        [[ ${anykey:-p} = l ]] && ch_speed;
         sleep 0.05;
     done
     
@@ -218,9 +218,9 @@ tput smcup; clear;                        #保存屏幕并清屏
 [ -f $EXITFLAG ] && rm $EXITFLAG
 [ -f $WRITEFILE ] && rm $WRITEFILE
 [ -f $READFILE ] && rm $READFILE
-trap 'snake_exit;' SIGTERM SIGINT; 
+trap 'snake_exit;' SIGTERM SIGINT;
 {
-    print_game_start;                         #开始游戏 
+    print_game_start;                         #开始游戏
 } &
 IFS=""
 while read -n 1 gkey; do
