@@ -4,6 +4,5 @@ _PATH=$(
 )
 _NAME=$(basename "$0")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-# systemctl reboot -i
-sudo reboot
+${_PATH}/../lib/_package/linux/2048
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

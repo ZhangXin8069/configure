@@ -1,4 +1,9 @@
-pushd ${HOME}/configure/bin
-bash ./zgCONFIGUREpull.sh
-bash ./zgPYQCUpull.sh
-popd
+_PATH=$(
+    cd "$(dirname "$0")"
+    pwd
+)
+_NAME=$(basename "$0")
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+bash ${_PATH}/zgCONFIGUREpull.sh
+bash ${_PATH}/zgPYQCUpull.sh
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

@@ -1,6 +1,10 @@
-#!/bin/bash
+_PATH=$(
+    cd "$(dirname "$0")"
+    pwd
+)
+_NAME=$(basename "$0")
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 command=$@
-echo "command:${command}"
 echo "#!/bin/bash 
 #SBATCH --job-name=ssub
 #SBATCH --partition=gpu-debug
@@ -20,3 +24,4 @@ source ${HOME}/env.sh
 " >.ssub.sh
 echo ${command} >>.ssub.sh
 sbatch ./.ssub.sh
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
