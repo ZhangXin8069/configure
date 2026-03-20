@@ -1,3 +1,9 @@
+_PATH=$(
+    cd "$(dirname "$0")"
+    pwd
+)
+_NAME=$(basename "$0")
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 git config --global user.name "zhangxin"
 git config --global user.email "zhangxin8069@qq.com"
 ssh-keygen -t ed25519 -C "zhangxin8069@qq.com"
@@ -6,3 +12,4 @@ ssh-add ~/.ssh/id_ed25519
 echo -e "id_rsa.pub:\n"
 cat ~/.ssh/id_ed25519.pub
 echo -e "\nput this to gitee's ssh.then run\"ssh -T git@gitee.com\""
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
