@@ -9,8 +9,8 @@ _PATH=$(
 # init
 _NAME=$(basename "$0")
 # do
-echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 echo "git pull --all"
 git pull --all
-echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 # done
