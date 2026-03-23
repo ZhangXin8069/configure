@@ -40,6 +40,7 @@ fi
 unset __conda_setup
 conda activate qcu
 source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
+source /home/phyww/zhangxin/tilelang-ascend/set_env.sh
 # <<< conda initialize <<<
 # wget https://gitee.com/ascend/pytorch/releases/download/v7.1.0.2-pytorch2.5.1/torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
 # pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
