@@ -1,3 +1,4 @@
+*.ipynb_checkpoints
 tmp/*
 lib/_package/linux/2048
 *.sw*
