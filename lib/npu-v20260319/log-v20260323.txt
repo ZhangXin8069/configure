@@ -1,5 +1,5 @@
 (qcu) phyww@ascend09
-2026/03/23 星期一 16:23:24
+2026/03/23 星期一 16:31:28
 ➜ /home/phyww env
 SHELL=/bin/bash
 HISTCONTROL=ignoreboth
@@ -59,8 +59,8 @@ MPI_INCLUDE_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/include
 HDF5_DIR=/home/phyww/zhangxin/lib/hdfsrc
 HDF5_INCLUDE_PATH=/home/phyww/zhangxin/lib/hdfsrc/include
 (qcu) phyww@ascend09
-2026/03/23 星期一 16:23:25
-➜ /home/phyww cat env.sh
+2026/03/23 星期一 16:31:30
+➜ /home/phyww cat env.sh                        
 ## CONFIGURE
 pushd /home/phyww/zhangxin
 pushd ./configure
@@ -164,8 +164,30 @@ export ACL_OP_INIT_MODE=1%
 export PYTHONPATH=/home/phyww/zhangxin/PyQCU:$PYTHONPATH
 export PYTHONPATH=/home/phyww/zhangxin/tilelang-ascend:$PYTHONPATH
 (qcu) phyww@ascend09
-2026/03/23 星期一 16:23:28
-➜ /home/phyww cat PyQCU/examples/npu/conftest.py 
+2026/03/23 星期一 16:31:35
+➜ /home/phyww python -c '\                         
+
+M, N, K = 1024, 1024, 1024
+import torch
+import torch_npu
+a = torch.randn(M, K, device="npu", dtype=torch.float16)
+b = torch.randn(K, N, device="npu", dtype=torch.float16)
+c = torch.empty(M, N, device="npu", dtype=torch.float16)
+ref_c = torch.relu(a @ b)
+print(ref_c)'
+Found existing alias for "python". You should use: "py"
+[W compiler_depend.ts:164] Warning: Device do not support double dtype now, dtype cast replace with float. (function operator())
+tensor([[ 0.0000,  0.7896,  3.3750,  ...,  0.0000, 30.4219, 26.3281],
+        [19.6875, 39.6250,  2.8535,  ..., 16.3906,  0.0000,  0.0000],
+        [ 0.0000, 14.7344, 44.8125,  ...,  0.0000,  0.0000, 23.0938],
+        ...,
+        [ 0.0000, 26.8125,  3.9922,  ...,  8.6875,  0.0000,  0.0000],
+        [14.5625,  0.0000, 43.9688,  ...,  0.0000, 11.6875,  3.1699],
+        [49.1875, 68.5000,  0.6777,  ...,  0.0000, 10.5547, 57.0625]],
+       device='npu:0', dtype=torch.float16)
+(qcu) phyww@ascend09
+2026/03/23 星期一 16:31:58
+➜ /home/phyww cat PyQCU/examples/npu/conftest.py
 import argparse
 
 import tilelang
@@ -237,7 +259,7 @@ ref_c = a @ b
 
 torch.testing.assert_close(c, ref_c, rtol=1e-2, atol=1e-2)
 print("Kernel Output Match!")%                                                                                                                                                      (qcu) phyww@ascend09
-2026/03/23 星期一 16:23:47
+2026/03/23 星期一 16:32:05
 ➜ /home/phyww python PyQCU/examples/npu/conftest.py
 Found existing alias for "python". You should use: "py"
 bisheng: error: unsupported option '--npu-arch=dav-2201'
@@ -268,8 +290,8 @@ Traceback (most recent call last):
     self.lib_generator.compile_lib()
   File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/adapter/libgen.py", line 151, in compile_lib
     raise RuntimeError(f"Compilation Failed! {command}")
-RuntimeError: Compilation Failed! ['bisheng', '--npu-arch=dav-2201', '-O2', '-std=c++17', '-xasc', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include/experiment/msprof', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include/experiment/runtime', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc/runtime', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc/profiling', '-I./3rdparty/catlass/include', '-I./3rdparty/shmem/include', '-I./3rdparty/shmem/src/device', '-DBACKEND_HYBM', '-I/home/phyww/zhangxin/tilelang-ascend/tilelang/../src', '-L/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/lib64', '-Wno-macro-redefined', '-Wno-ignored-attributes', '-Wno-non-c-typedef-for-linkage', '-lruntime', '-lascendcl', '-lm', '-ltiling_api', '-lplatform', '-lc_sec', '-ldl', '-fPIC', '--shared', '/tmp/tmpjnfoin2k.cpp', '-o', '/tmp/tmpjnfoin2k.so']
-[ERROR] 2026-03-23-16:24:01 (PID:1728090, Device:0, RankID:-1) ERR99999 UNKNOWN application exception
+RuntimeError: Compilation Failed! ['bisheng', '--npu-arch=dav-2201', '-O2', '-std=c++17', '-xasc', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include/experiment/msprof', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include/experiment/runtime', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc/runtime', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc/profiling', '-I./3rdparty/catlass/include', '-I./3rdparty/shmem/include', '-I./3rdparty/shmem/src/device', '-DBACKEND_HYBM', '-I/home/phyww/zhangxin/tilelang-ascend/tilelang/../src', '-L/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/lib64', '-Wno-macro-redefined', '-Wno-ignored-attributes', '-Wno-non-c-typedef-for-linkage', '-lruntime', '-lascendcl', '-lm', '-ltiling_api', '-lplatform', '-lc_sec', '-ldl', '-fPIC', '--shared', '/tmp/tmp3xhjcjew.cpp', '-o', '/tmp/tmp3xhjcjew.so']
+[ERROR] 2026-03-23-16:32:19 (PID:1744029, Device:0, RankID:-1) ERR99999 UNKNOWN application exception
 (qcu) phyww@ascend09
-2026/03/23 星期一 16:24:04
+2026/03/23 星期一 16:32:22
 ➜ /home/phyww 
