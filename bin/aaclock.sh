@@ -19,7 +19,7 @@ asciinumber=(
     ' XIN        XIN         XIN                 :ZX6       .::iYYDS          XIN   XIN     .ZHANGXIN        ZX66BUYANLE            XIN        LOVEi  bBB8    .XIN       :ZX.'
     '.XIN        XIN         XIN                 XIN        ZHANGNB         .ZXc    XIN     :I2BFOREVER     4RENWC.".DDDD.         XIN.          ZHANGNB       XINc     :XIN '
     ' XIN        XIN         XIN               :XIN            "iYYDS      :ZX      ZX6             ZXNB    XINc       XIN        .ZX6         ZXNB:.5SHUI      ZHANGXINYYDS '
-    ' XIN       .XIN         XIN              zXIN                7EEM    iSEE666ZHANGX2b            XIN    XIN        1TH,       XIN         XIN      ,XIN      .xZHANG XIN '
+    ' XIN       .XIN         XIN              zXIN                6XIN    iSEE666ZHANGX2b            XIN    XIN        1TH,       XIN         XIN      ,XIN      .xZHANG XIN '
     ' XIN       3EE:         XIN            .XIN,                  XIN    ILOVEXINFOREVER            XIN    5NB        zNB:      XIN         7ZX8       yES1            :ZX: '
     ' .NBy      XIN          XIN           zXIN                    XIN              ZX6              XIN     XIN       XIN      1SB:         kWOc       4WOc           ZXNB  '
     '  RIP9    XIN.          XIN         zXIN             Z       RIP9              XIN     j      :XIN      ZXNB     XINc     .XIN           XIN:     .XIN          1SHEN   '
