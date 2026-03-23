@@ -1,0 +1,275 @@
+(qcu) phyww@ascend09
+2026/03/23 星期一 16:23:24
+➜ /home/phyww env
+SHELL=/bin/bash
+HISTCONTROL=ignoreboth
+no_proxy=localhost,10.147.32.201
+HISTSIZE=50000
+HOSTNAME=ascend09
+PWD=/home/phyww
+LOGNAME=phyww
+MOTD_SHOWN=pam
+HOME=/home/phyww
+LANG=zh_CN.UTF-8
+LS_COLORS=rs=0:di=01;34:ln=01;36:mh=00:pi=40;33:so=01;35:do=01;35:bd=40;33;01:cd=40;33;01:or=40;31;01:mi=00:su=37;41:sg=30;43:ca=30;41:tw=30;42:ow=34;42:st=37;44:ex=01;32:*.tar=01;31:*.tgz=01;31:*.arc=01;31:*.arj=01;31:*.taz=01;31:*.lha=01;31:*.lz4=01;31:*.lzh=01;31:*.lzma=01;31:*.tlz=01;31:*.txz=01;31:*.tzo=01;31:*.t7z=01;31:*.zip=01;31:*.z=01;31:*.dz=01;31:*.gz=01;31:*.lrz=01;31:*.lz=01;31:*.lzo=01;31:*.xz=01;31:*.zst=01;31:*.tzst=01;31:*.bz2=01;31:*.bz=01;31:*.tbz=01;31:*.tbz2=01;31:*.tz=01;31:*.deb=01;31:*.rpm=01;31:*.jar=01;31:*.war=01;31:*.ear=01;31:*.sar=01;31:*.rar=01;31:*.alz=01;31:*.ace=01;31:*.zoo=01;31:*.cpio=01;31:*.7z=01;31:*.rz=01;31:*.cab=01;31:*.wim=01;31:*.swm=01;31:*.dwm=01;31:*.esd=01;31:*.jpg=01;35:*.jpeg=01;35:*.mjpg=01;35:*.mjpeg=01;35:*.gif=01;35:*.bmp=01;35:*.pbm=01;35:*.pgm=01;35:*.ppm=01;35:*.tga=01;35:*.xbm=01;35:*.xpm=01;35:*.tif=01;35:*.tiff=01;35:*.png=01;35:*.svg=01;35:*.svgz=01;35:*.mng=01;35:*.pcx=01;35:*.mov=01;35:*.mpg=01;35:*.mpeg=01;35:*.m2v=01;35:*.mkv=01;35:*.webm=01;35:*.webp=01;35:*.ogm=01;35:*.mp4=01;35:*.m4v=01;35:*.mp4v=01;35:*.vob=01;35:*.qt=01;35:*.nuv=01;35:*.wmv=01;35:*.asf=01;35:*.rm=01;35:*.rmvb=01;35:*.flc=01;35:*.avi=01;35:*.fli=01;35:*.flv=01;35:*.gl=01;35:*.dl=01;35:*.xcf=01;35:*.xwd=01;35:*.yuv=01;35:*.cgm=01;35:*.emf=01;35:*.ogv=01;35:*.ogx=01;35:*.aac=00;36:*.au=00;36:*.flac=00;36:*.m4a=00;36:*.mid=00;36:*.midi=00;36:*.mka=00;36:*.mp3=00;36:*.mpc=00;36:*.ogg=00;36:*.ra=00;36:*.wav=00;36:*.oga=00;36:*.opus=00;36:*.spx=00;36:*.xspf=00;36:
+https_proxy=http://10.147.32.201:3128/
+SSH_CONNECTION=10.147.32.201 25930 10.147.8.19 22
+SELINUX_ROLE_REQUESTED=
+TERM=xterm-256color
+USER=phyww
+SELINUX_USE_CURRENT_RANGE=
+SHLVL=2
+http_proxy=http://10.147.32.201:3128/
+SSH_CLIENT=10.147.32.201 25930 22
+PATH=/home/phyww/zhangxin/lib/hdfsrc/bin:/home/phyww/zhangxin/lib/openmpi-4.1.5/bin:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/bin:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/compiler/ccec_compiler/bin:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/tools/ccec_compiler/bin:/home/phyww/zhangxin/miniconda3/envs/qcu/bin:/home/phyww/zhangxin/miniconda3/condabin:/home/phyww/sbin:/usr/local/sbin:/home/phyww/bin:/usr/local/bin:/usr/local/bin:/usr/bin:/usr/local/sbin:/usr/sbin:/home/phyww/configure/bin:/home/phyww/zhangxin/configure/bin
+SELINUX_LEVEL_REQUESTED=
+MAIL=/var/spool/mail/phyww
+SSH_TTY=/dev/pts/48
+_=/usr/bin/env
+OLDPWD=/home/phyww
+ZSH=/home/phyww/.oh-my-zsh
+PAGER=less
+LESS=-R
+LSCOLORS=Gxfxcxdxbxegedabagacad
+YSU_VERSION=1.8.0
+MANPATH=/usr/local/man:
+EDITOR=vim
+CONDA_EXE=/home/phyww/zhangxin/miniconda3/bin/conda
+_CONDA_EXE=/home/phyww/zhangxin/miniconda3/bin/conda
+_CE_M=
+_CE_CONDA=
+CONDA_PYTHON_EXE=/home/phyww/zhangxin/miniconda3/bin/python
+_CONDA_ROOT=/home/phyww/zhangxin/miniconda3
+CONDA_SHLVL=2
+CONDA_PREFIX=/home/phyww/zhangxin/miniconda3/envs/qcu
+CONDA_DEFAULT_ENV=qcu
+CONDA_PROMPT_MODIFIER=(qcu) 
+CONDA_PREFIX_1=/home/phyww/zhangxin/miniconda3
+LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:/home/phyww/zhangxin/lib/openmpi-4.1.5/lib:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/tools/aml/lib64:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/tools/aml/lib64/plugin:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/lib64:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/lib64/plugin/opskernel:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/lib64/plugin/nnengine:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe/op_tiling/lib/linux/aarch64:/usr/local/Ascend/driver/lib64:/usr/local/Ascend/driver/lib64/common:/usr/local/Ascend/driver/lib64/driver:
+ASCEND_TOOLKIT_HOME=/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest
+PYTHONPATH=/home/phyww/zhangxin/tilelang-ascend:/home/phyww/zhangxin/PyQCU:.:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/python/site-packages:/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/opp/built-in/op_impl/ai_core/tbe:
+ASCEND_AICPU_PATH=/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest
+ASCEND_OPP_PATH=/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/opp
+TOOLCHAIN_HOME=/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/toolkit
+ASCEND_HOME_PATH=/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest
+TL_ROOT=.
+ACL_OP_INIT_MODE=1
+MPI_DIR=/home/phyww/zhangxin/lib/openmpi-4.1.5
+MPI_INCLUDE_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/include
+HDF5_DIR=/home/phyww/zhangxin/lib/hdfsrc
+HDF5_INCLUDE_PATH=/home/phyww/zhangxin/lib/hdfsrc/include
+(qcu) phyww@ascend09
+2026/03/23 星期一 16:23:25
+➜ /home/phyww cat env.sh
+## CONFIGURE
+pushd /home/phyww/zhangxin
+pushd ./configure
+source ./env.sh
+popd
+# pushd ./PyQCU
+# # source ./env.sh
+# popd
+popd
+
+## CONDA
+# wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-aarch64.sh
+# conda create --name qcu python=3.11 cmake
+
+## TORCH
+# https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/82RC1/softwareinst/instg/instg_quick.html
+### 1.
+# conda config --add channels https://repo.huaweicloud.com/ascend/repos/conda/
+# conda install ascend::cann-toolkit
+# source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
+# conda install ascend::a3-cann-kernels
+### 2.
+# chmod +x Ascend-cann-toolkit_8.2.RC1_linux-aarch64.run
+# ./Ascend-cann-toolkit_8.2.RC1_linux-aarch64.run --install
+# source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# chmod +x Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run
+# ./Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run --install
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/home/phyww/zhangxin/miniconda3/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/home/phyww/zhangxin/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/phyww/zhangxin/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/home/phyww/zhangxin/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+conda activate qcu
+source /home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/set_env.sh
+# <<< conda initialize <<<
+# wget https://gitee.com/ascend/pytorch/releases/download/v7.1.0.2-pytorch2.5.1/torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+# pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+# pip install pyyaml
+# pip install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py
+# pip3 install torch-npu==2.1.0.post17
+# python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
+
+## MPI
+# wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
+# tar -xzf openmpi-4.1.5.tar.gz
+# ./configure --prefix=/home/phyww/zhangxin/lib/openmpi-4.1.5
+# make -j$(nproc)
+# make install
+export MPI_DIR=/home/phyww/zhangxin/lib/openmpi-4.1.5
+export PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/bin:$PATH
+export MPI_INCLUDE_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/include
+export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PATH
+
+# HDF5
+# wget https://github.com/HDFGroup/hdf5/releases/download/hdf5-1_14_2/hdf5-1_14_2.tar.gz
+# tar -xzf hdf5-1_14_2.tar.gz
+# CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/home/phyww/zhangxin/lib/hdfsrc --enable-parallel --enable-shared --enable-hl --enable-build-hl-shared
+# make -j$(nproc)
+# make install
+# cp ./hl/src/hdf5_hl* include/
+# cp ./hl/src/.libs/libhdf5_hl* lib
+export HDF5_DIR=/home/phyww/zhangxin/lib/hdfsrc
+export PATH=/home/phyww/zhangxin/lib/hdfsrc/bin:$PATH
+export HDF5_INCLUDE_PATH=/home/phyww/zhangxin/lib/hdfsrc/include
+export LD_LIBRARY_PATH=/home/phyww/zhangxin/lib/hdfsrc/lib:$LD_LIBRARY_PATH
+
+## H5PY
+# export HDF5_MPI="ON"
+# # export CFLAGS="-I/path/to/include"
+# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
+# # export LDFLAGS="-L/path/to/lib"
+# pip install --no-binary=h5py h5py
+
+## PYTHON PACKAGES
+# pip install cython matplotlib
+
+## PROXY
+# git config --global http.proxy http://10.147.32.201:3128
+
+## TILELANG
+# git clone --recursive https://gitee.com/zhangxin8069/tilelang-ascend.git
+# pushd /home/phyww/zhangxin/tilelang-ascend
+# bash ./install_ascend.sh
+# source ./set_env.sh
+export export TL_ROOT=/home/phyww/zhangxin/tilelang-ascend
+export ACL_OP_INIT_MODE=1% 
+# popd
+
+## NUMPY
+# pip install numpy==1.26.4 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
+
+## PYTHONPATH
+export PYTHONPATH=/home/phyww/zhangxin/PyQCU:$PYTHONPATH
+export PYTHONPATH=/home/phyww/zhangxin/tilelang-ascend:$PYTHONPATH
+(qcu) phyww@ascend09
+2026/03/23 星期一 16:23:28
+➜ /home/phyww cat PyQCU/examples/npu/conftest.py 
+import argparse
+
+import tilelang
+import tilelang.language as T
+import torch
+import torch_npu
+
+tilelang.cache.clear_cache()
+
+parser = argparse.ArgumentParser(description="NPU Kernel Compilation")
+parser.add_argument("--m", type=int, default=1024, help="Matrix M dimension")
+parser.add_argument("--n", type=int, default=1024, help="Matrix N dimension")
+parser.add_argument("--k", type=int, default=1024, help="Matrix K dimension")
+args = parser.parse_args()
+
+M = args.m
+N = args.n
+K = args.k
+
+
+@tilelang.jit(out_idx=[-1])
+def matmul(M, N, K, block_M, block_N, K_L1, dtype="float16", accum_dtype="float"):
+    m_num = M // block_M
+    n_num = N // block_N
+
+    @T.prim_func
+    def main(
+            A: T.Tensor((M, K), dtype),
+            B: T.Tensor((K, N), dtype),
+            C: T.Tensor((M, N), dtype),
+    ):
+        with T.Kernel(m_num * n_num, is_npu=True) as (cid, _):
+            bx = cid // n_num
+            by = cid % n_num
+
+            A_L1 = T.alloc_L1((block_M, K_L1), dtype)
+            B_L1 = T.alloc_L1((K_L1, block_N), dtype)
+
+            C_L0 = T.alloc_L0C((block_M, block_N), accum_dtype)
+
+            with T.Scope("C"):
+                loop_k = T.ceildiv(K, K_L1)
+                for k in T.serial(loop_k):
+                    T.copy(A[bx * block_M, k * K_L1], A_L1)
+                    T.copy(B[k * K_L1, by * block_N], B_L1)
+
+                    T.barrier_all()
+                    T.gemm_v0(A_L1, B_L1, C_L0, init=(k == 0))
+
+                    T.barrier_all()
+
+                T.copy(C_L0, C[bx * block_M, by * block_N])
+
+    return main
+
+
+func = matmul(M, N, K, 128, 256, 64)
+
+torch.manual_seed(0)
+
+a = torch.randn(M, K).half().npu()
+b = torch.randn(K, N).half().npu()
+c = torch.empty(M, N).half().npu()
+print("init successful!")
+
+c = func(a, b)
+
+ref_c = a @ b
+
+torch.testing.assert_close(c, ref_c, rtol=1e-2, atol=1e-2)
+print("Kernel Output Match!")%                                                                                                                                                      (qcu) phyww@ascend09
+2026/03/23 星期一 16:23:47
+➜ /home/phyww python PyQCU/examples/npu/conftest.py
+Found existing alias for "python". You should use: "py"
+bisheng: error: unsupported option '--npu-arch=dav-2201'
+bisheng: error: language not recognized: 'asc'
+Traceback (most recent call last):
+  File "/home/phyww/PyQCU/examples/npu/conftest.py", line 57, in <module>
+    func = matmul(M, N, K, 128, 256, 64)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/__init__.py", line 216, in wrapper
+    kernel_result = compile(
+                    ^^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/__init__.py", line 81, in compile
+    return cached(
+           ^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/cache/__init__.py", line 33, in cached
+    return _kernel_cache_instance.cached(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/cache/kernel_cache.py", line 185, in cached
+    kernel = JITKernel(
+             ^^^^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/kernel.py", line 117, in __init__
+    adapter = self._compile_and_create_adapter(func, out_idx, workspace_idx)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/kernel.py", line 255, in _compile_and_create_adapter
+    adapter = CythonKernelAdapter(
+              ^^^^^^^^^^^^^^^^^^^^
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/adapter/cython/adapter.py", line 262, in __init__
+    self.lib_generator.compile_lib()
+  File "/home/phyww/zhangxin/tilelang-ascend/tilelang/jit/adapter/libgen.py", line 151, in compile_lib
+    raise RuntimeError(f"Compilation Failed! {command}")
+RuntimeError: Compilation Failed! ['bisheng', '--npu-arch=dav-2201', '-O2', '-std=c++17', '-xasc', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include/experiment/msprof', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/include/experiment/runtime', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc/runtime', '-I/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/pkg_inc/profiling', '-I./3rdparty/catlass/include', '-I./3rdparty/shmem/include', '-I./3rdparty/shmem/src/device', '-DBACKEND_HYBM', '-I/home/phyww/zhangxin/tilelang-ascend/tilelang/../src', '-L/home/phyww/zhangxin/miniconda3/Ascend/ascend-toolkit/latest/lib64', '-Wno-macro-redefined', '-Wno-ignored-attributes', '-Wno-non-c-typedef-for-linkage', '-lruntime', '-lascendcl', '-lm', '-ltiling_api', '-lplatform', '-lc_sec', '-ldl', '-fPIC', '--shared', '/tmp/tmpjnfoin2k.cpp', '-o', '/tmp/tmpjnfoin2k.so']
+[ERROR] 2026-03-23-16:24:01 (PID:1728090, Device:0, RankID:-1) ERR99999 UNKNOWN application exception
+(qcu) phyww@ascend09
+2026/03/23 星期一 16:24:04
+➜ /home/phyww 
