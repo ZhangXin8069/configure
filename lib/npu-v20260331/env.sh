@@ -67,13 +67,31 @@ export LD_LIBRARY_PATH=/root/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 # pip install --no-binary=h5py h5py
 
 ## PYTHON PACKAGES
-# pip install cython matplotlib
+# pip install cython matplotlib mpi4py
 
 ## PROXY
 # git config --global http.proxy http://10.147.32.201:3128
 
 ## TILELANG
 # git clone --recursive https://gitee.com/zhangxin8069/tilelang-ascend.git
+# [submodule "3rdparty/cutlass"]
+# 	path = 3rdparty/cutlass
+# 	url = https://gitee.com/zhangxin8069/cutlass
+# [submodule "3rdparty/tvm"]
+# 	path = 3rdparty/tvm
+# 	url = https://gitee.com/zhangxin8069/tvm
+# [submodule "3rdparty/composable_kernel"]
+# 	path = 3rdparty/composable_kernel
+# 	url = https://gitee.com/zhangxin8069/composable_kernel
+# [submodule "3rdparty/catlass"]
+# 	path = 3rdparty/catlass
+# 	url = https://gitee.com/ascend/catlass.git
+# [submodule "3rdparty/pto-isa"]
+# 	path = 3rdparty/pto-isa
+# 	url = https://gitcode.com/cann/pto-isa.git
+# [submodule "3rdparty/shmem"]
+# 	path = 3rdparty/shmem
+# 	url = https://gitcode.com/cann/shmem
 # pushd /root/tilelang-ascend
 # bash ./install_ascend.sh
 # source ./set_env.sh
