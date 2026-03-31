@@ -14,6 +14,9 @@
 # chmod +x Ascend-cann-910b-ops_9.0.0-beta.2_linux-aarch64.run
 # ./Ascend-cann-910b-ops_9.0.0-beta.2_linux-aarch64.run --install
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%209.0.T511/Ascend-cann-toolkit_9.0.0-beta.2_linux-aarch64.run?response-content-type=application/octet-stream
+# chmod +x Ascend-cann-toolkit_9.0.0-beta.2_linux-aarch64.run
+# ./Ascend-cann-toolkit_9.0.0-beta.2_linux-aarch64.run --install
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
 __conda_setup="$('/root/miniconda3/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
@@ -29,11 +32,7 @@ fi
 unset __conda_setup
 conda activate qcu
 # <<< conda initialize <<<
-# wget https://gitee.com/ascend/pytorch/releases/download/v7.1.0.2-pytorch2.5.1/torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-# pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
-# pip install pyyaml
-# pip install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py
-# pip3 install torch-npu==2.1.0.post17
+# pip3 install torch-npu==2.1.0.post17 pyyaml numpy==1.26.4
 # python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
 
 ## MPI
