@@ -7,14 +7,13 @@
 ### 1.
 # conda config --add channels https://repo.huaweicloud.com/ascend/repos/conda/
 # conda install ascend::cann-toolkit
-# source /root/miniconda3/Ascend/ascend-toolkit/set_env.sh
+# source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # conda install ascend::a3-cann-kernels
 ### 2.
-# chmod +x Ascend-cann-toolkit_8.2.RC1_linux-aarch64.run
-# ./Ascend-cann-toolkit_8.2.RC1_linux-aarch64.run --install
-source /root/miniconda3/Ascend/ascend-toolkit/set_env.sh
-# chmod +x Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run
-# ./Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run --install
+# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%209.0.T511/Ascend-cann-910b-ops_9.0.0-beta.2_linux-aarch64.run?response-content-type=application/octet-stream
+# chmod +x Ascend-cann-910b-ops_9.0.0-beta.2_linux-aarch64.run
+# ./Ascend-cann-910b-ops_9.0.0-beta.2_linux-aarch64.run --install
+source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
 __conda_setup="$('/root/miniconda3/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
