@@ -1,11 +1,6 @@
 ## CONFIGURE
-pushd /root
-pushd ./configure
+pushd /root/configure
 source ./env.sh
-popd
-# pushd ./PyQCU
-# # source ./env.sh
-# popd
 popd
 
 ## CONDA
