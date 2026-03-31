@@ -1,0 +1,102 @@
+## CONFIGURE
+pushd /home/phyww/zhangxin
+pushd ./configure
+source ./env.sh
+popd
+# pushd ./PyQCU
+# # source ./env.sh
+# popd
+popd
+
+## CONDA
+# wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-aarch64.sh
+# conda create --name qcu python=3.11 cmake
+
+## TORCH
+# https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/82RC1/softwareinst/instg/instg_quick.html
+### 1.
+# conda config --add channels https://repo.huaweicloud.com/ascend/repos/conda/
+# conda install ascend::cann-toolkit
+# source /root/miniconda3/Ascend/ascend-toolkit/set_env.sh
+# conda install ascend::a3-cann-kernels
+### 2.
+# chmod +x Ascend-cann-toolkit_8.2.RC1_linux-aarch64.run
+# ./Ascend-cann-toolkit_8.2.RC1_linux-aarch64.run --install
+# source /usr/local/Ascend/ascend-toolkit/set_env.sh
+# chmod +x Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run
+# ./Atlas-A3-cann-kernels_8.2.RC1_linux-aarch64.run --install
+# >>> conda initialize >>>
+# !! Contents within this block are managed by 'conda init' !!
+__conda_setup="$('/root/miniconda3/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
+if [ $? -eq 0 ]; then
+    eval "$__conda_setup"
+else
+    if [ -f "/root/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/root/miniconda3/etc/profile.d/conda.sh"
+    else
+        export PATH="/root/miniconda3/bin:$PATH"
+    fi
+fi
+unset __conda_setup
+conda activate qcu
+source /root/miniconda3/Ascend/ascend-toolkit/set_env.sh
+# <<< conda initialize <<<
+# wget https://gitee.com/ascend/pytorch/releases/download/v7.1.0.2-pytorch2.5.1/torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+# pip install torch_npu-2.5.1.post3-cp311-cp311-manylinux_2_17_aarch64.manylinux2014_aarch64.whl
+# pip install pyyaml
+# pip install attrs cython 'numpy>=1.19.2,<=1.24.0' decorator sympy cffi pyyaml pathlib2 psutil protobuf==3.20.0 scipy requests absl-py
+# pip3 install torch-npu==2.1.0.post17
+# python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
+
+## MPI
+# wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
+# tar -xzf openmpi-4.1.5.tar.gz
+# ./configure --prefix=/root/lib/openmpi-4.1.5
+# make -j$(nproc)
+# make install
+export MPI_DIR=/root/lib/openmpi-4.1.5
+export PATH=/root/lib/openmpi-4.1.5/bin:$PATH
+export MPI_INCLUDE_PATH=/root/lib/openmpi-4.1.5/include
+export LD_LIBRARY_PATH=/root/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PATH
+
+# HDF5
+# wget https://github.com/HDFGroup/hdf5/releases/download/hdf5-1_14_2/hdf5-1_14_2.tar.gz
+# tar -xzf hdf5-1_14_2.tar.gz
+# CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/root/lib/hdfsrc --enable-parallel --enable-shared --enable-hl --enable-build-hl-shared
+# make -j$(nproc)
+# make install
+# cp ./hl/src/hdf5_hl* include/
+# cp ./hl/src/.libs/libhdf5_hl* lib
+export HDF5_DIR=/root/lib/hdfsrc
+export PATH=/root/lib/hdfsrc/bin:$PATH
+export HDF5_INCLUDE_PATH=/root/lib/hdfsrc/include
+export LD_LIBRARY_PATH=/root/lib/hdfsrc/lib:$LD_LIBRARY_PATH
+
+## H5PY
+# export HDF5_MPI="ON"
+# # export CFLAGS="-I/path/to/include"
+# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
+# # export LDFLAGS="-L/path/to/lib"
+# pip install --no-binary=h5py h5py
+
+## PYTHON PACKAGES
+# pip install cython matplotlib
+
+## PROXY
+# git config --global http.proxy http://10.147.32.201:3128
+
+## TILELANG
+# git clone --recursive https://gitee.com/zhangxin8069/tilelang-ascend.git
+# pushd /root/tilelang-ascend
+# bash ./install_ascend.sh
+# source ./set_env.sh
+export export TL_ROOT=/root/tilelang-ascend
+export ACL_OP_INIT_MODE=1% 
+# popd
+
+## NUMPY
+# pip install numpy==1.26.4 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
+
+## PYTHONPATH
+export PYTHONPATH=/root/PyQCU:$PYTHONPATH
+export PYTHONPATH=/root/tilelang-ascend:$PYTHONPATH
