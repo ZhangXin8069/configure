@@ -74,15 +74,16 @@ export LD_LIBRARY_PATH=/root/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## TILELANG
 # git clone --recursive https://gitee.com/zhangxin8069/tilelang-ascend.git
+## the image gitmodule of tilelang
 # [submodule "3rdparty/cutlass"]
 # 	path = 3rdparty/cutlass
 # 	url = https://gitee.com/zhangxin8069/cutlass
 # [submodule "3rdparty/tvm"]
 # 	path = 3rdparty/tvm
-# 	url = https://gitee.com/zhangxin8069/tvm
+# 	url = https://gitee.com/zhangxin8069/tvm.git
 # [submodule "3rdparty/composable_kernel"]
 # 	path = 3rdparty/composable_kernel
-# 	url = https://gitee.com/zhangxin8069/composable_kernel
+# 	url = https://gitee.com/zhangxin8069/composable_kernel.git
 # [submodule "3rdparty/catlass"]
 # 	path = 3rdparty/catlass
 # 	url = https://gitee.com/ascend/catlass.git
@@ -91,7 +92,44 @@ export LD_LIBRARY_PATH=/root/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 # 	url = https://gitcode.com/cann/pto-isa.git
 # [submodule "3rdparty/shmem"]
 # 	path = 3rdparty/shmem
-# 	url = https://gitcode.com/cann/shmem
+# 	url = https://gitcode.com/cann/shmem.git
+## the image gitmodule of tvm
+# [submodule "dmlc-core"]
+#         path = 3rdparty/dmlc-core
+#         url = https://gitee.com/zhangxin8069/dmlc-core.git
+# [submodule "dlpack"]
+#         path = 3rdparty/dlpack
+#         url = https://gitee.com/zhangxin8069/dlpack.git
+# [submodule "3rdparty/rang"]
+#         path = 3rdparty/rang
+#         url = https://gitee.com/zhangxin8069/rang.git
+# [submodule "3rdparty/vta-hw"]
+#         path = 3rdparty/vta-hw
+#         url = https://gitee.com/zhangxin8069/tvm-vta.git
+# [submodule "3rdparty/libbacktrace"]
+#         path = 3rdparty/libbacktrace
+#         url = https://gitee.com/zhangxin8069/libbacktrace.git
+# [submodule "3rdparty/cutlass"]
+#         path = 3rdparty/cutlass
+#         url = https://gitee.com/zhangxin8069/cutlass.git
+# [submodule "3rdparty/OpenCL-Headers"]
+#         path = 3rdparty/OpenCL-Headers
+#         url = https://gitee.com/zhangxin8069/OpenCL-Headers.git
+# [submodule "3rdparty/cnpy"]
+#         path = 3rdparty/cnpy
+#         url = https://gitee.com/zhangxin8069/cnpy.git
+# [submodule "3rdparty/cutlass_fpA_intB_gemm"]
+#         path = 3rdparty/cutlass_fpA_intB_gemm
+#         url = https://gitee.com/zhangxin8069/cutlass_fpA_intB_gemm
+# [submodule "3rdparty/libflash_attn"]
+#         path = 3rdparty/libflash_attn
+#         url = https://gitee.com/zhangxin8069/libflash_attn
+# [submodule "3rdparty/flashinfer"]
+#         path = 3rdparty/flashinfer
+#         url = https://gitee.com/zhangxin8069/flashinfer.git
+# [submodule "3rdparty/composable_kernel"]
+#         path = 3rdparty/composable_kernel
+#         url = https://gitee.com/zhangxin8069/composable_kernel
 # pushd /root/tilelang-ascend
 # bash ./install_ascend.sh
 # source ./set_env.sh
