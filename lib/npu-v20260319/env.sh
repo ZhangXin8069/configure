@@ -1,13 +1,3 @@
-## CONFIGURE
-pushd /home/phyww/zhangxin
-pushd ./configure
-source ./env.sh
-popd
-# pushd ./PyQCU
-# # source ./env.sh
-# popd
-popd
-
 ## CONDA
 # wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-aarch64.sh
 # conda create --name qcu python=3.11 cmake
