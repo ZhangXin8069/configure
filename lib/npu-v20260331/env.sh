@@ -10,12 +10,12 @@
 # source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # conda install ascend::a3-cann-kernels
 ### 2.
-# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.5.0/Ascend-cann-910b-ops_8.5.0_linux-aarch64.run?response-content-type=application/octet-stream
-# chmod +x Ascend-cann-910b-ops_8.5.0_linux-aarch64.run
-# ./Ascend-cann-910b-ops_8.5.0_linux-aarch64.run --install
-# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.5.0/Ascend-cann-toolkit_8.5.0_linux-aarch64.run?response-content-type=application/octet-stream
-# chmod +x Ascend-cann-toolkit_8.5.0_linux-aarch64.run
-# ./Ascend-cann-toolkit_8.5.0_linux-aarch64.run --install
+# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.5.1/Ascend-cann-910b-ops_8.5.1_linux-aarch64.run?response-content-type=application/octet-stream
+# chmod +x Ascend-cann-910b-ops_8.5.1_linux-aarch64.run
+# ./Ascend-cann-910b-ops_8.5.1_linux-aarch64.run --install
+# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.5.1/Ascend-cann-toolkit_8.5.1_linux-aarch64.run?response-content-type=application/octet-stream
+# chmod +x Ascend-cann-toolkit_8.5.1_linux-aarch64.run
+# ./Ascend-cann-toolkit_8.5.1_linux-aarch64.run --install
 source /usr/local/Ascend/ascend-toolkit/set_env.sh
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
