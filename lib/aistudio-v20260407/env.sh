@@ -30,7 +30,7 @@ conda activate qcu
 # ./configure --prefix=/home/aistudio/lib/htop
 # make -j$(nproc)
 # make install
-export PATH=home/aistudio/lib/htop/bin:$PATH
+export PATH=/home/aistudio/lib/htop/bin:$PATH
 
 ## MPI
 # wget https://gitee.com/zhangxin8069/Packages/raw/main/openmpi_packages/openmpi-4.1.5.tar.gz
