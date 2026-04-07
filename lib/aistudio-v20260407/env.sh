@@ -1,3 +1,6 @@
+cp /Users/zhangxin/configure/lib/aistudio-v20260407/_bashrc ~/.bashrc
+echo "source /home/aistudio/configure/env.sh" >> ~/.bashrc
+
 # ln -s ./configure/lib/aistudio-v20260407/env.sh .
 ## ZHANGXIN
 # git clone https://gitee.com/zhangxin8069/configure.git
