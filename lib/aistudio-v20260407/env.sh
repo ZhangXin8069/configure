@@ -1,39 +1,37 @@
 ## CONDA
 # wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-aarch64.sh
-# conda create --name qcu python=3.11 cmake
+# conda create --name qcu python=3.11 cmake zsh
+
+## ZHANGXIN
+# pushd ~
+# echo "
+# /home/aistudio/.conda/envs/qcu/bin/zsh
+# " >./.bashrc
+# source ./.bashrc
+# popd
+# git clone https://gitee.com/zhangxin8069/configure.git
+# bash configure/bin/sh_init.sh
+# git clone https://gitee.com/zhangxin8069/PyQCU.git
 
 ## TORCH
-# https://www.hiascend.com/document/detail/zh/CANNCommunityEdition/82RC1/softwareinst/instg/instg_quick.html
-### 1.
-# conda config --add channels https://repo.huaweicloud.com/ascend/repos/conda/
-# conda install ascend::cann-toolkit
-# source /usr/local/Ascend/ascend-toolkit/set_env.sh
-# conda install ascend::a3-cann-kernels
-### 2.
-# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.5.1/Ascend-cann-910b-ops_8.5.1_linux-aarch64.run?response-content-type=application/octet-stream
-# chmod +x Ascend-cann-910b-ops_8.5.1_linux-aarch64.run
-# ./Ascend-cann-910b-ops_8.5.1_linux-aarch64.run --install
-# wget https://ascend-repo.obs.cn-east-2.myhuaweicloud.com/CANN/CANN%208.5.1/Ascend-cann-toolkit_8.5.1_linux-aarch64.run?response-content-type=application/octet-stream
-# chmod +x Ascend-cann-toolkit_8.5.1_linux-aarch64.run
-# ./Ascend-cann-toolkit_8.5.1_linux-aarch64.run --install
-source /usr/local/Ascend/ascend-toolkit/set_env.sh
+
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/root/miniconda3/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
+__conda_setup="$('/opt/conda/bin/conda' 'shell.bash' 'hook' 2>/dev/null)"
 if [ $? -eq 0 ]; then
     eval "$__conda_setup"
 else
-    if [ -f "/root/miniconda3/etc/profile.d/conda.sh" ]; then
-        . "/root/miniconda3/etc/profile.d/conda.sh"
+    if [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
+        . "/opt/conda/etc/profile.d/conda.sh"
     else
-        export PATH="/root/miniconda3/bin:$PATH"
+        export PATH="/opt/conda/bin:$PATH"
     fi
 fi
 unset __conda_setup
 conda activate qcu
 # <<< conda initialize <<<
 # pip3 install torch-npu==2.1.0.post17 pyyaml numpy==1.26.4
-# python3 -c "import torch;import torch_npu; a = torch.randn(3, 4).npu(); print(a + a);"
+# python3 -c "import torch; a = torch.randn(3, 4).cuda(); print(a + a);"
 
 ## MPI
 # wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
