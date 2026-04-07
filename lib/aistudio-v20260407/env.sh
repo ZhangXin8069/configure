@@ -55,7 +55,7 @@ export HDF5_INCLUDE_PATH=/home/aistudio/lib/hdfsrc/include
 export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## PYTHON PACKAGES
-# pip install cython matplotlib mpi4py tilelang
+# pip install cython matplotlib mpi4py tilelang ipython
 
 ## H5PY
 # export HDF5_MPI="ON"
