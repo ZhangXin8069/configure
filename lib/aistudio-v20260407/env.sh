@@ -64,6 +64,8 @@ export PYTHONPATH=/home/aistudio/PyQCU:$PYTHONPATH
 
 ## ZHANGXIN
 echo "/home/aistudio/lib/envs/qcu/bin/zsh" > ~/.bashrc
+ln -s /home/aistudio/configure/lib/_zshrc .zshrc
+ln -s /home/aistudio/configure/lib/_oh-my-zsh .oh-my-zsh
 # git clone https://gitee.com/zhangxin8069/configure.git
 # bash configure/bin/sh_init.sh
 # git clone https://gitee.com/zhangxin8069/PyQCU.git
