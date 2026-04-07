@@ -1,8 +1,3 @@
-## ZHANGXIN
-# git clone https://gitee.com/zhangxin8069/configure.git
-# bash configure/bin/sh_init.sh
-# git clone https://gitee.com/zhangxin8069/PyQCU.git
-
 ## CONDA
 # conda create --name qcu python=3.11 cmake zsh htop
 # cp -r /home/aistudio/.conda/envs/ lib/
@@ -67,3 +62,8 @@ export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 ## PYTHONPATH
 export PYTHONPATH=/home/aistudio/PyQCU:$PYTHONPATH
 
+## ZHANGXIN
+echo "/home/aistudio/lib/envs/qcu/bin/zsh" > ~/.bashrc
+# git clone https://gitee.com/zhangxin8069/configure.git
+# bash configure/bin/sh_init.sh
+# git clone https://gitee.com/zhangxin8069/PyQCU.git
