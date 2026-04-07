@@ -1,10 +1,7 @@
 # ln -s ./configure/lib/aistudio-v20260407/env.sh .
 ## ZHANGXIN
 # git clone https://gitee.com/zhangxin8069/configure.git
-pushd /home/aistudio/configure
-cp ./lib/aistudio-v20260407/_bashrc ~/.bashrc
-source ./env.sh
-popd
+cp /home/aistudio/configure/lib/aistudio-v20260407/_bashrc ~/.bashrc
 
 ## CONDA
 # wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-x86_64.sh
