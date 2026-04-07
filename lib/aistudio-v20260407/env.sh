@@ -21,11 +21,19 @@ else
 fi
 unset __conda_setup
 # <<< conda initialize <<<
-# conda create --name qcu python=3.11 cmake zsh htop
+# conda create --name qcu --clone base
 conda activate qcu
 
+## HTOP
+# git clone https://gitee.com/mirrors/htop.git
+# ./autogen.sh
+# ./configure --prefix=/home/aistudio/lib/htop
+# make -j$(nproc)
+# make install
+export PATH=home/aistudio/lib/htop/bin:$PATH
+
 ## MPI
-# wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
+# wget https://gitee.com/zhangxin8069/Packages/raw/main/openmpi_packages/openmpi-4.1.5.tar.gz
 # tar -xzf openmpi-4.1.5.tar.gz
 # ./configure --prefix=/home/aistudio/lib/openmpi-4.1.5
 # make -j$(nproc)
@@ -36,7 +44,7 @@ export MPI_INCLUDE_PATH=/home/aistudio/lib/openmpi-4.1.5/include
 export LD_LIBRARY_PATH=/home/aistudio/lib/openmpi-4.1.5/lib:$LD_LIBRARY_PATH
 
 # HDF5
-# wget https://github.com/HDFGroup/hdf5/releases/download/hdf5-1_14_2/hdf5-1_14_2.tar.gz
+# wget https://gitee.com/zhangxin8069/Packages/raw/main/hdf5_packages/hdf5-1_14_2.tar.gz
 # tar -xzf hdf5-1_14_2.tar.gz
 # CC=mpicc CXX=mpicxx FC=mpif90 ./configure --prefix=/home/aistudio/lib/hdfsrc --enable-parallel --enable-shared --enable-hl --enable-build-hl-shared
 # make -j$(nproc)
