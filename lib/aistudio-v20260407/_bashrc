@@ -212,3 +212,5 @@ popd
 pushd ${HOME}
 source ./env.sh
 popd
+# @CLEAR@
+clear
