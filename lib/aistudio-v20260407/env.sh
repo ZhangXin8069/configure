@@ -6,23 +6,23 @@ source ./env.sh
 popd
 
 ## CONDA
+# wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-x86_64.sh
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup="$('/opt/conda/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
+__conda_setup="$('/home/aistudio/miniconda3/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
     eval "$__conda_setup"
 else
-    if [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
-        . "/opt/conda/etc/profile.d/conda.sh"
+    if [ -f "/home/aistudio/miniconda3/etc/profile.d/conda.sh" ]; then
+        . "/home/aistudio/miniconda3/etc/profile.d/conda.sh"
     else
-        export PATH="/opt/conda/bin:$PATH"
+        export PATH="/home/aistudio/miniconda3/bin:$PATH"
     fi
 fi
 unset __conda_setup
 # <<< conda initialize <<<
 # conda create --name qcu python=3.11 cmake zsh htop
-# cp -r /home/aistudio/.conda/envs/ /home/aistudio/lib/
-conda activate /home/aistudio/lib/envs/qcu
+conda activate qcu
 
 ## MPI
 # wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
