@@ -1,8 +1,11 @@
-## CONDA
-# wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-amd64.sh
-# conda create --name qcu python=3.11 cmake zsh
+## ZHANGXIN
+# git clone https://gitee.com/zhangxin8069/configure.git
+# bash configure/bin/sh_init.sh
+# git clone https://gitee.com/zhangxin8069/PyQCU.git
 
-## TORCH
+## CONDA
+# conda create --name qcu python=3.11 cmake zsh htop
+# cp -r /home/aistudio/.conda/envs/ lib/
 
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
@@ -17,7 +20,7 @@ else
     fi
 fi
 unset __conda_setup
-conda activate qcu
+conda activate /home/aistudio/lib/envs/qcu
 # <<< conda initialize <<<
 
 ## TORCH
@@ -64,13 +67,3 @@ export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 ## PYTHONPATH
 export PYTHONPATH=/home/aistudio/PyQCU:$PYTHONPATH
 
-## ZHANGXIN
-pushd ~
-echo "
-/home/aistudio/miniconda3/envs/qcu/bin/zsh
-" >./.bashrc
-source ./.bashrc
-popd
-# git clone https://gitee.com/zhangxin8069/configure.git
-# bash configure/bin/sh_init.sh
-# git clone https://gitee.com/zhangxin8069/PyQCU.git
