@@ -56,15 +56,15 @@ export PATH=/home/aistudio/lib/hdfsrc/bin:$PATH
 export HDF5_INCLUDE_PATH=/home/aistudio/lib/hdfsrc/include
 export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
+## PYTHON PACKAGES
+# pip install cython matplotlib mpi4py tilelang
+
 ## H5PY
 # export HDF5_MPI="ON"
 # # export CFLAGS="-I/path/to/include"
 # export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
 # # export LDFLAGS="-L/path/to/lib"
 # pip install --no-binary=h5py h5py
-
-## PYTHON PACKAGES
-# pip install cython matplotlib mpi4py tilelang
 
 ## PYTHONPATH
 # git clone https://gitee.com/zhangxin8069/PyQCU.git
