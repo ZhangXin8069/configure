@@ -1,5 +1,5 @@
 ## ZHANGXIN
-export PATH="/home/aistudio/configure/bin:$PATH"
+export PATH="/home/aistudio/lib/envs/qcu/bin:$PATH"
 bash /home/aistudio/configure/bin/sh_init.sh
 # git clone https://gitee.com/zhangxin8069/configure.git
 # git clone https://gitee.com/zhangxin8069/PyQCU.git
