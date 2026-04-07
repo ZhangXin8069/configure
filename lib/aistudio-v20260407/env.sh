@@ -1,8 +1,8 @@
-cp /Users/zhangxin/configure/lib/aistudio-v20260407/_bashrc ~/.bashrc
 # ln -s ./configure/lib/aistudio-v20260407/env.sh .
 ## ZHANGXIN
 # git clone https://gitee.com/zhangxin8069/configure.git
 pushd /home/aistudio/configure
+cp ./lib/aistudio-v20260407/_bashrc ~/.bashrc
 source ./env.sh
 popd
 
