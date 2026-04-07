@@ -1,6 +1,12 @@
 ## ZHANGXIN
 # git clone https://gitee.com/zhangxin8069/configure.git
-# git clone https://gitee.com/zhangxin8069/PyQCU.git
+pushd ${HOME}
+pushd ./configure
+source ./env.sh
+popd
+# ln -s ./configure/lib/aistudio-v20260407/env.sh .
+source ./env.sh
+popd
 
 ## CONDA
 # >>> conda initialize >>>
@@ -56,4 +62,5 @@ export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 # pip install cython matplotlib mpi4py tilelang
 
 ## PYTHONPATH
+# git clone https://gitee.com/zhangxin8069/PyQCU.git
 export PYTHONPATH=/home/aistudio/PyQCU:$PYTHONPATH
