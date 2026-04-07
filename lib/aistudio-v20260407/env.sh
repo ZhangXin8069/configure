@@ -1,10 +1,7 @@
+# ln -s ./configure/lib/aistudio-v20260407/env.sh .
 ## ZHANGXIN
 # git clone https://gitee.com/zhangxin8069/configure.git
-pushd ${HOME}
-pushd ./configure
-source ./env.sh
-popd
-# ln -s ./configure/lib/aistudio-v20260407/env.sh .
+pushd /home/aistudio/configure
 source ./env.sh
 popd
 
