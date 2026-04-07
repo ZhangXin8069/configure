@@ -1,5 +1,5 @@
 ## CONDA
-# wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-aarch64.sh
+# wget https://mirrors.tuna.tsinghua.edu.cn/anaconda/miniconda/Miniconda3-py311_25.7.0-2-Linux-amd64.sh
 # conda create --name qcu python=3.11 cmake zsh
 
 ## ZHANGXIN
