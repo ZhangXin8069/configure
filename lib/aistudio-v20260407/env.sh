@@ -1,22 +1,22 @@
 ## ZHANGXIN
 bash /home/aistudio/configure/bin/sh_init.sh
-echo "
+echo '''
 # >>> conda initialize >>>
 # !! Contents within this block are managed by 'conda init' !!
-__conda_setup='$('/opt/conda/bin/conda' 'shell.bash' 'hook' 2> /dev/null)'
+__conda_setup="$('/opt/conda/bin/conda' 'shell.bash' 'hook' 2> /dev/null)"
 if [ $? -eq 0 ]; then
-    eval '$__conda_setup'
+    eval "$__conda_setup"
 else
-    if [ -f '/opt/conda/etc/profile.d/conda.sh' ]; then
-        . '/opt/conda/etc/profile.d/conda.sh'
+    if [ -f "/opt/conda/etc/profile.d/conda.sh" ]; then
+        . "/opt/conda/etc/profile.d/conda.sh"
     else
-        export PATH='/opt/conda/bin:$PATH'
+        export PATH="/opt/conda/bin:$PATH"
     fi
 fi
 unset __conda_setup
 # <<< conda initialize <<<
 /home/aistudio/lib/envs/qcu/bin/zsh
-" > ~/.bashrc
+''' > ~/.bashrc
 # git clone https://gitee.com/zhangxin8069/configure.git
 # git clone https://gitee.com/zhangxin8069/PyQCU.git
 
@@ -27,7 +27,7 @@ conda activate /home/aistudio/lib/envs/qcu
 
 ## TORCH
 # pip3 install torch-npu==2.1.0.post17 pyyaml numpy==1.26.4
-# python3 -c 'import torch; a = torch.randn(3, 4).cuda(); print(a + a);'
+# python3 -c "import torch; a = torch.randn(3, 4).cuda(); print(a + a);"
 
 ## MPI
 # wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
@@ -54,10 +54,10 @@ export HDF5_INCLUDE_PATH=/home/aistudio/lib/hdfsrc/include
 export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 
 ## H5PY
-# export HDF5_MPI='ON'
-# # export CFLAGS='-I/path/to/include'
-# export CFLAGS='-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src'
-# # export LDFLAGS='-L/path/to/lib'
+# export HDF5_MPI="ON"
+# # export CFLAGS="-I/path/to/include"
+# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
+# # export LDFLAGS="-L/path/to/lib"
 # pip install --no-binary=h5py h5py
 
 ## PYTHON PACKAGES
