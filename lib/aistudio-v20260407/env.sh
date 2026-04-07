@@ -23,10 +23,6 @@ unset __conda_setup
 # cp -r /home/aistudio/.conda/envs/ /home/aistudio/lib/
 conda activate /home/aistudio/lib/envs/qcu
 
-## TORCH
-# pip3 install torch-npu==2.1.0.post17 pyyaml numpy==1.26.4
-# python3 -c "import torch; a = torch.randn(3, 4).cuda(); print(a + a);"
-
 ## MPI
 # wget https://download.open-mpi.org/release/open-mpi/v4.1/openmpi-4.1.5.tar.gz
 # tar -xzf openmpi-4.1.5.tar.gz
@@ -59,10 +55,7 @@ export LD_LIBRARY_PATH=/home/aistudio/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 # pip install --no-binary=h5py h5py
 
 ## PYTHON PACKAGES
-# pip install cython matplotlib mpi4py
-
-## NUMPY
-# pip install numpy==1.26.4 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
+# pip install cython matplotlib mpi4py tilelang
 
 ## PYTHONPATH
 export PYTHONPATH=/home/aistudio/PyQCU:$PYTHONPATH
