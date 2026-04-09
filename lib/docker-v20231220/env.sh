@@ -1,5 +1,5 @@
 # @EXPORT@
-export LD_LIBRARY_PATH=/root/PyQCU/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/root/PyQCU/cpp/cuda/qcu:$LD_LIBRARY_PATH
 export LD_LIBRARY_PATH=/root/Build-USQCD-SciDAC/scidac/build/quda-mpi-sm_80/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/root/PyQCU/:${PYTHONPATH}
 export PYTHONPATH=/root/lib/PyQuda-master:${PYTHONPATH}
