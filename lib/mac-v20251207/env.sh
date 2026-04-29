@@ -64,8 +64,8 @@ export PATH=/Users/zhangxin/lib/btop/bin:$PATH
 
 ## ENV
 export KMP_DUPLICATE_LIB_OK=TRUE
-export PYTORCH_ENABLE_MPS_FALLBACK=1
 export PATH=/Library/TeX/texbin:$PATH
+export HOMEBREW_NO_AUTO_UPDATE=1
 
 ## PYTHONPATH
 export PYTHONPATH=/Users/zhangxin/PyQCU:$PYTHONPATH
