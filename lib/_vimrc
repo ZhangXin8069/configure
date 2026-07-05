@@ -1,0 +1,35 @@
+" ===== Most Convenient Basic Vim Configuration =====
+
+" --- Visual Experience ---
+set number                " Show absolute line numbers
+set relativenumber        " Also show relative line numbers (current line is 0)
+set cursorline            " Highlight the current line
+syntax on                 " Enable syntax highlighting
+set showmode              " Show current mode at the bottom
+
+" --- Indentation and Spaces ---
+set tabstop=4             " Tab width set to 4 spaces
+set shiftwidth=4          " Auto-indent width
+set expandtab             " Convert tabs to spaces
+set autoindent            " Auto-indent based on previous line
+set smartindent           " Smart indent based on syntax
+
+" --- Search Settings ---
+set hlsearch              " Highlight all search results
+set incsearch             " Incremental search as you type
+set ignorecase            " Ignore case in searches
+set smartcase             " Case-sensitive if uppercase is used
+
+" --- Editing Behavior ---
+set backspace=indent,eol,start  " Allow backspace over indent, end of line, start of line
+set mouse=a               " Enable mouse support (click, scroll)
+set hidden                " Allow switching buffers without saving
+
+" --- File Handling ---
+set nobackup              " Disable backup files
+set noswapfile            " Disable swap files (safe on modern drives)
+set encoding=utf-8        " Use UTF-8 encoding
+
+" --- Status Bar ---
+set laststatus=2          " Always show status bar
+set ruler                 " Show cursor line and column in the bottom right

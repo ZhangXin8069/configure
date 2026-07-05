@@ -5,6 +5,8 @@ _PATH=$(
 )
 _NAME=$(basename "$0")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-# systemctl reboot -i
-sudo reboot
+pushd $HOME
+mv ./.vimrc .vimrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak
+cp -r ${_PATH}/../lib/_vimrc .vimrc
+popd
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

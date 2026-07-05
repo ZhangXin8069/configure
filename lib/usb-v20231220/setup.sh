@@ -1,4 +1,5 @@
 # source
+#!/usr/bin/env bash
 _PATH=$(
     cd "$(dirname "$0")"
     pwd
