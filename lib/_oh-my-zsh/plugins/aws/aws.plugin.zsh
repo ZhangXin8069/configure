@@ -186,17 +186,32 @@ function aws_change_access_key() {
   echo "Your current keys are:"
   aws --no-cli-pager iam list-access-keys
 }
+# function aws_regions() {
+#   local region
+#   if [[ $AWS_DEFAULT_REGION ]];then
+#       region="$AWS_DEFAULT_REGION"
+#   elif [[ $AWS_REGION ]];then
+#       region="$AWS_REGION"
+#   else
+#       region="us-west-1"
+#   fi
+#   if [[ $AWS_DEFAULT_PROFILE || $AWS_PROFILE ]];then
+#     aws ec2 describe-regions --region $region |grep RegionName | awk -F ':' '{gsub(/"/, "", $2);gsub(/,/, "", $2);gsub(/ /, "", $2);  print $2}'
+#   else
+#     echo "You must specify a AWS profile."
+#   fi
+# }
 function aws_regions() {
   local region
-  if [[ $AWS_DEFAULT_REGION ]];then
+  if [[ $AWS_DEFAULT_REGION ]]; then
       region="$AWS_DEFAULT_REGION"
-  elif [[ $AWS_REGION ]];then
+  elif [[ $AWS_REGION ]]; then
       region="$AWS_REGION"
   else
       region="us-west-1"
   fi
-  if [[ $AWS_DEFAULT_PROFILE || $AWS_PROFILE ]];then
-    aws ec2 describe-regions --region $region |grep RegionName | awk -F ':' '{gsub(/"/, "", $2);gsub(/,/, "", $2);gsub(/ /, "", $2);  print $2}'
+  if [[ -n $AWS_DEFAULT_PROFILE || -n $AWS_PROFILE ]]; then
+    aws ec2 describe-regions --region $region |grep RegionName | awk -F ':' '{gsub(/"/, "", $2);gsub(/,/, "", $2);gsub(/ /, "", $2); print $2}'
   else
     echo "You must specify a AWS profile."
   fi
