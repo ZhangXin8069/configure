@@ -1,4 +1,5 @@
 # source
+#!/usr/bin/env bash
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 echo "PATH:"$_PATH
 pushd ${_PATH}/../
