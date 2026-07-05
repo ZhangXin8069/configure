@@ -1,10 +1,13 @@
 #compdef samtools
 #autoload
+
 local curcontext="$curcontext" state line ret=1
 local -a _files
+
 _arguments -C \
   '1: :->cmds' \
   '2:: :->args' && ret=0
+
 case $state in
   cmds)
     _values "samtools command" \
@@ -33,4 +36,5 @@ case $state in
     _files
     ;;
 esac
+
 return ret

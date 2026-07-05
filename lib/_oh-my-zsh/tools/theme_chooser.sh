@@ -1,13 +1,16 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
+
 # Zsh Theme Chooser by fox (fox91 at anche dot no)
 # This program is free software. It comes without any warranty, to
 # the extent permitted by applicable law. You can redistribute it
 # and/or modify it under the terms of the Do What The Fuck You Want
 # To Public License, Version 2, as published by Sam Hocevar. See
 # http://www.wtfpl.net/txt/copying/ for more details.
+
 THEMES_DIR="$ZSH/themes"
 FAVLIST="${HOME}/.zsh_favlist"
 source $ZSH/oh-my-zsh.sh
+
 function noyes() {
     read "a?$1 [y/N] "
     if [[ $a == "N" || $a == "n" || $a = "" ]]; then
@@ -15,6 +18,7 @@ function noyes() {
     fi
     return 1
 }
+
 function theme_preview() {
     THEME=$1
     THEME_NAME=`echo $THEME | sed s/\.zsh-theme$//`
@@ -24,6 +28,7 @@ function theme_preview() {
     (exit 1)
     print -P "$PROMPT                                                                                      $RPROMPT"
 }
+
 function banner() {
     echo
     echo "[0;1;35;95m╺━[0;1;31;91m┓┏[0;1;33;93m━┓[0;1;32;92m╻[0m [0;1;36;96m╻[0m   [0;1;35;95m╺┳[0;1;31;91m╸╻[0m [0;1;33;93m╻[0;1;32;92m┏━[0;1;36;96m╸┏[0;1;34;94m┳┓[0;1;35;95m┏━[0;1;31;91m╸[0m   [0;1;32;92m┏━[0;1;36;96m╸╻[0m [0;1;34;94m╻[0;1;35;95m┏━[0;1;31;91m┓┏[0;1;33;93m━┓[0;1;32;92m┏━[0;1;36;96m┓┏[0;1;34;94m━╸[0;1;35;95m┏━[0;1;31;91m┓[0m"
@@ -31,6 +36,7 @@ function banner() {
     echo "[0;1;33;93m┗━[0;1;32;92m╸┗[0;1;36;96m━┛[0;1;34;94m╹[0m [0;1;35;95m╹[0m    [0;1;33;93m╹[0m [0;1;32;92m╹[0m [0;1;36;96m╹[0;1;34;94m┗━[0;1;35;95m╸╹[0m [0;1;31;91m╹[0;1;33;93m┗━[0;1;32;92m╸[0m   [0;1;34;94m┗━[0;1;35;95m╸╹[0m [0;1;31;91m╹[0;1;33;93m┗━[0;1;32;92m┛┗[0;1;36;96m━┛[0;1;34;94m┗━[0;1;35;95m┛┗[0;1;31;91m━╸[0;1;33;93m╹┗[0;1;32;92m╸[0m"
     echo
 }
+
 function usage() {
     echo "Usage: $0 [options] [theme]"
     echo
@@ -40,12 +46,14 @@ function usage() {
     echo "  -h   Get this help message"
     exit 1
 }
+
 function list_themes() {
     for THEME in $(ls $THEMES_DIR); do
         THEME_NAME=`echo $THEME | sed s/\.zsh-theme$//`
         echo $THEME_NAME
     done
 }
+
 function insert_favlist() {
     if grep -q "$THEME_NAME" $FAVLIST 2> /dev/null ; then
         echo "Already in favlist"
@@ -53,7 +61,9 @@ function insert_favlist() {
         echo $THEME_NAME >> $FAVLIST
         echo "Saved to favlist"
     fi
+
 }
+
 function theme_chooser() {
     for THEME in $(ls $THEMES_DIR); do
         echo
@@ -66,6 +76,7 @@ function theme_chooser() {
         fi
     done
 }
+
 while getopts ":lhs" Option
 do
   case $Option in
@@ -75,6 +86,7 @@ do
     * ) usage ;; # Default.
   esac
 done
+
 if [[ -z $Option ]]; then
     if [[ -z $1 ]]; then
         banner

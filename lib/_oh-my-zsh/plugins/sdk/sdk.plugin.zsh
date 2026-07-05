@@ -1,5 +1,7 @@
 #!/usr/bin/env zsh
+
 ### SDKMAN Autocomplete for Oh My Zsh
+
 _sdk() {
 	case "${CURRENT}" in
 	2)
@@ -52,4 +54,5 @@ _sdk() {
 		;;
 	esac
 }
+
 compdef _sdk sdk

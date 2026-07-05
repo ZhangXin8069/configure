@@ -1,10 +1,13 @@
 #compdef ember
+
 local curcontext="$curcontext" state line ret=1
+
 _arguments -C -A "--version" -A "--help" \
   '(- 1 *)--help' \
   '(- 1 *)--version' \
   '1: :->cmds' \
   '*:: :->args' && ret=0
+
 case $state in
   cmds)
     _values "ember command" \
@@ -182,4 +185,5 @@ case $state in
     esac
     ;;
 esac
+
 return ret
