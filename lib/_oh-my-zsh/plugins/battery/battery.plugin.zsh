@@ -16,7 +16,14 @@
 # Author: Not Pua (im-notpua)             #
 # Modified to add support for OpenBSD     #
 ###########################################
+
+: ${BATTERY_SHOW_WATTS:=false}
+
+
 if [[ "$OSTYPE" = darwin* ]]; then
+  function get_charger_power() {
+    echo "$(ioreg -rc AppleSmartBattery | grep -o '"Watts"=[0-9]\+' | head -1 | grep -o '[0-9]\+')W "
+  }
   function battery_is_charging() {
     ioreg -rc AppleSmartBattery | command grep -q '^.*"ExternalConnected"\ =\ Yes'
   }
@@ -56,9 +63,13 @@ if [[ "$OSTYPE" = darwin* ]]; then
       fi
       echo "%{$fg[$color]%}[${battery_pct}%%]%{$reset_color%}"
     else
-      echo "${BATTERY_CHARGING-⚡️}"
+      if [[ "${BATTERY_SHOW_WATTS}" = "true" ]] ; then
+        watts=$(get_charger_power)
+      fi
+      echo "${watts}${BATTERY_CHARGING-⚡️}"
     fi
   }
+
 elif [[ "$OSTYPE" = freebsd* ]]; then
   function battery_is_charging() {
     [[ $(sysctl -n hw.acpi.battery.state) -eq 2 ]]
@@ -179,6 +190,7 @@ elif [[ "$OSTYPE" = openbsd* ]]; then
       echo "%{$fg[$color]%}${battery_pct}%%%{$reset_color%}"
     fi
   }
+
 elif [[ "$OSTYPE" = linux*  ]]; then
   function battery_is_charging() {
     if (( $+commands[acpitool] )); then
@@ -252,6 +264,7 @@ else
     battery_time_remaining \
     battery_pct_prompt { }
 fi
+
 function battery_level_gauge() {
   local gauge_slots=${BATTERY_GAUGE_SLOTS:-10}
   local green_threshold=${BATTERY_GREEN_THRESHOLD:-$(( gauge_slots * 0.6 ))}
@@ -266,11 +279,14 @@ function battery_level_gauge() {
   local empty_symbol=${BATTERY_GAUGE_EMPTY_SYMBOL:-'▷'}
   local charging_color=${BATTERY_CHARGING_COLOR:-$color_yellow}
   local charging_symbol=${BATTERY_CHARGING_SYMBOL:-'⚡'}
+
   local -i battery_remaining_percentage=$(battery_pct)
   local filled empty gauge_color
+
   if [[ $battery_remaining_percentage =~ [0-9]+ ]]; then
     filled=$(( ($battery_remaining_percentage * $gauge_slots) / 100 ))
     empty=$(( $gauge_slots - $filled ))
+
     if [[ $filled -gt $green_threshold ]]; then
       gauge_color=$color_green
     elif [[ $filled -gt $yellow_threshold ]]; then
@@ -283,8 +299,10 @@ function battery_level_gauge() {
     empty=0
     filled_symbol=${BATTERY_UNKNOWN_SYMBOL:-'.'}
   fi
+
   local charging=' '
   battery_is_charging && charging=$charging_symbol
+
   # Charging status and prefix
   print -n ${charging_color}${charging}${color_reset}${battery_prefix}${gauge_color}
   # Filled slots

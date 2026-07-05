@@ -1,6 +1,8 @@
 # web_search from terminal
+
 function web_search() {
   emulate -L zsh
+
   # define search engine URLS
   typeset -A urls
   urls=(
@@ -26,31 +28,45 @@ function web_search() {
     youtube         "https://www.youtube.com/results?search_query="
     deepl           "https://www.deepl.com/translator#auto/auto/"
     dockerhub       "https://hub.docker.com/search?q="
+    gems            "https://rubygems.org/search?query="
     npmpkg          "https://www.npmjs.com/search?q="
     packagist       "https://packagist.org/?query="
     gopkg           "https://pkg.go.dev/search?m=package&q="
+    chatgpt         "https://chatgpt.com/?q="
+    grok            "https://grok.com/?q="
+    claudeai        "https://claude.ai/new?q="
+    reddit          "https://www.reddit.com/search/?q="
+    ppai            "https://www.perplexity.ai/search/new?q="
+    rscrate         "https://crates.io/search?q="
+    rsdoc           "https://docs.rs/releases/search?query="
   )
+
   # check whether the search engine is supported
   if [[ -z "$urls[$1]" ]]; then
     echo "Search engine '$1' not supported."
     return 1
   fi
+
   # search or go to main page depending on number of arguments passed
   if [[ $# -gt 1 ]]; then
     # if search goes in the query string ==> space as +, otherwise %20
     # see https://stackoverflow.com/questions/1634271/url-encoding-the-space-character-or-20
     local param="-P"
     [[ "$urls[$1]" == *\?*= ]] && param=""
+
     # build search url:
     # join arguments passed with '+', then append to search engine URL
-    url="${urls[$1]}$(omz_urlencode $param ${@[2,-1]})"
+    url="${urls[$1]}$(omz_urlencode $param ${(s: :)@[2,-1]})"
   else
     # build main page url:
     # split by '/', then rejoin protocol (1) and domain (2) parts with '//'
     url="${(j://:)${(s:/:)urls[$1]}[1,2]}"
   fi
+
   open_command "$url"
 }
+
+
 alias bing='web_search bing'
 alias brs='web_search brave'
 alias google='web_search google'
@@ -72,15 +88,25 @@ alias ask='web_search ask'
 alias youtube='web_search youtube'
 alias deepl='web_search deepl'
 alias dockerhub='web_search dockerhub'
+alias gems='web_search gems'
 alias npmpkg='web_search npmpkg'
 alias packagist='web_search packagist'
 alias gopkg='web_search gopkg'
+alias chatgpt='web_search chatgpt'
+alias grokcom='web_search grok'
+alias claudeai='web_search claudeai'
+alias reddit='web_search reddit'
+alias ppai='web_search ppai'
+alias rscrate='web_search rscrate'
+alias rsdoc='web_search rsdoc'
+
 #add your own !bang searches here
 alias wiki='web_search duckduckgo \!w'
 alias news='web_search duckduckgo \!n'
 alias map='web_search duckduckgo \!m'
 alias image='web_search duckduckgo \!i'
 alias ducky='web_search duckduckgo \!'
+
 # other search engine aliases
 if [[ ${#ZSH_WEB_SEARCH_ENGINES} -gt 0 ]]; then
   typeset -A engines
@@ -90,3 +116,4 @@ if [[ ${#ZSH_WEB_SEARCH_ENGINES} -gt 0 ]]; then
   done
   unset engines key
 fi
+

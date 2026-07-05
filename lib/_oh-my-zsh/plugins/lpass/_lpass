@@ -1,4 +1,5 @@
 #compdef lpass
+
 _lpass() {
     local cmd has_color has_sync has_interactive
   	if (( CURRENT > 2)); then
@@ -17,6 +18,7 @@ _lpass() {
                   '--force[Do not ask on saving plaintext key]'
                 has_color=1
             ;;
+
             logout)
                 _arguments : '--force[Force confirmation]'
                 has_color=1
@@ -32,6 +34,7 @@ _lpass() {
                 has_color=1
                 has_sync=1
             ;;
+
             ls)
                 _arguments : \
                   '(-l --long)'{-l,--long}'[Also list the last modification time and username]' \
@@ -75,7 +78,7 @@ _lpass() {
                 has_sync=1
             ;;
             status)
-               _arguments : '(-q --quiet)'{-q,--quiet}'[Supress output to stdout]'
+               _arguments : '(-q --quiet)'{-q,--quiet}'[Suppress output to stdout]'
                 has_color=1
             ;;
             sync)
@@ -93,6 +96,7 @@ _lpass() {
               fi
             ;;
         esac
+
         if [ -n "$has_sync" ] || [ -n "$has_color" ] || [ -n "$has_interactive" ]; then
             local -a generic_options
             if [ "$has_sync" -eq 1 ]; then
@@ -130,8 +134,10 @@ _lpass() {
         _arguments : \
           '(-h --help)'{-h,--help}'[show help]' \
           '(-v --version)'{-v,--version}'[show version]'
+
     fi
 }
+
 _lpass_complete_uniqenames(){
   local -a entries
   while read i;  do
@@ -141,6 +147,8 @@ _lpass_complete_uniqenames(){
   done < <(lpass ls --sync auto --format "%an" --color=never)
   compadd -a entries
 }
+
+
 _lpass_complete_groups() {
   local -a entries
   while read i;  do
@@ -150,6 +158,7 @@ _lpass_complete_groups() {
   done < <(lpass ls --sync auto --format "%aN" --color=never | grep -E "\/$")
   compadd -a entries
 }
+
 _lpass
 # Local Variables:
 # mode: Shell-Script

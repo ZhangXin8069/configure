@@ -1,8 +1,15 @@
 ## Platforms with a built-in command-not-found handler init file
+
 for file (
-  # Arch Linux. Must have pkgfile installed: https://wiki.archlinux.org/index.php/Pkgfile#Command_not_found
+  # Arch Linux. Must have pkgfile installed: https://wiki.archlinux.org/title/Zsh#pkgfile_"command_not_found"_handler
   /usr/share/doc/pkgfile/command-not-found.zsh
-  # Homebrew: https://github.com/Homebrew/homebrew-command-not-found
+  # Void Linux: https://codeberg.org/classabbyamp/xbps-command-not-found
+  /usr/share/zsh/plugins/xbps-command-not-found/xbps-command-not-found.zsh
+  # Homebrew: https://github.com/Homebrew/brew/blob/main/docs/Command-Not-Found.md
+  /opt/homebrew/Library/Homebrew/command-not-found/handler.sh
+  /usr/local/Homebrew/Library/Homebrew/command-not-found/handler.sh
+  /home/linuxbrew/.linuxbrew/Homebrew/Library/Homebrew/command-not-found/handler.sh
+  # Old homebrew implementation
   /opt/homebrew/Library/Taps/homebrew/homebrew-command-not-found/handler.sh
   /usr/local/Homebrew/Library/Taps/homebrew/homebrew-command-not-found/handler.sh
   /home/linuxbrew/.linuxbrew/Homebrew/Library/Taps/homebrew/homebrew-command-not-found/handler.sh
@@ -14,7 +21,10 @@ for file (
   fi
 done
 unset file
+
+
 ## Platforms with manual command_not_found_handler() setup
+
 # Debian and derivatives: https://launchpad.net/ubuntu/+source/command-not-found
 if [[ -x /usr/lib/command-not-found || -x /usr/share/command-not-found/command-not-found ]]; then
   command_not_found_handler() {
@@ -30,6 +40,7 @@ if [[ -x /usr/lib/command-not-found || -x /usr/share/command-not-found/command-n
     fi
   }
 fi
+
 # Fedora: https://fedoraproject.org/wiki/Features/PackageKitCommandNotFound
 if [[ -x /usr/libexec/pk-command-not-found ]]; then
   command_not_found_handler() {
@@ -37,22 +48,26 @@ if [[ -x /usr/libexec/pk-command-not-found ]]; then
       /usr/libexec/pk-command-not-found "$@"
       return $?
     fi
+
     printf "zsh: command not found: %s\n" "$1" >&2
     return 127
   }
 fi
+
 # NixOS: https://github.com/NixOS/nixpkgs/tree/master/nixos/modules/programs/command-not-found
 if [[ -x /run/current-system/sw/bin/command-not-found ]]; then
   command_not_found_handler() {
     /run/current-system/sw/bin/command-not-found "$@"
   }
 fi
+
 # Termux: https://github.com/termux/command-not-found
 if [[ -x /data/data/com.termux/files/usr/libexec/termux/command-not-found ]]; then
   command_not_found_handler() {
     /data/data/com.termux/files/usr/libexec/termux/command-not-found "$1"
   }
 fi
+
 # SUSE and derivates: https://www.unix.com/man-page/suse/1/command-not-found/
 if [[ -x /usr/bin/command-not-found ]]; then
   command_not_found_handler() {

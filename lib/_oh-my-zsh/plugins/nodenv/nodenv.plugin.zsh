@@ -1,6 +1,8 @@
 # This plugin loads nodenv into the current shell and provides prompt info via
 # the 'nodenv_prompt_info' function.
+
 FOUND_NODENV=${+commands[nodenv]}
+
 if [[ $FOUND_NODENV -ne 1 ]]; then
   nodenvdirs=(
     "$HOME/.nodenv"
@@ -15,6 +17,7 @@ if [[ $FOUND_NODENV -ne 1 ]]; then
       break
     fi
   done
+
   if [[ $FOUND_NODENV -ne 1 ]]; then
     if (( $+commands[brew] )) && dir=$(brew --prefix nodenv 2>/dev/null); then
       if [[ -d "${dir}/bin" ]]; then
@@ -24,6 +27,7 @@ if [[ $FOUND_NODENV -ne 1 ]]; then
     fi
   fi
 fi
+
 if [[ $FOUND_NODENV -eq 1 ]]; then
   eval "$(nodenv init --no-rehash - zsh)"
   function nodenv_prompt_info() {
@@ -35,4 +39,5 @@ else
     echo "system: $(node -v 2>&1 | cut -c 2-)"
   }
 fi
+
 unset FOUND_NODENV nodenvdirs dir

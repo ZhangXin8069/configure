@@ -1,11 +1,16 @@
 # Singlechar plugin
+
 This plugin adds single char shortcuts (and combinations) for some commands.
+
 To use it, add `singlechar` to the plugins array of your zshrc file:
 ```
 plugins=(... singlechar)
 ```
+
 ## Aliases
+
 ### CAT, GREP, CURL, WGET
+
 | Alias | Command          | Description |
 |-------|------------------|-------------|
 | y     | `grep -Ri`       | Find case-insensitive string in all files and directories, recursively. Follows symlinks. |
@@ -23,9 +28,12 @@ plugins=(... singlechar)
 | a     | `echo >>`        | Write arguments to file, appending them if the file exists.                               |
 | w:    | `cat >`          | Write stdin to file, overwriting if it exists.                                            |
 | a:    | `cat >>`         | Write stdin to file, appending it if the file exists.                                     |
+
 ### XARGS
+
 These aliases are versions of the aliases above but using xargs. This can be used
 by piping the arguments to the xargs aliases.
+
 | Alias | Command              | Description                     |
 |-------|----------------------|---------------------------------|
 | x     | `xargs`              | 'xargs' command                 |
@@ -44,9 +52,12 @@ by piping the arguments to the xargs aliases.
 | xa    | `xargs echo >>`      | Same as 'a' alias using xargs.  |
 | xw:   | `xargs cat >`        | Same as 'w:' alias using xargs. |
 | xa:   | `xargs >>`           | Same as 'a:' alias using xargs. |
+
 ### SUDO
+
 These aliases are versions of the aliases above in [CAT, GREP, CURL, WGET](#cat-grep-curl-wget)
 but using sudo to run them with root permission.
+
 | Alias | Command               | Description                    |
 |-------|-----------------------|--------------------------------|
 | s     | `sudo`                | 'sudo' command                 |
@@ -64,8 +75,11 @@ but using sudo to run them with root permission.
 | sa    | `sudo echo >>`        | Same as 'a' alias using sudo.  |
 | sw:   | `sudo cat >`          | Same as 'w:' alias using sudo. |
 | sa:   | `sudo cat >>`         | Same as 'a:' alias using sudo. |
+
 ### SUDO-XARGS
+
 Same as above but using both sudo and xargs.
+
 | Alias | Command                   | Description                     |
 |-------|---------------------------|---------------------------------|
 | sx    | `sudo xargs`              | 'sudo xargs' command            |
@@ -84,10 +98,13 @@ Same as above but using both sudo and xargs.
 | sxa   | `sudo xargs echo >>`      | Same as 'xa' alias using sudo.  |
 | sxw:  | `sudo xargs cat >`        | Same as 'xw:' alias using sudo. |
 | sxa:  | `sudo xargs cat >>`       | Same as 'xa:' alias using sudo. |
+
 ## Options
+
 The commands `grep`, `sudo`, `wget`, `curl`, and `less` can be configured to use other commands
 via the setup variables below, before Oh My Zsh is sourced. If they are not set yet, they will
 use their default values:
+
 | Setup variable | Default value |
 |----------------|---------------|
 | GREP           | `grep`        |
@@ -95,5 +112,7 @@ use their default values:
 | WGET           | `wget`        |
 | CURL           | `curl`        |
 | PAGER          | `less`        |
+
 ## Author
+
 - [Karolin Varner](https://github.com/koraa)

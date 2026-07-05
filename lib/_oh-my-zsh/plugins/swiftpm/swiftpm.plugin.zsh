@@ -1,4 +1,5 @@
 # Some aliases to make your life with the Swift Package Manager faster ✌️
+
 alias spi='swift package init'
 alias spf='swift package fetch'
 alias spu='swift package update'

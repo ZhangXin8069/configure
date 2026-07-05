@@ -1,4 +1,5 @@
 #compdef nomad
+
 local -a _nomad_cmds
 _nomad_cmds=(
   'agent:Runs a Nomad agent'
@@ -22,6 +23,7 @@ _nomad_cmds=(
   'validate:Checks if a given job specification is valid'
   'version:Prints the Nomad version'
 )
+
 __allocstatus() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -33,6 +35,7 @@ __allocstatus() {
     '-json[Output the allocation in its JSON format.]' \
     '-t[Format and display allocation using a Go template.]'
 }
+
 __evalstatus() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -43,6 +46,7 @@ __evalstatus() {
     '-json[Output the allocation in its JSON format.]' \
     '-t[Format and display allocation using a Go template.]'
 }
+
 __inspect() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -51,6 +55,7 @@ __inspect() {
     '-json[Output the allocation in its JSON format.]' \
     '-t[Format and display allocation using a Go template.]'
 }
+
 __logs() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -64,6 +69,7 @@ __logs() {
     '-n[Sets the tail location in best-efforted number of lines relative to the end of the logs.]' \
     '-c[Sets the tail location in number of bytes relative to the end of the logs.]'
 }
+
 __nodestatus() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -77,6 +83,7 @@ __nodestatus() {
     '-json[Output the allocation in its JSON format.]' \
     '-t[Format and display allocation using a Go template.]'
 }
+
 __plan() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -84,6 +91,7 @@ __plan() {
     '-no-color[Disables colored command output.]' \
     '-diff[Determines whether the diff between the remote job and planned job is shown. Defaults to true.]'
 }
+
 __run() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -94,6 +102,7 @@ __run() {
     '-output[Output the JSON that would be submitted to the HTTP API without submitting the job.]' \
     '-verbose[Show full information.]'
 }
+
 __status() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -103,6 +112,7 @@ __status() {
     '-evals[Display the evaluations associated with the job.]' \
     '-verbose[Show full information.]'
 }
+
 __stop() {
   _arguments \
     '-address=[(addr) The address of the Nomad server. Overrides the NOMAD_ADDR environment variable if set. Default = http://127.0.0.1:4646]' \
@@ -112,11 +122,14 @@ __stop() {
     '-yes[Automatic yes to prompts.]' \
     '-verbose[Show full information.]'
 }
+
 _arguments '*:: :->command'
+
 if (( CURRENT == 1 )); then
   _describe -t commands "nomad command" _nomad_cmds
   return
 fi
+
 local -a _command_args
 case "$words[1]" in
   alloc-status)

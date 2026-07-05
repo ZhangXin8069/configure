@@ -1,4 +1,5 @@
 (( ${+commands[percol]} )) || return
+
 function percol_select_history() {
   # print history in reverse order (from -1 (latest) to 1 (oldest))
   BUFFER=$(fc -l -n -1 1 | percol --query "$LBUFFER")
@@ -9,6 +10,7 @@ zle -N percol_select_history
 bindkey -M emacs '^R' percol_select_history
 bindkey -M viins '^R' percol_select_history
 bindkey -M vicmd '^R' percol_select_history
+
 if (( ${+functions[marks]} )); then
   function percol_select_marks() {
     # parse directory from marks output (markname -> path) and quote if necessary

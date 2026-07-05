@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
+
 # Kubernetes prompt helper for bash/zsh
 # Displays current context and namespace
-# Copyright 2021 Jon Mosco
+
+# Copyright 2026 Jon Mosco
 #
 #  Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
@@ -14,329 +16,449 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
+
 # Debug
 [[ -n $DEBUG ]] && set -x
+
 # Default values for the prompt
 # Override these values in ~/.zshrc or ~/.bashrc
 KUBE_PS1_BINARY="${KUBE_PS1_BINARY:-kubectl}"
 KUBE_PS1_SYMBOL_ENABLE="${KUBE_PS1_SYMBOL_ENABLE:-true}"
-KUBE_PS1_SYMBOL_DEFAULT=${KUBE_PS1_SYMBOL_DEFAULT:-$'\u2388'}
 KUBE_PS1_SYMBOL_PADDING="${KUBE_PS1_SYMBOL_PADDING:-false}"
-KUBE_PS1_SYMBOL_USE_IMG="${KUBE_PS1_SYMBOL_USE_IMG:-false}"
+KUBE_PS1_SYMBOL_COLOR="${KUBE_PS1_SYMBOL_COLOR:-}"
+
 KUBE_PS1_NS_ENABLE="${KUBE_PS1_NS_ENABLE:-true}"
 KUBE_PS1_CONTEXT_ENABLE="${KUBE_PS1_CONTEXT_ENABLE:-true}"
 KUBE_PS1_PREFIX="${KUBE_PS1_PREFIX-(}"
 KUBE_PS1_SEPARATOR="${KUBE_PS1_SEPARATOR-|}"
 KUBE_PS1_DIVIDER="${KUBE_PS1_DIVIDER-:}"
 KUBE_PS1_SUFFIX="${KUBE_PS1_SUFFIX-)}"
-KUBE_PS1_SYMBOL_COLOR="${KUBE_PS1_SYMBOL_COLOR-blue}"
-KUBE_PS1_CTX_COLOR="${KUBE_PS1_CTX_COLOR-red}"
-KUBE_PS1_NS_COLOR="${KUBE_PS1_NS_COLOR-cyan}"
-KUBE_PS1_BG_COLOR="${KUBE_PS1_BG_COLOR}"
-KUBE_PS1_KUBECONFIG_CACHE="${KUBECONFIG}"
-KUBE_PS1_KUBECONFIG_SYMLINK="${KUBE_PS1_KUBECONFIG_SYMLINK:-false}"
-KUBE_PS1_DISABLE_PATH="${HOME}/.kube/kube-ps1/disabled"
-KUBE_PS1_LAST_TIME=0
-KUBE_PS1_CLUSTER_FUNCTION="${KUBE_PS1_CLUSTER_FUNCTION}"
-KUBE_PS1_NAMESPACE_FUNCTION="${KUBE_PS1_NAMESPACE_FUNCTION}"
+
+KUBE_PS1_HIDE_IF_NOCONTEXT="${KUBE_PS1_HIDE_IF_NOCONTEXT:-false}"
+
+_KUBE_PS1_KUBECONFIG_CACHE="${KUBECONFIG}"
+_KUBE_PS1_DISABLE_PATH="${HOME}/.kube/kube-ps1/disabled"
+_KUBE_PS1_LAST_TIME=0
+
 # Determine our shell
-if [ "${ZSH_VERSION-}" ]; then
-  KUBE_PS1_SHELL="zsh"
-elif [ "${BASH_VERSION-}" ]; then
-  KUBE_PS1_SHELL="bash"
-fi
+_kube_ps1_shell_type() {
+  local _KUBE_PS1_SHELL_TYPE
+
+  if [ "${ZSH_VERSION-}" ]; then
+    _KUBE_PS1_SHELL_TYPE="zsh"
+  elif [ "${BASH_VERSION-}" ]; then
+    _KUBE_PS1_SHELL_TYPE="bash"
+  fi
+  echo "$_KUBE_PS1_SHELL_TYPE"
+}
+
 _kube_ps1_init() {
-  [[ -f "${KUBE_PS1_DISABLE_PATH}" ]] && KUBE_PS1_ENABLED=off
-  case "${KUBE_PS1_SHELL}" in
-  "zsh")
-    _KUBE_PS1_OPEN_ESC="%{"
-    _KUBE_PS1_CLOSE_ESC="%}"
-    _KUBE_PS1_DEFAULT_BG="%k"
-    _KUBE_PS1_DEFAULT_FG="%f"
-    setopt PROMPT_SUBST
-    autoload -U add-zsh-hook
-    add-zsh-hook precmd _kube_ps1_update_cache
-    zmodload -F zsh/stat b:zstat
-    zmodload zsh/datetime
-    ;;
-  "bash")
-    _KUBE_PS1_OPEN_ESC=$'\001'
-    _KUBE_PS1_CLOSE_ESC=$'\002'
-    _KUBE_PS1_DEFAULT_BG=$'\033[49m'
-    _KUBE_PS1_DEFAULT_FG=$'\033[39m'
-    [[ $PROMPT_COMMAND =~ _kube_ps1_update_cache ]] || PROMPT_COMMAND="_kube_ps1_update_cache;${PROMPT_COMMAND:-:}"
-    ;;
-  esac
-}
-_kube_ps1_color_fg() {
-  local KUBE_PS1_FG_CODE
-  case "${1}" in
-  black) KUBE_PS1_FG_CODE=0 ;;
-  red) KUBE_PS1_FG_CODE=1 ;;
-  green) KUBE_PS1_FG_CODE=2 ;;
-  yellow) KUBE_PS1_FG_CODE=3 ;;
-  blue) KUBE_PS1_FG_CODE=4 ;;
-  magenta) KUBE_PS1_FG_CODE=5 ;;
-  cyan) KUBE_PS1_FG_CODE=6 ;;
-  white) KUBE_PS1_FG_CODE=7 ;;
-  # 256
-  [0-9] | [1-9][0-9] | [1][0-9][0-9] | [2][0-4][0-9] | [2][5][0-6]) KUBE_PS1_FG_CODE="${1}" ;;
-  *) KUBE_PS1_FG_CODE=default ;;
-  esac
-  if [[ "${KUBE_PS1_FG_CODE}" == "default" ]]; then
-    KUBE_PS1_FG_CODE="${_KUBE_PS1_DEFAULT_FG}"
-    return
-  elif [[ "${KUBE_PS1_SHELL}" == "zsh" ]]; then
-    KUBE_PS1_FG_CODE="%F{$KUBE_PS1_FG_CODE}"
-  elif [[ "${KUBE_PS1_SHELL}" == "bash" ]]; then
-    if tput setaf 1 &>/dev/null; then
-      KUBE_PS1_FG_CODE="$(tput setaf ${KUBE_PS1_FG_CODE})"
-    elif [[ $KUBE_PS1_FG_CODE -ge 0 ]] && [[ $KUBE_PS1_FG_CODE -le 256 ]]; then
-      KUBE_PS1_FG_CODE="\033[38;5;${KUBE_PS1_FG_CODE}m"
-    else
-      KUBE_PS1_FG_CODE="${_KUBE_PS1_DEFAULT_FG}"
-    fi
-  fi
-  echo ${_KUBE_PS1_OPEN_ESC}${KUBE_PS1_FG_CODE}${_KUBE_PS1_CLOSE_ESC}
-}
-_kube_ps1_color_bg() {
-  local KUBE_PS1_BG_CODE
-  case "${1}" in
-  black) KUBE_PS1_BG_CODE=0 ;;
-  red) KUBE_PS1_BG_CODE=1 ;;
-  green) KUBE_PS1_BG_CODE=2 ;;
-  yellow) KUBE_PS1_BG_CODE=3 ;;
-  blue) KUBE_PS1_BG_CODE=4 ;;
-  magenta) KUBE_PS1_BG_CODE=5 ;;
-  cyan) KUBE_PS1_BG_CODE=6 ;;
-  white) KUBE_PS1_BG_CODE=7 ;;
-  # 256
-  [0-9] | [1-9][0-9] | [1][0-9][0-9] | [2][0-4][0-9] | [2][5][0-6]) KUBE_PS1_BG_CODE="${1}" ;;
-  *) KUBE_PS1_BG_CODE=$'\033[0m' ;;
-  esac
-  if [[ "${KUBE_PS1_BG_CODE}" == "default" ]]; then
-    KUBE_PS1_FG_CODE="${_KUBE_PS1_DEFAULT_BG}"
-    return
-  elif [[ "${KUBE_PS1_SHELL}" == "zsh" ]]; then
-    KUBE_PS1_BG_CODE="%K{$KUBE_PS1_BG_CODE}"
-  elif [[ "${KUBE_PS1_SHELL}" == "bash" ]]; then
-    if tput setaf 1 &>/dev/null; then
-      KUBE_PS1_BG_CODE="$(tput setab ${KUBE_PS1_BG_CODE})"
-    elif [[ $KUBE_PS1_BG_CODE -ge 0 ]] && [[ $KUBE_PS1_BG_CODE -le 256 ]]; then
-      KUBE_PS1_BG_CODE="\033[48;5;${KUBE_PS1_BG_CODE}m"
-    else
-      KUBE_PS1_BG_CODE="${DEFAULT_BG}"
-    fi
-  fi
-  echo ${OPEN_ESC}${KUBE_PS1_BG_CODE}${CLOSE_ESC}
-}
-_kube_ps1_binary_check() {
-  command -v $1 >/dev/null
-}
-_kube_ps1_symbol() {
-  [[ "${KUBE_PS1_SYMBOL_ENABLE}" == false ]] && return
-  case "${KUBE_PS1_SHELL}" in
-  bash)
-    if ((BASH_VERSINFO[0] >= 4)) && [[ $'\u2388' != "\\u2388" ]]; then
-      KUBE_PS1_SYMBOL="${KUBE_PS1_SYMBOL_DEFAULT}"
-      KUBE_PS1_SYMBOL_IMG=$'\u2638\ufe0f'
-    else
-      KUBE_PS1_SYMBOL=$'\xE2\x8E\x88'
-      KUBE_PS1_SYMBOL_IMG=$'\xE2\x98\xB8'
-    fi
-    ;;
-  zsh)
-    KUBE_PS1_SYMBOL="${KUBE_PS1_SYMBOL_DEFAULT}"
-    KUBE_PS1_SYMBOL_IMG="\u2638"
-    ;;
-  *)
-    KUBE_PS1_SYMBOL="k8s"
-    ;;
-  esac
-  if [[ "${KUBE_PS1_SYMBOL_USE_IMG}" == true ]]; then
-    KUBE_PS1_SYMBOL="${KUBE_PS1_SYMBOL_IMG}"
-  fi
-  if [[ "${KUBE_PS1_SYMBOL_PADDING}" == true ]]; then
-    echo "${KUBE_PS1_SYMBOL} "
+  [[ -f "${_KUBE_PS1_DISABLE_PATH}" ]] && KUBE_PS1_ENABLED=off
+
+  # Detect shell type once and cache it
+  _KUBE_PS1_SHELL="$(_kube_ps1_shell_type)"
+
+  # Check tput availability once
+  if tput setaf 1 &> /dev/null; then
+    _KUBE_PS1_TPUT_AVAILABLE=true
   else
-    echo "${KUBE_PS1_SYMBOL}"
+    _KUBE_PS1_TPUT_AVAILABLE=false
+  fi
+
+  # Detect stat type once (not needed for zsh which uses zstat builtin)
+  if [[ "${_KUBE_PS1_SHELL}" != "zsh" ]]; then
+    if stat -c "%s" /dev/null &> /dev/null; then
+      _KUBE_PS1_STAT_TYPE="gnu"
+    else
+      _KUBE_PS1_STAT_TYPE="bsd"
+    fi
+  fi
+
+  case "${_KUBE_PS1_SHELL}" in
+    "zsh")
+      _KUBE_PS1_OPEN_ESC="%{"
+      _KUBE_PS1_CLOSE_ESC="%}"
+      _KUBE_PS1_DEFAULT_BG="%k"
+      _KUBE_PS1_DEFAULT_FG="%f"
+      setopt PROMPT_SUBST
+      autoload -U add-zsh-hook
+      add-zsh-hook precmd _kube_ps1_prompt_update
+      zmodload -F zsh/stat b:zstat
+      zmodload zsh/datetime
+      ;;
+    "bash")
+      _KUBE_PS1_OPEN_ESC=$'\001'
+      _KUBE_PS1_CLOSE_ESC=$'\002'
+      _KUBE_PS1_DEFAULT_BG=$'\033[49m'
+      _KUBE_PS1_DEFAULT_FG=$'\033[39m'
+      [[ $PROMPT_COMMAND =~ _kube_ps1_prompt_update ]] || PROMPT_COMMAND="_kube_ps1_prompt_update;${PROMPT_COMMAND:-:}"
+      ;;
+  esac
+}
+
+_kube_ps1_color_fg() {
+  local _KUBE_PS1_FG_CODE
+  case "${1}" in
+    black) _KUBE_PS1_FG_CODE=0;;
+    red) _KUBE_PS1_FG_CODE=1;;
+    green) _KUBE_PS1_FG_CODE=2;;
+    yellow) _KUBE_PS1_FG_CODE=3;;
+    blue) _KUBE_PS1_FG_CODE=4;;
+    magenta) _KUBE_PS1_FG_CODE=5;;
+    cyan) _KUBE_PS1_FG_CODE=6;;
+    white) _KUBE_PS1_FG_CODE=7;;
+    # 256 colors
+    [0-9]|[1-9][0-9]|[1][0-9][0-9]|[2][0-4][0-9]|[2][5][0-5]) _KUBE_PS1_FG_CODE="${1}";;
+    *) _KUBE_PS1_FG_CODE=default
+  esac
+
+  if [[ "${_KUBE_PS1_FG_CODE}" == "default" ]]; then
+    _KUBE_PS1_FG_CODE="${_KUBE_PS1_DEFAULT_FG}"
+    return
+  elif [[ "${_KUBE_PS1_SHELL}" == "zsh" ]]; then
+    _KUBE_PS1_FG_CODE="%F{$_KUBE_PS1_FG_CODE}"
+  elif [[ "${_KUBE_PS1_SHELL}" == "bash" ]]; then
+    if [[ "${_KUBE_PS1_TPUT_AVAILABLE}" == "true" ]]; then
+      _KUBE_PS1_FG_CODE="$(tput setaf "${_KUBE_PS1_FG_CODE}")"
+    elif [[ $_KUBE_PS1_FG_CODE -ge 0 ]] && [[ $_KUBE_PS1_FG_CODE -le 255 ]]; then
+      _KUBE_PS1_FG_CODE="\033[38;5;${_KUBE_PS1_FG_CODE}m"
+    else
+      _KUBE_PS1_FG_CODE="${_KUBE_PS1_DEFAULT_FG}"
+    fi
+  fi
+  echo "${_KUBE_PS1_OPEN_ESC}${_KUBE_PS1_FG_CODE}${_KUBE_PS1_CLOSE_ESC}"
+}
+
+_kube_ps1_color_bg() {
+  local _KUBE_PS1_BG_CODE
+  case "${1}" in
+    black) _KUBE_PS1_BG_CODE=0;;
+    red) _KUBE_PS1_BG_CODE=1;;
+    green) _KUBE_PS1_BG_CODE=2;;
+    yellow) _KUBE_PS1_BG_CODE=3;;
+    blue) _KUBE_PS1_BG_CODE=4;;
+    magenta) _KUBE_PS1_BG_CODE=5;;
+    cyan) _KUBE_PS1_BG_CODE=6;;
+    white) _KUBE_PS1_BG_CODE=7;;
+    # 256 colors
+    [0-9]|[1-9][0-9]|[1][0-9][0-9]|[2][0-4][0-9]|[2][5][0-5]) _KUBE_PS1_BG_CODE="${1}";;
+    *) _KUBE_PS1_BG_CODE=default
+  esac
+
+  if [[ "${_KUBE_PS1_BG_CODE}" == "default" ]]; then
+    _KUBE_PS1_BG_CODE="${_KUBE_PS1_DEFAULT_BG}"
+    return
+  elif [[ "${_KUBE_PS1_SHELL}" == "zsh" ]]; then
+    _KUBE_PS1_BG_CODE="%K{$_KUBE_PS1_BG_CODE}"
+  elif [[ "${_KUBE_PS1_SHELL}" == "bash" ]]; then
+    if [[ "${_KUBE_PS1_TPUT_AVAILABLE}" == "true" ]]; then
+      _KUBE_PS1_BG_CODE="$(tput setab "${_KUBE_PS1_BG_CODE}")"
+    elif [[ $_KUBE_PS1_BG_CODE -ge 0 ]] && [[ $_KUBE_PS1_BG_CODE -le 255 ]]; then
+      _KUBE_PS1_BG_CODE="\033[48;5;${_KUBE_PS1_BG_CODE}m"
+    else
+      _KUBE_PS1_BG_CODE="${_KUBE_PS1_DEFAULT_BG}"
+    fi
+  fi
+  echo "${_KUBE_PS1_OPEN_ESC}${_KUBE_PS1_BG_CODE}${_KUBE_PS1_CLOSE_ESC}"
+}
+
+_kube_ps1_binary_check() {
+  command -v "$1" >/dev/null
+}
+
+_kube_ps1_symbol() {
+  # Exit early if symbol display is disabled
+  [[ "${KUBE_PS1_SYMBOL_ENABLE}" == false ]] && return
+
+  local symbol_arg="${KUBE_PS1_SYMBOL_CUSTOM}"
+
+  local symbol=""
+  local symbol_default=$'\u2388'
+  local symbol_img="☸️" 
+  local k8s_glyph=$'\Uf10fe'
+  local k8s_symbol_color=blue
+  local oc_glyph=$'\ue7b7'
+  local oc_symbol_color=red
+  local custom_symbol_color="${KUBE_PS1_SYMBOL_COLOR:-$k8s_symbol_color}"
+  local KUBE_PS1_RESET_COLOR="${_KUBE_PS1_OPEN_ESC}${_KUBE_PS1_DEFAULT_FG}${_KUBE_PS1_CLOSE_ESC}"
+
+  # Choose the symbol based on the provided argument or environment variable
+  case "${symbol_arg}" in
+    "img")
+      symbol="${symbol_img}"
+      ;;
+    "k8s")
+      symbol="$(_kube_ps1_color_fg "${custom_symbol_color}")${k8s_glyph}${KUBE_PS1_RESET_COLOR}"
+      ;;
+    "oc")
+      symbol="$(_kube_ps1_color_fg ${oc_symbol_color})${oc_glyph}${KUBE_PS1_RESET_COLOR}"
+      ;;
+    *)
+      case "${_KUBE_PS1_SHELL}" in
+        bash)
+          if ((BASH_VERSINFO[0] >= 4)) && [[ $'\u2388' != "\\u2388" ]]; then
+            symbol="$(_kube_ps1_color_fg $custom_symbol_color)${symbol_default}${KUBE_PS1_RESET_COLOR}"
+            symbol_img=$'\u2638\ufe0f'
+          else
+            symbol=$'\xE2\x8E\x88'
+            symbol_img=$'\xE2\x98\xB8'
+          fi
+          ;;
+        zsh)
+          symbol="$(_kube_ps1_color_fg $custom_symbol_color)${symbol_default}${KUBE_PS1_RESET_COLOR}"
+          symbol_img="☸️"
+          ;;
+        *)
+          symbol="k8s"
+      esac
+  esac
+
+  # Append padding if enabled
+  if [[ "${KUBE_PS1_SYMBOL_PADDING}" == true ]]; then
+    echo "${symbol} "
+  else
+    echo "${symbol}"
   fi
 }
-_kube_ps1_split() {
+
+_kube_ps1_split_config() {
   type setopt >/dev/null 2>&1 && setopt SH_WORD_SPLIT
   local IFS=$1
   echo $2
 }
+
 _kube_ps1_file_newer_than() {
   local mtime
   local file=$1
   local check_time=$2
-  if [[ "${KUBE_PS1_KUBECONFIG_SYMLINK}" == "true" ]]; then
-    if [[ "${KUBE_PS1_SHELL}" == "zsh" ]]; then
-      mtime=$(zstat -L +mtime "${file}")
-    elif stat -c "%s" /dev/null &>/dev/null; then
-      # GNU stat
+
+  if [[ "${_KUBE_PS1_SHELL}" == "zsh" ]]; then
+    # Use zstat '-F %s.%s' to make it compatible with low zsh version (eg: 5.0.2)
+    mtime=$(zstat -L +mtime -F %s.%s "${file}")
+  elif [[ "${_KUBE_PS1_STAT_TYPE}" == "gnu" ]]; then
+    mtime=$(stat -L -c %Y "${file}")
+  else
+    mtime=$(stat -L -f %m "$file")
+  fi
+
+  [[ "${mtime}" -gt "${check_time}" ]] && return 0
+
+  # If the path is a symlink, also check the symlink's own mtime
+  if [[ -L "${file}" ]]; then
+    if [[ "${_KUBE_PS1_SHELL}" == "zsh" ]]; then
+      mtime=$(zstat +mtime -F %s.%s "${file}")
+    elif [[ "${_KUBE_PS1_STAT_TYPE}" == "gnu" ]]; then
       mtime=$(stat -c %Y "${file}")
     else
-      # BSD stat
       mtime=$(stat -f %m "$file")
     fi
-  else
-    if [[ "${KUBE_PS1_SHELL}" == "zsh" ]]; then
-      mtime=$(zstat +mtime "${file}")
-    elif stat -c "%s" /dev/null &>/dev/null; then
-      # GNU stat
-      mtime=$(stat -L -c %Y "${file}")
-    else
-      # BSD stat
-      mtime=$(stat -L -f %m "$file")
-    fi
+    [[ "${mtime}" -gt "${check_time}" ]] && return 0
   fi
-  [[ "${mtime}" -gt "${check_time}" ]]
+
+  return 1
 }
-_kube_ps1_update_cache() {
+
+_kube_ps1_prompt_update() {
   local return_code=$?
+
   [[ "${KUBE_PS1_ENABLED}" == "off" ]] && return $return_code
+
   if ! _kube_ps1_binary_check "${KUBE_PS1_BINARY}"; then
     # No ability to fetch context/namespace; display N/A.
     KUBE_PS1_CONTEXT="BINARY-N/A"
     KUBE_PS1_NAMESPACE="N/A"
-    return
+    return $return_code
   fi
-  if [[ "${KUBECONFIG}" != "${KUBE_PS1_KUBECONFIG_CACHE}" ]]; then
+
+  if [[ "${KUBECONFIG}" != "${_KUBE_PS1_KUBECONFIG_CACHE}" ]]; then
     # User changed KUBECONFIG; unconditionally refetch.
-    KUBE_PS1_KUBECONFIG_CACHE=${KUBECONFIG}
+    _KUBE_PS1_KUBECONFIG_CACHE=${KUBECONFIG}
     _kube_ps1_get_context_ns
-    return
+    return $return_code
   fi
+
   # kubectl will read the environment variable $KUBECONFIG
   # otherwise set it to ~/.kube/config
   local conf
-  for conf in $(_kube_ps1_split : "${KUBECONFIG:-${HOME}/.kube/config}"); do
+  local config_file_cache
+
+  for conf in $(_kube_ps1_split_config : "${KUBECONFIG:-${HOME}/.kube/config}"); do
     [[ -r "${conf}" ]] || continue
-    if _kube_ps1_file_newer_than "${conf}" "${KUBE_PS1_LAST_TIME}"; then
+    config_file_cache+=":${conf}"
+    if _kube_ps1_file_newer_than "${conf}" "${_KUBE_PS1_LAST_TIME}"; then
       _kube_ps1_get_context_ns
-      return
+      return $return_code
     fi
   done
+
+  if [[ "${config_file_cache}" != "${_KUBE_PS1_CFGFILES_READ_CACHE}" ]]; then
+    _kube_ps1_get_context_ns
+    return $return_code
+  fi
+
   return $return_code
 }
+
 _kube_ps1_get_context() {
   if [[ "${KUBE_PS1_CONTEXT_ENABLE}" == true ]]; then
     KUBE_PS1_CONTEXT="$(${KUBE_PS1_BINARY} config current-context 2>/dev/null)"
-    # Set namespace to 'N/A' if it is not defined
     KUBE_PS1_CONTEXT="${KUBE_PS1_CONTEXT:-N/A}"
-    if [[ ! -z "${KUBE_PS1_CLUSTER_FUNCTION}" ]]; then
-      KUBE_PS1_CONTEXT=$($KUBE_PS1_CLUSTER_FUNCTION $KUBE_PS1_CONTEXT)
+
+    if [[ -n "${KUBE_PS1_CLUSTER_FUNCTION}" ]]; then
+      KUBE_PS1_CONTEXT="$("${KUBE_PS1_CLUSTER_FUNCTION}" "${KUBE_PS1_CONTEXT}")"
     fi
   fi
 }
+
 _kube_ps1_get_ns() {
   if [[ "${KUBE_PS1_NS_ENABLE}" == true ]]; then
     KUBE_PS1_NAMESPACE="$(${KUBE_PS1_BINARY} config view --minify --output 'jsonpath={..namespace}' 2>/dev/null)"
-    # Set namespace to 'default' if it is not defined
-    KUBE_PS1_NAMESPACE="${KUBE_PS1_NAMESPACE:-default}"
-    if [[ ! -z "${KUBE_PS1_NAMESPACE_FUNCTION}" ]]; then
-      KUBE_PS1_NAMESPACE=$($KUBE_PS1_NAMESPACE_FUNCTION $KUBE_PS1_NAMESPACE)
+    KUBE_PS1_NAMESPACE="${KUBE_PS1_NAMESPACE:-N/A}"
+
+    if [[ -n "${KUBE_PS1_NAMESPACE_FUNCTION}" ]]; then
+        KUBE_PS1_NAMESPACE="$("${KUBE_PS1_NAMESPACE_FUNCTION}" "${KUBE_PS1_NAMESPACE}")"
     fi
   fi
 }
+
 _kube_ps1_get_context_ns() {
   # Set the command time
-  if [[ "${KUBE_PS1_SHELL}" == "bash" ]]; then
-    if ((BASH_VERSINFO[0] >= 4 && BASH_VERSINFO[1] >= 2)); then
-      KUBE_PS1_LAST_TIME=$(printf '%(%s)T')
+  if [[ "${_KUBE_PS1_SHELL}" == "bash" ]]; then
+    if ((BASH_VERSINFO[0] > 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] >= 2))); then
+      _KUBE_PS1_LAST_TIME=$(printf '%(%s)T')
     else
-      KUBE_PS1_LAST_TIME=$(date +%s)
+      _KUBE_PS1_LAST_TIME=$(date +%s)
     fi
-  elif [[ "${KUBE_PS1_SHELL}" == "zsh" ]]; then
-    KUBE_PS1_LAST_TIME=$EPOCHSECONDS
+  elif [[ "${_KUBE_PS1_SHELL}" == "zsh" ]]; then
+    _KUBE_PS1_LAST_TIME=$EPOCHREALTIME
   fi
+
+  # Cache which cfgfiles we can read in case they change.
+  local conf
+  _KUBE_PS1_CFGFILES_READ_CACHE=
+  for conf in $(_kube_ps1_split_config : "${KUBECONFIG:-${HOME}/.kube/config}"); do
+    [[ -r $conf ]] && _KUBE_PS1_CFGFILES_READ_CACHE+=":$conf"
+  done
+
   _kube_ps1_get_context
   _kube_ps1_get_ns
 }
+
 # Set kube-ps1 shell defaults
 _kube_ps1_init
+
 _kubeon_usage() {
   cat <<"EOF"
 Toggle kube-ps1 prompt on
+
 Usage: kubeon [-g | --global] [-h | --help]
-With no arguments, turn off kube-ps1 status for this shell instance (default).
+
+With no arguments, turn on kube-ps1 status for this shell instance (default).
+
   -g --global  turn on kube-ps1 status globally
   -h --help    print this message
 EOF
 }
+
 _kubeoff_usage() {
   cat <<"EOF"
 Toggle kube-ps1 prompt off
+
 Usage: kubeoff [-g | --global] [-h | --help]
+
 With no arguments, turn off kube-ps1 status for this shell instance (default).
+
   -g --global turn off kube-ps1 status globally
   -h --help   print this message
 EOF
 }
+
 kubeon() {
   if [[ "${1}" == '-h' || "${1}" == '--help' ]]; then
     _kubeon_usage
+    return 0
   elif [[ "${1}" == '-g' || "${1}" == '--global' ]]; then
-    rm -f -- "${KUBE_PS1_DISABLE_PATH}"
+    rm -f -- "${_KUBE_PS1_DISABLE_PATH}"
   elif [[ "$#" -ne 0 ]]; then
-    echo -e "error: unrecognized flag ${1}\\n"
+    echo -e "error: unrecognized flag ${1}\\n" >&2
     _kubeon_usage
-    return
+    return 1
   fi
+
   KUBE_PS1_ENABLED=on
 }
+
 kubeoff() {
   if [[ "${1}" == '-h' || "${1}" == '--help' ]]; then
     _kubeoff_usage
+    return 0
   elif [[ "${1}" == '-g' || "${1}" == '--global' ]]; then
-    mkdir -p -- "$(dirname "${KUBE_PS1_DISABLE_PATH}")"
-    touch -- "${KUBE_PS1_DISABLE_PATH}"
+    mkdir -p -- "$(dirname "${_KUBE_PS1_DISABLE_PATH}")"
+    touch -- "${_KUBE_PS1_DISABLE_PATH}"
   elif [[ $# -ne 0 ]]; then
-    echo "error: unrecognized flag ${1}" >&2
+    echo -e "error: unrecognized flag ${1}\\n" >&2
     _kubeoff_usage
-    return
+    return 1
   fi
+
   KUBE_PS1_ENABLED=off
 }
+
 # Build our prompt
 kube_ps1() {
   [[ "${KUBE_PS1_ENABLED}" == "off" ]] && return
   [[ -z "${KUBE_PS1_CONTEXT}" ]] && [[ "${KUBE_PS1_CONTEXT_ENABLE}" == true ]] && return
+  [[ "${KUBE_PS1_CONTEXT}" == "N/A" ]] && [[ ${KUBE_PS1_HIDE_IF_NOCONTEXT} == true ]] && return
+
   local KUBE_PS1
   local KUBE_PS1_RESET_COLOR="${_KUBE_PS1_OPEN_ESC}${_KUBE_PS1_DEFAULT_FG}${_KUBE_PS1_CLOSE_ESC}"
+
   # Background Color
-  [[ -n "${KUBE_PS1_BG_COLOR}" ]] && KUBE_PS1+="$(_kube_ps1_color_bg ${KUBE_PS1_BG_COLOR})"
+  [[ -n "${KUBE_PS1_BG_COLOR}" ]] && KUBE_PS1+="$(_kube_ps1_color_bg "${KUBE_PS1_BG_COLOR}")"
+
   # Prefix
   if [[ -z "${KUBE_PS1_PREFIX_COLOR:-}" ]] && [[ -n "${KUBE_PS1_PREFIX}" ]]; then
-    KUBE_PS1+="${KUBE_PS1_PREFIX}"
+      KUBE_PS1+="${KUBE_PS1_PREFIX}"
   else
-    KUBE_PS1+="$(_kube_ps1_color_fg $KUBE_PS1_PREFIX_COLOR)${KUBE_PS1_PREFIX}${KUBE_PS1_RESET_COLOR}"
+      KUBE_PS1+="$(_kube_ps1_color_fg "${KUBE_PS1_PREFIX_COLOR}")${KUBE_PS1_PREFIX}${KUBE_PS1_RESET_COLOR}"
   fi
+
   # Symbol
-  KUBE_PS1+="$(_kube_ps1_color_fg $KUBE_PS1_SYMBOL_COLOR)$(_kube_ps1_symbol)${KUBE_PS1_RESET_COLOR}"
+  KUBE_PS1+="$(_kube_ps1_symbol)"
+
   if [[ -n "${KUBE_PS1_SEPARATOR}" ]] && [[ "${KUBE_PS1_SYMBOL_ENABLE}" == true ]]; then
     KUBE_PS1+="${KUBE_PS1_SEPARATOR}"
   fi
+
   # Context
   if [[ "${KUBE_PS1_CONTEXT_ENABLE}" == true ]]; then
-    KUBE_PS1+="$(_kube_ps1_color_fg $KUBE_PS1_CTX_COLOR)${KUBE_PS1_CONTEXT}${KUBE_PS1_RESET_COLOR}"
+    local ctx_color="${KUBE_PS1_CTX_COLOR:-red}"
+
+    # Allow custom function to override color based on context
+    if [[ -n "${KUBE_PS1_CTX_COLOR_FUNCTION}" ]]; then
+      ctx_color="$("${KUBE_PS1_CTX_COLOR_FUNCTION}" "${KUBE_PS1_CONTEXT}")"
+    fi
+
+    KUBE_PS1+="$(_kube_ps1_color_fg "${ctx_color}")${KUBE_PS1_CONTEXT}${KUBE_PS1_RESET_COLOR}"
   fi
+
   # Namespace
   if [[ "${KUBE_PS1_NS_ENABLE}" == true ]]; then
     if [[ -n "${KUBE_PS1_DIVIDER}" ]] && [[ "${KUBE_PS1_CONTEXT_ENABLE}" == true ]]; then
       KUBE_PS1+="${KUBE_PS1_DIVIDER}"
     fi
-    KUBE_PS1+="$(_kube_ps1_color_fg ${KUBE_PS1_NS_COLOR})${KUBE_PS1_NAMESPACE}${KUBE_PS1_RESET_COLOR}"
+    KUBE_PS1+="$(_kube_ps1_color_fg "${KUBE_PS1_NS_COLOR:-cyan}")${KUBE_PS1_NAMESPACE}${KUBE_PS1_RESET_COLOR}"
   fi
+
   # Suffix
   if [[ -z "${KUBE_PS1_SUFFIX_COLOR:-}" ]] && [[ -n "${KUBE_PS1_SUFFIX}" ]]; then
-    KUBE_PS1+="${KUBE_PS1_SUFFIX}"
+      KUBE_PS1+="${KUBE_PS1_SUFFIX}"
   else
-    KUBE_PS1+="$(_kube_ps1_color_fg $KUBE_PS1_SUFFIX_COLOR)${KUBE_PS1_SUFFIX}${KUBE_PS1_RESET_COLOR}"
+      KUBE_PS1+="$(_kube_ps1_color_fg "${KUBE_PS1_SUFFIX_COLOR}")${KUBE_PS1_SUFFIX}${KUBE_PS1_RESET_COLOR}"
   fi
+
   # Close Background color if defined
   [[ -n "${KUBE_PS1_BG_COLOR}" ]] && KUBE_PS1+="${_KUBE_PS1_OPEN_ESC}${_KUBE_PS1_DEFAULT_BG}${_KUBE_PS1_CLOSE_ESC}"
+
   echo "${KUBE_PS1}"
 }

@@ -6,5 +6,6 @@ _jfrog() {
 		_files
 	fi
 }
+
 compdef _jfrog jfrog
 compdef _jfrog jf
