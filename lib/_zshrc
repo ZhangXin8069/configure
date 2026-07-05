@@ -106,11 +106,7 @@ PROMPT='${user_display}${NEWLINE}${current_time}${NEWLINE}${arrow_status} %{$fg[
 # @CLEAR
 clear
 # @ENV@
-pushd ${HOME}/configure
-source ./env.sh
-pushd ..
-source ./env.sh
-popd
-popd
+source ${HOME}/configure/env.sh
+source ${HOME}/env.sh
 # @CLEAR
 # clear
