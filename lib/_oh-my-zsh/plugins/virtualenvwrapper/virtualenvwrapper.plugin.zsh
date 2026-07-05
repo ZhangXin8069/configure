@@ -4,6 +4,7 @@ function {
       $commands[virtualenvwrapper.sh] \
       /usr/share/virtualenvwrapper/virtualenvwrapper{_lazy,}.sh \
       /usr/local/bin/virtualenvwrapper{_lazy,}.sh \
+      /usr/bin/virtualenvwrapper{_lazy,}.sh \
       /etc/bash_completion.d/virtualenvwrapper \
       /usr/share/bash-completion/completions/virtualenvwrapper \
       $HOME/.local/bin/virtualenvwrapper.sh
@@ -17,14 +18,17 @@ function {
           "Please install with \`pip install virtualenvwrapper\`" >&2
     return 1
 }
+
 if [[ $? -eq 0 ]] && ! type workon &>/dev/null; then
   print "[oh-my-zsh] virtualenvwrapper plugin: shell function 'workon' not defined.\n"\
         "Please check ${virtualenvwrapper}" >&2
   return
 fi
+
 if [[ -z "$WORKON_HOME" ]]; then
   WORKON_HOME="$HOME/.virtualenvs"
 fi
+
 if [[ ! $DISABLE_VENV_CD -eq 1 ]]; then
   # Automatically activate Git projects or other customized virtualenvwrapper projects based on the
   # directory name of the project. Virtual environment name can be overridden
@@ -38,6 +42,7 @@ if [[ ! $DISABLE_VENV_CD -eq 1 ]]; then
           && ! -d "$PROJECT_ROOT/.git" ]]; do
         PROJECT_ROOT="${PROJECT_ROOT:h}"
       done
+
       # Check for virtualenv name override
       if [[ -f "$PROJECT_ROOT/.venv" ]]; then
         ENV_NAME="$(cat "$PROJECT_ROOT/.venv")"
@@ -48,6 +53,7 @@ if [[ ! $DISABLE_VENV_CD -eq 1 ]]; then
       else
         ENV_NAME=""
       fi
+
       if [[ -n $CD_VIRTUAL_ENV && "$ENV_NAME" != "$CD_VIRTUAL_ENV" ]]; then
         # We've just left the repo, deactivate the environment
         # Note: this only happens if the virtualenv was activated automatically
@@ -78,6 +84,7 @@ if [[ ! $DISABLE_VENV_CD -eq 1 ]]; then
       fi
     fi
   }
+
   # Append workon_cwd to the chpwd_functions array, so it will be called on cd
   # http://zsh.sourceforge.net/Doc/Release/Functions.html
   autoload -U add-zsh-hook

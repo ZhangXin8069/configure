@@ -1,14 +1,19 @@
 # Laravel
+
 This plugin adds aliases and autocompletion for Laravel [Artisan](https://laravel.com/docs/artisan) and [Bob](http://daylerees.github.io/laravel-bob/) command-line interfaces.
+
 ```
 plugins=(... laravel)
 ```
+
 | Alias | Description |
 |:-:|:-:|
 | `artisan`  | `php artisan`  |
 | `pas`  | `php artisan serve` |
 | `pats`  | `php artisan test` |
+
 ## Database
+
 | Alias | Description |
 |:-:|:-:|
 | `pam`  |  `php artisan migrate` |
@@ -16,7 +21,10 @@ plugins=(... laravel)
 | `pamfs`  |  `php artisan migrate:fresh --seed` |
 | `pamr`  |  `php artisan migrate:rollback` |
 | `pads`  |  `php artisan db:seed` |
+| `padw`  |  `php artisan db:wipe` |
+
 ## Makers
+
 | Alias | Description |
 |:-:|:-:|
 | `pamm`  |  `php artisan make:model` |
@@ -33,14 +41,19 @@ plugins=(... laravel)
 | `pamen` | `php artisan make:enum` |
 | `pami`  | `php artisan make:interface` |
 | `pamtr` | `php artisan make:trait` |
+
 ## Clears
+
 | Alias | Description |
 |:-:|:-:|
 | `pacac`  |  `php artisan cache:clear` |
 | `pacoc`  |  `php artisan config:clear` |
 | `pavic`  |  `php artisan view:clear` |
 | `paroc`  |  `php artisan route:clear` |
+| `paopc`  |  `php artisan optimize:clear` |
+
 ## Queues
+
 | Alias | Description |
 |:-:|:-:|
 | `paqf`  |  `php artisan queue:failed` |

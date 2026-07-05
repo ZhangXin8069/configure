@@ -5,17 +5,18 @@
 _ssh_configfile="$HOME/.ssh/config"
 if [[ -f "$_ssh_configfile" ]]; then
   _ssh_hosts=($(
-    egrep '^Host.*' "$_ssh_configfile" |
-      awk '{for (i=2; i<=NF; i++) print $i}' |
-      sort |
-      uniq |
-      grep -v '^*' |
-      sed -e 's/\.*\*$//'
+    grep -E '^Host.*' "$_ssh_configfile" |\
+    awk '{for (i=2; i<=NF; i++) print $i}' |\
+    sort |\
+    uniq |\
+    grep -v '^*' |\
+    sed -e 's/\.*\*$//'
   ))
   zstyle ':completion:*:hosts' hosts $_ssh_hosts
   unset _ssh_hosts
 fi
 unset _ssh_configfile
+
 ############################################################
 # Remove host key from known hosts based on a host section
 # name from .ssh/config
@@ -26,6 +27,7 @@ function ssh_rmhkey {
   ssh-keygen -R $(grep -A10 "$ssh_host" "$ssh_configfile" | grep -i HostName | head -n 1 | awk '{print $2}')
 }
 compctl -k hosts ssh_rmhkey
+
 ############################################################
 # Load SSH key into agent
 function ssh_load_key() {
@@ -33,10 +35,11 @@ function ssh_load_key() {
   if [[ -z "$key" ]]; then return; fi
   local keyfile="$HOME/.ssh/$key"
   local keysig=$(ssh-keygen -l -f "$keyfile")
-  if (! ssh-add -l | grep -q "$keysig"); then
+  if ( ! ssh-add -l | grep -q "$keysig" ); then
     ssh-add "$keyfile"
   fi
 }
+
 ############################################################
 # Remove SSH key from agent
 function ssh_unload_key {
@@ -44,7 +47,7 @@ function ssh_unload_key {
   if [[ -z "$key" ]]; then return; fi
   local keyfile="$HOME/.ssh/$key"
   local keysig=$(ssh-keygen -l -f "$keyfile")
-  if (ssh-add -l | grep -q "$keysig"); then
+  if ( ssh-add -l | grep -q "$keysig" ); then
     ssh-add -d "$keyfile"
   fi
 }
