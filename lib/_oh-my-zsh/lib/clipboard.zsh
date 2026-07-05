@@ -50,6 +50,7 @@
 #
 function detect-clipboard() {
   emulate -L zsh
+
   if [[ "${OSTYPE}" == darwin* ]] && (( ${+commands[pbcopy]} )) && (( ${+commands[pbpaste]} )); then
     function clipcopy() { cat "${1:-/dev/stdin}" | pbcopy; }
     function clippaste() { pbpaste; }
@@ -81,7 +82,7 @@ function detect-clipboard() {
     function clipcopy() { cat "${1:-/dev/stdin}" | termux-clipboard-set; }
     function clippaste() { termux-clipboard-get; }
   elif [ -n "${TMUX:-}" ] && (( ${+commands[tmux]} )); then
-    function clipcopy() { tmux load-buffer "${1:--}"; }
+    function clipcopy() { tmux load-buffer -w "${1:--}"; }
     function clippaste() { tmux save-buffer -; }
   else
     function _retry_clipboard_detection_or_fail() {
@@ -98,6 +99,7 @@ function detect-clipboard() {
     return 1
   fi
 }
+
 function clipcopy clippaste {
   unfunction clipcopy clippaste
   detect-clipboard || true # let one retry

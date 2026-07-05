@@ -1,6 +1,7 @@
 #####################################################
 # Kitty plugin for oh-my-zsh                        #
 #####################################################
+
 if [[ "$TERM" == 'xterm-kitty' ]]; then
   ## kssh
   # Use this when your terminfo isn't recognized on remote hosts.
@@ -9,6 +10,7 @@ if [[ "$TERM" == 'xterm-kitty' ]]; then
   compdef kssh='ssh'
   # Use this if kssh fails
   alias kssh-slow="infocmp -a xterm-kitty | ssh myserver tic -x -o \~/.terminfo /dev/stdin"
+
   # Change the colour theme
   alias kitty-theme="kitty +kitten themes"
 fi

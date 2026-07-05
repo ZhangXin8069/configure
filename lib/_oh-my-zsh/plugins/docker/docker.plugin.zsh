@@ -2,6 +2,7 @@ alias dbl='docker build'
 alias dcin='docker container inspect'
 alias dcls='docker container ls'
 alias dclsa='docker container ls -a'
+alias dcprune='docker container prune'
 alias dib='docker image build'
 alias dii='docker image inspect'
 alias dils='docker image ls'
@@ -15,6 +16,7 @@ alias dncn='docker network connect'
 alias dndcn='docker network disconnect'
 alias dni='docker network inspect'
 alias dnls='docker network ls'
+alias dnprune='docker network prune'
 alias dnrm='docker network rm'
 alias dpo='docker container port'
 alias dps='docker ps'
@@ -24,23 +26,28 @@ alias dr='docker container run'
 alias drit='docker container run -it'
 alias drm='docker container rm'
 alias 'drm!'='docker container rm -f'
+alias dsprune='docker system prune'
 alias dst='docker container start'
 alias drs='docker container restart'
 alias dsta='docker stop $(docker ps -q)'
 alias dstp='docker container stop'
+alias dsts='docker stats'
 alias dtop='docker top'
 alias dvi='docker volume inspect'
 alias dvls='docker volume ls'
 alias dvprune='docker volume prune'
 alias dxc='docker container exec'
 alias dxcit='docker container exec -it'
+
 if (( ! $+commands[docker] )); then
   return
 fi
-# Standarized $0 handling
+
+# Standardized $0 handling
 # https://zdharma-continuum.github.io/Zsh-100-Commits-Club/Zsh-Plugin-Standard.html
 0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
+
 # If the completion file doesn't exist yet, we need to autoload it and
 # bind it to `docker`. Otherwise, compinit will have already done that.
 if [[ ! -f "$ZSH_CACHE_DIR/completions/_docker" ]]; then
@@ -48,6 +55,7 @@ if [[ ! -f "$ZSH_CACHE_DIR/completions/_docker" ]]; then
   autoload -Uz _docker
   _comps[docker]=_docker
 fi
+
 {
   # `docker completion` is only available from 23.0.0 on
   # docker version returns `Docker version 24.0.2, build cb74dfcd85`

@@ -2,18 +2,22 @@ alias xcb='xcodebuild'
 alias xcdd='rm -rf ~/Library/Developer/Xcode/DerivedData/*'
 alias xcp='xcode-select --print-path'
 alias xcsel='sudo xcode-select --switch'
+
 # original author: @subdigital
 # source: https://gist.github.com/subdigital/5420709
 function xc {
   local xcode_files
   xcode_files=(${1:-.}/{*.{xcworkspace,xcodeproj,swiftpm},Package.swift}(N))
+
   if [[ ${#xcode_files} -eq 0 ]]; then
     echo "No Xcode files found in ${1:-the current directory}." >&2
     return 1
   fi
+
   local active_path
   active_path=${"$(xcode-select -p)"%%/Contents/Developer*}
   echo "Found ${xcode_files[1]}. Opening with ${active_path}"
+
   # If Xcode is already opened in another Desk, we need this double call
   # with -g to open the project window in the current Desk and focus it.
   # See https://github.com/ohmyzsh/ohmyzsh/issues/10384
@@ -22,6 +26,7 @@ function xc {
   fi
   open -a "$active_path" "${xcode_files[1]}"
 }
+
 # Opens a file or files in the Xcode IDE. Multiple files are opened in multi-file browser
 # original author: @possen
 function xx {
@@ -32,6 +37,7 @@ function xx {
   echo "${xcode_files}"
   open -a "Xcode.app" "$@"
 }
+
 # "Xcode-Select by Version" - select Xcode by just version number
 # Uses naming convention:
 #  - different versions of Xcode are named Xcode-<version>.app or stored
@@ -72,11 +78,13 @@ function xcselv {
   echo "selecting Xcode $version: $app"
   xcsel "$app"
 }
+
 function _omz_xcode_print_xcselv_usage {
   cat << EOF >&2
 Usage:
   xcselv <version>
   xcselv [options]
+
 Options:
   <version> set the active Xcode version
   -h        print this help message and exit
@@ -85,6 +93,7 @@ Options:
   -L        list installed Xcode versions (short form, version names only)
 EOF
 }
+
 # Parses the Xcode version from a filename based on our conventions
 # Only meaningful when called from other _omz_xcode functions
 function _omz_xcode_parse_versioned_file {
@@ -109,6 +118,7 @@ function _omz_xcode_parse_versioned_file {
     # Invalid naming pattern
     return 1;
   fi
+
   local ver=${verstr#Xcode}
   ver=${ver#[- ]}
   if [[ -z $ver ]]; then
@@ -117,6 +127,7 @@ function _omz_xcode_parse_versioned_file {
   fi
   print -- "$ver"
 }
+
 # Print the active version, using xcselv's notion of versions
 function _omz_xcode_print_active_version {
   emulate -L zsh
@@ -134,6 +145,7 @@ function _omz_xcode_print_active_version {
   done
   printf "%s (%s)\n" "<unknown>" $active_path
 }
+
 # Locates all the installed versions of Xcode on this system, for this
 # plugin's internal use.
 # Populates the $xcode_versions associative array variable
@@ -155,6 +167,7 @@ function _omz_xcode_locate_versions {
     done
   done
 }
+
 function _omz_xcode_list_versions {
   emulate -L zsh
   local -A xcode_versions
@@ -177,9 +190,11 @@ function _omz_xcode_list_versions {
     fi
   done
 }
+
 function simulator {
   local devfolder
   devfolder="$(xcode-select -p)"
+
   # Xcode ≤ 5.x
   if [[ -d "${devfolder}/Platforms/iPhoneSimulator.platform/Developer/Applications/iPhone Simulator.app" ]]; then
     open "${devfolder}/Platforms/iPhoneSimulator.platform/Developer/Applications/iPhone Simulator.app"

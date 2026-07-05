@@ -2,6 +2,7 @@
 local context state state_descr line
 _swift_commandname=$words[1]
 typeset -A opt_args
+
 _swift() {
     integer ret=1
     local -a args
@@ -43,8 +44,10 @@ _swift() {
             esac
             ;;
     esac
+
     return ret
 }
+
 _swift_run() {
     integer ret=1
     local -a args
@@ -117,8 +120,10 @@ _swift_run() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_build() {
     integer ret=1
     local -a args
@@ -189,8 +194,10 @@ _swift_build() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_test() {
     integer ret=1
     local -a args
@@ -292,8 +299,10 @@ _swift_test() {
             esac
             ;;
     esac
+
     return ret
 }
+
 _swift_test_list() {
     integer ret=1
     local -a args
@@ -304,8 +313,10 @@ _swift_test_list() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_test_generate-linuxmain() {
     integer ret=1
     local -a args
@@ -314,8 +325,10 @@ _swift_test_generate-linuxmain() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package() {
     integer ret=1
     local -a args
@@ -471,8 +484,10 @@ _swift_package() {
             esac
             ;;
     esac
+
     return ret
 }
+
 _swift_package_clean() {
     integer ret=1
     local -a args
@@ -481,8 +496,10 @@ _swift_package_clean() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_purge-cache() {
     integer ret=1
     local -a args
@@ -491,8 +508,10 @@ _swift_package_purge-cache() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_reset() {
     integer ret=1
     local -a args
@@ -501,8 +520,10 @@ _swift_package_reset() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_update() {
     integer ret=1
     local -a args
@@ -513,8 +534,10 @@ _swift_package_update() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_describe() {
     integer ret=1
     local -a args
@@ -524,8 +547,10 @@ _swift_package_describe() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_init() {
     integer ret=1
     local -a args
@@ -536,8 +561,10 @@ _swift_package_init() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_diagnose-api-breaking-changes() {
     integer ret=1
     local -a args
@@ -552,8 +579,10 @@ _swift_package_diagnose-api-breaking-changes() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_dump-symbol-graph() {
     integer ret=1
     local -a args
@@ -569,8 +598,10 @@ _swift_package_dump-symbol-graph() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_dump-package() {
     integer ret=1
     local -a args
@@ -579,8 +610,10 @@ _swift_package_dump-package() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_edit() {
     integer ret=1
     local -a args
@@ -593,20 +626,24 @@ _swift_package_edit() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_unedit() {
     integer ret=1
     local -a args
     args+=(
-        '--force[Unedit the package even if it has uncommited and unpushed changes]'
+        '--force[Unedit the package even if it has uncommitted and unpushed changes]'
         ':package-name:'
         '--version[Show the version.]'
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_config() {
     integer ret=1
     local -a args
@@ -641,8 +678,10 @@ _swift_package_config() {
             esac
             ;;
     esac
+
     return ret
 }
+
 _swift_package_config_set-mirror() {
     integer ret=1
     local -a args
@@ -653,8 +692,10 @@ _swift_package_config_set-mirror() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_config_unset-mirror() {
     integer ret=1
     local -a args
@@ -665,8 +706,10 @@ _swift_package_config_unset-mirror() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_config_get-mirror() {
     integer ret=1
     local -a args
@@ -676,8 +719,10 @@ _swift_package_config_get-mirror() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_resolve() {
     integer ret=1
     local -a args
@@ -690,8 +735,10 @@ _swift_package_resolve() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_show-dependencies() {
     integer ret=1
     local -a args
@@ -702,8 +749,10 @@ _swift_package_show-dependencies() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_tools-version() {
     integer ret=1
     local -a args
@@ -714,8 +763,10 @@ _swift_package_tools-version() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_compute-checksum() {
     integer ret=1
     local -a args
@@ -725,8 +776,10 @@ _swift_package_compute-checksum() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_archive-source() {
     integer ret=1
     local -a args
@@ -736,8 +789,10 @@ _swift_package_archive-source() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_completion-tool() {
     integer ret=1
     local -a args
@@ -747,8 +802,10 @@ _swift_package_completion-tool() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_package_plugin() {
     integer ret=1
     local -a args
@@ -763,8 +820,10 @@ _swift_package_plugin() {
         '(-help -h --help)'{-help,-h,--help}'[Show help information.]'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
 _swift_help() {
     integer ret=1
     local -a args
@@ -772,10 +831,14 @@ _swift_help() {
         ':subcommands:'
     )
     _arguments -w -s -S $args[@] && ret=0
+
     return ret
 }
+
+
 _custom_completion() {
     local completions=("${(@f)$($*)}")
     _describe '' completions
 }
+
 _swift

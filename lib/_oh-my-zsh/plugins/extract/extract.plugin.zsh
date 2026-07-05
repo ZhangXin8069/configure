@@ -1,18 +1,50 @@
 alias x=extract
+
 extract() {
   setopt localoptions noautopushd
+
   if (( $# == 0 )); then
     cat >&2 <<'EOF'
 Usage: extract [-option] [file ...]
+
 Options:
     -r, --remove    Remove archive after unpacking.
+    -t, --to-directory <dir>  Extract to a specific directory instead of the current one.
 EOF
   fi
+
   local remove_archive=1
-  if [[ "$1" == "-r" ]] || [[ "$1" == "--remove" ]]; then
-    remove_archive=0
-    shift
-  fi
+  local target_directory=""
+
+  while (( $# > 0 )); do
+    case "$1" in
+      -r|--remove)
+        remove_archive=0
+        shift
+        ;;
+      -t|--to-directory)
+        shift
+        if (( $# == 0 )); then
+          echo "extract: -t/--to-directory requires a directory argument" >&2
+          return 1
+        fi
+
+        target_directory="$1"
+        shift
+
+        if [[ ! -d "$target_directory" ]]; then
+          echo "extract: '$target_directory' is not a valid directory" >&2
+          return 1
+        fi
+
+        target_directory="${target_directory%/}"
+        ;;
+      *)
+        break
+        ;;
+    esac
+  done
+
   local pwd="$PWD"
   while (( $# > 0 )); do
     if [[ ! -f "$1" ]]; then
@@ -20,23 +52,32 @@ EOF
       shift
       continue
     fi
+
     local success=0
     local file="$1" full_path="${1:A}"
     local extract_dir="${1:t:r}"
+
     # Remove the .tar extension if the file name is .tar.*
     if [[ $extract_dir =~ '\.tar$' ]]; then
       extract_dir="${extract_dir:r}"
     fi
+
+    if [[ -n "$target_directory" ]]; then
+      extract_dir="$target_directory/${extract_dir:t}"
+    fi
+
     # If there's a file or directory with the same name as the archive
     # add a random string to the end of the extract directory
     if [[ -e "$extract_dir" ]]; then
       local rnd="${(L)"${$(( [##36]$RANDOM*$RANDOM ))}":1:5}"
       extract_dir="${extract_dir}-${rnd}"
     fi
+
     # Create an extraction directory based on the file name
     command mkdir -p "$extract_dir"
     builtin cd -q "$extract_dir"
     echo "extract: extracting to $extract_dir" >&2
+
     case "${file:l}" in
       (*.tar.gz|*.tgz)
         (( $+commands[pigz] )) && { tar -I pigz -xvf "$full_path" } || tar zxvf "$full_path" ;;
@@ -66,11 +107,19 @@ EOF
       (*.lz4) lz4 -d "$full_path" ;;
       (*.lzma) unlzma "$full_path" ;;
       (*.z) uncompress "$full_path" ;;
-      (*.zip|*.war|*.jar|*.ear|*.sublime-package|*.ipa|*.ipsw|*.xpi|*.apk|*.aar|*.whl) unzip "$full_path" ;;
-      (*.rar) unrar x -ad "$full_path" ;;
+      (*.zip|*.war|*.jar|*.ear|*.sublime-package|*.ipa|*.ipsw|*.xpi|*.apk|*.aar|*.whl|*.vsix|*.crx|*.pk3|*.pk4) unzip "$full_path" ;;
+      (*.rar)
+        if (( $+commands[unrar] )); then
+          unrar x -ad "$full_path"
+        elif (( $+commands[unar] )); then
+          unar -o . "$full_path"
+        else
+          echo "extract: cannot extract RAR files: install unrar or unar" >&2
+          success=1
+        fi ;;
       (*.rpm)
         rpm2cpio "$full_path" | cpio --quiet -id ;;
-      (*.7z | *.7z.[0-9]*) 7za x "$full_path" ;;
+      (*.7z | *.7z.[0-9]* | *.pk7) 7za x "$full_path" ;;
       (*.deb)
         command mkdir -p "control" "data"
         ar vx "$full_path" > /dev/null
@@ -86,11 +135,14 @@ EOF
         echo "extract: '$file' cannot be extracted" >&2
         success=1 ;;
     esac
+
     (( success = success > 0 ? success : $? ))
     (( success == 0 && remove_archive == 0 )) && command rm "$full_path"
     shift
+
     # Go back to original working directory
     builtin cd -q "$pwd"
+
     # If content of extract dir is a single directory, move its contents up
     # Glob flags:
     # - D: include files starting with .
@@ -105,7 +157,7 @@ EOF
       # 1. Move and rename the extracted file/folder to a temporary random name
       # 2. Delete the empty folder
       # 3. Rename the extracted file/folder to the original name
-      if [[ "${content[1]:t}" == "$extract_dir" ]]; then
+      if [[ "${content[1]:t}" == "${extract_dir:t}" ]]; then
         # =(:) gives /tmp/zsh<random>, with :t it gives zsh<random>
         local tmp_name==(:); tmp_name="${tmp_name:t}"
         command mv "${content[1]}" "$tmp_name" \
@@ -113,9 +165,9 @@ EOF
         && command mv "$tmp_name" "$extract_dir"
       # Otherwise, if the extracted folder name already exists in the current
       # directory (because of a previous file / folder), keep the extract_dir
-      elif [[ ! -e "${content[1]:t}" ]]; then
-        command mv "${content[1]}" . \
-        && command rmdir "$extract_dir"
+      elif [[ ! -e "${target_directory:-.}/${content[1]:t}" ]]; then
+        command mv -- "${content[1]}" "${target_directory:-.}/" \
+        && command rmdir -- "$extract_dir"
       fi
     elif [[ ${#content} -eq 0 ]]; then
       command rmdir "$extract_dir"
