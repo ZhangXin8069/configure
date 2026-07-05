@@ -1,18 +1,23 @@
+#!/usr/bin/env bash
 # @INIT@
-_HOME=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-echo 'HOME:'${_HOME}
+_PATH=$(
+    cd "$(dirname "$0")"
+    pwd
+)
+_NAME=$(basename "$0")
+echo "###${_NAME} in ${_PATH} is sourcing...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 # @MKDIR@
-mkdir -p ${_HOME}/bin
-mkdir -p ${_HOME}/docs
-mkdir -p ${_HOME}/lib
-mkdir -p ${_HOME}/scripts
-mkdir -p ${_HOME}/tmp
+mkdir -p ${_PATH}/bin
+mkdir -p ${_PATH}/docs
+mkdir -p ${_PATH}/lib
+mkdir -p ${_PATH}/scripts
+mkdir -p ${_PATH}/tmp
 # @SOURCE@
-echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_HOME}/tmp/scripts.sh
-source ${_HOME}/tmp/scripts.sh
+echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_PATH}/tmp/scripts.sh
+source ${_PATH}/tmp/scripts.sh
 # @EXPORT@
 # export TERM=xterm-256color
-export PATH=$PATH:${_HOME}/bin
+export PATH=$PATH:${_PATH}/bin
 # export PATH=$PATH:${HOME}/.local/bin
 # @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
@@ -301,3 +306,4 @@ alias gsize='git count-objects -vH'
 alias py='python'
 alias clc='clear'
 alias his='history | tail'
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
