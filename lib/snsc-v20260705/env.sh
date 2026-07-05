@@ -9,8 +9,9 @@ module load git/2.40.0-gcc-10.3.0
 module load openmpi/4.1.5-gcc-10.3.0
 module load ncurses/6.2-intel-2022.0.2
 module load cmake/3.22.2-gcc-10.3.0
-module load intel-oneapi/compiler/2024.0.0
 module load python/3.9.10-gcc-10.3.0
+module use /public/soft/modulefiles/apps
+module load intel-oneapi/compiler/2024.0.0
 module list
 # EXPORT
 export PATH=/public/home/zhangxin/sbin:$PATH
