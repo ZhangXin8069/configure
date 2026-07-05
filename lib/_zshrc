@@ -108,8 +108,9 @@ clear
 # @ENV@
 pushd ${HOME}/configure
 source ./env.sh
-cd ..
+pushd ..
 source ./env.sh
+popd
 popd
 # @CLEAR
 # clear
