@@ -2,6 +2,7 @@
 # filename: snake.sh
 # snake game
 # Author: LKJ 2013.5.17
+#!/usr/bin/env bash
 _PATH=$(
     cd "$(dirname "$0")"
     pwd

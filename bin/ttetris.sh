@@ -5,6 +5,7 @@
 # Date: 2013.5.14
 # Email: liungkejin@gmail.com
 #
+#!/usr/bin/env bash
 _PATH=$(
     cd "$(dirname "$0")"
     pwd
