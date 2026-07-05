@@ -104,11 +104,11 @@ arrow_status="%(?:%{$fg_bold[green]%}➜:%{$fg_bold[red]%}➜)"
 NEWLINE=$'\n'
 PROMPT='${user_display}${NEWLINE}${current_time}${NEWLINE}${arrow_status} %{$fg[magenta]%}%d%{$reset_color%} $(git_prompt_info)'
 # @ENV@
-pushd ${HOME}/configure
+pushd $HOME
+source ./env.sh
+pushd ./configure
 source ./env.sh
 popd
-pushd ${HOME}
-source ./env.sh
 popd
 # @CLEAR
 # clear
