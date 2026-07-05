@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+_PATH=$(
+    cd "$(dirname "$0")"
+    pwd
+)
+_NAME=$(basename "$0")
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+pushd $HOME
+mv ./.vimrc .vimrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak
+cp -r ${_PATH}/../lib/_vimrc .vimrc
+popd
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
