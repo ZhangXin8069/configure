@@ -103,6 +103,8 @@ fi
 arrow_status="%(?:%{$fg_bold[green]%}➜:%{$fg_bold[red]%}➜)"
 NEWLINE=$'\n'
 PROMPT='${user_display}${NEWLINE}${current_time}${NEWLINE}${arrow_status} %{$fg[magenta]%}%d%{$reset_color%} $(git_prompt_info)'
+# @CLEAR
+clear
 # @ENV@
 pushd ${HOME}/configure
 source ./env.sh
