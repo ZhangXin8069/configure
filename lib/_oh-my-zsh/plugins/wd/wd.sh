@@ -1,19 +1,24 @@
-#!/bin/zsh
+#!/usr/bin/env zsh
+
 # WARP DIRECTORY
 # ==============
 # Jump to custom directories in terminal
 # because `cd` takes too long...
 #
 # @github.com/mfaerevaag/wd
+
 # version
-readonly WD_VERSION=0.7.0
+readonly WD_VERSION=0.10.1
+
 # colors
 readonly WD_BLUE="\033[96m"
 readonly WD_GREEN="\033[92m"
 readonly WD_YELLOW="\033[93m"
 readonly WD_RED="\033[91m"
 readonly WD_NOC="\033[m"
+
 ## functions
+
 # helpers
 wd_yesorno()
 {
@@ -24,10 +29,12 @@ wd_yesorno()
     local no_RETVAL="3"
     local RETVAL=""
     local answer=""
+
     # read-eval loop
     while true ; do
         printf $prompt
         read -r answer
+
         case ${answer:=${default}} in
             "Y"|"y"|"YES"|"yes"|"Yes" )
                 RETVAL=${yes_RETVAL} && \
@@ -42,15 +49,17 @@ wd_yesorno()
                 ;;
         esac
     done
+
     return ${RETVAL}
 }
+
 wd_print_msg()
 {
     if [[ -z $wd_quiet_mode ]]
     then
         local color="${1:-$WD_BLUE}"  # Default to blue if no color is provided
         local msg="$2"
-        
+
         if [[ -z "$msg" ]]; then
             print "${WD_RED}*${WD_NOC} Could not print message. Sorry!"
         else
@@ -58,10 +67,12 @@ wd_print_msg()
         fi
     fi
 }
+
 wd_print_usage()
 {
     command cat <<- EOF
 Usage: wd [command] [point]
+
 Commands:
     <point>              Warps to the directory specified by the warp point
     <point> <path>       Warps to the directory specified by the warp point with path appended
@@ -75,33 +86,42 @@ Commands:
     show                 Print warp points to current directory
     list                 Print all stored warp points
     ls  <point>          Show files from given warp point (ls)
+    open <point>         Open the warp point in the default file explorer (open / xdg-open)
     path <point>         Show the path to given warp point (pwd)
     clean                Remove points warping to nonexistent directories (will prompt unless --force is used)
+
     -v | --version  Print version
-    -d | --debug    Exit after execution with exit codes (for testing)
     -c | --config   Specify config file (default ~/.warprc)
     -q | --quiet    Suppress all output
     -f | --force    Allows overwriting without warning (for add & clean)
+
     help            Show this extremely helpful text
 EOF
 }
+
 wd_exit_fail()
 {
     local msg=$1
+
     wd_print_msg "$WD_RED" "$msg"
     WD_EXIT_CODE=1
 }
+
 wd_exit_warn()
 {
     local msg=$1
+
     wd_print_msg "$WD_YELLOW" "$msg"
     WD_EXIT_CODE=1
 }
+
 wd_getdir()
 {
     local name_arg=$1
+
     point=$(wd_show "$name_arg")
     dir=${point:28+$#name_arg+7}
+
     if [[ -z $name_arg ]]; then
         wd_exit_fail "You must enter a warp point"
         break
@@ -110,11 +130,14 @@ wd_getdir()
         break
     fi
 }
+
 # core
+
 wd_warp()
 {
     local point=$1
     local sub=$2
+
     if [[ $point =~ "^\.+$" ]]
     then
         if [[ $#1 < 2 ]]
@@ -123,28 +146,39 @@ wd_warp()
         else
             (( n = $#1 - 1 ))
             cd -$n > /dev/null
+            WD_EXIT_CODE=$?
         fi
     elif [[ ${points[$point]} != "" ]]
     then
         if [[ $sub != "" ]]
         then
             cd ${points[$point]/#\~/$HOME}/$sub
+            WD_EXIT_CODE=$?
         else
             cd ${points[$point]/#\~/$HOME}
+            WD_EXIT_CODE=$?
         fi
     else
         wd_exit_fail "Unknown warp point '${point}'"
     fi
 }
+
 wd_add()
 {
     local point=$1
     local force=$2
     cmdnames=(add rm show list ls path clean help)
+
     if [[ $point == "" ]]
     then
         point=$(basename "$PWD")
     fi
+
+    if [ ! -w "$wd_config_file" ]; then
+        wd_exit_fail "\'$wd_config_file\' is not writeable."
+        return
+    fi
+
     if [[ $point =~ "^[\.]+$" ]]
     then
         wd_exit_fail "Warp point cannot be just dots"
@@ -160,14 +194,17 @@ wd_add()
     elif [[ ${points[$point]} == "" ]] || [ ! -z "$force" ]
     then
         wd_remove "$point" > /dev/null
-        printf "%q:%s\n" "${point}" "${PWD/#$HOME/~}" >> "$WD_CONFIG"
+        printf "%q:%s\n" "${point}" "${PWD/#$HOME/~}" >> "$wd_config_file"
         if (whence sort >/dev/null); then
             local config_tmp=$(mktemp "${TMPDIR:-/tmp}/wd.XXXXXXXXXX")
-            # use 'cat' below to ensure we respect $WD_CONFIG as a symlink
-            command sort -o "${config_tmp}" "$WD_CONFIG" && command cat "${config_tmp}" >| "$WD_CONFIG" && command rm "${config_tmp}"
+            # use 'cat' below to ensure we respect $wd_config_file as a symlink
+            command sort -o "${config_tmp}" "$wd_config_file" && command cat "${config_tmp}" >| "$wd_config_file" && command rm "${config_tmp}"
         fi
+
         wd_export_static_named_directories
+
         wd_print_msg "$WD_GREEN" "Warp point added"
+
         # override exit code in case wd_remove did not remove any points
         # TODO: we should handle this kind of logic better
         WD_EXIT_CODE=0
@@ -175,36 +212,49 @@ wd_add()
         wd_exit_warn "Warp point '${point}' already exists. Use 'add --force' to overwrite."
     fi
 }
+
 wd_addcd() {
     local folder="$1"
     local point=$2
     local force=$3
     local currentdir=$PWD
+
     if [[ -z "$folder" ]]; then
         wd_exit_fail "You must specify a path"
         return
     fi
+
     if [[ ! -d "$folder" ]]; then
         wd_exit_fail "The directory does not exist"
         return
     fi
+
     cd "$folder" || return
     wd_add "$point" "$force"
     cd "$currentdir" || return
 }
+
+
 wd_remove()
 {
     local point_list=$1
+
     if [[ "$point_list" == "" ]]
     then
         point_list=$(basename "$PWD")
     fi
+
+    if [ ! -w "$wd_config_file" ]; then
+        wd_exit_fail "\'$wd_config_file\' is not writeable."
+        return
+    fi
+
     for point_name in $point_list ; do
         if [[ ${points[$point_name]} != "" ]]
         then
             local config_tmp=$(mktemp "${TMPDIR:-/tmp}/wd.XXXXXXXXXX")
             # Copy and delete in two steps in order to preserve symlinks
-            if sed -n "/^${point_name}:.*$/!p" "$WD_CONFIG" >| "$config_tmp" && command cp "$config_tmp" "$WD_CONFIG" && command rm "$config_tmp"
+            if sed -n "/^${point_name}:.*$/!p" "$wd_config_file" >| "$config_tmp" && command cp "$config_tmp" "$wd_config_file" && command rm "$config_tmp"
             then
                 wd_print_msg "$WD_GREEN" "Warp point removed"
             else
@@ -215,37 +265,79 @@ wd_remove()
         fi
     done
 }
+
 wd_browse() {
+    # Check if fzf is installed
     if ! command -v fzf >/dev/null; then
-        echo "This functionality requires fzf. Please install fzf first."
+        wd_print_msg "$WD_RED" "This functionality requires fzf. Please install fzf first."
         return 1
     fi
-    local entries=("${(@f)$(sed "s:${HOME}:~:g" "$WD_CONFIG" | awk -F ':' '{print $1 " -> " $2}')}")
+
+    # Ensure wd_config_file is properly set
+    if [[ -z $wd_config_file ]]; then
+        wd_config_file="${WD_CONFIG:-$HOME/.warprc}"
+    fi
+
+    # Check if config file exists
+    if [[ ! -f $wd_config_file ]]; then
+        wd_print_msg "$WD_RED" "Config file $wd_config_file does not exist. Please create it first."
+        return 1
+    fi
+
+    # Read entries from the config file
+    local entries=("${(@f)$(sed "s:${HOME}:~:g" "$wd_config_file" | awk -F ':' '{print $1 " -> " $2}')}")
+    if [[ -z $entries ]]; then
+        wd_print_msg "$WD_YELLOW" "You don't have any warp points to browse"
+        return 1
+    fi
+
+    # Temp file for remove operations
     local script_path="${${(%):-%x}:h}"
     local wd_remove_output=$(mktemp "${TMPDIR:-/tmp}/wd.XXXXXXXXXX")
+
+    # Create fzf bindings
     entries=("All warp points:" "Press enter to select. Press delete to remove" "${entries[@]}")
-    local fzf_bind="delete:execute(echo {} | awk -F ' -> ' '{print \$1}' | xargs -I {} "$script_path/wd.sh" rm {} > "$wd_remove_output")+abort"
+    local fzf_bind="delete:execute(echo {} | awk -F ' -> ' '{print \$1}' | xargs -I {} \"$script_path/wd.sh\" rm {} > \"$wd_remove_output\")+abort"
+
+    # Run fzf
     local selected_entry=$(printf '%s\n' "${entries[@]}" | fzf --height 100% --reverse --header-lines=2 --bind="$fzf_bind")
+
+    # Handle selection
     if [[ -e $wd_remove_output ]]; then
         cat "$wd_remove_output"
-        rm "$wd_remove_output"
+        rm -f "$wd_remove_output"
     fi
+
     if [[ -n $selected_entry ]]; then
         local selected_point="${selected_entry%% ->*}"
         selected_point=$(echo "$selected_point" | xargs)
         wd $selected_point
     fi
 }
+
 wd_browse_widget() {
-  if [[ -e $WD_CONFIG ]]; then
+    # Ensure wd_config_file is properly set
+    if [[ -z $wd_config_file ]]; then
+        wd_config_file="${WD_CONFIG:-$HOME/.warprc}"
+    fi
+
+    # Check if config file exists
+    if [[ ! -f $wd_config_file ]]; then
+        wd_print_msg "$WD_RED" "Config file $wd_config_file does not exist. Please create it first."
+        return 1
+    fi
+
+    # Call wd_browse to handle the selection
     wd_browse
+
+    # Restore the zsh buffer and cursor after running wd_browse
     saved_buffer=$BUFFER
     saved_cursor=$CURSOR
     BUFFER=
     zle redisplay
     zle accept-line
-  fi
 }
+
 wd_restore_buffer() {
   if [[ -n $saved_buffer ]]; then
     BUFFER=$saved_buffer
@@ -254,21 +346,26 @@ wd_restore_buffer() {
   saved_buffer=
   saved_cursor=1
 }
+
 wd_list_all()
 {
     wd_print_msg "$WD_BLUE" "All warp points:"
-    entries=$(sed "s:${HOME}:~:g" "$WD_CONFIG")
+
+    entries=$(sed "s:${HOME}:~:g" "$wd_config_file")
+
     max_warp_point_length=0
     while IFS= read -r line
     do
         arr=(${(s,:,)line})
         key=${arr[1]}
+
         length=${#key}
         if [[ length -gt max_warp_point_length ]]
         then
             max_warp_point_length=$length
         fi
     done <<< "$entries"
+
     while IFS= read -r line
     do
         if [[ $line != "" ]]
@@ -276,6 +373,7 @@ wd_list_all()
             arr=(${(s,:,)line})
             key=${arr[1]}
             val=${line#"${arr[1]}:"}
+
             if [[ -z $wd_quiet_mode ]]
             then
                 printf "%${max_warp_point_length}s  ->  %s\n" "$key" "$val"
@@ -283,19 +381,38 @@ wd_list_all()
         fi
     done <<< "$entries"
 }
+
 wd_ls()
 {
     wd_getdir "$1"
     ls "${dir/#\~/$HOME}"
 }
+
+wd_open()
+{
+    wd_getdir "$1"
+    if command -v open >/dev/null 2>&1; then
+        # MacOS, Ubuntu (alias)
+        open "${dir/#\~/$HOME}"
+    elif command -v xdg-open >/dev/null 2>&1; then
+        # Most Linux desktops
+        xdg-open "${dir/#\~/$HOME}"
+    else
+        echo "No known file opener found (need 'open' or 'xdg-open')." >&2
+        exit 1
+    fi
+}
+
 wd_path()
 {
     wd_getdir "$1"
     echo "$(echo "$dir" | sed "s:~:${HOME}:g")"
 }
+
 wd_show()
 {
     local name_arg=$1
+    local show_pwd
     # if there's an argument we look up the value
     if [[ -n $name_arg ]]
     then
@@ -310,26 +427,34 @@ wd_show()
         local wd_matches
         wd_matches=()
         # do a reverse lookup to check whether PWD is in $points
-        PWD="${PWD/$HOME/~}"
-        if [[ ${points[(r)$PWD]} == "$PWD" ]]
+        show_pwd="${PWD/$HOME/~}"
+        if [[ ${points[(r)$show_pwd]} == "$show_pwd" ]]
         then
             for name in ${(k)points}
             do
-                if [[ $points[$name] == "$PWD" ]]
+                if [[ $points[$name] == "$show_pwd" ]]
                 then
                     wd_matches[$(($#wd_matches+1))]=$name
                 fi
             done
+
             wd_print_msg "$WD_BLUE" "$#wd_matches warp point(s) to current directory: ${WD_GREEN}$wd_matches${WD_NOC}"
         else
-            wd_print_msg "$WD_YELLOW" "No warp point to $(echo "$PWD" | sed "s:$HOME:~:")"
+            wd_print_msg "$WD_YELLOW" "No warp point to $show_pwd"
         fi
     fi
 }
+
 wd_clean() {
     local force=$1
     local count=0
     local wd_tmp=""
+
+    if [ ! -w "$wd_config_file" ]; then
+        wd_exit_fail "\'$wd_config_file\' is not writeable."
+        return
+    fi
+
     while read -r line
     do
         if [[ $line != "" ]]
@@ -337,6 +462,7 @@ wd_clean() {
             arr=(${(s,:,)line})
             key=${arr[1]}
             val=${arr[2]}
+
             if [ -d "${val/#\~/$HOME}" ]
             then
                 wd_tmp=$wd_tmp"\n"`echo "$line"`
@@ -345,63 +471,74 @@ wd_clean() {
                 count=$((count+1))
             fi
         fi
-    done < "$WD_CONFIG"
+    done < "$wd_config_file"
+
     if [[ $count -eq 0 ]]
     then
         wd_print_msg "$WD_BLUE" "No warp points to clean, carry on!"
     else
         if [ ! -z "$force" ] || wd_yesorno "Removing ${count} warp points. Continue? (y/n)"
         then
-            echo "$wd_tmp" >! "$WD_CONFIG"
+            echo "$wd_tmp" >! "$wd_config_file"
             wd_print_msg "$WD_GREEN" "Cleanup complete. ${count} warp point(s) removed"
         else
             wd_print_msg "$WD_BLUE" "Cleanup aborted"
         fi
     fi
 }
+
 wd_export_static_named_directories() {
   if [[ ! -z $WD_EXPORT ]]
   then
-    command grep '^[0-9a-zA-Z_-]\+:' "$WD_CONFIG" | sed -e "s,~,$HOME," -e 's/:/=/' | while read -r warpdir ; do
+    command grep '^[0-9a-zA-Z_-]\+:' "$wd_config_file" | sed -e "s,~,$HOME," -e 's/:/=/' | while read -r warpdir ; do
         hash -d "$warpdir"
     done
   fi
 }
+
 WD_CONFIG=${WD_CONFIG:-$HOME/.warprc}
 local WD_QUIET=0
 local WD_EXIT_CODE=0
-local WD_DEBUG=0
+
 # Parse 'meta' options first to avoid the need to have them before
 # other commands. The `-D` flag consumes recognized options so that
 # the actual command parsing won't be affected.
+
 zparseopts -D -E \
     c:=wd_alt_config -config:=wd_alt_config \
     q=wd_quiet_mode -quiet=wd_quiet_mode \
     v=wd_print_version -version=wd_print_version \
-    d=wd_debug_mode -debug=wd_debug_mode \
     f=wd_force_mode -force=wd_force_mode
+
 if [[ ! -z $wd_print_version ]]
 then
     echo "wd version $WD_VERSION"
 fi
+
+# set the config file from variable or default
+typeset wd_config_file=${WD_CONFIG:-$HOME/.warprc}
 if [[ ! -z $wd_alt_config ]]
 then
-    WD_CONFIG=$wd_alt_config[2]
+    # prefer the flag if provided
+    wd_config_file=$wd_alt_config[2]
 fi
+
 # check if config file exists
-if [ ! -e "$WD_CONFIG" ]
+if [ ! -e "$wd_config_file" ]
 then
     # if not, create config file
-    touch "$WD_CONFIG"
+    touch "$wd_config_file"
 else
     wd_export_static_named_directories
 fi
+
 # disable extendedglob for the complete wd execution time
 setopt | grep -q extendedglob
 wd_extglob_is_set=$?
 if (( wd_extglob_is_set == 0 )); then
     setopt noextendedglob
 fi
+
 # load warp points
 typeset -A points
 while read -r line
@@ -410,20 +547,17 @@ do
     key=${arr[1]}
     # join the rest, in case the path contains colons
     val=${(j,:,)arr[2,-1]}
+
     points[$key]=$val
-done < "$WD_CONFIG"
+done < "$wd_config_file"
+
 # get opts
-args=$(getopt -o a:r:c:lhs -l add:,rm:,clean,list,ls:,path:,help,show -- $*)
+args=$(getopt -o a:r:c:lhs -l add:,rm:,clean,list,ls:,open:,path:,help,show -- $*)
+
 # check if no arguments were given, and that version is not set
 if [[ ($? -ne 0 || $#* -eq 0) && -z $wd_print_version ]]
 then
     wd_print_usage
-# check if config file is writeable
-elif [ ! -w "$WD_CONFIG" ]
-then
-    # do nothing
-    # can't run `exit`, as this would exit the executing shell
-    wd_exit_fail "\'$WD_CONFIG\' is not writeable."
 else
     # parse rest of options
     local wd_o
@@ -460,6 +594,10 @@ else
                 wd_ls "$2"
                 break
                 ;;
+            "-o"|"--open"|"open")
+                wd_open "$2"
+                break
+                ;;
             "-p"|"--path"|"path")
                 wd_path "$2"
                 break
@@ -486,12 +624,15 @@ else
         esac
     done
 fi
+
 ## garbage collection
 # if not, next time warp will pick up variables from this run
 # remember, there's no sub shell
+
 if (( wd_extglob_is_set == 0 )); then
     setopt extendedglob
 fi
+
 unset wd_extglob_is_set
 unset wd_warp
 unset wd_add
@@ -503,16 +644,15 @@ unset wd_print_msg
 unset wd_yesorno
 unset wd_print_usage
 unset wd_alt_config
+#unset wd_config_file do not unset this - breaks keybind
 unset wd_quiet_mode
 unset wd_print_version
+unset wd_force_mode
 unset wd_export_static_named_directories
 unset wd_o
+
 unset args
 unset points
 unset val &> /dev/null # fixes issue #1
-if [[ -n $wd_debug_mode ]]
-then
-    exit $WD_EXIT_CODE
-else
-    unset wd_debug_mode
-fi
+
+return $WD_EXIT_CODE

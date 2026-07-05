@@ -4,7 +4,7 @@
 #
 # https://github.com/agkozak/zsh-z
 #
-# Copyright (c) 2018-2023 Alexandros Kozak
+# Copyright (c) 2018-2026 Alexandros Kozak
 #
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to deal
@@ -68,10 +68,13 @@
 #   ZSHZ_UNCOMMON -> if 1, do not jump to "common directories," but rather drop
 #     subdirectories based on what the search string was (default: 0)
 ################################################################################
+
 autoload -U is-at-least
+
 if ! is-at-least 4.3.11; then
   print "Zsh-z requires Zsh v4.3.11 or higher." >&2 && exit
 fi
+
 ############################################################
 # The help message
 #
@@ -81,7 +84,9 @@ fi
 _zshz_usage() {
   print "Usage: ${ZSHZ_CMD:-${_Z_CMD:-z}} [OPTION]... [ARGUMENT]
 Jump to a directory that you have visited frequently or recently, or a bit of both, based on the partial string ARGUMENT.
+
 With no ARGUMENT, list the directory history in ascending rank.
+
   --add Add a directory to the database
   -c    Only match subdirectories of the current directory
   -e    Echo the best match without going to it
@@ -91,12 +96,15 @@ With no ARGUMENT, list the directory history in ascending rank.
   -t    Match by recent access
   -x    Remove a directory from the database (by default, the current directory)
   -xR   Remove a directory and its subdirectories from the database (by default, the current directory)" |
-    fold -s -w $COLUMNS >&2
+    fold -s -w $(( COLUMNS > 0 ? COLUMNS : 80 )) >&2
 }
+
 # Load zsh/datetime module, if necessary
 (( ${+EPOCHSECONDS} )) || zmodload zsh/datetime
+
 # Global associative array for internal use
 typeset -gA ZSHZ
+
 # Fallback utilities in case Zsh lacks zsh/files (as is the case with MobaXterm)
 ZSHZ[CHOWN]='chown'
 ZSHZ[MV]='mv'
@@ -111,15 +119,20 @@ fi
 [[ ${builtins[zf_chown]-} == 'defined' ]] && ZSHZ[CHOWN]='zf_chown'
 [[ ${builtins[zf_mv]-} == 'defined' ]] && ZSHZ[MV]='zf_mv'
 [[ ${builtins[zf_rm]-} == 'defined' ]] && ZSHZ[RM]='zf_rm'
+
 # Load zsh/system, if necessary
 [[ ${modules[zsh/system]-} == 'loaded' ]] || zmodload zsh/system &> /dev/null
+
 # Make sure ZSHZ_EXCLUDE_DIRS has been declared so that other scripts can
 # simply append to it
 (( ${+ZSHZ_EXCLUDE_DIRS} )) || typeset -gUa ZSHZ_EXCLUDE_DIRS
+
 # Determine if zsystem flock is available
 zsystem supports flock &> /dev/null && ZSHZ[USE_FLOCK]=1
+
 # Determine if `print -v' is supported
 is-at-least 5.3.0 && ZSHZ[PRINTV]=1
+
 ############################################################
 # The Zsh-z Command
 #
@@ -139,37 +152,47 @@ is-at-least 5.3.0 && ZSHZ[PRINTV]=1
 #   $* Command options and arguments
 ############################################################
 zshz() {
+
   # Don't use `emulate -L zsh' - it breaks PUSHD_IGNORE_DUPS
   setopt LOCAL_OPTIONS NO_KSH_ARRAYS NO_SH_WORD_SPLIT EXTENDED_GLOB UNSET
   (( ZSHZ_DEBUG )) && setopt LOCAL_OPTIONS WARN_CREATE_GLOBAL
+
   local REPLY
   local -a lines
+
   # Allow the user to specify a custom datafile in $ZSHZ_DATA (or legacy $_Z_DATA)
   local custom_datafile="${ZSHZ_DATA:-$_Z_DATA}"
+
   # If a datafile was provided as a standalone file without a directory path
   # print a warning and exit
   if [[ -n ${custom_datafile} && ${custom_datafile} != */* ]]; then
     print "ERROR: You configured a custom Zsh-z datafile (${custom_datafile}), but have not specified its directory." >&2
     exit
   fi
+
   # If the user specified a datafile, use that or default to ~/.z
   # If the datafile is a symlink, it gets dereferenced
   local datafile=${${custom_datafile:-$HOME/.z}:A}
+
   # If the datafile is a directory, print a warning and exit
   if [[ -d $datafile ]]; then
     print "ERROR: Zsh-z's datafile (${datafile}) is a directory." >&2
     exit
   fi
+
   # Make sure that the datafile exists before attempting to read it or lock it
   # for writing
   [[ -f $datafile ]] || { mkdir -p "${datafile:h}" && touch "$datafile" }
+
   # Bail if we don't own the datafile and $ZSHZ_OWNER is not set
   [[ -z ${ZSHZ_OWNER:-${_Z_OWNER}} && -f $datafile && ! -O $datafile ]] &&
     return
+
   # Load the datafile into an array and parse it
   lines=( ${(f)"$(< $datafile)"} )
   # Discard entries that are incomplete or incorrectly formatted
   lines=( ${(M)lines:#/*\|[[:digit:]]##[.,]#[[:digit:]]#\|[[:digit:]]##} )
+
   ############################################################
   # Add a path to or remove one from the datafile
   #
@@ -185,10 +208,14 @@ zshz() {
   _zshz_add_or_remove_path() {
     local action=${1}
     shift
+
     if [[ $action == '--add' ]]; then
+
       # TODO: The following tasks are now handled by _agkozak_precmd. Dead code?
+
       # Don't add $HOME
       [[ $* == $HOME ]] && return
+
       # Don't track directory trees excluded in ZSHZ_EXCLUDE_DIRS
       local exclude
       for exclude in ${(@)ZSHZ_EXCLUDE_DIRS:-${(@)_Z_EXCLUDE_DIRS}}; do
@@ -197,14 +224,20 @@ zshz() {
         esac
       done
     fi
+
     # A temporary file that gets copied over the datafile if all goes well
     local tempfile="${datafile}.${RANDOM}"
+
     # See https://github.com/rupa/z/pull/199/commits/ed6eeed9b70d27c1582e3dd050e72ebfe246341c
     if (( ZSHZ[USE_FLOCK] )); then
+
       local lockfd
+
       # Grab exclusive lock (released when function exits)
       zsystem flock -f lockfd "$datafile" 2> /dev/null || return
+
     fi
+
     integer tmpfd
     case $action in
       --add)
@@ -214,11 +247,13 @@ zshz() {
         ;;
       --remove)
         local xdir  # Directory to be removed
+
         if (( ${ZSHZ_NO_RESOLVE_SYMLINKS:-${_Z_NO_RESOLVE_SYMLINKS}} )); then
           [[ -d ${${*:-${PWD}}:a} ]] && xdir=${${*:-${PWD}}:a}
         else
-          [[ -d ${${*:-${PWD}}:A} ]] && xdir=${${*:-${PWD}}:a}
+          [[ -d ${${*:-${PWD}}:A} ]] && xdir=${${*:-${PWD}}:A}
         fi
+
         local -a lines_to_keep
         if (( ${+opts[-R]} )); then
           # Prompt user before deleting entire database
@@ -243,19 +278,33 @@ zshz() {
         local ret=$?
         ;;
     esac
+
     if (( tmpfd != 0 )); then
       # Close tempfile
       exec {tmpfd}>&-
     fi
+
     if (( ret != 0 )); then
       # Avoid clobbering the datafile if the write to tempfile failed
       ${ZSHZ[RM]} -f "$tempfile"
       return $ret
     fi
+
     local owner
     owner=${ZSHZ_OWNER:-${_Z_OWNER}}
+
     if (( ZSHZ[USE_FLOCK] )); then
-      ${ZSHZ[MV]} "$tempfile" "$datafile" 2> /dev/null || ${ZSHZ[RM]} -f "$tempfile"
+      # An unusual case: if inside Docker container where datafile could be bind
+      # mounted
+      if [[ -f '/.dockerenv' || ( -r '/proc/1/cgroup' && "$(< '/proc/1/cgroup')" == *docker* ) ]]; then
+        print "$(< "$tempfile")" > "$datafile" 2> /dev/null
+        ${ZSHZ[RM]} -f "$tempfile"
+      # All other cases
+      else
+        ${ZSHZ[MV]} "$tempfile" "$datafile" 2> /dev/null ||
+            ${ZSHZ[RM]} -f "$tempfile"
+      fi
+
       if [[ -n $owner ]]; then
         ${ZSHZ[CHOWN]} ${owner}:"$(id -ng ${owner})" "$datafile"
       fi
@@ -266,6 +315,7 @@ zshz() {
       ${ZSHZ[MV]} -f "$tempfile" "$datafile" 2> /dev/null ||
           ${ZSHZ[RM]} -f "$tempfile"
     fi
+
     # In order to make z -x work, we have to disable zsh-z's adding
     # to the database until the user changes directory and the
     # chpwd_functions are run
@@ -273,6 +323,7 @@ zshz() {
       ZSHZ[DIRECTORY_REMOVED]=1
     fi
   }
+
   ############################################################
   # Read the current datafile contents, update them, "age" them
   # when the total rank gets high enough, and print the new
@@ -287,16 +338,21 @@ zshz() {
   #   $2 Path to be added to datafile
   ############################################################
   _zshz_update_datafile() {
+
     integer fd=$1
     local -A rank time
+
     # Characters special to the shell (such as '[]') are quoted with backslashes
     # See https://github.com/rupa/z/issues/246
     local add_path=${(q)2}
+
     local -a existing_paths
     local now=$EPOCHSECONDS line dir
     local path_field rank_field time_field count x
+
     rank[$add_path]=1
     time[$add_path]=$now
+
     # Remove paths from database if they no longer exist
     for line in $lines; do
       if [[ ! -d ${line%%\|*} ]]; then
@@ -312,12 +368,15 @@ zshz() {
       fi
     done
     lines=( $existing_paths )
+
     for line in $lines; do
       path_field=${(q)line%%\|*}
       rank_field=${${line%\|*}#*\|}
       time_field=${line##*\|}
+
       # When a rank drops below 1, drop the path from the database
       (( rank_field < 1 )) && continue
+
       if [[ $path_field == $add_path ]]; then
         rank[$path_field]=$rank_field
         (( rank[$path_field]++ ))
@@ -339,6 +398,7 @@ zshz() {
       done
     fi
   }
+
   ############################################################
   # The original tab completion method
   #
@@ -352,15 +412,21 @@ zshz() {
   #   $1 The string to be completed
   ############################################################
   _zshz_legacy_complete() {
+
     local line path_field path_field_normalized
+
     # Replace spaces in the search string with asterisks for globbing
     1=${1//[[:space:]]/*}
+
     for line in $lines; do
+
       path_field=${line%%\|*}
+
       path_field_normalized=$path_field
       if (( ZSHZ_TRAILING_SLASH )); then
         path_field_normalized=${path_field%/}/
       fi
+
       # If the search string is all lowercase, the search will be case-insensitive
       if [[ $1 == "${1:l}" && ${path_field_normalized:l} == *${~1}* ]]; then
         print -- $path_field
@@ -368,10 +434,12 @@ zshz() {
       elif [[ $path_field_normalized == *${~1}* ]]; then
         print -- $path_field
       fi
+
     done
     # TODO: Search strings with spaces in them are currently treated case-
     # insensitively.
   }
+
   ############################################################
   # `print' or `printf' to REPLY
   #
@@ -407,6 +475,7 @@ zshz() {
     # which does not exhibit the undesired behavior. See
     #
     #   https://www.zsh.org/mla/workers/2020/msg00308.html
+
     if (( ZSHZ[PRINTV] )); then
       builtin print -v REPLY -f %s $@
     else
@@ -414,6 +483,7 @@ zshz() {
       builtin read -rz REPLY
     fi
   }
+
   ############################################################
   # If matches share a common root, find it, and put it in
   # REPLY for _zshz_output to use.
@@ -424,18 +494,24 @@ zshz() {
   _zshz_find_common_root() {
     local -a common_matches
     local x short
+
     common_matches=( ${(@Pk)1} )
+
     for x in ${(@)common_matches}; do
       if [[ -z $short ]] || (( $#x < $#short )) || [[ $x != ${short}/* ]]; then
         short=$x
       fi
     done
+
     [[ $short == '/' ]] && return
+
     for x in ${(@)common_matches}; do
       [[ $x != $short* ]] && return
     done
+
     _zshz_printv -- $short
   }
+
   ############################################################
   # Calculate a common root, if there is one. Then do one of
   # the following:
@@ -454,14 +530,19 @@ zshz() {
   #        match
   ############################################################
   _zshz_output() {
+
     local match_array=$1 match=$2 format=$3
     local common k x
     local -a descending_list output
     local -A output_matches
+
     output_matches=( ${(Pkv)match_array} )
+
     _zshz_find_common_root $match_array
     common=$REPLY
+
     case $format in
+
       completion)
         for k in ${(@k)output_matches}; do
           _zshz_printv -f "%.2f|%s" ${output_matches[$k]} $k
@@ -471,6 +552,7 @@ zshz() {
         descending_list=( ${${(@On)descending_list}#*\|} )
         print -l $descending_list
         ;;
+
       list)
         local path_to_display
         for x in ${(k)output_matches}; do
@@ -504,6 +586,7 @@ zshz() {
           done
         fi
         ;;
+
       *)
         if (( ! ZSHZ_UNCOMMON )) && [[ -n $common ]]; then
           _zshz_printv -- $common
@@ -513,6 +596,7 @@ zshz() {
         ;;
     esac
   }
+
   ############################################################
   # Match a pattern by rank, time, or a combination of the
   # two, and output the results as completions, a list, or a
@@ -532,11 +616,14 @@ zshz() {
   ############################################################
   _zshz_find_matches() {
     setopt LOCAL_OPTIONS NO_EXTENDED_GLOB
+
     local fnd=$1 method=$2 format=$3
+
     local -a existing_paths
     local line dir path_field rank_field time_field rank dx escaped_path_field
     local -A matches imatches
     local best_match ibest_match hi_rank=-9999999999 ihi_rank=-9999999999
+
     # Remove paths from database if they no longer exist
     for line in $lines; do
       if [[ ! -d ${line%%\|*} ]]; then
@@ -552,10 +639,12 @@ zshz() {
       fi
     done
     lines=( $existing_paths )
+
     for line in $lines; do
       path_field=${line%%\|*}
       rank_field=${${line%\|*}#*\|}
       time_field=${line##*\|}
+
       case $method in
         rank) rank=$rank_field ;;
         time) (( rank = time_field - EPOCHSECONDS )) ;;
@@ -565,13 +654,16 @@ zshz() {
           rank=$(( 10000 * rank_field * (3.75/( (0.0001 * dx + 1) + 0.25)) ))
           ;;
       esac
+
       # Use spaces as wildcards
       local q=${fnd//[[:space:]]/\*}
+
       # If $ZSHZ_TRAILING_SLASH is set, use path_field with a trailing slash for matching.
       local path_field_normalized=$path_field
       if (( ZSHZ_TRAILING_SLASH )); then
         path_field_normalized=${path_field%/}/
       fi
+
       # If $ZSHZ_CASE is 'ignore', be case-insensitive.
       #
       # If it's 'smart', be case-insensitive unless the string to be matched
@@ -587,6 +679,7 @@ zshz() {
       elif [[ $ZSHZ_CASE != 'smart' && ${path_field_normalized:l} == ${~q:l} ]]; then
         imatches[$path_field]=$rank
       fi
+
       # Escape characters that would cause "invalid subscript" errors
       # when accessing the associative array.
       escaped_path_field=${path_field//'\'/'\\'}
@@ -595,6 +688,7 @@ zshz() {
       escaped_path_field=${escaped_path_field//')'/'\)'}
       escaped_path_field=${escaped_path_field//'['/'\['}
       escaped_path_field=${escaped_path_field//']'/'\]'}
+
       if (( matches[$escaped_path_field] )) &&
          (( matches[$escaped_path_field] > hi_rank )); then
         best_match=$path_field
@@ -606,16 +700,21 @@ zshz() {
         ZSHZ[CASE_INSENSITIVE]=1
       fi
     done
+
     # Return 1 when there are no matches
     [[ -z $best_match && -z $ibest_match ]] && return 1
+
     if [[ -n $best_match ]]; then
       _zshz_output matches best_match $format
     elif [[ -n $ibest_match ]]; then
       _zshz_output imatches ibest_match $format
     fi
   }
+
   # THE MAIN ROUTINE
+
   local -A opts
+
   zparseopts -E -D -A opts -- \
     -add \
     -complete \
@@ -628,6 +727,7 @@ zshz() {
     R \
     t \
     x
+
   if [[ $1 == '--' ]]; then
     shift
   elif [[ -n ${(M)@:#-*} && -z $compstate ]]; then
@@ -635,10 +735,15 @@ zshz() {
     _zshz_usage
     return 1
   fi
+
   local opt output_format method='frecency' fnd prefix req
+
   for opt in ${(k)opts}; do
     case $opt in
       --add)
+        # Don't change the database when invoked via --complete (e.g., from
+        # tab completion).
+        (( ${+opts[--complete]} )) && continue
         [[ ! -d $* ]] && return 1
         local dir
         # Cygwin and MSYS2 have a hard time with relative paths expressed from /
@@ -662,6 +767,7 @@ zshz() {
         ;;
       -c) [[ $* == ${PWD}/* || $PWD == '/' ]] || prefix="$PWD " ;;
       -h|--help)
+        (( ${+opts[--complete]} )) && continue
         _zshz_usage
         return
         ;;
@@ -669,6 +775,7 @@ zshz() {
       -r) method='rank' ;;
       -t) method='time' ;;
       -x)
+        (( ${+opts[--complete]} )) && continue
         # Cygwin and MSYS2 have a hard time with relative paths expressed from /
         if [[ $OSTYPE == (cygwin|msys) && $PWD == '/' && $* != /* ]]; then
           set -- "/$*"
@@ -680,9 +787,11 @@ zshz() {
   done
   req="$*"
   fnd="$prefix$*"
+
   [[ -n $fnd && $fnd != "$PWD " ]] || {
     [[ $output_format != 'completion' ]] && output_format='list'
   }
+
   #########################################################
   # Allow the user to specify directory-changing command
   # using $ZSHZ_CD (default: builtin cd).
@@ -695,12 +804,14 @@ zshz() {
   #########################################################
   zshz_cd() {
     setopt LOCAL_OPTIONS NO_WARN_CREATE_GLOBAL
+
     if [[ -z $ZSHZ_CD ]]; then
       builtin cd "$*"
     else
       ${=ZSHZ_CD} "$*"
     fi
   }
+
   #########################################################
   # If $ZSHZ_ECHO == 1, display paths as you jump to them.
   # If it is also the case that $ZSHZ_TILDE == 1, display
@@ -715,30 +826,39 @@ zshz() {
       fi
     fi
   }
+
   if [[ ${@: -1} == /* ]] && (( ! $+opts[-e] && ! $+opts[-l] )); then
     # cd if possible; echo the new path if $ZSHZ_ECHO == 1
     [[ -d ${@: -1} ]] && zshz_cd ${@: -1} && _zshz_echo && return
   fi
+
   # With option -c, make sure query string matches beginning of matches;
   # otherwise look for matches anywhere in paths
+
   # zpm-zsh/colors has a global $c, so we'll avoid math expressions here
   if [[ ! -z ${(tP)opts[-c]} ]]; then
     _zshz_find_matches "$fnd*" $method $output_format
   else
     _zshz_find_matches "*$fnd*" $method $output_format
   fi
+
   local ret2=$?
+
   local cd
   cd=$REPLY
+
   # New experimental "uncommon" behavior
   #
-  # If the best choice at this point is something like /foo/bar/foo/bar, and the  # search pattern is `bar', go to /foo/bar/foo/bar; but if the search pattern
+  # If the best choice at this point is something like /foo/bar/foo/bar, and the
+  # search pattern is `bar', go to /foo/bar/foo/bar; but if the search pattern
   # is `foo', go to /foo/bar/foo
   if (( ZSHZ_UNCOMMON )) && [[ -n $cd ]]; then
     if [[ -n $cd ]]; then
+
       # In the search pattern, replace spaces with *
       local q=${fnd//[[:space:]]/\*}
       q=${q%/} # Trailing slash has to be removed
+
       # As long as the best match is not case-insensitive
       if (( ! ZSHZ[CASE_INSENSITIVE] )); then
         # Count the number of characters in $cd that $q matches
@@ -748,6 +868,7 @@ zshz() {
         until (( ( ${#cd:h} - ${#${${cd:h}//${~q}/}} ) != q_chars )); do
           cd=${cd:h}
         done
+
       # If the best match is case-insensitive
       else
         local q_chars=$(( ${#cd} - ${#${${cd:l}//${~${q:l}}/}} ))
@@ -755,9 +876,11 @@ zshz() {
           cd=${cd:h}
         done
       fi
+
       ZSHZ[CASE_INSENSITIVE]=0
     fi
   fi
+
   if (( ret2 == 0 )) && [[ -n $cd ]]; then
     if (( $+opts[-e] )); then               # echo
       (( ZSHZ_TILDE )) && cd=${cd/#${HOME}/\~}
@@ -775,7 +898,9 @@ zshz() {
     fi
   fi
 }
+
 alias ${ZSHZ_CMD:-${_Z_CMD:-z}}='zshz 2>&1'
+
 ############################################################
 # precmd - add path to datafile unless `z -x' has just been
 #   run
@@ -786,9 +911,11 @@ alias ${ZSHZ_CMD:-${_Z_CMD:-z}}='zshz 2>&1'
 _zshz_precmd() {
   # Protect against `setopt NO_UNSET'
   setopt LOCAL_OPTIONS UNSET
+
   # Do not add PWD to datafile when in HOME directory, or
   # if `z -x' has just been run
   [[ $PWD == "$HOME" ]] || (( ZSHZ[DIRECTORY_REMOVED] )) && return
+
   # Don't track directory trees excluded in ZSHZ_EXCLUDE_DIRS
   local exclude
   for exclude in ${(@)ZSHZ_EXCLUDE_DIRS:-${(@)_Z_EXCLUDE_DIRS}}; do
@@ -796,6 +923,7 @@ _zshz_precmd() {
       ${exclude}|${exclude}/*) return ;;
     esac
   done
+
   # It appears that forking a subshell is so slow in Windows that it is better
   # just to add the PWD to the datafile in the foreground
   if [[ $OSTYPE == (cygwin|msys) ]]; then
@@ -803,9 +931,11 @@ _zshz_precmd() {
   else
       (zshz --add "$PWD" &)
   fi
+
   # See https://github.com/rupa/z/pull/247/commits/081406117ea42ccb8d159f7630cfc7658db054b6
   : $RANDOM
 }
+
 ############################################################
 # chpwd
 #
@@ -819,17 +949,92 @@ _zshz_precmd() {
 _zshz_chpwd() {
   ZSHZ[DIRECTORY_REMOVED]=0
 }
+
 autoload -Uz add-zsh-hook
+
 add-zsh-hook precmd _zshz_precmd
 add-zsh-hook chpwd _zshz_chpwd
+
 ############################################################
 # Completion
 ############################################################
+
 # Standardized $0 handling
 # https://zdharma-continuum.github.io/Zsh-100-Commits-Club/Zsh-Plugin-Standard.html
 0="${${ZERO:-${0:#$ZSH_ARGZERO}}:-${(%):-%N}}"
 0="${${(M)0:#/*}:-$PWD/$0}"
+
 (( ${fpath[(ie)${0:A:h}]} <= ${#fpath} )) || fpath=( "${0:A:h}" "${fpath[@]}" )
+
+
+# Save the existing Tab binding so that the completion widget can invoke it,
+# but being careful not to create a situation where the widget ends up calling
+# itself and causing infinite recursion if this script is re-sourced.
+if (( ! ${+widgets[_zshz_zle_completion_widget]} )); then
+  ZSHZ[TAB_BINDING]="${$(bindkey -M main '^I')##* }"
+fi
+
+############################################################
+# ZLE widget to fix spaces-as-wildcards completion
+#
+# When completing a Zsh-z command with multiple search terms
+# (e.g. `z us lo bi'), collapse the terms into a single
+# wildcard-joined word (e.g. `z us*lo*bi') before triggering
+# completion. This causes compadd to replace the whole query
+# with the matched path rather than just the last word.
+#
+# Globals:
+#   ZSHZ_CMD
+############################################################
+_zshz_zle_completion_widget() {
+
+  setopt LOCAL_OPTIONS EXTENDED_GLOB NO_KSH_ARRAYS NO_SH_WORD_SPLIT
+
+  local cmd=${ZSHZ_CMD:-${_Z_CMD:-z}}
+
+  # If a trailing space was added after an already-completed absolute path
+  # (e.g. `z /usr/local/bin '), a second Tab would otherwise re-trigger
+  # completion on an empty word and insert a duplicate. Bail out early.
+  if [[ $LBUFFER[-1] == ' ' && ${${LBUFFER% }##* } == [/~]* ]]; then
+    return
+  fi
+
+  # Only act when there are at least two words after the command
+  if [[ $LBUFFER == ${cmd}\ *\ * ]]; then
+    local after=${LBUFFER#${cmd} }
+    local -a parts option_parts search_parts
+    local p past_options=0
+
+    parts=( ${(z)after} )
+    for p in $parts; do
+      if (( ! past_options )) && [[ $p == (--|-[cehlrRtx]##|--add|--complete|--help) ]]; then
+        option_parts+=( $p )
+        # `--' terminates option parsing; subsequent tokens are positional,
+        # even if they happen to look like options.
+        [[ $p == -- ]] && past_options=1
+      else
+        past_options=1
+        search_parts+=( $p )
+      fi
+    done
+
+    if (( ${#search_parts} > 1 )); then
+      LBUFFER="${cmd}${option_parts:+ ${(j: :)option_parts}} ${(j:*:)search_parts}"
+    fi
+  fi
+
+  # If Tab had a non-default binding, continue to use it; otherwise the default
+  # expand-or-complete gets used.
+  zle ${ZSHZ[TAB_BINDING]:-expand-or-complete}
+}
+
+# Register the widget and bind to Tab, but only if this script has not already
+# been sourced -- avoid infinite recursion.
+if (( ! ${+widgets[_zshz_zle_completion_widget]} )); then
+  zle -N _zshz_zle_completion_widget
+  bindkey -M main '^I' _zshz_zle_completion_widget
+fi
+
 ############################################################
 # zsh-z functions
 ############################################################
@@ -844,7 +1049,9 @@ ZSHZ[FUNCTIONS]='_zshz_usage
                  zshz
                  _zshz_precmd
                  _zshz_chpwd
-                 _zshz'
+                 _zshz
+                 _zshz_zle_completion_widget'
+
 ############################################################
 # Enable WARN_NESTED_VAR for functions listed in
 #   ZSHZ[FUNCTIONS]
@@ -857,6 +1064,7 @@ ZSHZ[FUNCTIONS]='_zshz_usage
     done
   fi
 }
+
 ############################################################
 # Unload function
 #
@@ -868,16 +1076,33 @@ ZSHZ[FUNCTIONS]='_zshz_usage
 ############################################################
 zsh-z_plugin_unload() {
   emulate -L zsh
+
   add-zsh-hook -D precmd _zshz_precmd
   add-zsh-hook -d chpwd _zshz_chpwd
+
+  zle -D _zshz_zle_completion_widget
+
+  # Only restore Tab binding if it is still bound to our widget; otherwise
+  # leave it alone.
+  local _zshz_current_tab
+  _zshz_current_tab="$(bindkey -M main '^I' 2>/dev/null || true)"
+  if [[ ${_zshz_current_tab##* } == _zshz_zle_completion_widget ]]; then
+    bindkey -M main '^I' "${ZSHZ[TAB_BINDING]:-expand-or-complete}"
+  fi
+
   local x
   for x in ${=ZSHZ[FUNCTIONS]}; do
     (( ${+functions[$x]} )) && unfunction $x
   done
+
   unset ZSHZ
+
   fpath=( "${(@)fpath:#${0:A:h}}" )
+
   (( ${+aliases[${ZSHZ_CMD:-${_Z_CMD:-z}}]} )) &&
     unalias ${ZSHZ_CMD:-${_Z_CMD:-z}}
+
   unfunction $0
 }
+
 # vim: fdm=indent:ts=2:et:sts=2:sw=2:

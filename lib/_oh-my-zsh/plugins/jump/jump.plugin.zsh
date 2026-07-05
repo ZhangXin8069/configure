@@ -7,10 +7,13 @@
 # marks: lists all marks
 #
 export MARKPATH=$HOME/.marks
+
+
 jump() {
 	local markpath="$(readlink $MARKPATH/$1)" || {echo "No such mark: $1"; return 1}
 	builtin cd "$markpath" 2>/dev/null || {echo "Destination does not exist for mark [$1]: $markpath"; return 2}
 }
+
 mark() {
 	if [[ $# -eq 0 || "$1" = "." ]]; then
 		MARK=${PWD:t}
@@ -22,9 +25,11 @@ mark() {
 		command ln -sfn "$PWD" "$MARKPATH/$MARK"
 	fi
 }
+
 unmark() {
 	LANG= command rm -i "$MARKPATH/$1"
 }
+
 marks() {
 	local link max=0
 	for link in $MARKPATH/{,.}*(@N); do
@@ -39,11 +44,13 @@ marks() {
 		printf -- "%s -> %s\n" "$markname" "$markpath"
 	done
 }
+
 _completemarks() {
 	reply=("${MARKPATH}"/{,.}*(@N:t))
 }
 compctl -K _completemarks jump
 compctl -K _completemarks unmark
+
 _mark_expansion() {
 	setopt localoptions extendedglob
 	autoload -U modify-current-argument
