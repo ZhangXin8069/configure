@@ -1,1 +1,0 @@
-xattr -dr com.apple.quarantine /Users/zhangxin/Draft /Users/zhangxin/Desktop /Users/zhangxin/Downloads /Users/zhangxin/Documents /Users/zhangxin/Pictures /Users/zhangxin/Favorites /Users/zhangxin/Music /Users/zhangxin/Movies

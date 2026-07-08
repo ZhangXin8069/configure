@@ -4,3 +4,6 @@ lib/_package/linux/2048
 *.sw*
 *.Identifier
 *.DS_Store
+*.log.txt
+*~
+*.swp
