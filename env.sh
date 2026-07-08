@@ -304,6 +304,7 @@ alias python='python3'
 alias pip='pip3'
 alias gsize='git count-objects -vH'
 alias py='python'
+alias cl='claude'
 alias clc='clear'
 alias his='history | tail'
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
