@@ -1,18 +1,19 @@
 #!/usr/bin/env bash
-# _gpush-claude_code.sh — git push with auto-generated Claude Code tag
+# ccgpush.sh — git push with auto-generated Claude Code annotated tag
 #
-# Tag convention: stab<N> follow stab<N-1>, <changelog> (Claude Code)
+# Tag convention: stab<N> (sequential), with a detailed English changelog
+# as the tag annotation.
 #
 # Usage:
-#   _gpush-claude_code.sh [tag-message]
+#   ccgpush.sh [tag-message]
 #     - If message is provided, uses it as the tag annotation
-#     - If omitted, auto-generates from recent commit messages
+#     - If omitted, auto-generates a changelog from recent commit messages
 #     - If --amend is passed, re-tags the last tag instead of creating a new one
 #
 # Examples:
-#   _gpush-claude_code.sh "optimize env.sh, extract git aliases"
-#   _gpush-claude_code.sh                    # auto-generate from git log
-#   _gpush-claude_code.sh --amend "fix typo" # amend last tag message
+#   ccgpush.sh "optimize env.sh, extract git aliases"
+#   ccgpush.sh                    # auto-generate changelog from git log
+#   ccgpush.sh --amend "fix typo" # amend last tag annotation
 
 set -e
 
@@ -31,9 +32,9 @@ for arg in "$@"; do
     esac
 done
 
-# --- Determine tag message ---
+# --- Determine tag annotation ---
 if [ -z "$TAG_MSG" ]; then
-    # Auto-generate from recent commits since last tag
+    # Auto-generate changelog from recent commits since last tag
     LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
     if [ -n "$LAST_TAG" ]; then
         COMMITS_SINCE=$(git log "${LAST_TAG}..HEAD" --oneline --no-merges 2>/dev/null | head -10)
@@ -42,11 +43,18 @@ if [ -z "$TAG_MSG" ]; then
     fi
 
     if [ -z "$COMMITS_SINCE" ]; then
-        TAG_MSG="auto-tag: $(date "+%Y-%m-%d-%H-%M-%S")"
+        TAG_MSG="Automatic tag — no new commits since last tag ($(date "+%Y-%m-%d %H:%M:%S"))"
     else
-        # Build summary from commit messages
-        SUMMARY=$(echo "$COMMITS_SINCE" | head -5 | cut -d' ' -f2- | tr '\n' '; ' | sed 's/; $//')
-        TAG_MSG="${SUMMARY:0:200}"  # Truncate to 200 chars
+        # Build a bullet-point changelog from commit messages
+        CHANGELOG=""
+        while IFS= read -r line; do
+            COMMIT_HASH=$(echo "$line" | awk '{print $1}')
+            COMMIT_MSG=$(echo "$line" | cut -d' ' -f2-)
+            CHANGELOG="${CHANGELOG}  - ${COMMIT_MSG} (${COMMIT_HASH})
+"
+        done <<< "$COMMITS_SINCE"
+        TAG_MSG="Changes in this tag:
+${CHANGELOG}"
     fi
 fi
 
@@ -67,11 +75,21 @@ fi
 
 NEW_TAG="${TAG_PREFIX}${NEW_NUM}"
 
-# Build the full tag message
+# Build the full tag annotation (English only, no tag-name prefix)
+TAG_DATE=$(date "+%Y-%m-%d %H:%M:%S")
 if [ -n "$LAST_STAB" ]; then
-    TAG_MESSAGE="${NEW_TAG} follow ${LAST_STAB}, ${TAG_MSG} (${CLAUDE_SIG})"
+    TAG_MESSAGE="Release ${NEW_TAG}
+
+Changelog since ${LAST_STAB}:
+${TAG_MSG}
+
+Tag created by ${CLAUDE_SIG} on ${TAG_DATE}"
 else
-    TAG_MESSAGE="${NEW_TAG} init, ${TAG_MSG} (${CLAUDE_SIG})"
+    TAG_MESSAGE="Release ${NEW_TAG} (initial)
+
+${TAG_MSG}
+
+Tag created by ${CLAUDE_SIG} on ${TAG_DATE}"
 fi
 
 # --- Handle amend mode ---
@@ -83,9 +101,18 @@ if $AMEND; then
     NEW_TAG="$LAST_STAB"
     PREV_STAB=$(git tag -l "${TAG_PREFIX}*" --sort=-v:refname | sed -n '2p')
     if [ -n "$PREV_STAB" ]; then
-        TAG_MESSAGE="${NEW_TAG} follow ${PREV_STAB}, ${TAG_MSG} (${CLAUDE_SIG})"
+        TAG_MESSAGE="Release ${NEW_TAG} (amended)
+
+Changelog since ${PREV_STAB}:
+${TAG_MSG}
+
+Tag updated by ${CLAUDE_SIG} on ${TAG_DATE}"
     else
-        TAG_MESSAGE="${NEW_TAG} init, ${TAG_MSG} (${CLAUDE_SIG})"
+        TAG_MESSAGE="Release ${NEW_TAG} (amended, initial)
+
+${TAG_MSG}
+
+Tag updated by ${CLAUDE_SIG} on ${TAG_DATE}"
     fi
     echo "Amending tag: ${NEW_TAG}"
     git tag -d "$NEW_TAG" 2>/dev/null || true
@@ -95,7 +122,8 @@ fi
 # --- Confirm and create tag ---
 echo ""
 echo "  Tag:     ${NEW_TAG}"
-echo "  Message: ${TAG_MESSAGE}"
+echo "  Message:"
+echo "${TAG_MESSAGE}"
 echo ""
 
 if [ -t 0 ]; then
@@ -128,5 +156,5 @@ git push origin --tags
 git push
 
 echo ""
-echo "✅ Pushed: ${NEW_TAG} — ${TAG_MSG}"
+echo "✅ Pushed: ${NEW_TAG}"
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
