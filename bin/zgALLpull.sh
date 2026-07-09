@@ -6,6 +6,6 @@ _PATH=$(
 _NAME=$(basename "$0")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 bash ${_PATH}/zgCONFIGUREpull.sh
-bash ${_PATH}/gzLATTICE-PDFpull.sh
+bash ${_PATH}/zgLATTICE-PDFpull.sh
 bash ${_PATH}/zgPYQCUpull.sh
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
