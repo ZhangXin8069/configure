@@ -1,1 +1,0 @@
-../../bin/ccgpush.md
