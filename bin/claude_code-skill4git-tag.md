@@ -47,15 +47,15 @@ All counters start from 0 and increment independently. The first tag in each cat
 Every tag is an **annotated tag** with the following message format:
 
 ```text
-follow <previous-tag-of-any-type>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; ...... [Claude Code].
+follow <previous-tag-of-any-type>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; [Claude Code].
 ```
 
-- The **first tag** uses `<type>0 init, 1. ... [Claude Code].` (no predecessor)
-- `<type><N>` (N>0) uses `follow <previous-tag>, 1. ...` — references the **immediately previous tag regardless of type**
-- For example, if the tag history is `stab3 → dev0 → bug1 → dev1`, then `dev1` uses `follow bug1, 1. ...`
-- Changelog items are numbered, separated by Chinese semicolon + space (`; `)
-- Each item is a concise Chinese sentence summarizing one logical group of changes
-- The suffix ` [Claude Code].` (preceded by a space, trailing period) is always appended
+- The **very first tag** in the repo uses `<type>0 init, 1. ...; [Claude Code].` (no predecessor)
+- **All subsequent tags** (regardless of type) use `follow <previous-tag>, 1. ...;` — references the immediately previous tag regardless of type
+- Changelog items are numbered with English period + space (`1. `, `2. `, `3. `)
+- **Every item ends with `;`** (English semicolon), including the last item — no exceptions
+- All punctuation is English: `.` `,` `;` (the content text itself may be Chinese)
+- The suffix ` [Claude Code].` (preceded by a space, trailing English period) is always appended
 - The message is stored as the tag annotation (`git tag -a -m "..."`)
 
 ### Changelog item guidelines
@@ -71,7 +71,7 @@ When constructing changelog items from diffs and commit messages:
 Example:
 
 ```text
-follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增cctag Agent技能，替代ccgpush; 3. 修复zshrc中oh-my-zsh插件加载顺序; 4. 清理bin/中过期脚本 [Claude Code].
+follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增cctag Agent技能，替代ccgpush; 3. 修复zshrc中oh-my-zsh插件加载顺序; 4. 清理bin/中过期脚本; [Claude Code].
 ```
 
 ---
@@ -145,7 +145,7 @@ Present the proposed message to the user for confirmation:
 ```text
 Type:    dev
 Tag:     dev3
-Message: follow stab9, 1. 初步实现xxx功能; 2. 添加yyy模块框架 [Claude Code].
+Message: follow stab9, 1. 初步实现xxx功能; 2. 添加yyy模块框架; [Claude Code].
 Changes: 3 files changed, 85 insertions(+), 12 deletions(-)
 
 Proceed? [Y/n]
@@ -210,14 +210,14 @@ Output format (grouped by type):
 === stab (3 tags) ===
 stab9  | 2026-07-09 | follow stab8, 1. 重构lib目录结构; 2. ...
 stab8  | 2026-07-08 | follow stab7, 1. 新增xxx功能; 2. ...
-stab0  | 2026-07-01 | stab0 init, 1. 初始化配置仓库 [Claude Code].
+stab0  | 2026-07-01 | stab0 init, 1. 初始化配置仓库; [Claude Code].
 
 === dev (2 tags) ===
-dev1   | 2026-07-09 | follow dev0, 1. 实现xxx模块框架 [Claude Code].
-dev0   | 2026-07-09 | dev0 init, 1. 开始yyy功能开发 [Claude Code].
+dev1   | 2026-07-09 | follow bug0, 1. 实现xxx模块框架; [Claude Code].
+dev0   | 2026-07-09 | follow stab3, 1. 开始yyy功能开发; [Claude Code].
 
 === bug (1 tag) ===
-bug0   | 2026-07-09 | bug0 init, 1. 修复zzz空指针异常 [Claude Code].
+bug0   | 2026-07-09 | follow dev1, 1. 修复zzz空指针异常; [Claude Code].
 ```
 
 **Edge case — no tags**: Report "No cctag tags found in this repository."
@@ -355,7 +355,7 @@ After each operation, report a structured summary:
 ```text
 ✓ Tag dev3 created
   Type:    dev
-  Message: follow stab9, 1. 实现xxx模块框架; 2. 添加yyy接口 [Claude Code].
+  Message: follow stab9, 1. 实现xxx模块框架; 2. 添加yyy接口; [Claude Code].
   Pushed:  yes (origin)
   Files:   3 changed, 85 insertions(+), 12 deletions(-)
 ```
@@ -363,9 +363,9 @@ After each operation, report a structured summary:
 For listing:
 
 ```text
-stab9  2026-07-09  follow stab8, 1. 重构lib目录结构; 2. 新增cctag技能 [Claude Code].
-stab8  2026-07-08  follow stab7, 1. 新增xxx功能; 2. ...
-dev1   2026-07-09  follow dev0, 1. 实现xxx模块框架 [Claude Code].
-dev0   2026-07-09  dev0 init, 1. 开始yyy功能开发 [Claude Code].
-bug0   2026-07-09  bug0 init, 1. 修复zzz空指针异常 [Claude Code].
+stab9  2026-07-09  follow stab8, 1. 重构lib目录结构; 2. 新增cctag技能; [Claude Code].
+stab8  2026-07-08  follow stab7, 1. 新增xxx功能; 2. ...;
+dev1   2026-07-09  follow bug0, 1. 实现xxx模块框架; [Claude Code].
+dev0   2026-07-09  follow stab3, 1. 开始yyy功能开发; [Claude Code].
+bug0   2026-07-09  follow dev1, 1. 修复zzz空指针异常; [Claude Code].
 ```
