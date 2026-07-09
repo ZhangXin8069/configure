@@ -25,11 +25,11 @@ Tags are **monotonically increasing integers** starting from 0. The first tag is
 Every stab tag is an **annotated tag** with the following message format:
 
 ```text
-stab<N> follow stab<N-1>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; ...... [Claude Code]
+follow stab<N-1>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; ...... [Claude Code].
 ```
 
 - `stab0` uses `stab0 init, 1. ... [Claude Code]` (no predecessor)
-- `stab<N>` (N>0) uses `stab<N> follow stab<N-1>, 1. ...`
+- `stab<N>` (N>0) uses `follow stab<N-1>, 1. ...`
 - Changelog items are numbered, separated by Chinese semicolon + space (`; `)
 - Each item is a concise Chinese sentence summarizing one logical group of changes
 - The suffix `[Claude Code]` (preceded by a space) is always appended to identify the tag creator
@@ -114,8 +114,6 @@ Analyze the collected diffs and commit messages to produce the tag message. Appl
 Tag:     stab9
 Message: stab9 follow stab8, 1. 重构lib目录结构...; 2. 新增cctag技能... [Claude Code]
 Changes: 5 files changed, 120 insertions(+), 45 deletions(-)
-
-Proceed? [Y/n]
 ```
 
 **If the user rejects**, ask what to change — reword a specific item, add a missing item, or remove an item.
