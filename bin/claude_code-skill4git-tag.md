@@ -153,7 +153,18 @@ Proceed? [Y/n]
 
 **If the user rejects**, ask what to change — reword a specific item, add a missing item, or remove an item.
 
-#### Step 1.4 — Create the tag
+#### Step 1.4 — Push current commits (before tag)
+
+Push the current branch first to ensure the remote is up to date before tagging:
+
+```bash
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push origin "$BRANCH"
+```
+
+**Edge case — no remote**: If `git remote` is empty, skip all push steps and note that no remote is configured.
+
+#### Step 1.5 — Create the tag
 
 ```bash
 git tag -a "$NEW_TAG" -m "$TAG_MESSAGE"
@@ -166,23 +177,13 @@ git tag -l "$NEW_TAG"                        # Confirm tag exists
 git tag -l --format='%(subject)' "$NEW_TAG"  # Show the tag message
 ```
 
-#### Step 1.5 — Push (optional, ask user)
+#### Step 1.6 — Push the tag (after tag)
 
-After creating the tag, ask the user whether to push:
-
-```text
-Tag dev3 created. Push to remote? [Y/n]
-```
-
-If yes:
+After creating the tag, push it to remote:
 
 ```bash
-git push origin "$NEW_TAG"     # Push the specific tag
-# OR
-git push origin --tags          # Push all tags (use only if user wants to push all)
+git push origin "$NEW_TAG"
 ```
-
-**Edge case — no remote**: If `git remote` is empty, skip the push step and note that no remote is configured.
 
 ---
 
@@ -298,19 +299,23 @@ Use the immediate predecessor tag of any type as baseline (same logic as Step 1.
 
 Propose a new message. This may be entirely rewritten or just partially edited — follow the user's instructions. Keep the same tag type.
 
-#### Step 5.5 — Replace the tag
+#### Step 5.5 — Push current commits, replace tag, push tag
 
 ```bash
+# Push current branch first
+BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push origin "$BRANCH"
+
 # Delete old tag locally
 git tag -d "$TARGET_TAG"
 
-# Delete old tag remotely (if needed)
+# Delete old tag remotely
 git push origin :refs/tags/"$TARGET_TAG" 2>/dev/null
 
 # Re-create with new message (at the same commit)
 git tag -a "$TARGET_TAG" -m "$NEW_MESSAGE"
 
-# Push updated tag (ask user first)
+# Push updated tag
 git push origin "$TARGET_TAG"
 ```
 
@@ -330,7 +335,7 @@ git log ${BASE_REF}..${HEAD_REF} --oneline --no-merges
 git diff ${BASE_REF}..${HEAD_REF} --stat
 ```
 
-Proceed with Steps 1.1–1.5, substituting `$BASE_REF` for the baseline.
+Proceed with Steps 1.1–1.6, substituting `$BASE_REF` for the baseline.
 
 ---
 
@@ -342,7 +347,7 @@ Proceed with Steps 1.1–1.5, substituting `$BASE_REF` for the baseline.
 | No previous tags at all | Use first commit as baseline |
 | No commits in repo | Abort; report nothing to tag |
 | No changes since baseline | Report and ask user whether to proceed |
-| No remote configured | Skip push; note the absence |
+| No remote configured | Skip both push steps; note the absence |
 | Tag name collision | Increment N and retry (should not happen with auto-numbering) |
 | Tag already exists remotely | Warn if local and remote messages differ |
 | Amend on non-existent tag | Report the tag doesn't exist; suggest listing |
