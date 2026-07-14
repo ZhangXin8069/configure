@@ -8,6 +8,7 @@
 #   3. 自动安装所有插件（纯 vimscript，无需外部运行时）
 #   4. 备份旧配置
 #   5. 创建必要的目录结构
+#   6. 终端环境检测 & Nerd Font 智能适配
 #
 # 补全: 使用 vim 内置 ins-completion (Tab 触发)，无需 Node.js / CoC / fzf
 #
@@ -37,7 +38,7 @@ _CYN='\033[0;36m'
 _BLD='\033[1m'
 _NC='\033[0m'
 
-# 环境检测 (仅展示用)
+# --- 操作系统检测 ---
 _IS_WSL=false
 _IS_DOCKER=false
 _IS_MAC=false
@@ -55,6 +56,66 @@ fi
 if [[ "$(uname -s)" == "Linux" ]]; then
     _IS_LINUX=true
 fi
+
+# --- 终端模拟器检测 ---
+_TERM_EMULATOR="unknown"
+_TERM_SUPPORTS_NERD_FONT=false
+
+detect_terminal() {
+    # 检查已知支持 Nerd Font 的环境变量
+    if [[ -n "${WT_SESSION:-}" ]]; then
+        _TERM_EMULATOR="Windows Terminal"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ "$TERM_PROGRAM" == "vscode" ]]; then
+        _TERM_EMULATOR="VS Code Integrated Terminal"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ "$TERM_PROGRAM" == "iTerm.app" ]]; then
+        _TERM_EMULATOR="iTerm2"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ "$TERM_PROGRAM" == "WarpTerminal" ]]; then
+        _TERM_EMULATOR="Warp"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ "$TERM_PROGRAM" == "WezTerm" ]]; then
+        _TERM_EMULATOR="WezTerm"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ "$TERM" == "xterm-kitty" ]]; then
+        _TERM_EMULATOR="Kitty"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ -n "${ALACRITTY_LOG:-}" ]] || [[ "$TERM" == "alacritty" ]]; then
+        _TERM_EMULATOR="Alacritty"
+        _TERM_SUPPORTS_NERD_FONT=true
+    elif [[ -n "${GNOME_TERMINAL_SERVICE:-}" ]]; then
+        _TERM_EMULATOR="GNOME Terminal"
+    elif [[ -n "${KONSOLE_VERSION:-}" ]]; then
+        _TERM_EMULATOR="Konsole"
+    elif [[ "$TERM" == "xterm"* ]] || [[ "$TERM" == "screen"* ]]; then
+        _TERM_EMULATOR="xterm/screen (SSH 或基础终端)"
+    elif [[ -n "${SSH_TTY:-}" ]] || [[ -n "${SSH_CONNECTION:-}" ]]; then
+        _TERM_EMULATOR="SSH 远程会话"
+    elif [[ -n "${TMUX:-}" ]]; then
+        _TERM_EMULATOR="tmux"
+    fi
+}
+
+detect_terminal
+
+# --- Nerd Font 检测 ---
+# 检查显式标记: 环境变量 $VIM_NERD_FONT 或标记文件 ~/.vim/nerd-font-enabled
+_HAS_NERD_FONT=false
+check_nerd_font() {
+    # 仅通过显式标记启用 Nerd Font (避免在未安装字体的终端上出现乱码)
+    if [[ -n "${VIM_NERD_FONT:-}" ]]; then
+        _HAS_NERD_FONT=true
+        return
+    fi
+    if [[ -f "${HOME}/.vim/nerd-font-enabled" ]]; then
+        _HAS_NERD_FONT=true
+        return
+    fi
+    # 不自动检测 — 终端支持 Nerd Font != 用户已安装 Nerd Font
+    # 用户需手动创建标记文件或设置环境变量来启用
+}
+check_nerd_font
 
 # -------------------------------------------------------------------
 # 辅助函数
@@ -75,9 +136,10 @@ log_title "Vim 终端配置脚本 (零外部依赖)"
 echo "  执行时间 : ${_TIMESTAMP}"
 echo "  脚本路径 : ${_PATH}/${_NAME}"
 echo "  运行环境 : $(uname -a | cut -d' ' -f1-3)"
-if $_IS_WSL;  then echo "  检测到   : WSL2 (Windows Subsystem for Linux)"; fi
-if $_IS_DOCKER; then echo "  检测到   : Docker 容器"; fi
-if $_IS_MAC;   then echo "  检测到   : macOS"; fi
+echo "  终端模拟器: ${_TERM_EMULATOR}"
+if $_IS_WSL;     then echo "  检测到   : WSL2 (Windows Subsystem for Linux)"; fi
+if $_IS_DOCKER;  then echo "  检测到   : Docker 容器"; fi
+if $_IS_MAC;     then echo "  检测到   : macOS"; fi
 echo ""
 echo "  补全方案 : vim 内置 ins-completion (Tab 触发)"
 echo "  依赖     : 无 (不需要 Node.js / CoC / fzf / ripgrep)"
@@ -86,7 +148,7 @@ echo ""
 # -------------------------------------------------------------------
 # 1. 检查 vim
 # -------------------------------------------------------------------
-log_step "1/5 检查 vim"
+log_step "1/6 检查 vim"
 
 if ! has_cmd vim; then
     log_err "vim 未安装！请先安装 vim (apt install vim / brew install vim / ...)"
@@ -98,7 +160,7 @@ log_ok "vim 就绪"
 # -------------------------------------------------------------------
 # 2. 创建 vim 目录结构
 # -------------------------------------------------------------------
-log_step "2/5 创建 vim 目录结构"
+log_step "2/6 创建 vim 目录结构"
 
 _VIM_DIR="${HOME}/.vim"
 mkdir -p "${_VIM_DIR}/autoload"
@@ -114,9 +176,43 @@ mkdir -p "${_VIM_DIR}/UltiSnips"
 log_ok "目录结构创建完毕"
 
 # -------------------------------------------------------------------
-# 3. 安装 vim-plug 插件管理器
+# 3. Nerd Font 检测与配置
 # -------------------------------------------------------------------
-log_step "3/5 安装 vim-plug"
+log_step "3/6 Nerd Font 检测"
+
+if $_HAS_NERD_FONT; then
+    log_ok "Nerd Font 支持: 已启用 (终端: ${_TERM_EMULATOR})"
+    # 创建标记文件，供 vim 和后续运行检测
+    touch "${_VIM_DIR}/nerd-font-enabled"
+else
+    log_warn "Nerd Font 支持: 未启用 — 图标功能已禁用，使用 ASCII 回退方案"
+    echo ""
+    echo -e "  ${_YLW}图标 (vim-devicons) 需要安装 Nerd Font 字体并在终端中选择该字体。${_NC}"
+    echo ""
+    echo "  ${_BLD}启用方法:${_NC}"
+    echo "  ┌─────────────────────────────────────────────────────────────┐"
+    echo "  │ 1. 安装 Nerd Font:                                         │"
+    echo "  │    https://www.nerdfonts.com/font-downloads                │"
+    echo "  │    推荐: JetBrainsMono Nerd Font, FiraCode Nerd Font       │"
+    echo "  │                                                             │"
+    echo "  │ 2. 在终端设置中选择该字体:                                   │"
+    echo "  │    Windows Terminal: 设置 → 配置文件 → 外观 → 字体          │"
+    echo "  │    VS Code: settings.json → terminal.integrated.fontFamily  │"
+    echo "  │    iTerm2: Preferences → Profiles → Text → Font            │"
+    echo "  │    GNOME Terminal: Preferences → 自定义字体                 │"
+    echo "  │                                                             │"
+    echo "  │ 3. 重新运行本脚本: vim_init.sh                               │"
+    echo "  │    或手动启用: touch ~/.vim/nerd-font-enabled               │"
+    echo "  └─────────────────────────────────────────────────────────────┘"
+    echo ""
+    # 确保标记文件不存在 (禁用状态)
+    rm -f "${_VIM_DIR}/nerd-font-enabled"
+fi
+
+# -------------------------------------------------------------------
+# 4. 安装 vim-plug 插件管理器
+# -------------------------------------------------------------------
+log_step "4/6 安装 vim-plug"
 
 _PLUG_URL="https://raw.githubusercontent.com/junegunn/vim-plug/master/plug.vim"
 _PLUG_PATH="${_VIM_DIR}/autoload/plug.vim"
@@ -133,9 +229,9 @@ else
 fi
 
 # -------------------------------------------------------------------
-# 4. 部署 vimrc
+# 5. 部署 vimrc (基础配置)
 # -------------------------------------------------------------------
-log_step "4/5 部署 .vimrc"
+log_step "5/6 部署 .vimrc (基础配置)"
 
 _VIMRC_SRC="${_PATH}/../lib/_vimrc"
 _VIMRC_DST="${HOME}/.vimrc"
@@ -156,28 +252,60 @@ if [[ -f "$_VIMRC_DST" ]]; then
 fi
 
 cp "$_VIMRC_SRC" "$_VIMRC_DST"
-log_ok ".vimrc 部署完毕 → ${_VIMRC_DST}"
+log_ok ".vimrc 基础配置部署完毕 → ${_VIMRC_DST}"
 
 # -------------------------------------------------------------------
-# 5. 生成插件配置块并追加到 vimrc
+# 6. 插件配置块 (自动适配 Nerd Font)
 # -------------------------------------------------------------------
+log_step "6/6 插件配置"
 
-# 检查是否已经存在插件配置
+# 清理旧版插件块 (v1 无版本标记 或 v2+ 有 BEGIN/END 标记)
+_OLD_BLOCK=false
 if grep -q "vim-plug 插件管理器" "$_VIMRC_DST" 2>/dev/null; then
-    log_info "插件配置已存在，跳过追加"
+    _OLD_BLOCK=true
+
+    # 尝试用 END 标记删除 (v2+ 格式)，失败则用起始标记到文件末尾范围删除 (v1 格式)
+    if grep -q '^" ===== vim-plug 插件管理器 v[0-9]\+ END =====' "$_VIMRC_DST" 2>/dev/null; then
+        sed -i '/^" ===== vim-plug 插件管理器 v[0-9]\+ BEGIN =====/,/^" ===== vim-plug 插件管理器 v[0-9]\+ END =====/d' "$_VIMRC_DST"
+    else
+        # v1 格式: 从标记行删到文件末尾 (v1 没有 END 标记)
+        sed -i '/^" ===== vim-plug 插件管理器/,$d' "$_VIMRC_DST"
+    fi
+    # 清理末尾空行
+    sed -i -e :a -e '/^\n*$/{$d;N;ba' -e '}' "$_VIMRC_DST" 2>/dev/null || true
+
+    log_info "已清理旧版插件配置"
+fi
+
+log_info "写入插件配置块 (Nerd Font: $($_HAS_NERD_FONT && echo '已启用' || echo '已禁用'))..."
+
+cat >> "$_VIMRC_DST" << 'PLUGEOF'
+
+" ===== vim-plug 插件管理器 v3 BEGIN =====
+" Nerd Font 检测 — 满足任一条件即启用图标:
+"   1. 环境变量 $VIM_NERD_FONT 非空
+"   2. 标记文件 ~/.vim/nerd-font-enabled 存在
+"   启用方法: touch ~/.vim/nerd-font-enabled  或  export VIM_NERD_FONT=1
+let s:has_nerd_font = 0
+if !empty($VIM_NERD_FONT) || filereadable(expand('~/.vim/nerd-font-enabled'))
+    let s:has_nerd_font = 1
+endif
+" 输出检测结果 (启动时 :message 可见)
+if s:has_nerd_font
+    let g:nerd_font_enabled = 1
 else
-    log_info "追加插件配置块..."
+    let g:nerd_font_enabled = 0
+endif
 
-    cat >> "$_VIMRC_DST" << 'PLUGEOF'
-
-" ===== vim-plug 插件管理器 (纯 vimscript, 无外部依赖) =====
 call plug#begin('~/.vim/plugged')
 
 " --- 外观 ---
 Plug 'morhetz/gruvbox'                     " 复古暖色主题 (终端友好)
 Plug 'vim-airline/vim-airline'             " 状态栏增强
 Plug 'vim-airline/vim-airline-themes'      " 状态栏主题
-Plug 'ryanoasis/vim-devicons'              " 文件图标 (需 Nerd Font, 可选)
+if s:has_nerd_font
+    Plug 'ryanoasis/vim-devicons'          " 文件图标 (需要 Nerd Font)
+endif
 Plug 'luochen1990/rainbow'                 " 彩虹括号
 
 " --- 导航 ---
@@ -220,19 +348,73 @@ let g:gruvbox_italic = 1
 silent! colorscheme gruvbox
 set background=dark
 
+" --- vim-devicons (仅 Nerd Font 环境加载) ---
+if s:has_nerd_font
+    let g:webdevicons_enable = 1
+    let g:webdevicons_conceal_nerdtree_brackets = 1
+    " 解决某些终端下图标后文件名粘连问题: 在图标和文件名之间加空格
+    let g:DevIconsEnableFoldersOpenClose = 1
+    let g:WebDevIconsUnicodeDecorateFolderNodes = 1
+else
+    " 禁用 devicons 的所有集成，避免垃圾字符
+    let g:webdevicons_enable = 0
+endif
+
 " --- vim-airline ---
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#formatter = 'unique_tail'
-let g:airline_powerline_fonts = 0
 let g:airline_theme = 'gruvbox'
+
+if s:has_nerd_font
+    " Nerd Font 环境: 使用 Powerline 符号 (需要打补丁的字体)
+    let g:airline_powerline_fonts = 1
+else
+    " 无 Nerd Font: 使用 ASCII 回退符号，兼容所有终端
+    let g:airline_powerline_fonts = 0
+    let g:airline_symbols = {}
+    let g:airline_symbols.branch    = '|'
+    let g:airline_symbols.readonly  = 'RO'
+    let g:airline_symbols.linenr    = ':'
+    let g:airline_symbols.maxlinenr = ''
+    let g:airline_symbols.dirty     = '*'
+    let g:airline_symbols.crypt     = '🔒'
+    let g:airline_symbols.paste     = 'PASTE'
+    let g:airline_symbols.spell     = 'SPELL'
+    let g:airline_symbols.notexists = '?'
+    let g:airline_symbols.whitespace = '!'
+endif
+
+" 禁用 devicons 集成 airline (如果不满足条件)
+if !s:has_nerd_font
+    let g:airline#extensions#tabline#enabled = 1
+endif
 
 " --- NERDTree ---
 let g:NERDTreeShowHidden = 1
 let g:NERDTreeMinimalUI = 1
+" 箭头符号: 使用标准 Unicode (U+25B8/U+25BE)，几乎所有现代终端都支持
+" 如果终端极旧不支持，可改用 ASCII: let g:NERDTreeDirArrowExpandable = '+'
+"                                    let g:NERDTreeDirArrowCollapsible = '-'
 let g:NERDTreeDirArrowExpandable = '▸'
 let g:NERDTreeDirArrowCollapsible = '▾'
 nnoremap <silent> <Leader>t :NERDTreeToggle<CR>
 nnoremap <silent> <Leader>e :NERDTreeFind<CR>
+
+" 无 Nerd Font 时用纯文本标记代替图标
+if !s:has_nerd_font
+    let g:NERDTreeIndicatorMapCustom = {
+        \ 'Modified'  : '~',
+        \ 'Staged'    : '+',
+        \ 'Untracked' : '?',
+        \ 'Renamed'   : '>',
+        \ 'Unmerged'  : '!',
+        \ 'Deleted'   : 'x',
+        \ 'Dirty'     : '*',
+        \ 'Clean'     : ' ',
+        \ 'Ignored'   : '-',
+        \ 'Unknown'   : '?'
+        \ }
+endif
 
 " --- vim-visual-multi ---
 let g:VM_maps = {}
@@ -329,7 +511,7 @@ autocmd BufReadPost *
     \ |   exe "normal! g`\""
     \ | endif
 
-" ===== 不可见字符显示 =====
+" ===== 不可见字符显示 ====="
 nnoremap <Leader>l :set list!<CR>
 set listchars=tab:▸\ ,trail:·,nbsp:␣,extends:→,precedes:←
 
@@ -347,16 +529,15 @@ set undodir=~/.vim/undodir//
 silent! call mkdir(&backupdir, 'p', 0700)
 silent! call mkdir(&directory, 'p', 0700)
 silent! call mkdir(&undodir, 'p', 0700)
+
+" ===== vim-plug 插件管理器 v3 END =====
 PLUGEOF
 
-    log_ok "插件配置已追加"
-fi
+log_ok "插件配置写入完毕"
 
 # -------------------------------------------------------------------
-# 5. 安装 vim 插件 (无头模式)
+# 安装 vim 插件 (无头模式)
 # -------------------------------------------------------------------
-log_step "5/5 安装 vim 插件"
-
 log_info "通过 vim-plug 安装所有插件 (纯 vimscript, 无外部依赖)..."
 vim -es -u "$_VIMRC_DST" -i NONE -c "PlugInstall" -c "qa" 2>&1 | while IFS= read -r line; do
     if [[ "$line" =~ (Installing|Updated|Already|Finishing) ]]; then
@@ -376,6 +557,17 @@ echo -e "  ${_GRN}✓${_NC} vim         : $(vim --version 2>/dev/null | head -1 
 echo -e "  ${_GRN}✓${_NC} 插件管理器  : vim-plug (${_PLUG_PATH})"
 echo -e "  ${_GRN}✓${_NC} 配置文件    : ${_VIMRC_DST}"
 echo -e "  ${_GRN}✓${_NC} 补全方案    : vim 内置 ins-completion (Tab 触发)"
+echo -e "  ${_GRN}✓${_NC} 终端        : ${_TERM_EMULATOR}"
+if $_HAS_NERD_FONT; then
+    echo -e "  ${_GRN}✓${_NC} Nerd Font   : 已启用 (vim-devicons, powerline 符号)"
+else
+    echo -e "  ${_YLW}⚠${_NC} Nerd Font   : 未启用 (使用 ASCII 回退方案, 无图标)"
+    echo ""
+    echo -e "  ${_BLD}如需启用图标支持:${_NC}"
+    echo "    1. 从 https://www.nerdfonts.com 下载安装 Nerd Font"
+    echo "    2. 在终端设置中切换为该字体"
+    echo "    3. 执行: touch ~/.vim/nerd-font-enabled && vim_init.sh"
+fi
 echo ""
 echo -e "  ${_BLD}核心快捷键:${_NC}"
 echo -e "  ┌──────────────────────┬──────────────────────────────┐"
