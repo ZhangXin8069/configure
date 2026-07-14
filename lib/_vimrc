@@ -90,3 +90,178 @@ endif
 set path+=**                " :find searches recursively
 nnoremap <Leader>f :find *
 nnoremap <Leader>F :vimgrep //g **/*<Left><Left><Left><Left><Left><Left><Left>
+
+" ===== vim-plug Plugins =====
+call plug#begin('~/.vim/plugged')
+
+Plug 'morhetz/gruvbox'
+Plug 'vim-airline/vim-airline'
+Plug 'vim-airline/vim-airline-themes'
+Plug 'luochen1990/rainbow'
+Plug 'preservim/nerdtree'
+Plug 'mhinz/vim-startify'
+Plug 'tpope/vim-commentary'
+Plug 'tpope/vim-surround'
+Plug 'mg979/vim-visual-multi'
+Plug 'jiangmiao/auto-pairs'
+Plug 'tpope/vim-repeat'
+Plug 'tpope/vim-unimpaired'
+Plug 'junegunn/vim-easy-align'
+Plug 'tpope/vim-fugitive'
+Plug 'airblade/vim-gitgutter'
+Plug 'junegunn/gv.vim'
+Plug 'godlygeek/tabular'
+if !empty($TMUX)
+    Plug 'christoomey/vim-tmux-navigator'
+    Plug 'tmux-plugins/vim-tmux-focus-events'
+endif
+
+call plug#end()
+
+" ===== Theme =====
+if has('termguicolors') && ($COLORTERM == 'truecolor' || $COLORTERM == '24bit')
+    set termguicolors
+endif
+let g:gruvbox_contrast_dark = 'medium'
+let g:gruvbox_italic = 1
+silent! colorscheme gruvbox
+set background=dark
+
+" ===== vim-airline (ASCII) =====
+let g:airline#extensions#tabline#enabled = 1
+let g:airline#extensions#tabline#formatter = 'unique_tail'
+let g:airline_powerline_fonts = 0
+let g:airline_theme = 'gruvbox'
+let g:airline_symbols = {}
+let g:airline_symbols.branch     = '|'
+let g:airline_symbols.readonly   = 'RO'
+let g:airline_symbols.linenr     = ':'
+let g:airline_symbols.maxlinenr  = ''
+let g:airline_symbols.dirty      = '*'
+let g:airline_symbols.paste      = 'PASTE'
+let g:airline_symbols.spell      = 'SPELL'
+let g:airline_symbols.notexists  = '?'
+let g:airline_symbols.whitespace = '!'
+
+" ===== NERDTree =====
+let g:NERDTreeShowHidden = 1
+let g:NERDTreeMinimalUI = 1
+let g:NERDTreeDirArrowExpandable = '+'
+let g:NERDTreeDirArrowCollapsible = '-'
+let g:NERDTreeIndicatorMapCustom = {
+    \ 'Modified'  : '~',
+    \ 'Staged'    : '+',
+    \ 'Untracked' : '?',
+    \ 'Renamed'   : '>',
+    \ 'Unmerged'  : '!',
+    \ 'Deleted'   : 'x',
+    \ 'Dirty'     : '*',
+    \ 'Clean'     : ' ',
+    \ 'Ignored'   : '-',
+    \ 'Unknown'   : '?'
+    \ }
+nnoremap <silent> <Leader>t :NERDTreeToggle<CR>
+nnoremap <silent> <Leader>e :NERDTreeFind<CR>
+
+" ===== vim-visual-multi =====
+let g:VM_maps = {}
+let g:VM_maps['Find Under'] = '<C-n>'
+let g:VM_maps['Find Subword Under'] = '<C-n>'
+
+" ===== rainbow =====
+let g:rainbow_active = 1
+
+" ===== vim-startify =====
+let g:startify_change_to_dir = 1
+let g:startify_session_autoload = 1
+let g:startify_lists = [
+    \ { 'type': 'files',     'header': ['   最近文件'] },
+    \ { 'type': 'dir',       'header': ['   当前目录: ' . getcwd()] },
+    \ { 'type': 'sessions',  'header': ['   Sessions'] },
+    \ { 'type': 'bookmarks', 'header': ['   书签'] },
+    \ ]
+let g:startify_bookmarks = [
+    \ { 'c': '~/configure' },
+    \ { 'l': '~/lattice-pdf' },
+    \ { 'p': '~/PyQCU' },
+    \ { 'q': '~/PyQUDA' },
+    \ ]
+
+" ===== vim-easy-align =====
+xmap ga <Plug>(EasyAlign)
+nmap ga <Plug>(EasyAlign)
+
+" ===== Key Mappings (Leader = Space) =====
+let mapleader = " "
+
+nnoremap <Leader>w :w<CR>
+nnoremap <Leader>q :q!<CR>
+nnoremap <Leader>s :source ~/.vimrc<CR>
+nnoremap <Leader>h :nohlsearch<CR>
+
+nnoremap <silent> <C-h> :wincmd h<CR>
+nnoremap <silent> <C-j> :wincmd j<CR>
+nnoremap <silent> <C-k> :wincmd k<CR>
+nnoremap <silent> <C-l> :wincmd l<CR>
+
+inoremap jk <Esc>
+inoremap kj <Esc>
+cnoremap jk <C-c>
+
+nnoremap <Leader>bn :bnext<CR>
+nnoremap <Leader>bp :bprevious<CR>
+nnoremap <Leader>bd :bdelete<CR>
+nnoremap <Leader>bl :ls<CR>:b<Space>
+
+nnoremap <Leader>cn :cnext<CR>
+nnoremap <Leader>cp :cprev<CR>
+nnoremap <Leader>co :copen<CR>
+
+vnoremap < <gv
+vnoremap > >gv
+
+nnoremap <A-j> :m .+1<CR>==
+nnoremap <A-k> :m .-2<CR>==
+inoremap <A-j> <Esc>:m .+1<CR>==gi
+inoremap <A-k> <Esc>:m .-2<CR>==gi
+vnoremap <A-j> :m '>+1<CR>gv=gv
+vnoremap <A-k> :m '<-2<CR>gv=gv
+
+vnoremap // y/\V<C-R>=escape(@",'/\')<CR><CR>
+
+autocmd FileType python nnoremap <buffer> <Leader>r :w<CR>:!python %<CR>
+autocmd FileType sh nnoremap <buffer> <Leader>r :w<CR>:!bash %<CR>
+autocmd FileType c,cpp nnoremap <buffer> <Leader>r :w<CR>:!gcc % -o /tmp/a.out && /tmp/a.out<CR>
+
+" ===== Filetype Indent =====
+autocmd FileType python setlocal ts=4 sw=4 sts=4 expandtab
+autocmd FileType yaml   setlocal ts=2 sw=2 sts=2 expandtab
+autocmd FileType html,css,javascript,json setlocal ts=2 sw=2 sts=2 expandtab
+autocmd FileType c,cpp,cuda   setlocal ts=4 sw=4 sts=4 noexpandtab
+autocmd FileType make,cmake   setlocal ts=4 sw=4 sts=4 noexpandtab
+autocmd FileType markdown setlocal ts=2 sw=2 sts=2 expandtab spell
+
+" ===== Cursor Position Memory =====
+autocmd BufReadPost *
+    \ if line("'\"") >= 1 && line("'\"") <= line("$") && &ft !~# 'commit'
+    \ |   exe "normal! g`\""
+    \ | endif
+
+" ===== Invisible Characters =====
+nnoremap <Leader>l :set list!<CR>
+set listchars=tab:>-,trail:.,nbsp:+,extends:>,precedes:<
+
+" ===== netrw =====
+let g:netrw_banner = 0
+let g:netrw_liststyle = 3
+let g:netrw_browse_split = 4
+let g:netrw_altv = 1
+let g:netrw_winsize = 25
+
+" ===== Backup & Swap =====
+set backupdir=~/.vim/backup//
+set directory=~/.vim/swap//
+set undodir=~/.vim/undodir//
+silent! call mkdir(&backupdir, 'p', 0700)
+silent! call mkdir(&directory, 'p', 0700)
+silent! call mkdir(&undodir, 'p', 0700)
