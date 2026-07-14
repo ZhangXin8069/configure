@@ -41,7 +41,6 @@ cat << 'USAGE'
   │  常用 alias (自动生成)                                       │
   │    gpush.sh / gpull.sh   Git 推送/拉取                       │
   │    gback.sh              Git 分支备份                        │
-  │    gcomm.sh              Git 提交                            │
   │    gls.sh                Git 仓库列表                        │
   │    gzALLpush.sh          推送所有 repo                       │
   │    ssub.sh / ssqueue.sh  Slurm 作业管理                      │
