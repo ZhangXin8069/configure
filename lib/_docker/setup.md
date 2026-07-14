@@ -25,6 +25,7 @@ docker pull docker.io/zhangxin8069/computer-v20250708:ubuntu-22.04_gcc-11.4.0_py
 ### 方式二：从本地 tar 文件加载
 
 ```bash
+# 发送邮件到zhangxin8069@qq.com请求张鑫阿里云盘/资源库/Downloads/zip/computer-v20250708:ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17.tar
 docker load -i E:\Docker\computer-v20250708:ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17.tar
 ```
 
