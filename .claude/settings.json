@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(xelatex *)",
+      "Bash(pdftotext *)",
+      "Bash(fc-list *)"
+    ]
+  }
+}
