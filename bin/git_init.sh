@@ -49,7 +49,6 @@ cat << 'USAGE2'
   │    gpush.sh   推送到 origin/main                             │
   │    gpull.sh   从 origin 拉取                                 │
   │    gback.sh   创建备份分支                                   │
-  │    gcomm.sh   带注释提交                                     │
   │    gls.sh     列出所有 git 仓库                              │
   │    gsize      查看仓库大小                                   │
   │                                                              │
