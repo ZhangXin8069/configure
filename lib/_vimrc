@@ -1,4 +1,5 @@
-" ===== Most Convenient Basic Vim Configuration =====
+" ===== Vim Configuration — Zero External Dependencies =====
+" 自动补全由 vim 内置 ins-completion 提供，无需任何外部工具。
 
 " --- Visual Experience ---
 set number                " Show absolute line numbers
@@ -6,6 +7,10 @@ set relativenumber        " Also show relative line numbers (current line is 0)
 set cursorline            " Highlight the current line
 syntax on                 " Enable syntax highlighting
 set showmode              " Show current mode at the bottom
+set showcmd               " Show partially typed commands
+
+" --- Filetype Detection (required for omni-completion) ---
+filetype plugin on        " Enable filetype plugins → activates built-in omni-completion
 
 " --- Indentation and Spaces ---
 set tabstop=4             " Tab width set to 4 spaces
@@ -33,3 +38,55 @@ set encoding=utf-8        " Use UTF-8 encoding
 " --- Status Bar ---
 set laststatus=2          " Always show status bar
 set ruler                 " Show cursor line and column in the bottom right
+
+" ===== Built-in Completion (Zero External Dependencies) =====
+" Tab 触发/导航补全 — vim 原生 ins-completion，无需任何外部工具
+
+set completeopt=menu,menuone,preview,noselect,noinsert
+set complete=.,w,b,u,t,i
+set pumheight=10
+
+function! s:check_back_space() abort
+    let col = col('.') - 1
+    return !col || getline('.')[col - 1] =~# '\s'
+endfunction
+
+" Tab: 触发关键字补全 / 在弹出菜单中向前选择
+inoremap <silent><expr> <TAB>
+    \ pumvisible() ? "\<C-n>" :
+    \ <SID>check_back_space() ? "\<TAB>" :
+    \ "\<C-n>"
+
+" Shift+Tab: 在弹出菜单中向后选择
+inoremap <expr> <S-TAB> pumvisible() ? "\<C-p>" : "\<C-p>"
+
+" Ctrl+Space: 触发 omni-completion (文件类型感知: Python/C/HTML/CSS/JS...)
+inoremap <C-Space> <C-x><C-o>
+
+" Ctrl+F: 触发文件路径补全
+inoremap <C-@> <C-x><C-f>
+
+" ===== Command-line Completion ---
+set wildmenu               " Enhanced command-line completion menu
+set wildmode=longest:full,full
+set wildignore+=*.o,*.obj,*.pyc,*.swp,*.class,*.so,*.dylib,*.exe
+
+" ===== Performance ---
+set lazyredraw              " Don't redraw during macro execution
+set ttyfast                 " Fast terminal connection
+set scrolloff=3             " Keep 3 lines visible above/below cursor
+set sidescrolloff=5         " Keep 5 columns visible left/right of cursor
+set updatetime=300          " CursorHold trigger interval (ms)
+set synmaxcol=200           " Don't highlight syntax beyond column 200
+set display+=lastline       " Show as much of last line as possible
+
+" ===== Persistent Undo ---
+if has('persistent_undo')
+    set undofile
+    set undodir=~/.vim/undodir
+endif
+
+" ===== File Search (built-in :find, no fzf needed) ---
+set path+=**                " :find searches recursively
+nnoremap <Leader>f :find *
+nnoremap <Leader>F :vimgrep //g **/*<Left><Left><Left><Left><Left><Left><Left>
