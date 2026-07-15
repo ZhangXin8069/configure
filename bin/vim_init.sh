@@ -69,7 +69,7 @@ cat << 'USAGE'
   │    C-x C-l       整行补全                                    │
   │                                                              │
   │  插件                                                        │
-  │    solarized, vim-airline, rainbow, nerdtree, vim-startify     │
+  │    solarized, vim-airline, rainbow, nerdtree, vim-startify   │
   │    vim-commentary, vim-surround, vim-visual-multi            │
   │    auto-pairs, vim-repeat, vim-unimpaired, vim-easy-align    │
   │    vim-fugitive, vim-gitgutter, gv.vim, tabular              │
