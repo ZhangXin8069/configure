@@ -94,7 +94,7 @@ nnoremap <Leader>F :vimgrep //g **/*<Left><Left><Left><Left><Left><Left><Left>
 " ===== vim-plug Plugins =====
 call plug#begin('~/.vim/plugged')
 
-Plug 'morhetz/gruvbox'
+Plug 'altercation/vim-colors-solarized'
 Plug 'vim-airline/vim-airline'
 Plug 'vim-airline/vim-airline-themes'
 Plug 'luochen1990/rainbow'
@@ -122,16 +122,14 @@ call plug#end()
 if has('termguicolors') && ($COLORTERM == 'truecolor' || $COLORTERM == '24bit')
     set termguicolors
 endif
-let g:gruvbox_contrast_dark = 'medium'
-let g:gruvbox_italic = 1
-silent! colorscheme gruvbox
+silent! colorscheme solarized
 set background=dark
 
 " ===== vim-airline (ASCII) =====
 let g:airline#extensions#tabline#enabled = 1
 let g:airline#extensions#tabline#formatter = 'unique_tail'
 let g:airline_powerline_fonts = 0
-let g:airline_theme = 'gruvbox'
+let g:airline_theme = 'solarized'
 let g:airline_symbols = {}
 let g:airline_symbols.branch     = '|'
 let g:airline_symbols.readonly   = 'RO'
