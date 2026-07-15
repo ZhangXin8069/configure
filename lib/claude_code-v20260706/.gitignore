@@ -1,0 +1,14 @@
+# Data directories — exclude binaries and archives
+/claude-code/*/
+/claude-code/latest.txt
+/cc-switch-cli/*/
+/cc-switch-cli/latest.json
+/cc-switch/*/
+/cc-switch/latest.json
+
+# Keep scripts and docs
+!/cc-v20260706.sh
+!/cc-v20260706.ps1
+!/cc_cli-v20260708.sh
+!/download_all.sh
+!/setup.md
