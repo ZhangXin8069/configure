@@ -1,66 +1,84 @@
 #!/usr/bin/env bash
-# xx99 工作站连接脚本
-# 功能: 确保 ZeroTier 在线, 然后 SSH 连接到 x99 工作站
-# 目标: 172.25.193.104:22 (x99 局域网 IP, 通过 ZeroTier 路由可达)
-# 前置: 需先运行 zerotier_init.sh 加入 ZeroTier 网络
+# xx99.sh — X99 工作站一键连接 (ZeroTier + SSH + ddocker)
 #
-# 用法: bash xx99.sh [ssh 额外参数]
+# 功能:
+#   1. 确保 ZeroTier 在线 (自动启动)
+#   2. SSH 连接到 x99 工作站 (172.25.193.104)
+#   3. 自动运行 ddocker.bat 进入 Docker 容器
+#
+# 用法:
+#   bash xx99.sh              默认: SSH → 自动执行 ddocker.bat
+#   bash xx99.sh --no-ddocker  仅 SSH，不运行 ddocker
+#   bash xx99.sh -- <cmd>      仅 SSH，执行自定义命令
+#
+# 前置: 需先运行 zerotier_init.sh 加入 ZeroTier 网络
 
 set -euo pipefail
 
-_PATH=$(
-    cd "$(dirname "$0")"
-    pwd
-)
+_PATH=$(cd "$(dirname "$0")" && pwd)
 _NAME=$(basename "$0")
-echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "### ${_NAME} started : $(date "+%Y-%m-%d-%H-%M-%S") ###"
 
 readonly TARGET_HOST="172.25.193.104"
 readonly SSH_PORT="${SSH_PORT:-22}"
 readonly SSH_USER="${SSH_USER:-kfutfd}"
 
+# 远程 Windows 上 ddocker.bat 路径 (相对于用户 HOME)
+readonly REMOTE_DDOCKER="${REMOTE_DDOCKER:-configure\\bin\\ddocker.bat}"
+
+# ── 解析参数 ──
+AUTO_DDOCKER=true
+SSH_EXTRA=()
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-ddocker)
+            AUTO_DDOCKER=false
+            shift
+            ;;
+        --)
+            shift
+            SSH_EXTRA=("$@")
+            break
+            ;;
+        *)
+            SSH_EXTRA+=("$1")
+            shift
+            ;;
+    esac
+done
+
 # ──────────────────────────────────────────────
 # 1. 确保 zerotier-cli 可用
 # ──────────────────────────────────────────────
 if ! command -v zerotier-cli &>/dev/null; then
-    echo "[ERROR] 未检测到 zerotier-cli, 请先运行 zerotier_init.sh 安装 ZeroTier"
+    echo "[ERROR] 未检测到 zerotier-cli，请先运行 zerotier_init.sh"
     echo "  sudo bash ${_PATH}/zerotier_init.sh"
     exit 1
 fi
 
 # ──────────────────────────────────────────────
-# 2. 如果 ZeroTier 未运行, 尝试启动
+# 2. 如果 ZeroTier 未运行，尝试启动
 # ──────────────────────────────────────────────
 if zerotier-cli status 2>/dev/null | grep -q 'ONLINE'; then
-    echo "[INFO] ZeroTier 已在线"
+    echo "[OK] ZeroTier 在线"
 else
-    echo "[STEP] ZeroTier 未运行, 尝试启动..."
+    echo "[STEP] ZeroTier 未运行，尝试启动..."
 
+    _SUDO=""
     if [[ $EUID -ne 0 ]]; then
-        echo "[WARN] 启动 ZeroTier 需要 root 权限, 将尝试 sudo..."
-        if ! sudo -n true 2>/dev/null; then
-            _OS_NAME="$(uname -s)"
-            if [[ "${_OS_NAME}" == "Darwin" ]]; then
-                echo "[WARN] 无免密 sudo 权限, 跳过 ZeroTier 启动"
-                echo "  请手动启动: sudo zerotier-one -d"
-                echo "  或通过 launchd: sudo launchctl load /Library/LaunchDaemons/com.zerotier.zerotier-one.plist"
-                echo "  将继续尝试 SSH 连接..."
-                _SUDO=""
-            else
-                echo "[ERROR] 无免密 sudo 权限, 请手动启动:"
-                echo "  sudo systemctl start zerotier-one"
-                echo "  或"
-                echo "  sudo zerotier-one -d"
-                exit 1
-            fi
-        else
+        if sudo -n true 2>/dev/null; then
             _SUDO="sudo"
+        elif [[ "$(uname -s)" == "Darwin" ]]; then
+            echo "[WARN] 无免密 sudo，跳过自动启动（macOS 将继续尝试 SSH）"
+        else
+            echo "[ERROR] 无免密 sudo 权限，请手动启动 ZeroTier"
+            echo "  sudo systemctl start zerotier-one"
+            exit 1
         fi
-    else
-        _SUDO=""
     fi
 
-    # 尝试 systemd / service / 手动
+    # 尝试 systemd / service / 手动启动
     if command -v systemctl &>/dev/null && systemctl is-system-running &>/dev/null 2>&1; then
         ${_SUDO} systemctl start zerotier-one 2>/dev/null || true
     elif command -v service &>/dev/null; then
@@ -72,7 +90,7 @@ else
         sleep 2
     fi
 
-    # 等待上线
+    # 等待上线，最多 15 秒
     for i in $(seq 1 15); do
         if zerotier-cli status 2>/dev/null | grep -q 'ONLINE'; then
             echo "[OK] ZeroTier 已上线"
@@ -82,15 +100,10 @@ else
     done
 
     if ! zerotier-cli status 2>/dev/null | grep -q 'ONLINE'; then
-        _OS_NAME="$(uname -s)"
-        if [[ "${_OS_NAME}" == "Darwin" ]]; then
-            echo "[WARN] ZeroTier 启动失败或未运行"
-            echo "  请手动排查: zerotier-cli status"
-            echo "  或: sudo zerotier-one -d"
-            echo "  将继续尝试 SSH 连接..."
+        if [[ "$(uname -s)" == "Darwin" ]]; then
+            echo "[WARN] ZeroTier 启动失败，继续尝试 SSH..."
         else
-            echo "[ERROR] ZeroTier 启动失败, 请手动排查"
-            echo "  sudo systemctl status zerotier-one"
+            echo "[ERROR] ZeroTier 启动失败"
             echo "  zerotier-cli status"
             exit 1
         fi
@@ -98,24 +111,33 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# 3. 连通性检查 (可选, 非致命)
+# 3. 连通性检查 (快速，非阻塞)
 # ──────────────────────────────────────────────
-echo "[INFO] 检测到 ${TARGET_HOST} 的连通性..."
 if ping -c 1 -W 2 "${TARGET_HOST}" &>/dev/null; then
     echo "[OK] ${TARGET_HOST} 可达"
 else
-    echo "[WARN] ${TARGET_HOST} ping 不通, 但仍尝试 SSH 连接"
-    echo "  (可能对方禁 ping, 或 ZeroTier 路由尚未建立)"
+    echo "[WARN] ${TARGET_HOST} ping 不通，仍尝试 SSH..."
 fi
 
 # ──────────────────────────────────────────────
 # 4. SSH 连接
 # ──────────────────────────────────────────────
-echo "[STEP] SSH 连接 ${SSH_USER}@${TARGET_HOST}:${SSH_PORT} ..."
 echo ""
 
-# 传递额外参数 (如 -p 端口等)
-ssh -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" "$@"
+if [[ "$AUTO_DDOCKER" == true && ${#SSH_EXTRA[@]} -eq 0 ]]; then
+    echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST} → ${REMOTE_DDOCKER}"
+    echo ""
+    # -t 强制分配 TTY，docker exec -it 需要
+    ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" "${REMOTE_DDOCKER}"
+elif [[ ${#SSH_EXTRA[@]} -gt 0 ]]; then
+    echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST}，执行: ${SSH_EXTRA[*]}"
+    echo ""
+    ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" "${SSH_EXTRA[@]}"
+else
+    echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST} (交互模式)"
+    echo ""
+    ssh -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}"
+fi
 
 echo ""
-echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+echo "### ${_NAME} done : $(date "+%Y-%m-%d-%H-%M-%S") ###"
