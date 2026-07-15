@@ -167,6 +167,6 @@ echo.
 
 REM Launch: the shell -c runs "cd $HOME && exec <final_shell>"
 REM $HOME is expanded by the container's shell, not by CMD
-start "Docker: !LATEST!" cmd /k docker exec -it "!LATEST!" !SH! -c "cd $HOME && exec !FINAL! -l"
+docker exec -it "!LATEST!" !SH! -c "cd $HOME && exec !FINAL! -l"
 
 exit /b 0
