@@ -39,13 +39,23 @@ else
     if [[ $EUID -ne 0 ]]; then
         echo "[WARN] 启动 ZeroTier 需要 root 权限, 将尝试 sudo..."
         if ! sudo -n true 2>/dev/null; then
-            echo "[ERROR] 无免密 sudo 权限, 请手动启动:"
-            echo "  sudo systemctl start zerotier-one"
-            echo "  或"
-            echo "  sudo zerotier-one -d"
-            exit 1
+            _OS_NAME="$(uname -s)"
+            if [[ "${_OS_NAME}" == "Darwin" ]]; then
+                echo "[WARN] 无免密 sudo 权限, 跳过 ZeroTier 启动"
+                echo "  请手动启动: sudo zerotier-one -d"
+                echo "  或通过 launchd: sudo launchctl load /Library/LaunchDaemons/com.zerotier.zerotier-one.plist"
+                echo "  将继续尝试 SSH 连接..."
+                _SUDO=""
+            else
+                echo "[ERROR] 无免密 sudo 权限, 请手动启动:"
+                echo "  sudo systemctl start zerotier-one"
+                echo "  或"
+                echo "  sudo zerotier-one -d"
+                exit 1
+            fi
+        else
+            _SUDO="sudo"
         fi
-        _SUDO="sudo"
     else
         _SUDO=""
     fi
@@ -72,10 +82,18 @@ else
     done
 
     if ! zerotier-cli status 2>/dev/null | grep -q 'ONLINE'; then
-        echo "[ERROR] ZeroTier 启动失败, 请手动排查"
-        echo "  sudo systemctl status zerotier-one"
-        echo "  zerotier-cli status"
-        exit 1
+        _OS_NAME="$(uname -s)"
+        if [[ "${_OS_NAME}" == "Darwin" ]]; then
+            echo "[WARN] ZeroTier 启动失败或未运行"
+            echo "  请手动排查: zerotier-cli status"
+            echo "  或: sudo zerotier-one -d"
+            echo "  将继续尝试 SSH 连接..."
+        else
+            echo "[ERROR] ZeroTier 启动失败, 请手动排查"
+            echo "  sudo systemctl status zerotier-one"
+            echo "  zerotier-cli status"
+            exit 1
+        fi
     fi
 fi
 
