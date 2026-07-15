@@ -37,9 +37,15 @@ esac
 echo "[INFO] 操作系统: $(uname -s) ($(uname -m))"
 
 if [[ $EUID -ne 0 ]]; then
-    echo "[ERROR] 该脚本必须以 root 运行 (需要安装软件包和启动系统服务)"
-    echo "  请执行: sudo bash ${_NAME}"
-    exit 1
+    if [[ "${_OS}" == "macos" ]]; then
+        echo "[WARN] 当前非 root 用户, 部分操作(启动系统服务/写入系统目录)可能失败"
+        echo "  如需完整权限: sudo bash ${_NAME}"
+        echo "  将继续尝试执行..."
+    else
+        echo "[ERROR] 该脚本必须以 root 运行 (需要安装软件包和启动系统服务)"
+        echo "  请执行: sudo bash ${_NAME}"
+        exit 1
+    fi
 fi
 
 # ──────────────────────────────────────────────
@@ -171,8 +177,14 @@ _install_zerotier() {
     fi
 
     if ! command -v zerotier-cli &>/dev/null; then
-        echo "[ERROR] ZeroTier 安装失败, 请检查网络或手动安装"
-        exit 1
+        if [[ "${_OS}" == "macos" && $EUID -ne 0 ]]; then
+            echo "[WARN] ZeroTier 安装失败或未找到 zerotier-cli (可能权限不足)"
+            echo "  请尝试: sudo bash ${_NAME}"
+            echo "  将继续执行..."
+        else
+            echo "[ERROR] ZeroTier 安装失败, 请检查网络或手动安装"
+            exit 1
+        fi
     fi
     echo "[OK] ZeroTier One 安装完成"
 }
@@ -273,13 +285,18 @@ _start_service() {
     launchd)
         local _plist="/Library/LaunchDaemons/com.zerotier.zerotier-one.plist"
         if [[ -f "${_plist}" ]]; then
-            launchctl unload "${_plist}" 2>/dev/null || true
-            launchctl load "${_plist}" 2>/dev/null || true
-            if _check_online 10; then
-                echo "[OK] zerotier-one 已启动 (launchd)"
-                return
+            if launchctl load "${_plist}" 2>/dev/null; then
+                if _check_online 10; then
+                    echo "[OK] zerotier-one 已启动 (launchd)"
+                    return
+                fi
+                echo "[WARN] launchd 启动超时, 尝试手动模式..."
+            else
+                echo "[WARN] launchctl 操作失败 (可能权限不足), 尝试手动模式..."
+                if [[ $EUID -ne 0 ]]; then
+                    echo "  如需通过 launchd 管理: sudo launchctl load ${_plist}"
+                fi
             fi
-            echo "[WARN] launchd 启动超时, 尝试手动模式..."
         else
             echo "[WARN] 未找到 ZeroTier launchd plist, 尝试手动模式..."
         fi
@@ -315,16 +332,24 @@ _start_service() {
         _pid=$(pgrep -x zerotier-one | head -1 || echo "?")
         echo "[OK] zerotier-one 已手动启动 (PID: ${_pid})"
     else
-        echo "[ERROR] zerotier-one 启动失败"
-        echo "  - 日志: journalctl -u zerotier-one 或 /var/log/syslog"
-        echo "  - tun 设备: ls -la /dev/net/tun"
-        if [[ "${_IS_CONTAINER}" == true ]]; then
-            echo "  - 容器参数: --cap-add=NET_ADMIN --device=/dev/net/tun"
+        if [[ "${_OS}" == "macos" && $EUID -ne 0 ]]; then
+            echo "[WARN] zerotier-one 启动失败 (可能权限不足)"
+            echo "  解决方案: sudo bash ${_NAME}"
+            echo "  或手动: sudo zerotier-one -d"
+            echo "  检查: 系统偏好设置 → 隐私与安全性 → 允许 ZeroTier 系统扩展"
+            echo "  将继续执行后续步骤..."
+        else
+            echo "[ERROR] zerotier-one 启动失败"
+            echo "  - 日志: journalctl -u zerotier-one 或 /var/log/syslog"
+            echo "  - tun 设备: ls -la /dev/net/tun"
+            if [[ "${_IS_CONTAINER}" == true ]]; then
+                echo "  - 容器参数: --cap-add=NET_ADMIN --device=/dev/net/tun"
+            fi
+            if [[ "${_OS}" == "macos" ]]; then
+                echo "  - macOS: 检查 系统偏好设置 → 隐私与安全性 → 允许 ZeroTier 系统扩展"
+            fi
+            exit 1
         fi
-        if [[ "${_OS}" == "macos" ]]; then
-            echo "  - macOS: 检查 系统偏好设置 → 隐私与安全性 → 允许 ZeroTier 系统扩展"
-        fi
-        exit 1
     fi
 }
 
@@ -338,33 +363,41 @@ fi
 # 6. 加入网络 + 设置 orbit 卫星节点
 # ──────────────────────────────────────────────
 if ! zerotier-cli status 2>/dev/null | grep -q 'ONLINE'; then
-    echo "[ERROR] zerotier-one 未在线, 无法加入网络"
-    echo "  请检查: zerotier-cli status"
-    exit 1
-fi
-
-# 6a. 加入网络
-if [[ "${_ALREADY_JOINED}" == true ]]; then
-    echo "[INFO] 已加入网络 ${NETWORK_ID}, 跳过 join 步骤"
-else
-    echo "[STEP] 加入 ZeroTier 网络: ${NETWORK_ID} ..."
-    _JOIN_RESULT=$(zerotier-cli join "${NETWORK_ID}" 2>&1) || true
-    if echo "${_JOIN_RESULT}" | grep -qE '200 join OK|already a member'; then
-        echo "[OK] 已向网络 ${NETWORK_ID} 发起加入请求"
+    if [[ "${_OS}" == "macos" && $EUID -ne 0 ]]; then
+        echo "[WARN] zerotier-one 未在线, 跳过网络加入步骤"
+        echo "  请以 root 运行以完成网络配置: sudo bash ${_NAME}"
+        echo "  或手动: sudo zerotier-one -d && zerotier-cli join ${NETWORK_ID}"
     else
-        echo "[ERROR] 加入网络失败: ${_JOIN_RESULT}"
+        echo "[ERROR] zerotier-one 未在线, 无法加入网络"
+        echo "  请检查: zerotier-cli status"
         exit 1
     fi
 fi
 
-# 6b. 设置 orbit 卫星节点 (加速 NAT 穿透, 幂等操作)
-echo "[STEP] 设置 orbit 卫星节点: ${ORBIT_ID} ..."
-_ORBIT_RESULT=$(zerotier-cli orbit "${ORBIT_ID}" "${ORBIT_ID}" 2>&1) || true
-if echo "${_ORBIT_RESULT}" | grep -qE '200 orbit OK|already orbiting'; then
-    echo "[OK] orbit ${ORBIT_ID} 已设置"
-else
-    echo "[WARN] orbit 设置返回: ${_ORBIT_RESULT}"
-    echo "  (如果显示 already orbiting 可忽略此警告)"
+# 6a. 加入网络
+if zerotier-cli status 2>/dev/null | grep -q 'ONLINE'; then
+    if [[ "${_ALREADY_JOINED}" == true ]]; then
+        echo "[INFO] 已加入网络 ${NETWORK_ID}, 跳过 join 步骤"
+    else
+        echo "[STEP] 加入 ZeroTier 网络: ${NETWORK_ID} ..."
+        _JOIN_RESULT=$(zerotier-cli join "${NETWORK_ID}" 2>&1) || true
+        if echo "${_JOIN_RESULT}" | grep -qE '200 join OK|already a member'; then
+            echo "[OK] 已向网络 ${NETWORK_ID} 发起加入请求"
+        else
+            echo "[ERROR] 加入网络失败: ${_JOIN_RESULT}"
+            exit 1
+        fi
+    fi
+
+    # 6b. 设置 orbit 卫星节点 (加速 NAT 穿透, 幂等操作)
+    echo "[STEP] 设置 orbit 卫星节点: ${ORBIT_ID} ..."
+    _ORBIT_RESULT=$(zerotier-cli orbit "${ORBIT_ID}" "${ORBIT_ID}" 2>&1) || true
+    if echo "${_ORBIT_RESULT}" | grep -qE '200 orbit OK|already orbiting'; then
+        echo "[OK] orbit ${ORBIT_ID} 已设置"
+    else
+        echo "[WARN] orbit 设置返回: ${_ORBIT_RESULT}"
+        echo "  (如果显示 already orbiting 可忽略此警告)"
+    fi
 fi
 
 # ──────────────────────────────────────────────
