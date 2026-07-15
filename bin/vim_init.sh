@@ -4,7 +4,7 @@
 # 补全: vim 内置 ins-completion (Tab), 无需 Node.js / CoC / fzf
 # 插件: vim-plug 管理, 预装于 lib/_vim/ 无需联网
 # 图标: 纯 ASCII 符号, 兼容所有终端
-# 主题: gruvbox dark + vim-airline
+# 主题: solarized dark + vim-airline
 
 _PATH=$(
     cd "$(dirname "$0")"
@@ -69,7 +69,7 @@ cat << 'USAGE'
   │    C-x C-l       整行补全                                    │
   │                                                              │
   │  插件                                                        │
-  │    gruvbox, vim-airline, rainbow, nerdtree, vim-startify     │
+  │    solarized, vim-airline, rainbow, nerdtree, vim-startify     │
   │    vim-commentary, vim-surround, vim-visual-multi            │
   │    auto-pairs, vim-repeat, vim-unimpaired, vim-easy-align    │
   │    vim-fugitive, vim-gitgutter, gv.vim, tabular              │
