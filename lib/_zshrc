@@ -103,6 +103,9 @@ fi
 arrow_status="%(?:%{$fg_bold[green]%}➜:%{$fg_bold[red]%}➜)"
 NEWLINE=$'\n'
 PROMPT='${user_display}${NEWLINE}${current_time}${NEWLINE}${arrow_status} %{$fg[magenta]%}%d%{$reset_color%} $(git_prompt_info)'
+# Fix: disable complete_in_word to prevent Tab completion from appending
+# instead of replacing the typed word (e.g., "py" + Tab → "pypython")
+unsetopt complete_in_word
 # @CLEAR
 clear
 # @ENV@
