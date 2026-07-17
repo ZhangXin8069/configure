@@ -77,6 +77,30 @@ plugins=(
   zsh-autosuggestions
 )
 source $ZSH/oh-my-zsh.sh
+
+# --- Zsh completion tuning ---
+# Menu-style completion: select from list with arrow keys
+zstyle ':completion:*' menu select
+# Verbose listing format (show descriptions)
+zstyle ':completion:*' verbose yes
+# Group completions by type (commands, aliases, files, etc.)
+zstyle ':completion:*' group-name ''
+# Use cache for completion (faster re-completion)
+zstyle ':completion:*' use-cache on
+zstyle ':completion:*' cache-path "$ZSH/cache/completions"
+# Case-insensitive completion (all lowercase matches mixed case)
+zstyle ':completion:*' matcher-list 'm:{a-z}={A-Z}'
+# Kill processes menu: offer to kill
+zstyle ':completion:*:*:kill:*:processes' list-colors '=(#b) #([0-9]#) ([0-9a-z-]#)*=01;34=0=01'
+# Format messages during completion
+zstyle ':completion:*:messages' format '%d'
+zstyle ':completion:*:warnings' format 'No matches for: %d'
+zstyle ':completion:*:corrections' format '%B%d (errors: %e)%b'
+# Don't complete unavailable commands
+zstyle ':completion:*:functions' ignored-patterns '(_*|pre(cmd|exec))'
+# Separate man page sections
+zstyle ':completion:*:manuals' separate-sections true
+
 # User configuration
 export MANPATH="/usr/local/man:$MANPATH"
 # You may need to manually set your language environment
@@ -103,10 +127,16 @@ fi
 arrow_status="%(?:%{$fg_bold[green]%}➜:%{$fg_bold[red]%}➜)"
 NEWLINE=$'\n'
 PROMPT='${user_display}${NEWLINE}${current_time}${NEWLINE}${arrow_status} %{$fg[magenta]%}%d%{$reset_color%} $(git_prompt_info)'
-# @CLEAR
-clear
+# @CLEAR — only clear in a genuine interactive login shell, never during completion
+if [[ -o interactive ]] && [[ -o zle ]]; then
+    clear
+fi
 # @ENV@
-source ${HOME}/configure/env.sh
+# Guard against re-sourcing: skip env setup if already done in this shell
+if [[ -z "$_CONFIGURE_ENV_SOURCED" ]]; then
+    export _CONFIGURE_ENV_SOURCED=1
+    source ${HOME}/configure/env.sh
+fi
 source ${HOME}/env.sh
 # @CLEAR
 # clear
