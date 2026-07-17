@@ -4,7 +4,8 @@
 # 功能: 确保 ZeroTier 在线 → SSH 到 x99 → 自动运行 ddocker.bat
 # 目标: 172.25.193.104:22 (x99 局域网 IP, ZeroTier 路由)
 #
-# 用法: bash xx99.sh
+# 用法: bash xx99.sh [-n]
+#   -n  跳过 ddocker，直接 SSH 到 x99 终端
 #
 # 前置: 需先运行 zerotier_init.sh 加入 ZeroTier 网络
 
@@ -17,6 +18,15 @@ echo "### ${_NAME} started : $(date "+%Y-%m-%d-%H-%M-%S") ###"
 readonly TARGET_HOST="172.25.193.104"
 readonly SSH_PORT="${SSH_PORT:-22}"
 readonly SSH_USER="${SSH_USER:-kfutfd}"
+
+# 解析命令行参数
+NO_DDOCKER=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -n) NO_DDOCKER=true; shift ;;
+        *)  shift ;;
+    esac
+done
 
 # ──────────────────────────────────────────────
 # 1. 确保 zerotier-cli 可用
@@ -87,14 +97,21 @@ else
 fi
 
 # ──────────────────────────────────────────────
-# 4. SSH → 自动运行 ddocker.bat
+# 4. SSH → 自动运行 ddocker.bat（-n 跳过）
 # ──────────────────────────────────────────────
 echo ""
-echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST} → ddocker.bat"
-echo ""
-
-# -t 强制分配 TTY（docker exec -it 需要）; 远程执行 ddocker.bat
-ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" "ddocker.bat"
+if [[ "${NO_DDOCKER}" == true ]]; then
+    echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST}（跳过 ddocker）"
+    echo ""
+    ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}"
+else
+    echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST} → ddocker.bat"
+    echo ""
+    # -t 强制分配 TTY（docker exec -it 需要）; 远程执行 ddocker.bat
+    # ddocker.bat 退出后（成功退出容器或登入失败），始终退回 x99 SSH 终端，避免直接断开连接
+    ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" \
+        "ddocker.bat; echo ''; echo '[INFO] 已退出 ddocker，回到 x99 终端'; exec bash -l"
+fi
 
 echo ""
 echo "### ${_NAME} done : $(date "+%Y-%m-%d-%H-%M-%S") ###"
