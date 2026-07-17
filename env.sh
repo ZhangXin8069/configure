@@ -17,6 +17,8 @@ echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_PA
 source ${_PATH}/tmp/scripts.sh
 # @EXPORT@
 # export TERM=xterm-256color
+export LANG=zh_CN.UTF-8
+export LC_ALL=zh_CN.UTF-8
 export PATH=${_PATH}/bin:$PATH
 export PATH=${HOME}/.local/bin:$PATH
 # @@OPENMPI@@
