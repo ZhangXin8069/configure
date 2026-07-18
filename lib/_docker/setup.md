@@ -34,17 +34,13 @@ docker load -i E:\Docker\computer-v20250708:ubuntu-22.04_gcc-11.4.0_python-3.10.
 ### v20250708
 
 ```bash
-docker run -itd --gpus all --name v20250708 ^
-  -e NVIDIA_DRIVER_CAPABILITIES=compute,utility ^
-  -e NVIDIA_VISIBLE_DEVICES=all ^
-  -v /c/docker:/root/windows ^
-  zhangxin8069/computer-v20250708:ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17
+docker run -itd --gpus all --name v20250708 -e NVIDIA_DRIVER_CAPABILITIES=compute,utility -e NVIDIA_VISIBLE_DEVICES=all -v /c/docker:/root/windows zhangxin8069/computer-v20250708:ubuntu-22.04_gcc-11.4.0_python-3.10.12_cuda-12.4.0_quda-develop-sm80_pyqcu-stab17
 ```
 
 ## 4. 进入容器
 
 ```bash
-docker exec -it v20260708 bash
+docker exec -it v20250708 bash
 ```
 
 ## 5. 保存容器修改为新镜像
