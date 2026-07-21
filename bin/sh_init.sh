@@ -26,11 +26,11 @@ popd
 cat << 'USAGE'
 
   ┌──────────────────────────────────────────────────────────────┐
-  │                  Shell 终端配置 — 使用说明                   │
+  │                  Shell 终端配置 — 使用说明                  │
   ├──────────────────────────────────────────────────────────────┤
   │                                                              │
   │  启动链                                                      │
-  │    .zshrc  →  ~/configure/env.sh  →  tmp/scripts.sh          │
+  │    .zshrc  →  ~/configure/env.sh  →  tmp/scripts.sh        │
   │    自动生成 51 个 alias, 加载 git 别名和 env 变量            │
   │                                                              │
   │  oh-my-zsh                                                   │
