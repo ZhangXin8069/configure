@@ -9,4 +9,4 @@ alias mpirun='mpirun --allow-run-as-root'
 alias python='python3 -u'
 
 # @ENV@
-source ${HOME}/configure/env.sh
+source ${HOME}/env-key.sh
