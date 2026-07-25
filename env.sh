@@ -72,5 +72,6 @@ alias gsize='git count-objects -vH'
 alias py='python'
 alias cl='claude --permission-mode auto'
 alias clc='clear'
+alias cls='clear'
 alias his='history | tail'
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
