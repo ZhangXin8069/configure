@@ -12,7 +12,7 @@ REM Step 1: Check if CloudMusic is already running
 REM ===========================================================================
 echo [1/3] Checking CloudMusic...
 
-tasklist /fi "imagename eq cloudmusic.exe" 2^>nul | find /i "cloudmusic.exe" >nul
+tasklist /fi "imagename eq cloudmusic.exe" 2>nul | find /i "cloudmusic.exe" >nul
 if not errorlevel 1 (
     echo        CloudMusic is already running.
     echo ============================================================
@@ -74,7 +74,7 @@ set /a N=0
 :WAIT_CM
     timeout /t 1 /nobreak >nul
     set /a N+=1
-    tasklist /fi "imagename eq cloudmusic.exe" 2^>nul | find /i "cloudmusic.exe" >nul
+    tasklist /fi "imagename eq cloudmusic.exe" 2>nul | find /i "cloudmusic.exe" >nul
     if not errorlevel 1 goto CM_RUNNING
     if !N! lss 30 goto WAIT_CM
 
