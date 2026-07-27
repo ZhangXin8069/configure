@@ -45,7 +45,42 @@ case "${OS}" in
 esac
 
 if (( RUNNING == 1 )); then
-    echo "       CloudMusic is already running."
+    echo "       CloudMusic is already running — bringing to foreground..."
+    case "${OS}" in
+        Darwin)
+            osascript -e 'tell application "NeteaseMusic" to activate' 2>/dev/null || true
+            ;;
+        Linux)
+            if command -v tasklist.exe &>/dev/null; then
+                # WSL: bring Windows CloudMusic window to foreground via PowerShell
+                powershell.exe -NoProfile -Command "
+                    Add-Type @'
+                        using System;
+                        using System.Runtime.InteropServices;
+                        public class Win32 {
+                            [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd);
+                            [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+                            [DllImport(\"user32.dll\")] public static extern IntPtr FindWindow(string lpClassName, string lpWindowName);
+                        }
+'@
+                    \$h = [Win32]::FindWindow(null, '网易云音乐')
+                    if (\$h -ne [IntPtr]::Zero) {
+                        [Win32]::ShowWindow(\$h, 9)  # SW_RESTORE
+                        [Win32]::SetForegroundWindow(\$h)
+                    }
+                " 2>/dev/null || true
+            else
+                if command -v wmctrl &>/dev/null; then
+                    wmctrl -a "CloudMusic" 2>/dev/null || \
+                    wmctrl -a "网易云音乐" 2>/dev/null || true
+                elif command -v xdotool &>/dev/null; then
+                    xdotool search --name "CloudMusic" windowactivate 2>/dev/null || \
+                    xdotool search --name "网易云音乐" windowactivate 2>/dev/null || true
+                fi
+            fi
+            ;;
+    esac
+    echo "       Done."
     echo "============================================================"
     echo
     exit 0
