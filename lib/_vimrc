@@ -42,7 +42,13 @@ set ruler                 " Show cursor line and column in the bottom right
 " ===== Built-in Completion (Zero External Dependencies) =====
 " Tab 触发/导航补全 — vim 原生 ins-completion，无需任何外部工具
 
-set completeopt=menu,menuone,preview,noselect,noinsert
+set completeopt=menu,menuone,preview
+if has('patch-8.0.1298')
+    set completeopt+=noselect
+endif
+if has('patch-8.0.1489')
+    set completeopt+=noinsert
+endif
 set complete=.,w,b,u,t,i
 set pumheight=10
 
