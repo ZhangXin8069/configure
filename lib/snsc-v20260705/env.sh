@@ -24,3 +24,5 @@ alias pip="pip3.9"
 pushd /public/home/zhangxin/PyQCU
 source ./env.sh
 popd
+# VSCODE
+source /public/home/zhangxin/configure/lib/_snsc/vscode-server-sysroot-env.sh
