@@ -18,6 +18,8 @@
 # ============================================================
 
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+# configure 仓库根目录：直接使用 ${HOME}/configure，不依赖脚本自身位置
+_CONFIGURE_ROOT="${HOME}/configure"
 _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
@@ -42,7 +44,7 @@ else
   echo ">>> 未找到 ${HOME}/.env.sh，在 \$HOME 下调用 save-env.sh 生成..."
   # save-env.sh 默认把 .env.sh 写到「当前目录」，故 pushd 到 $HOME，运行后 popd 还原
   pushd "${HOME}" >/dev/null
-  bash "${_PATH}/../bin/save-env.sh"
+  bash "${_CONFIGURE_ROOT}/bin/save-env.sh"
   popd >/dev/null
   if [[ -f "${HOME}/.env.sh" ]]; then
     source "${HOME}/.env.sh"
@@ -52,10 +54,10 @@ else
 fi
 
 # ---------- 2. source ~/configure/env.sh ----------
-if [[ -f "${_PATH}/../env.sh" ]]; then
-  source "${_PATH}/../env.sh"
+if [[ -f "${_CONFIGURE_ROOT}/env.sh" ]]; then
+  source "${_CONFIGURE_ROOT}/env.sh"
 else
-  echo ">>> 未找到 ${_PATH}/../env.sh，跳过"
+  echo ">>> 未找到 ${_CONFIGURE_ROOT}/env.sh，跳过"
 fi
 
 # ---------- 3. source ~/env.sh ----------
