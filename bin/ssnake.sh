@@ -3,10 +3,10 @@
 # snake game
 # Author: LKJ 2013.5.17
 _PATH=$(
-    cd "$(dirname "$0")"
+    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
     pwd
 )
-_NAME=$(basename "$0")
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 EXITFLAG="/tmp/snake_exit.flag"
 WRITEFILE="/tmp/snake_pipe.in"
