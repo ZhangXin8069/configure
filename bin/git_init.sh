@@ -4,10 +4,10 @@
 # 用法: 将打印的公钥添加到 Gitee / GitHub 后, 执行 ssh -T git@gitee.com 验证
 
 _PATH=$(
-    cd "$(dirname "$0")"
+    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
     pwd
 )
-_NAME=$(basename "$0")
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 git config --global user.name "zhangxin"
 git config --global user.email "zhangxin8069@qq.com"

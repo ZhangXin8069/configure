@@ -14,14 +14,15 @@ Every script follows this skeleton:
 
 ```bash
 #!/usr/bin/env bash
-_PATH=$(cd "$(dirname "$0")" && pwd)
-_NAME=$(basename "$0")
+_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 # ... script logic ...
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 ```
 
 - `_NAME` and `_PATH` provide self-awareness (needed since scripts are invoked via alias from anywhere).
+- Use `${BASH_SOURCE[0]:-$0}` (not bare `$0`) for the script path: it resolves correctly whether the script is **executed** or **sourced**, and never breaks when the calling shell is a login shell (`$0` = `-bash` → `dirname -bash` would error).
 - Timestamps bracket every execution for auditability.
 - Some scripts add `set -euo pipefail` for strict error handling; older/simpler ones do not.
 - Comments are in Chinese and/or English.
