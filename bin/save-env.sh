@@ -2,6 +2,7 @@
 # ============================================================
 # save-env.sh — 把当前环境导出为可 source 的 .env.sh
 # 过滤掉 shell 内部 / 只读 / 每次变化无常的变量（如 _、SHLVL、UID）
+# 以及 bash 导出的函数项（BASH_FUNC_module()=...）
 #
 # 用法：
 #   bash save-env.sh                     # 输出到 ./.env.sh
@@ -38,6 +39,8 @@ shell_quote() {
 # 主流程：读 env，跳过不想要的，重新加引号写出
 while IFS= read -r -d '' entry; do
   name="${entry%%=*}"
+  # 跳过非合法标识符的名字（如 bash 导出的函数 BASH_FUNC_module()=...），函数无法跨 shell 传递
+  [[ "$name" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]] || continue
   skip_var "$name" && continue
   printf 'export %s\n' "$(shell_quote "$entry")"
 done < <(env -0 | sort -z) > "$OUT"
