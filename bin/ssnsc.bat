@@ -1,9 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
-title NSC Connect
+title SNSC Connect
 
 echo ============================================================
-echo   NSC Connect
+echo   SNSC Connect
 echo ============================================================
 echo.
 
