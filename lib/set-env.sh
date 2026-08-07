@@ -21,11 +21,18 @@ _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
 _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
-# ---------- 0. source ~/.bashrc ----------
-if [[ -f "${HOME}/.bashrc" ]]; then
-  source "${HOME}/.bashrc"
+# ---------- 0. source ~/.bashrc（仅限 bash，zsh 中跳过） ----------
+# ~/.bashrc 是 bash 脚本，含 shopt、bash_completion 等 bash 专属语法；
+# 若在 zsh 等非 bash shell 中 source，会报 "shopt: command not found" /
+# "bash_completion: parse error near '\n'"。故先检测当前 shell 是否为 bash。
+if [[ -n "${BASH_VERSION:-}" ]]; then
+  if [[ -f "${HOME}/.bashrc" ]]; then
+    source "${HOME}/.bashrc"
+  else
+    echo ">>> 未找到 ${HOME}/.bashrc，跳过"
+  fi
 else
-  echo ">>> 未找到 ${HOME}/.bashrc，跳过"
+  echo ">>> 当前 shell 非 bash（ZSH_VERSION=${ZSH_VERSION:-?}），跳过 ${HOME}/.bashrc"
 fi
 
 # ---------- 1. source ~/.env.sh；不存在则用 save-env.sh 生成 ----------
