@@ -11,8 +11,8 @@
 
 set -euo pipefail
 
-_PATH=$(cd "$(dirname "$0")" && pwd)
-_NAME=$(basename "$0")
+_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "### ${_NAME} started : $(date "+%Y-%m-%d-%H-%M-%S") ###"
 
 readonly TARGET_HOST="172.25.193.104"
