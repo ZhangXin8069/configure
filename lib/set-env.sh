@@ -4,14 +4,17 @@
 #
 # 注意：本脚本必须 source 执行，因为它要为「当前 shell」设置环境变量；
 #       直接运行（子进程）会丢掉所有环境变量，毫无意义。
-#   用法： source ~/configure/bin/set-env.sh
-#       或  . ~/configure/bin/set-env.sh
+#   用法： source ~/configure/lib/set-env.sh
+#       或  . ~/configure/lib/set-env.sh
 #
 # 顺序：
 #   0. source ~/.bashrc
 #   1. source ~/.env.sh（不存在则在 $HOME 下调用 save-env.sh 生成）
 #   2. source ~/configure/env.sh
 #   3. source ~/env.sh
+#
+# 本脚本位于 configure/lib/ 下（不参与 bin/ 的自动 alias 生成，避免被
+# script_alias.sh 包装成子进程别名而丢失环境变量）；save-env.sh 仍在 bin/。
 # ============================================================
 
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
@@ -32,7 +35,7 @@ else
   echo ">>> 未找到 ${HOME}/.env.sh，在 \$HOME 下调用 save-env.sh 生成..."
   # save-env.sh 默认把 .env.sh 写到「当前目录」，故 pushd 到 $HOME，运行后 popd 还原
   pushd "${HOME}" >/dev/null
-  bash "${HOME}/configure/bin/save-env.sh"
+  bash "${_PATH}/../bin/save-env.sh"
   popd >/dev/null
   if [[ -f "${HOME}/.env.sh" ]]; then
     source "${HOME}/.env.sh"
@@ -42,10 +45,10 @@ else
 fi
 
 # ---------- 2. source ~/configure/env.sh ----------
-if [[ -f "${HOME}/configure/env.sh" ]]; then
-  source "${HOME}/configure/env.sh"
+if [[ -f "${_PATH}/../env.sh" ]]; then
+  source "${_PATH}/../env.sh"
 else
-  echo ">>> 未找到 ${HOME}/configure/env.sh，跳过"
+  echo ">>> 未找到 ${_PATH}/../env.sh，跳过"
 fi
 
 # ---------- 3. source ~/env.sh ----------
