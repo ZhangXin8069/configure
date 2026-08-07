@@ -1,7 +1,7 @@
 # source
 #!/usr/bin/env bash
 _PATH=$(
-    cd "$(dirname "$0")"
+    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
     pwd
 )
 pushd ${_PATH}

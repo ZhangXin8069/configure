@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # dgtag — Delete all local git tags in the current repository
 
-_NAME=$(basename "$0")
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 # Locate the git repository root (works from any subdirectory)

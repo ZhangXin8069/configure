@@ -5,10 +5,10 @@
 # Email: liungkejin@gmail.com
 #
 _PATH=$(
-    cd "$(dirname "$0")"
+    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
     pwd
 )
-_NAME=$(basename "$0")
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 asciinumber=(
     '    .ZHANGx           ,:XIN          :ZHANGNB        .LOVEXIN9                dOOp       ZHANGXINNB           1YYDS1    ILOVEZHANGXIN       5SHIREN.         iZXYYDS    '

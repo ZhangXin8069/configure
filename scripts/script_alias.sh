@@ -6,7 +6,7 @@ pushd ${_PATH}/../
 source ./env.sh
 popd
 # init
-_NAME=$(basename "$0")
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 name='work'
 work_name="bin"
 tmp_name="tmp"
