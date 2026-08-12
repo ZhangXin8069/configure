@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch opencode: Build agent + auto + DeepSeek V4 Flash (max) + debug logs
+# Launch opencode: Build agent + auto + DeepSeek V4 Pro (max) + debug logs
 # 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
 
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
@@ -71,10 +71,10 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
-export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"opencode-go/deepseek-v4-flash","variant":"max"}}}'
+export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"opencode-go/deepseek-v4-pro","variant":"max"}}}'
 
 echo "============================================================"
-echo "  OpenCode: build | auto | DeepSeek V4 Flash (max)"
+echo "  OpenCode: build | auto | DeepSeek V4 Pro (max)"
 echo "  log: ${LOG_FILE}"
 if [[ -n "${project_root}" ]]; then
     echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
