@@ -8,7 +8,7 @@ description: |
    修复打标（"bug"、"修复"、"补丁"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
    查看标签详情（"tag详情"）、删除标签（"删除tag"）、修改/重写标签（"修改tag"、"amend"）时使用此 skill。
    description 中未明确类型时按上下文自动推断：bug/修复→bug，dev/暂存/快照→dev，无信号时默认 dev。
-   创建/改写标签后默认自动推送当前分支与标签到远程（无需逐次确认）；破坏性操作（删除/改写已推送标签）先确认。
+   创建标签默认直接执行并自动推送远程（非必要不确认）；仅破坏性操作（删除/改写已推送标签）与类型歧义时询问。
 metadata:
   openclaw:
     emoji: 🏷️
@@ -22,7 +22,8 @@ metadata:
 2. **先推后打，默认同步远程**：打标签**之前**先 `git push origin <当前分支>`（确保远程已包含即将被打标的提交），
    创建/改写标签**之后**再 `git push origin <标签>`；全部**默认执行、无需逐次确认**。
    仅当无远程或用户明确要求仅本地（local-only）时跳过。push 失败自动重试并记入会话日志。
-3. **操作前确认**：创建前展示拟用消息；删除/改写（尤其已推送的标签）等破坏性操作必须先经用户确认。
+3. **非必要不确认**：创建标签时展示拟用消息后**直接执行**，不阻塞等待确认；仅破坏性操作
+   （删除/改写已推送标签）与类型歧义时询问用户。
 4. **注释标签**：一律 `git tag -a`，消息格式严格遵循约定（follow 链、编号项以 `;` 结尾、
    ` [opencode].` 后缀）。
 5. **类型推断，歧义就问**：按上下文自动推断 stab/dev/bug；无法确定时提问，不擅断。
@@ -37,7 +38,7 @@ metadata:
 - 文件名格式：`.tag.<时间戳>.log`（例如 `.tag.2026-08-12-19-19-43.log`）
 - 时间戳格式：`%Y-%m-%d-%H-%M-%S`：`TS=$(date +%Y-%m-%d-%H-%M-%S)`
 - 日志**不入库**（与仓库 `.agent.*.log` 约定一致），全程**追加**写入（`>>`）
-- 记录内容：操作类型与目标标签、基线、拟用消息、用户确认结果、push/删除结果、
+- 记录内容：操作类型与目标标签、基线、拟用消息、用户确认结果（如有询问）、push/删除结果、
   失败与重试原因、最终汇总
 
 Manage annotated tags across three categories — `stab<N>`, `dev<N>`, `bug<N>` — each with independent numbering, plus optional sub-versions (`stab15_1`). Supports create, list, show, delete, and amend. Designed for Agent invocation — every operation returns structured output and handles edge cases explicitly.
@@ -222,7 +223,7 @@ Analyze the collected diffs and commit messages to produce the tag message. Appl
 - For `dev` tags: describe what was done so far, what's still in progress (optional), and the current state.
 - For `stab` tags: describe completed work comprehensively.
 
-Present the proposed message to the user for confirmation:
+Present the proposed message, then **proceed immediately — 默认不等待确认**，展示后直接进入 Step 1.4：
 
 ```text
 Type:    dev
@@ -230,10 +231,10 @@ Tag:     dev3
 Message: follow stab9, 1. 初步实现xxx功能; 2. 添加yyy模块框架; [opencode].
 Changes: 3 files changed, 85 insertions(+), 12 deletions(-)
 
-Proceed? [Y/n]
+→ 展示后直接创建并推送，不阻塞等待确认。
 ```
 
-**If the user rejects**, ask what to change — reword a specific item, add a missing item, or remove an item.
+**If the user intervenes/rejects**, ask what to change — reword a specific item, add a missing item, or remove an item.
 
 #### Step 1.4 — Push current commits (before tag)
 
@@ -434,7 +435,7 @@ Proceed with Steps 1.1–1.6, substituting `$BASE_REF` for the baseline.
 | Auto-numbering after a sub-version tag | Next major (`stab15_1` → `stab16`); request `stab15_2` explicitly for another sub-version |
 | No previous tags at all | Use first commit as baseline |
 | No commits in repo | Abort; report nothing to tag |
-| No changes since baseline | Report and ask user whether to proceed |
+| No changes since baseline | Report; do not create an empty tag unless explicitly requested |
 | No remote configured | Skip both push steps; note the absence |
 | Branch push before tagging fails | Diagnose, fix, retry; if still failing, pause and report — do not create the tag |
 | User requests local-only | Create/amend locally only, skip push; record in session log |
@@ -442,7 +443,7 @@ Proceed with Steps 1.1–1.6, substituting `$BASE_REF` for the baseline.
 | Tag already exists remotely | Warn if local and remote messages differ |
 | Amend on non-existent tag | Report the tag doesn't exist; suggest listing |
 | Push/create/delete fails (network, conflict) | Diagnose from error, fix, and retry (loop until success); record attempts in the session log |
-| User rejects changelog | Allow reword of specific items or full rewrite |
+| User rejects changelog (intervenes) | Allow reword of specific items or full rewrite |
 
 ## Agent output conventions
 
