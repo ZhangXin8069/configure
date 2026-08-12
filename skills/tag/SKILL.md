@@ -20,7 +20,7 @@ metadata:
 1. **先看后打**：打标签前先分析基线以来的变更，构建诚实、分组的变更清单，不臆造内容。
 2. **操作前确认**：创建前展示拟用消息，删除/改写（尤其已推送的标签）必须先经用户确认。
 3. **注释标签**：一律 `git tag -a`，消息格式严格遵循约定（follow 链、编号项以 `;` 结尾、
-   ` [Claude Code].` 后缀）。
+   ` [opencode].` 后缀）。
 4. **类型推断，歧义就问**：按上下文自动推断 stab/dev/bug；无法确定时提问，不擅断。
 5. **循环尝试直至成功**：push/删除失败、标签冲突、重命名冲突时定位原因重试，
    直至成功或用户终止；失败与重试记入会话日志。
@@ -89,7 +89,7 @@ A sub-version is a **follow-up revision on top of an existing major tag** withou
 
 - `stab15_1` = first sub-version of `stab15`; it belongs to type `stab` and major `15`.
 - Minor `M` starts at **1** (`stab15_1` is the first sub-version of `stab15`; `_0` is never used).
-- Message format is identical to any other tag: `follow stab15, 1. 修复...; [Claude Code].` — the `follow <previous-tag-of-any-type>` rule makes the parent major (or the previous sub-version) the natural predecessor.
+- Message format is identical to any other tag: `follow stab15, 1. 修复...; [opencode].` — the `follow <previous-tag-of-any-type>` rule makes the parent major (or the previous sub-version) the natural predecessor.
 - Version sort (`--sort=-v:refname`) orders them correctly: `stab15 < stab15_1 < stab15_2 < stab16`.
 - Sub-versions are **explicit requests only** — auto-numbering (Case C below) always produces a plain major tag. If the latest tag is `stab15_1`, auto-creating a `stab` tag yields `stab16`, not `stab15_2`. To get another sub-version, say so explicitly (e.g. "在 stab15 上再补一个标签").
 
@@ -98,15 +98,15 @@ A sub-version is a **follow-up revision on top of an existing major tag** withou
 Every tag is an **annotated tag** with the following message format:
 
 ```text
-follow <previous-tag-of-any-type>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; [Claude Code].
+follow <previous-tag-of-any-type>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; [opencode].
 ```
 
-- The **very first tag** in the repo uses `<type>0 init, 1. ...; [Claude Code].` (no predecessor)
+- The **very first tag** in the repo uses `<type>0 init, 1. ...; [opencode].` (no predecessor)
 - **All subsequent tags** (regardless of type) use `follow <previous-tag>, 1. ...;` — references the immediately previous tag regardless of type
 - Changelog items are numbered with English period + space (`1. `, `2. `, `3. `)
 - **Every item ends with `;`** (English semicolon), including the last item — no exceptions
 - All punctuation is English: `.` `,` `;` (the content text itself may be Chinese)
-- The suffix ` [Claude Code].` (preceded by a space, trailing English period) is always appended
+- The suffix ` [opencode].` (preceded by a space, trailing English period) is always appended
 - The message is stored as the tag annotation (`git tag -a -m "..."`)
 
 ### Changelog item guidelines
@@ -122,7 +122,7 @@ When constructing changelog items from diffs and commit messages:
 Example:
 
 ```text
-follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增cctag Agent技能，替代ccgpush; 3. 修复zshrc中oh-my-zsh插件加载顺序; 4. 清理bin/中过期脚本; [Claude Code].
+follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增cctag Agent技能，替代ccgpush; 3. 修复zshrc中oh-my-zsh插件加载顺序; 4. 清理bin/中过期脚本; [opencode].
 ```
 
 ---
@@ -222,7 +222,7 @@ Present the proposed message to the user for confirmation:
 ```text
 Type:    dev
 Tag:     dev3
-Message: follow stab9, 1. 初步实现xxx功能; 2. 添加yyy模块框架; [Claude Code].
+Message: follow stab9, 1. 初步实现xxx功能; 2. 添加yyy模块框架; [opencode].
 Changes: 3 files changed, 85 insertions(+), 12 deletions(-)
 
 Proceed? [Y/n]
@@ -286,17 +286,17 @@ Output format (grouped by type, sub-version listed above its parent):
 
 ```text
 === stab (4 tags) ===
-stab15_1 | 2026-08-07 | follow stab15, 1. 修复set-env.sh相对路径引用; [Claude Code].
-stab15   | 2026-08-07 | follow stab14, 1. 新增save-env.sh脚本; 2. ...; [Claude Code].
+stab15_1 | 2026-08-07 | follow stab15, 1. 修复set-env.sh相对路径引用; [opencode].
+stab15   | 2026-08-07 | follow stab14, 1. 新增save-env.sh脚本; 2. ...; [opencode].
 stab9    | 2026-07-09 | follow stab8, 1. 重构lib目录结构; 2. ...
-stab0    | 2026-07-01 | stab0 init, 1. 初始化配置仓库; [Claude Code].
+stab0    | 2026-07-01 | stab0 init, 1. 初始化配置仓库; [opencode].
 
 === dev (2 tags) ===
-dev1   | 2026-07-09 | follow bug0, 1. 实现xxx模块框架; [Claude Code].
-dev0   | 2026-07-09 | follow stab3, 1. 开始yyy功能开发; [Claude Code].
+dev1   | 2026-07-09 | follow bug0, 1. 实现xxx模块框架; [opencode].
+dev0   | 2026-07-09 | follow stab3, 1. 开始yyy功能开发; [opencode].
 
 === bug (1 tag) ===
-bug0   | 2026-07-09 | follow dev1, 1. 修复zzz空指针异常; [Claude Code].
+bug0   | 2026-07-09 | follow dev1, 1. 修复zzz空指针异常; [opencode].
 ```
 
 **Edge case — no tags**: Report "No cctag tags found in this repository."
@@ -442,7 +442,7 @@ After each operation, report a structured summary:
 ```text
 ✓ Tag dev3 created
   Type:    dev
-  Message: follow stab9, 1. 实现xxx模块框架; 2. 添加yyy接口; [Claude Code].
+  Message: follow stab9, 1. 实现xxx模块框架; 2. 添加yyy接口; [opencode].
   Pushed:  yes (origin)
   Files:   3 changed, 85 insertions(+), 12 deletions(-)
   Log:     .tag.2026-08-12-19-19-43.log (retries 0)
@@ -451,11 +451,11 @@ After each operation, report a structured summary:
 For listing:
 
 ```text
-stab9  2026-07-09  follow stab8, 1. 重构lib目录结构; 2. 新增cctag技能; [Claude Code].
+stab9  2026-07-09  follow stab8, 1. 重构lib目录结构; 2. 新增cctag技能; [opencode].
 stab8  2026-07-08  follow stab7, 1. 新增xxx功能; 2. ...;
-dev1   2026-07-09  follow bug0, 1. 实现xxx模块框架; [Claude Code].
-dev0   2026-07-09  follow stab3, 1. 开始yyy功能开发; [Claude Code].
-bug0   2026-07-09  follow dev1, 1. 修复zzz空指针异常; [Claude Code].
+dev1   2026-07-09  follow bug0, 1. 实现xxx模块框架; [opencode].
+dev0   2026-07-09  follow stab3, 1. 开始yyy功能开发; [opencode].
+bug0   2026-07-09  follow dev1, 1. 修复zzz空指针异常; [opencode].
 ```
 
 ## 注意事项
