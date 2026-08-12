@@ -16,6 +16,7 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 - 必须用 `${BASH_SOURCE[0]:-$0}`（不能用裸 `$0`，登录 shell 下 `$0` 为 `-bash` 会报错）
 - 执行首尾打印带时间戳标记
 - 严格模式 `set -euo pipefail` 仅部分新脚本使用
+- **所有 `.sh` 脚本必须有可执行权限**（新建/编辑脚本后执行 `chmod +x <script>`）
 
 ## 脚本分类
 
