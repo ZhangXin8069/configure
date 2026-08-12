@@ -157,6 +157,18 @@ uninstall_cc-v20260812.bat -npm       rem 同时卸载 npm 安装的 @anthropic-
 
 > 若 Claude Code 通过官方 npm 安装（`npm i -g @anthropic-ai/claude-code`），脚本会检测并提示，加 `--npm` / `-npm` 自动卸载；npm 安装位置不受默认（非 purge）路径清理影响，需要手动确认。
 
+### 卸载 cc-switch
+
+`uninstall_ccswitch-v20260813.sh` 卸载 cc-switch（CLI + GUI），默认删除 `~/.local/bin/cc-switch` 二进制、shell completions，并（root/sudo 下）卸载通过 dpkg/rpm 安装的 GUI 包；加 `--purge` 后连同 `~/.config`、`~/.local/share` 下 cc-switch 的 provider/设置目录（含 API 供应商凭据）一并删除。GUI 包名动态检测（`dpkg -l` / `rpm -qa`），不做硬编码。AppImage 免安装，需手动删除文件。
+
+```bash
+./uninstall_ccswitch-v20260813.sh           # 标准卸载（保留用户数据）
+./uninstall_ccswitch-v20260813.sh --purge   # 连同 provider/设置数据一起删除
+./uninstall_ccswitch-v20260813.sh --dry-run # 先预览将删除的内容
+```
+
+> cc-switch 只操作 `~/.claude.json` / `~/.claude` 中的供应商配置，卸载脚本**不会**触碰这两个 Claude Code 数据目录。
+
 ## 版本切换
 
 使用 `cc-switch` 命令行工具管理 Claude Code 多版本：
