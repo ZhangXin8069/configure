@@ -1,26 +1,20 @@
 #!/usr/bin/env bash
 # @INIT@
-_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
-    pwd
-)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
-echo "###${_NAME} in ${_PATH} is sourcing...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+_SRC=${BASH_SOURCE[0]:-$0}
+case "$_SRC" in
+    */*) _DIR=${_SRC%/*} ;;
+    *) _DIR=. ;;
+esac
+_PATH=$(cd "$_DIR" && pwd)
 # @MKDIR@
-mkdir -p ${_PATH}/bin
-mkdir -p ${_PATH}/docs
-mkdir -p ${_PATH}/lib
-mkdir -p ${_PATH}/scripts
-mkdir -p ${_PATH}/tmp
+mkdir -p ${_PATH}/bin ${_PATH}/docs ${_PATH}/lib ${_PATH}/scripts ${_PATH}/tmp
 # @SOURCE@
-echo "###configure/env.sh is sourced...:$(date "+%Y-%m-%d-%H-%M-%S")###" >>${_PATH}/tmp/scripts.sh
 source ${_PATH}/tmp/scripts.sh
 # @EXPORT@
 # export TERM=xterm-256color
 export LANG=zh_CN.UTF-8
 export LC_ALL=zh_CN.UTF-8
-export PATH=${_PATH}/bin:$PATH
-export PATH=${HOME}/.local/bin:$PATH
+export PATH=${HOME}/.local/bin:${_PATH}/bin:$PATH
 # @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
 # export PATH=${MPI_HOME}/bin:$PATH
@@ -70,8 +64,6 @@ alias python='python3'
 alias pip='pip3'
 alias gsize='git count-objects -vH'
 alias py='python'
-alias cl='claude --permission-mode auto'
 alias clc='clear'
 alias cls='clear'
 alias his='history | tail'
-echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
