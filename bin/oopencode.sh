@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch opencode: Build agent + auto + DeepSeek V4 Pro (max) + debug logs
+# Launch opencode: Build agent + auto + 可选模型 (-p/-f/-q/-k/-g, 默认 -f) + debug logs
 # 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
 
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
@@ -71,10 +71,19 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
-export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"opencode-go/deepseek-v4-pro","variant":"max"}}}'
+# 模型选择：默认 -f DeepSeek V4 Flash；-p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
+case "${1:-f}" in
+    -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
+    -q) MODEL_ID="opencode-go/qwen3.8-max";      MODEL_NAME="Qwen3.8 Max";;
+    -k) MODEL_ID="opencode-go/kimi-k3";          MODEL_NAME="Kimi K3";;
+    -g) MODEL_ID="opencode-go/gpt-5.6-luna";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
+    -f|*) MODEL_ID="opencode-go/deepseek-v4-flash"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
+esac
+
+export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"max"}}}'
 
 echo "============================================================"
-echo "  OpenCode: build | auto | DeepSeek V4 Pro (max)"
+echo "  OpenCode: build | auto | ${MODEL_NAME} (max)"
 echo "  log: ${LOG_FILE}"
 if [[ -n "${project_root}" ]]; then
     echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
