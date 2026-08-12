@@ -131,6 +131,32 @@ sudo dpkg -i cc-switch/$VERSION/CC-Switch-*-Linux-x86_64.deb
 sudo rpm -i cc-switch/$VERSION/CC-Switch-*-Linux-x86_64.rpm
 ```
 
+## 卸载
+
+卸载脚本对应安装脚本的布局，默认删除二进制、版本目录、状态/缓存及 shell 配置中的 PATH 行，**保留用户数据**（`~/.claude.json`、`~/.claude`，含登录凭据与设置）；加 `--purge` / `-purge` 后连同用户数据一并删除。
+
+| 脚本 | 平台 | 常用参数 |
+|------|------|----------|
+| `uninstall_cc-v20260812.sh` | Linux / macOS | `-y` 跳过确认，`--npm` 一并卸载 npm 版，`--dry-run` 预览 |
+| `uninstall_cc-v20260812.bat` | Windows (cmd) | `-y`，`-npm`，`-dry-run` |
+
+```bash
+# Linux / macOS
+./uninstall_cc-v20260812.sh           # 标准卸载（保留用户数据）
+./uninstall_cc-v20260812.sh --purge   # 连同 ~/.claude.json、~/.claude 一起删除
+./uninstall_cc-v20260812.sh --dry-run # 先预览将删除的内容
+./uninstall_cc-v20260812.sh --npm     # 同时卸载 npm 安装的 @anthropic-ai/claude-code
+```
+
+```bat
+rem Windows (cmd，可直接双击或命令行运行)
+uninstall_cc-v20260812.bat            rem 标准卸载（保留用户数据）
+uninstall_cc-v20260812.bat -purge -y  rem 连同 .claude.json、.claude 一起删除
+uninstall_cc-v20260812.bat -npm       rem 同时卸载 npm 安装的 @anthropic-ai/claude-code
+```
+
+> 若 Claude Code 通过官方 npm 安装（`npm i -g @anthropic-ai/claude-code`），脚本会检测并提示，加 `--npm` / `-npm` 自动卸载；npm 安装位置不受默认（非 purge）路径清理影响，需要手动确认。
+
 ## 版本切换
 
 使用 `cc-switch` 命令行工具管理 Claude Code 多版本：
