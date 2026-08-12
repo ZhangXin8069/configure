@@ -5,9 +5,10 @@ description: |
   支持子版本标签如 stab15_1（stab15 的后续修订）。
   当用户要求打标签、创建/应用 tag（"打标签"、"tag"、"标记一下"、"版本标记"、"子版本"）、
   暂存进度（"dev"、"暂存"、"保存进度"、"快照"）、标记完成（"stab"、"完成"、"稳定版"）、
-  修复打标（"bug"、"修复"、"补丁"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
-  查看标签详情（"tag详情"）、删除标签（"删除tag"）、修改/重写标签（"修改tag"、"amend"）时使用此 skill。
-  description 中未明确类型时按上下文自动推断：bug/修复→bug，dev/暂存/快照→dev，否则默认 stab。
+   修复打标（"bug"、"修复"、"补丁"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
+   查看标签详情（"tag详情"）、删除标签（"删除tag"）、修改/重写标签（"修改tag"、"amend"）时使用此 skill。
+   description 中未明确类型时按上下文自动推断：bug/修复→bug，dev/暂存/快照→dev，否则默认 stab。
+   创建/改写标签后默认自动推送当前分支与标签到远程（无需逐次确认）；破坏性操作（删除/改写已推送标签）先确认。
 metadata:
   openclaw:
     emoji: 🏷️
@@ -18,13 +19,15 @@ metadata:
 ## 核心原则
 
 1. **先看后打**：打标签前先分析基线以来的变更，构建诚实、分组的变更清单，不臆造内容。
-2. **操作前确认**：创建前展示拟用消息，删除/改写（尤其已推送的标签）必须先经用户确认。
-3. **注释标签**：一律 `git tag -a`，消息格式严格遵循约定（follow 链、编号项以 `;` 结尾、
+2. **默认同步远程**：创建/改写标签后**默认** `git push` 当前分支与标签到远程，**无需逐次确认**；
+   仅当无远程或用户明确要求仅本地（local-only）时跳过。push 失败自动重试并记入会话日志。
+3. **操作前确认**：创建前展示拟用消息；删除/改写（尤其已推送的标签）等破坏性操作必须先经用户确认。
+4. **注释标签**：一律 `git tag -a`，消息格式严格遵循约定（follow 链、编号项以 `;` 结尾、
    ` [opencode].` 后缀）。
-4. **类型推断，歧义就问**：按上下文自动推断 stab/dev/bug；无法确定时提问，不擅断。
-5. **循环尝试直至成功**：push/删除失败、标签冲突、重命名冲突时定位原因重试，
+5. **类型推断，歧义就问**：按上下文自动推断 stab/dev/bug；无法确定时提问，不擅断。
+6. **循环尝试直至成功**：push/删除失败、标签冲突、重命名冲突时定位原因重试，
    直至成功或用户终止；失败与重试记入会话日志。
-6. **破坏性操作预警**：改写/删除已推送标签会重写他人历史，先警告再执行。
+7. **破坏性操作预警**：改写/删除已推送标签会重写他人历史，先警告再执行。
 
 ## 会话日志
 
@@ -232,7 +235,7 @@ Proceed? [Y/n]
 
 #### Step 1.4 — Push current commits (before tag)
 
-Push the current branch first to ensure the remote is up to date before tagging:
+Push the current branch first to ensure the remote is up to date before tagging. **默认执行，无需确认**（push 失败按循环重试原则处理并记入日志）：
 
 ```bash
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -256,7 +259,7 @@ git tag -l --format='%(subject)' "$NEW_TAG"  # Show the tag message
 
 #### Step 1.6 — Push the tag (after tag)
 
-After creating the tag, push it to remote:
+After creating the tag, push it to remote. **默认执行，无需确认**（push 失败自动重试并记入日志）：
 
 ```bash
 git push origin "$NEW_TAG"
@@ -379,6 +382,8 @@ Propose a new message. This may be entirely rewritten or just partially edited �
 
 #### Step 5.5 — Push current commits, replace tag, push tag
 
+**改写已推送标签属破坏性操作，整体流程须先经用户确认（见核心原则与下方 Warning）；确认之后推送步骤默认执行，不再逐次询问**：
+
 ```bash
 # Push current branch first
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -429,6 +434,7 @@ Proceed with Steps 1.1–1.6, substituting `$BASE_REF` for the baseline.
 | No commits in repo | Abort; report nothing to tag |
 | No changes since baseline | Report and ask user whether to proceed |
 | No remote configured | Skip both push steps; note the absence |
+| User requests local-only | Create/amend locally only, skip push; record in session log |
 | Tag name collision | Increment N and retry (should not happen with auto-numbering) |
 | Tag already exists remotely | Warn if local and remote messages differ |
 | Amend on non-existent tag | Report the tag doesn't exist; suggest listing |
@@ -461,5 +467,6 @@ bug0   2026-07-09  follow dev1, 1. 修复zzz空指针异常; [opencode].
 ## 注意事项
 
 - 操作结果以实测为准（`git tag -l`、`git push` 输出），不虚报已推送/已创建；
-- 不代用户提交代码；涉及 tag 变更后提示用户自行 `git push`/`git fetch` 同步其他机器（不代推送，除非用户要求）；
+- 不代用户提交代码；创建/改写标签后**默认自动**推送当前分支与标签到远程（无需逐次确认），
+  push 失败自动重试并记入会话日志；其他机器由用户自行 `git fetch --tags` 同步；
 - 会话日志 `.tag.<时间戳>.log` 不入库，由用户决定保留或清理。
