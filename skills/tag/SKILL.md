@@ -19,7 +19,8 @@ metadata:
 ## 核心原则
 
 1. **先看后打**：打标签前先分析基线以来的变更，构建诚实、分组的变更清单，不臆造内容。
-2. **默认同步远程**：创建/改写标签后**默认** `git push` 当前分支与标签到远程，**无需逐次确认**；
+2. **先推后打，默认同步远程**：打标签**之前**先 `git push origin <当前分支>`（确保远程已包含即将被打标的提交），
+   创建/改写标签**之后**再 `git push origin <标签>`；全部**默认执行、无需逐次确认**。
    仅当无远程或用户明确要求仅本地（local-only）时跳过。push 失败自动重试并记入会话日志。
 3. **操作前确认**：创建前展示拟用消息；删除/改写（尤其已推送的标签）等破坏性操作必须先经用户确认。
 4. **注释标签**：一律 `git tag -a`，消息格式严格遵循约定（follow 链、编号项以 `;` 结尾、
@@ -235,7 +236,7 @@ Proceed? [Y/n]
 
 #### Step 1.4 — Push current commits (before tag)
 
-Push the current branch first to ensure the remote is up to date before tagging. **默认执行，无需确认**（push 失败按循环重试原则处理并记入日志）：
+**打标签的前置必需步骤**：先 push 当前分支，确保远程已包含即将被打标的提交，之后才能执行 Step 1.5 创建标签。**默认执行，无需确认**；push 失败按循环重试原则处理并记入日志，重试仍未成功则**暂停打标签并报告用户**，不创建指向本地独有提交的标签：
 
 ```bash
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
@@ -434,6 +435,7 @@ Proceed with Steps 1.1–1.6, substituting `$BASE_REF` for the baseline.
 | No commits in repo | Abort; report nothing to tag |
 | No changes since baseline | Report and ask user whether to proceed |
 | No remote configured | Skip both push steps; note the absence |
+| Branch push before tagging fails | Diagnose, fix, retry; if still failing, pause and report — do not create the tag |
 | User requests local-only | Create/amend locally only, skip push; record in session log |
 | Tag name collision | Increment N and retry (should not happen with auto-numbering) |
 | Tag already exists remotely | Warn if local and remote messages differ |
