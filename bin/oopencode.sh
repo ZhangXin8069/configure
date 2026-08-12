@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 # Launch opencode: Build agent + auto + DeepSeek V4 Flash (max) + debug logs
+# 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
+
+_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 LOG_FILE=".agent.$(date +%Y-%m-%d-%H-%M-%S).log"
 
@@ -30,11 +35,52 @@ PROMPT="你是一个多身份智能体，拥有以下可切换的提示词身份
 
 【技能与环境】自动加载并使用 ${HOME}/configure/skills 下的技能；当输入形如 {~skill-name} 的指令时，执行 ${HOME}/configure/skills/skill-name 对应的技能。必要时自动在工作目录生成或更新 AGENTS.md 与 .opencode 文件夹，保持项目约定文档与配置同步最新。"
 
+# 自动收集工作目录项目上下文：从 pwd 向上查找 AGENTS.md 与 .opencode，注入 prompt
+PROJECT_CONTEXT=""
+project_root=""
+_ctx_dir="$(pwd)"
+while :; do
+    if [[ -f "${_ctx_dir}/AGENTS.md" || -d "${_ctx_dir}/.opencode" ]]; then
+        project_root="${_ctx_dir}"
+        break
+    fi
+    _parent="$(dirname "${_ctx_dir}")"
+    [[ "${_parent}" == "${_ctx_dir}" ]] && break
+    _ctx_dir="${_parent}"
+done
+unset _ctx_dir _parent
+
+if [[ -n "${project_root}" ]]; then
+    PROJECT_CONTEXT=$'\n\n\n### 工作目录项目上下文（由 oopencode.sh 自动注入） ###'
+    if [[ -f "${project_root}/AGENTS.md" ]]; then
+        PROJECT_CONTEXT+=$'\n\n===== AGENTS.md ('"${project_root}"'/AGENTS.md) =====\n'
+        _n_lines="$(wc -l < "${project_root}/AGENTS.md")"
+        if (( _n_lines > 400 )); then
+            PROJECT_CONTEXT+="$(head -400 "${project_root}/AGENTS.md")"
+            PROJECT_CONTEXT+=$'\n\n...（AGENTS.md 共 '"${_n_lines}"$' 行，已截断；完整内容请自行读取 '"${project_root}"$'/AGENTS.md）'
+        else
+            PROJECT_CONTEXT+="$(<"${project_root}/AGENTS.md")"
+        fi
+        unset _n_lines
+    fi
+    if [[ -d "${project_root}/.opencode" ]]; then
+        PROJECT_CONTEXT+=$'\n\n===== .opencode 目录结构 ('"${project_root}"'/.opencode) =====\n'
+        PROJECT_CONTEXT+="$(cd "${project_root}/.opencode" && find . -maxdepth 2 -mindepth 1 ! -path './node_modules*' ! -path './.git*' | sort)"
+    fi
+    PROMPT="${PROMPT}${PROJECT_CONTEXT}"
+fi
+unset PROJECT_CONTEXT
+
 export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"opencode-go/deepseek-v4-flash","variant":"max"}}}'
 
 echo "============================================================"
 echo "  OpenCode: build | auto | DeepSeek V4 Flash (max)"
 echo "  log: ${LOG_FILE}"
+if [[ -n "${project_root}" ]]; then
+    echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
+else
+    echo "  project context: 未发现 AGENTS.md / .opencode（仅使用固定 prompt）"
+fi
 echo "============================================================"
 
 opencode --agent build --auto --prompt "${PROMPT}" \
@@ -42,3 +88,4 @@ opencode --agent build --auto --prompt "${PROMPT}" \
         2> "${LOG_FILE}"
 
 echo "logs -> ${LOG_FILE}"
+echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
