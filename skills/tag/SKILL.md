@@ -7,7 +7,7 @@ description: |
   暂存进度（"dev"、"暂存"、"保存进度"、"快照"）、标记完成（"stab"、"完成"、"稳定版"）、
    修复打标（"bug"、"修复"、"补丁"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
    查看标签详情（"tag详情"）、删除标签（"删除tag"）、修改/重写标签（"修改tag"、"amend"）时使用此 skill。
-   description 中未明确类型时按上下文自动推断：bug/修复→bug，dev/暂存/快照→dev，否则默认 stab。
+   description 中未明确类型时按上下文自动推断：bug/修复→bug，dev/暂存/快照→dev，无信号时默认 dev。
    创建/改写标签后默认自动推送当前分支与标签到远程（无需逐次确认）；破坏性操作（删除/改写已推送标签）先确认。
 metadata:
   openclaw:
@@ -71,7 +71,8 @@ Invoke this skill when the user asks to:
 - Mentioning "子版本" / "修订" / "sub" + a major tag (e.g. "stab15的子版本") → next sub-version of that major
 - Mentioning "bug"/"修复"/"fix"/"补丁"/"问题" → `bug`
 - Mentioning "dev"/"暂存"/"保存"/"快照"/"继续" → `dev`
-- Mentioning "stab"/"完成"/"稳定"/"版本"/"发布" or no clear signal → `stab` (default)
+- Mentioning "stab"/"完成"/"稳定"/"版本"/"发布" → `stab`
+- No clear signal → `dev` (default)
 
 If ambiguous, ask: "Which tag type? [stab/dev/bug]"
 
