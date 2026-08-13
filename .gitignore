@@ -39,12 +39,9 @@
 # ==== 日志 ====
 *.log
 *.bak
+*.list
 *.cache
 *.err
-
-# ==== opencode 运行产物（不入库）====
-.agent.*.log
-.agent.*.list
 
 # ==== LaTeX ====
 *.aux
@@ -61,9 +58,6 @@
 *.c
 *.bin
 *dist
-# *.png
-*.jpg
-*.jpeg
 *.json
 *.csv
 *.tsv
