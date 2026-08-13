@@ -2,7 +2,7 @@
 # Shell 终端配置脚本
 # 功能: 备份 ~/.bashrc ~/.zshrc ~/.oh-my-zsh, 部署新版 (从 lib/ 复制)
 # 主题: robbyrussell + zsh-syntax-highlighting + zsh-autosuggestions
-# 启动: .zshrc → ~/configure/env.sh → tmp/scripts.sh → 51 个 alias
+# 启动: .zshrc → ~/configure/env.sh → bin/ 进 PATH → 66 个命令直调
 
 _PATH=$(
     cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
@@ -30,15 +30,15 @@ cat << 'USAGE'
   ├──────────────────────────────────────────────────────────────┤
   │                                                              │
   │  启动链                                                      │
-  │    .zshrc  →  ~/configure/env.sh  →  tmp/scripts.sh          │
-  │    自动生成 51 个 alias, 加载 git 别名和 env 变量            │
+  │    .zshrc  →  ~/configure/env.sh  →  bin/ 进 PATH           │
+  │    bin/ 下 66 个命令直接按名调用, 加载 git 别名和 env 变量   │
   │                                                              │
   │  oh-my-zsh                                                   │
   │    主题: robbyrussell                                        │
   │    插件: git, z, zsh-syntax-highlighting,                    │
   │          zsh-autosuggestions, you-should-use                 │
   │                                                              │
-  │  常用 alias (自动生成)                                       │
+  │  常用命令 (bin/ 直调)                                       │
   │    gpush.sh / gpull.sh   Git 推送/拉取                       │
   │    gback.sh              Git 分支备份                        │
   │    gls.sh                Git 仓库列表                        │

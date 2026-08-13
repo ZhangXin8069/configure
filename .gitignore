@@ -1,7 +1,4 @@
 *.ipynb_checkpoints
-tmp/
-tmp/*
-lib/_package/linux/2048
 *.sw*
 *.Identifier
 *.DS_Store

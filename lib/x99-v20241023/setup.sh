@@ -56,7 +56,7 @@ git clone git@gitee.com:zhangxin8069/configure.git
 git clone git@gitee.com:zhangxin8069/qcu.git
 ######
 pushd ./configure
-bash ./scripts/script_alias.sh
+# 别名已废弃: bin/ 直接进 PATH, 无需 script_alias.sh
 cp ./lib/x99-v20241023/env.sh ~/env.sh
 popd
 ######

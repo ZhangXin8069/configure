@@ -13,8 +13,8 @@
 #   2. source ~/configure/env.sh
 #   3. source ~/env.sh
 #
-# 本脚本位于 configure/lib/ 下（不参与 bin/ 的自动 alias 生成，避免被
-# script_alias.sh 包装成子进程别名而丢失环境变量）；save-env.sh 仍在 bin/。
+# 本脚本位于 configure/lib/ 下（bin/ 已直接进 PATH，本脚本按路径 source，
+# 避免子进程执行丢失环境变量）；save-env.sh 仍在 bin/。
 # ============================================================
 
 _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)

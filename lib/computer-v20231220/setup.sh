@@ -17,7 +17,7 @@ git clone https://gitee.com/zhangxin8069/configure.git
 git clone https://gitee.com/zhangxin8069/qcu.git
 pushd ~/configure
 source ./env.sh
-bash ./scripts/script_alias.sh
+# 别名已废弃: bin/ 直接进 PATH, 无需 script_alias.sh
 bash ./bin/sh_init.sh
 popd
 sudo apt install zsh

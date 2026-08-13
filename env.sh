@@ -7,9 +7,8 @@ case "$_SRC" in
 esac
 _PATH=$(cd "$_DIR" && pwd)
 # @MKDIR@
-mkdir -p ${_PATH}/bin ${_PATH}/docs ${_PATH}/lib ${_PATH}/scripts ${_PATH}/tmp
+mkdir -p ${_PATH}/bin ${_PATH}/docs ${_PATH}/lib ${HOME}/.local/bin
 # @SOURCE@
-source ${_PATH}/tmp/scripts.sh
 # @EXPORT@
 # export TERM=xterm-256color
 export LANG=zh_CN.UTF-8
