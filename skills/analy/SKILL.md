@@ -12,7 +12,7 @@ metadata:
     emoji: 📊
 ---
 
-# analyze — 仓库分析 + LaTeX PDF 报告生成技能
+# analy — 仓库分析 + LaTeX PDF 报告生成技能
 
 对当前 git 仓库中的**全部文档与代码**进行只读分析，解析用户输入（`{$用户输入}`，即分析主题/问题），
 以证据驱动的方式产出分析结论，**每个结论附参考源（`文件:行号`）**，最后用 LaTeX 生成 PDF 文档，
@@ -42,7 +42,7 @@ metadata:
 
 ## 会话日志
 
-每次 analyze 会话必须在**当前工作目录（仓库根）**生成详细日志：
+每次 analy 会话必须在**当前工作目录（仓库根）**生成详细日志：
 
 - 文件名格式：`.analy.<时间戳>.log`（例如 `.analy.2026-08-13-09-15-30.log`）
 - 时间戳格式：`%Y-%m-%d-%H-%M-%S`：`TS=$(date +%Y-%m-%d-%H-%M-%S)`
@@ -207,7 +207,7 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
 \usepackage{fancyhdr}
 
 \title{主题标题}
-\author{opencode analyze}
+\author{opencode analy}
 \date{\today}
 
 \lstset{
