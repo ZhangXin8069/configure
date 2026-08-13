@@ -7,6 +7,7 @@ _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 _TS="$(date +%Y-%m-%d-%H-%M-%S)"
+_PWD="$(pwd)"
 LOG_FILE=".agent.${_TS}.log"
 LIST_FILE=".agent.${_TS}.list"
 unset _TS
@@ -40,10 +41,10 @@ PROMPT="你是一个多身份智能体，拥有以下可切换的提示词身份
 
 【历史用户输入】以下为 oopencode.sh 启动时自动预读的历史用户输入清单（按时间倒序，各份来自历史会话的 .agent.*.list 文件），作为本次会话的上下文参考：了解用户惯用的表述、关注点与既定需求，避免重复提问。本章节仅供回顾参考，不代表当前任务；实际任务以用户本次输入为准。
 
-【用户输入记录】本会话的所有用户输入必须逐条原样保存到文件 ${LIST_FILE}（绝对路径）：收到每条用户输入后立即追加写入（首条系统注入的固定提示词除外），每条格式为：
+【用户输入记录】本会话的所有用户输入必须逐条原样保存到文件 ${_PWD}/${LIST_FILE}（绝对路径）：系统注入的固定提示词（含自动注入的项目上下文与历史清单）不是用户输入，一律不记录；收到每条真实用户输入后，在输出任何回复之前立即追加写入（先写后答，保证会话中断也不丢失），无需向用户确认；文件不存在则自动创建。每条格式为：
 ---- [YYYY-MM-DD HH:MM:SS] 第 N 条用户输入 ----
 <用户输入原文>
-追加写入直接执行（printf '%s\n' 追加 >> 或文件追加工具），无需向用户确认；文件不存在则自动创建。"
+N 从 1 起按真实用户输入递增计数；追加写入直接执行（printf '%s\n' 追加 >> 或文件追加工具）；写入失败时立即向用户报告错误。"
 
 # 自动收集工作目录项目上下文：从 pwd 向上查找 AGENTS.md 与 .opencode，注入 prompt
 PROJECT_CONTEXT=""
@@ -132,6 +133,52 @@ else
 fi
 echo "============================================================"
 
+# 兜底防丢失：trap EXIT（任何退出路径均触发）——从 LOG_FILE 提取 session.id，export 会话 JSON，
+# python3 提取 user 消息文本（跳过系统注入提示词），与 LIST_FILE 比对后追加补录缺失的用户输入
+_recover_inputs() {
+    local _rec_sid _rec_jf
+    _rec_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+    [[ -n "${_rec_sid}" ]] || return 0
+    command -v opencode >/dev/null 2>&1 || return 0
+    command -v python3  >/dev/null 2>&1 || return 0
+    _rec_jf="/tmp/opencode/${LIST_FILE}.export.json"
+    if opencode export "${_rec_sid}" 2>/dev/null > "${_rec_jf}"; then
+        python3 - "${_rec_jf}" "${LIST_FILE}" <<'PYEOF'
+import json, sys, datetime
+exp, lst = sys.argv[1], sys.argv[2]
+try:
+    with open(exp) as f:
+        d = json.load(f)
+except Exception:
+    sys.exit(0)
+users = []
+for m in d.get('messages', []):
+    if m.get('info', {}).get('role') != 'user':
+        continue
+    for p in m.get('parts', []):
+        if p.get('type') == 'text':
+            t = p.get('text', '')
+            if t and '【用户输入记录】' not in t:
+                users.append(t)
+try:
+    with open(lst) as f:
+        content = f.read()
+except FileNotFoundError:
+    content = ''
+recs = [t for t in users if t not in content]
+if recs:
+    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+    with open(lst, 'a') as f:
+        for t in recs:
+            f.write(f'---- [{ts}] 兜底补录 ----\n{t}\n')
+    print(f"  recover: 兜底补录 {len(recs)} 条缺失用户输入 -> {lst}")
+PYEOF
+    fi
+    rm -f "${_rec_jf}"
+}
+trap '_recover_inputs' EXIT
+unset _rec_sid _rec_jf
+
 opencode --agent build --auto --prompt "${PROMPT}" \
         --print-logs --log-level DEBUG \
         2> "${LOG_FILE}"
@@ -142,4 +189,5 @@ elif [[ -f "${LIST_FILE}" ]]; then
     echo "user inputs -> ${LIST_FILE}（空）"
 fi
 echo "logs -> ${LOG_FILE}"
+unset _PWD
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
