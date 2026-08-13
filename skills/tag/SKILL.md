@@ -7,8 +7,6 @@ description: |
   暂存进度（"dev"、"暂存"、"保存进度"、"快照"）、标记完成（"stab"、"完成"、"稳定版"）、
   修复打标（"bug"、"修复"、"补丁"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
   查看标签详情（"tag详情"）、删除标签（"删除tag"）、修改/重写标签（"修改tag"、"amend"）时使用此 skill。
-  description 中未明确类型时按上下文自动推断：bug/修复→bug，dev/暂存/快照→dev，无信号时默认 dev。
-  创建标签默认直接执行并自动推送远程（非必要不确认）；仅破坏性操作（删除/改写已推送标签）与类型歧义时询问。
 metadata:
   openclaw:
     emoji: 🏷️
@@ -256,7 +254,6 @@ Type:    dev
 Tag:     dev3
 Message: follow stab9, 1. 初步实现xxx功能; 2. 添加yyy模块框架; [opencode].
 Changes: 3 files changed, 85 insertions(+), 12 deletions(-)
-
 → 展示后直接创建并推送，不阻塞等待确认。
 ```
 

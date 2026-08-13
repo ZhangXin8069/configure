@@ -23,7 +23,7 @@ PROMPT="你是一个多身份智能体，拥有以下可切换的提示词身份
 【思维方法论】面对复杂问题，你同时调用两种视角：作为物理学家，先做对称性分析与量纲检查，识别问题的主导项与可忽略项，用守恒律与极端情形（极限、退化、边界情形）校验结论的合理性；作为工程师，再将其转化为可靠、可维护、可验证的实现，优先采用经过实践检验的方案而非华而不实的设计。分析既要有物理上的深刻洞见，也要有工程上的务实落地。
 
 【工作流程】按以下顺序推进任务：
-1. 理解：收到首个任务时，先逐一列出当前可用技能（含简略介绍），同时回顾并输出【历史用户输入】章节中的历史输入（作为上下文参考；无历史输入则跳过），之后任务不再重复；随后阅读相关代码与文档，定位根本原因或明确需求，确认约束条件；复杂任务先分解为若干可独立验证的子步骤，按依赖关系排序；
+1. 理解：收到首个任务时，先逐一列出当前可用技能（含简略介绍），之后任务不再重复；随后阅读相关代码与文档，定位根本原因或明确需求，确认约束条件；复杂任务先分解为若干可独立验证的子步骤，按依赖关系排序；
 2. 规划：权衡各种方案的取舍（正确性、简洁性、可维护性、性能），优先选择简单正确的方案，而非取巧的方案；需求不明确时，先提出简洁的澄清问题；
 3. 实现：遵循代码库既有约定与库的使用方式（不得未经确认就假定某个库可用），最小化改动范围，保持代码简洁、地道、经过充分测试；遵循安全最佳实践，绝不泄露机密信息；
 4. 验证：运行测试与 lint/typecheck 等校验（纯脚本项目至少做语法检查），确保改动正确；发现自身错误时立即承认并修正，不掩饰、不回避；任务执行失败时先 debug 定位根因，优化方案后重新执行，不因一次失败而停止；
@@ -39,9 +39,7 @@ PROMPT="你是一个多身份智能体，拥有以下可切换的提示词身份
 
 【技能与环境】自动加载并使用 ${HOME}/configure/skills 下的技能；当输入形如 {~skill-name} 的指令时，执行 ${HOME}/configure/skills/skill-name 对应的技能。必要时自动在工作目录生成或更新 AGENTS.md 与 .opencode 文件夹，保持项目约定文档与配置同步最新。
 
-【历史用户输入】以下为 oopencode.sh 启动时自动预读的历史用户输入清单（按时间倒序，各份来自历史会话的 .agent.*.list 文件），作为本次会话的上下文参考：了解用户惯用的表述、关注点与既定需求，避免重复提问。本章节仅供回顾参考，不代表当前任务；实际任务以用户本次输入为准。
-
-【用户输入记录】本会话的所有用户输入必须逐条原样保存到文件 ${_PWD}/${LIST_FILE}（绝对路径）：系统注入的固定提示词（含自动注入的项目上下文与历史清单）不是用户输入，一律不记录；收到每条真实用户输入后，在输出任何回复之前立即追加写入（先写后答，保证会话中断也不丢失），无需向用户确认；文件不存在则自动创建。每条格式为：
+【用户输入记录】本会话的所有用户输入必须逐条原样保存到文件 ${_PWD}/${LIST_FILE}（绝对路径）：系统注入的固定提示词（含自动注入的项目上下文）不是用户输入，一律不记录；收到每条真实用户输入后，在输出任何回复之前立即追加写入（先写后答，保证会话中断也不丢失），无需向用户确认；文件不存在则自动创建。每条格式为：
 ---- [YYYY-MM-DD HH:MM:SS] 第 N 条用户输入 ----
 <用户输入原文>
 N 从 1 起按真实用户输入递增计数；追加写入直接执行（printf '%s\n' 追加 >> 或文件追加工具）；写入失败时立即向用户报告错误。"
@@ -82,33 +80,6 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
-# 历史用户输入预读：按文件名（ISO 时间戳）倒序读取最近 HIST_LIMIT 份 .agent.*.list（每份限 HIST_MAX_LINES 行），注入 prompt 作为后续参考
-# 仅匹配 .list（用户输入清单），显式排除 .log（opencode 运行日志，体积大且非用户输入，一律不读）
-HIST_LIMIT=5
-HIST_MAX_LINES=200
-HISTORY_CONTEXT=""
-HIST_FILES=()
-while IFS= read -r _hf; do
-    HIST_FILES+=("${_hf}")
-done < <(ls -1 .agent.*.list 2>/dev/null | grep -v '\.log$' | sort -r | head -n "${HIST_LIMIT}")
-if (( ${#HIST_FILES[@]} > 0 )); then
-    HIST_COUNT="${#HIST_FILES[@]}"
-    HISTORY_CONTEXT=$'\n\n\n### 历史用户输入（由 oopencode.sh 自动预读注入，供上下文参考） ###'
-    for _hf in "${HIST_FILES[@]}"; do
-        HISTORY_CONTEXT+=$'\n\n===== 历史清单 ['"${_hf}"'] =====\n'
-        _hln="$(wc -l < "${_hf}")"
-        if (( _hln > HIST_MAX_LINES )); then
-            HISTORY_CONTEXT+="$(head -"${HIST_MAX_LINES}" "${_hf}")"
-            HISTORY_CONTEXT+=$'\n\n...（'"${_hf}"$' 共 '"${_hln}"$' 行，已截断；完整内容请自行读取）'
-        else
-            HISTORY_CONTEXT+="$(<"${_hf}")"
-        fi
-        unset _hln
-    done
-    PROMPT="${PROMPT}${HISTORY_CONTEXT}"
-fi
-unset HISTORY_CONTEXT HIST_FILES _hf
-
 # 模型选择：默认 -f DeepSeek V4 Flash；-p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
 case "${1:-f}" in
     -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
@@ -124,9 +95,6 @@ echo "============================================================"
 echo "  OpenCode: build | auto | ${MODEL_NAME} (max)"
 echo "  log: ${LOG_FILE}"
 echo "  user-input list: ${LIST_FILE}"
-if (( HIST_COUNT > 0 )); then
-    echo "  history input: 预读 ${HIST_COUNT} 份历史清单已注入 prompt"
-fi
 if [[ -n "${project_root}" ]]; then
     echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
 else
@@ -180,9 +148,28 @@ PYEOF
 trap '_recover_inputs' EXIT
 unset _rec_sid _rec_jf
 
-opencode --agent build --auto --prompt "${PROMPT}" \
-        --print-logs --log-level DEBUG \
-        2> "${LOG_FILE}"
+# 超时策略：默认 60s，可用 OPENCODE_TIMEOUT 覆盖（秒）；防 agent 卡死/无限循环导致脚本无限挂起
+# 优先 GNU timeout（Linux）/ gtimeout（macOS brew coreutils）；均无则用后台运行 + 看门狗 kill 兜底
+_TIMEOUT="${OPENCODE_TIMEOUT:-60}"
+_OPENCODE_CMD=(opencode --agent build --auto --prompt "${PROMPT}" --print-logs --log-level DEBUG)
+if command -v timeout >/dev/null 2>&1; then
+    timeout "${_TIMEOUT}" "${_OPENCODE_CMD[@]}" 2> "${LOG_FILE}"
+    _rc=$?
+    [[ $_rc -eq 124 ]] && echo "timeout: opencode 运行超过 ${_TIMEOUT}s 已被终止（可用 OPENCODE_TIMEOUT 调整）"
+elif command -v gtimeout >/dev/null 2>&1; then
+    gtimeout "${_TIMEOUT}" "${_OPENCODE_CMD[@]}" 2> "${LOG_FILE}"
+    _rc=$?
+    [[ $_rc -eq 124 ]] && echo "timeout: opencode 运行超过 ${_TIMEOUT}s 已被终止（可用 OPENCODE_TIMEOUT 调整）"
+else
+    "${_OPENCODE_CMD[@]}" 2> "${LOG_FILE}" &
+    _PID=$!
+    ( sleep "${_TIMEOUT}"; kill "${_PID}" 2>/dev/null ) & _WATCHER=$!
+    wait "${_PID}"
+    _rc=$?
+    kill "${_WATCHER}" 2>/dev/null
+    [[ $_rc -ge 128 ]] && echo "timeout: opencode 运行超过 ${_TIMEOUT}s 已被看门狗终止（可用 OPENCODE_TIMEOUT 调整）"
+fi
+unset _TIMEOUT _PID _WATCHER _rc
 
 if [[ -s "${LIST_FILE}" ]]; then
     echo "user inputs -> ${LIST_FILE}（$(wc -l < "${LIST_FILE}") 行）"
