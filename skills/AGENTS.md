@@ -14,3 +14,5 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `analy` | 仓库分析：只读分析当前 git 库全部文档与代码，解析 `{$用户输入}` 主题，侧重多份资料的联系与层次逻辑、代码-对象映射（如格点代码与粒子物理图像），结论附参考源（`文件:行号`），代码片段用 `\lstinputlisting` 直引原文件，LaTeX（ctex+xelatex）编译带色彩标识的 PDF 输出到当前目录 `docs/`，`.analy.<时间戳>.log` 会话日志 |
 | `test` | 系统化测试：默认测试对象为上次 agent 生成的工作（参考 `.agent.*.list` 格式），可指定项目；中间变量自行计算并保存，中间/最终结果与图表落盘 `test_out/`，失败按 debug 循环修复、通过按 optim 循环优化，支持设备切换（GPU 优先/CPU/NPU）与多精度切换（默认 fp32），数据读写间精度转换显式管理，`.test.<时间戳>.log` 会话日志 |
 | `make` | 项目生成：生成对象为用户指定的项目，编排调用本目录全部技能（init/tag/debug/optim/diff/analy/test）完成全流程（解析需求→调查规划→最小改动实现→系统化测试→循环优化→复查→归档→打标），细节要求为所有技能的汇总，`.make.<时间戳>.log` 会话日志 |
+| `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范，`.skill-creator.<时间戳>.log` 会话日志 |
+| `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`，`.plan.<时间戳>.log` 会话日志 |
