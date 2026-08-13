@@ -26,7 +26,7 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 | 跨仓库批量 | `zgALLpush/pull.sh`、`zgCONFIGUREpush/pull.sh`、`zgLATTICE-PDFpush/pull.sh`、`zgPYQCUpush/pull.sh`（相对路径 `../../repo-name`） |
 | HPC/Slurm | `ssub.sh`（内嵌模板：gpu-debug 分区、2 GPU）、`ssqueue.sh`、`zsqueue.sh`、`ssrun.sh`、`sstop.sh`、`ssnake.sh`、`ssnsc.sh`、`ssjtu.sh` |
 | 系统 | `cpupower.sh`（按 `$_NAME` 分发，`conservative/ondemand/performance/powersave.sh` 为符号链接）、`swap.sh`（64GB /var/swapfile）、`apt_install.sh`、`pip_install.sh`、`poweroff.sh`、`reboot.sh` |
-| 启动器 | `cclaude.sh`（Claude Code）、`oopencode.sh`（opencode build agent，含固定中文 prompt；每次会话生成 `.agent.<TS>.log` 运行日志与 `.agent.<TS>.list` 用户输入清单，启动时预读最近 5 份 `.agent.*.list` 注入 prompt 作历史参考）、`ddocker.sh`、`ccloudmusic.sh`、`zipython.sh`、`zjulab.sh`、`vscode_unset.sh` |
+| 启动器 | `cclaude.sh`（Claude Code）、`oopencode.sh`（opencode build agent，含固定中文 prompt；每次会话生成 `.agent.<TS>.log` 运行日志与 `.agent.<TS>.list` 用户输入清单）、`ddocker.sh`、`ccloudmusic.sh`、`zipython.sh`、`zjulab.sh`、`vscode_unset.sh` |
 | 初始化 | `sh_init.sh`（引导 shell：备份旧点文件，部署 lib/_bashrc、_zshrc、_oh-my-zsh）、`vim_init.sh`、`zerotier_init.sh` |
 | 工具 | `wwa.sh`、`ddu.sh`、`llog.sh`、`zsearch.sh`、`zlog.sh`、`cp-small.sh`（cp 包装：跳过 >1MB 文件并记录清单到目标目录）、`mv-small.sh`（mv 包装，同规则） |
 | 平台 | `xxattr.sh`（macOS）、`xx99.sh`（X99 工作站） |
