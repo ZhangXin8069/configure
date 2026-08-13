@@ -19,7 +19,7 @@ apt install zsh wget
 sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
 # git clone https://gitee.com/zhangxin8069/configure.git
 pushd ./configure
-bash ./scripts/script_alias.sh
+# 别名已废弃: bin/ 直接进 PATH, 无需 script_alias.sh
 cp ./lib/v20241023/env.sh ~/env.sh
 popd
 # ######
