@@ -83,13 +83,14 @@ fi
 unset PROJECT_CONTEXT
 
 # 历史用户输入预读：按文件名（ISO 时间戳）倒序读取最近 HIST_LIMIT 份 .agent.*.list（每份限 HIST_MAX_LINES 行），注入 prompt 作为后续参考
+# 仅匹配 .list（用户输入清单），显式排除 .log（opencode 运行日志，体积大且非用户输入，一律不读）
 HIST_LIMIT=5
 HIST_MAX_LINES=200
 HISTORY_CONTEXT=""
 HIST_FILES=()
 while IFS= read -r _hf; do
     HIST_FILES+=("${_hf}")
-done < <(ls -1 .agent.*.list 2>/dev/null | sort -r | head -n "${HIST_LIMIT}")
+done < <(ls -1 .agent.*.list 2>/dev/null | grep -v '\.log$' | sort -r | head -n "${HIST_LIMIT}")
 if (( ${#HIST_FILES[@]} > 0 )); then
     HIST_COUNT="${#HIST_FILES[@]}"
     HISTORY_CONTEXT=$'\n\n\n### 历史用户输入（由 oopencode.sh 自动预读注入，供上下文参考） ###'

@@ -1,0 +1,683 @@
+timestamp=2026-08-13T02:14:19.611Z level=INFO run=5dd350e1 message="loading tui config" path=/root/.config/opencode/tui.json
+timestamp=2026-08-13T02:14:19.614Z level=INFO run=5dd350e1 message="applying tui config" path=/root/.config/opencode/tui.json order=1
+timestamp=2026-08-13T02:14:20.315Z level=INFO run=4d2e9958 message="creating instance" directory=/root/configure/bin
+timestamp=2026-08-13T02:14:20.317Z level=INFO run=4d2e9958 message=fromDirectory directory=/root/configure/bin
+timestamp=2026-08-13T02:14:20.367Z level=INFO run=4d2e9958 message=bootstrapping directory=/root/configure/bin
+timestamp=2026-08-13T02:14:20.372Z level=INFO run=4d2e9958 message=loading path=/root/.config/opencode/config.json
+timestamp=2026-08-13T02:14:20.372Z level=INFO run=4d2e9958 message=loading path=/root/.config/opencode/opencode.json
+timestamp=2026-08-13T02:14:20.373Z level=INFO run=4d2e9958 message=loading path=/root/.config/opencode/opencode.jsonc
+timestamp=2026-08-13T02:14:20.397Z level=DEBUG run=4d2e9958 message="loading config from /root/configure/.opencode/opencode.json"
+timestamp=2026-08-13T02:14:20.398Z level=INFO run=4d2e9958 message=loading path=/root/configure/.opencode/opencode.json
+timestamp=2026-08-13T02:14:20.512Z level=DEBUG run=4d2e9958 message="loading config from /root/configure/.opencode/opencode.jsonc"
+timestamp=2026-08-13T02:14:20.512Z level=INFO run=4d2e9958 message=loading path=/root/configure/.opencode/opencode.jsonc
+timestamp=2026-08-13T02:14:20.539Z level=DEBUG run=4d2e9958 message="loading config from /root/.opencode/opencode.json"
+timestamp=2026-08-13T02:14:20.539Z level=INFO run=4d2e9958 message=loading path=/root/.opencode/opencode.json
+timestamp=2026-08-13T02:14:20.542Z level=DEBUG run=4d2e9958 message="loading config from /root/.opencode/opencode.jsonc"
+timestamp=2026-08-13T02:14:20.542Z level=INFO run=4d2e9958 message=loading path=/root/.opencode/opencode.jsonc
+timestamp=2026-08-13T02:14:20.571Z level=DEBUG run=4d2e9958 message="loaded custom config from OPENCODE_CONFIG_CONTENT"
+timestamp=2026-08-13T02:14:21.146Z level=WARN run=4d2e9958 message="background dependency install failed" dir=/root/.config/opencode error="Cause([Fail(NpmInstallFailedError (cause: Error: could not resolve))])"
+[0m[31mTESTPLUGIN_LOADED[0m
+timestamp=2026-08-13T02:14:21.191Z level=ERROR run=4d2e9958 message="failed to load plugin" path=file:///root/.config/opencode/plugins/teststatus.js error="undefined is not an object (evaluating 'api.slots.register')"
+timestamp=2026-08-13T02:14:21.191Z level=ERROR run=4d2e9958 message="failed to load plugin" path=file:///root/.config/opencode/plugins/minimal.js error="Plugin file:///root/.config/opencode/plugins/minimal.js must default export an object with server()"
+timestamp=2026-08-13T02:14:21.191Z level=ERROR run=4d2e9958 message="failed to load plugin" path=file:///root/.config/opencode/plugins/statusbar.js error="Plugin file:///root/.config/opencode/plugins/statusbar.js must default export an object with server()"
+timestamp=2026-08-13T02:14:21.192Z level=INFO run=4d2e9958 message="all LSPs are disabled"
+timestamp=2026-08-13T02:14:21.195Z level=INFO run=4d2e9958 message="all formatters are disabled"
+timestamp=2026-08-13T02:14:21.195Z level=INFO run=4d2e9958 message=init
+timestamp=2026-08-13T02:14:21.958Z level=INFO run=4d2e9958 message=init count=40
+timestamp=2026-08-13T02:14:22.033Z level=INFO run=4d2e9958 message="watcher backend" directory=/root/configure/bin platform=linux backend=inotify
+timestamp=2026-08-13T02:14:22.040Z level=INFO run=4d2e9958 message="project copy refresh started" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5
+timestamp=2026-08-13T02:14:22.170Z level=INFO run=4d2e9958 message=created id=ses_00719d325ffeetTQaWLN4q5Sqb slug=brave-circuit version=1.18.18 projectID=2cc8c8f55c65496aa42f29371806790e41468fb5 directory=/root/configure/bin path=bin workspaceID=undefined parentID=undefined title="New session - 2026-08-13T02:14:22.170Z" agent=build model.id=deepseek-v4-flash model.providerID=opencode-go model.variant=max metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1786587262170 time.updated=1786587262170
+timestamp=2026-08-13T02:14:22.216Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=0
+timestamp=2026-08-13T02:14:22.355Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=true agent=title mode=primary
+timestamp=2026-08-13T02:14:22.378Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:14:22.393Z level=INFO run=4d2e9958 message="project copy refresh done" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5 updated=[] removed=[]
+timestamp=2026-08-13T02:14:22.407Z level=INFO run=4d2e9958 message="booting location services" directory=/root/configure/bin workspaceID=undefined
+timestamp=2026-08-13T02:14:22.862Z level=INFO run=4d2e9958 message=tracking hash=f5f5e27af0810d4caebf7ae15eb83767bc9eaf9e cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:14:22.869Z level=INFO run=4d2e9958 message="shell tool using shell" shell=/usr/bin/bash
+timestamp=2026-08-13T02:14:22.920Z level=INFO run=4d2e9958 message="watcher backend" directory=/root/configure/bin platform=linux backend=inotify
+timestamp=2026-08-13T02:14:22.923Z level=INFO run=4d2e9958 message="project copy refresh started" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5
+timestamp=2026-08-13T02:14:23.434Z level=INFO run=4d2e9958 message="project copy refresh done" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5 updated=[] removed=[]
+timestamp=2026-08-13T02:14:23.448Z level=INFO run=4d2e9958 message="booting location services" directory=/root/configure/bin workspaceID=undefined
+timestamp=2026-08-13T02:14:23.457Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e62d0b001pQ1V761N8JpZu2
+timestamp=2026-08-13T02:14:23.459Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:14:23.461Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:14:26.773Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="printf '%s\\n' '---- [2026-08-13 10:14:XX] 第 1 条用户输入 ----' '测试' >> /root/configure/bin/.agent.2026-08-13-10-14-18.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:14:26.872Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:14:26.913Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=1
+timestamp=2026-08-13T02:14:26.961Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:14:26.970Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e63f63001kSoco3PK17oiCe
+timestamp=2026-08-13T02:14:26.970Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:14:26.980Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:14:33.864Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:14:33.890Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=2
+timestamp=2026-08-13T02:14:33.891Z level=INFO run=4d2e9958 message="exiting loop" session.id=ses_00719d325ffeetTQaWLN4q5Sqb
+timestamp=2026-08-13T02:15:21.567Z level=INFO run=4d2e9958 message=cleanup prune=7.days
+timestamp=2026-08-13T02:16:01.849Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=0
+timestamp=2026-08-13T02:16:01.866Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:01.903Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e7b23c001tPFxOwq6ROA413
+timestamp=2026-08-13T02:16:01.904Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:16:01.907Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:16:04.474Z level=INFO run=4d2e9958 message=evaluated permission=skill pattern=optim action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:04.559Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:04.582Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=1
+timestamp=2026-08-13T02:16:04.615Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:04.620Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e7bce80014AHV9WwHtSLTgL
+timestamp=2026-08-13T02:16:04.621Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:16:04.630Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:16:07.938Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="ls -1t /root/configure/bin/.optim.*.log 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:07.938Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -5" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:07.938Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:07.938Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="tail -60 \"$(ls -1t /root/configure/bin/.optim.*.log 2>/dev/null | head -1)\" 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:07.938Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:08.092Z level=INFO run=4d2e9958 message=evaluated permission=read pattern=bin/oopencode.sh action.permission=read action.pattern=* action.action=allow
+timestamp=2026-08-13T02:16:08.108Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:16:08.183Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:08.203Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=2
+timestamp=2026-08-13T02:16:08.233Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:08.239Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e7cb0d001ravcwabKGvaZlT
+timestamp=2026-08-13T02:16:08.240Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:16:08.241Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:16:57.448Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="ls -1t /root/configure/bin/.agent.*.log 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:57.448Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -3" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:57.448Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===最近日志尾部===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:57.448Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="tail -30 \"$(ls -1t /root/configure/bin/.agent.*.log | head -1)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:57.448Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="ls -1t /root/configure/bin/.agent.*.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:57.448Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:16:57.491Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:57.524Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=3
+timestamp=2026-08-13T02:16:57.554Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:16:57.559Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e88bb6001oN4QSOAoY5G68i
+timestamp=2026-08-13T02:16:57.560Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:16:57.562Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:00.241Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -n \"测试\" /root/configure/bin/.agent.2026-08-13-10-14-18.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:00.241Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -5" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:00.241Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:00.241Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -n \"user input\\|user.*message\\|message=user\" /root/configure/bin/.agent.2026-08-13-10-14-18.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:00.241Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===行数与体积===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:00.241Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="wc -l /root/configure/bin/.agent.2026-08-13-10-14-18.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:00.365Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:00.384Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=4
+timestamp=2026-08-13T02:17:00.416Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:00.422Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e896e3001tmU105jjNqMSJ1
+timestamp=2026-08-13T02:17:00.423Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:00.433Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:08.074Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="opencode --help 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:08.075Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -60" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:08.562Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:08.587Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=5
+timestamp=2026-08-13T02:17:08.618Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:08.630Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e8b6ef001VWkD7LlDVP8eei
+timestamp=2026-08-13T02:17:08.631Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:08.633Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:16.005Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -o 'session.id=[a-z0-9_]*' /root/configure/bin/.agent.2026-08-13-10-14-18.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.005Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.005Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cut -d= -f2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.005Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"SID=$SID\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.005Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="opencode export \"$SID\" 2>/dev/null > /tmp/opencode/sess_export.json" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.006Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"exit=$? size=$(wc -c < /tmp/opencode/sess_export.json)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.006Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="wc -c < /tmp/opencode/sess_export.json" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:16.006Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 -c \"\nimport json\nd=json.load(open('/tmp/opencode/sess_export.json'))\nprint('top keys:', list(d.keys()))\nmsgs=d.get('messages') or d.get('message') or []\nprint('n messages:', len(msgs))\nfor i,m in enumerate(msgs):\n    role=m.get('role')\n    c=m.get('content')\n    txt=''\n    if isinstance(c,str): txt=c[:60]\n    elif isinstance(c,list):\n        txt=' '.join(str(p.get('text',''))[:40] for p in c if isinstance(p,dict) and p.get('type')=='text')[:60]\n    print(i, role, repr(txt))\n\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:19.594Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:19.620Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=6
+timestamp=2026-08-13T02:17:19.652Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:19.658Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e8e208001KCjS8qXDH66RS6
+timestamp=2026-08-13T02:17:19.659Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:19.661Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -o 'session.id=[A-Za-z0-9_-]*' /root/configure/bin/.agent.2026-08-13-10-14-18.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cut -d= -f2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"SID=$SID\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="opencode export \"$SID\" > /tmp/opencode/sess_export.json" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"exit=$?\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.273Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 -c \"\nimport json\nd=json.load(open('/tmp/opencode/sess_export.json'))\nprint('top keys:', list(d.keys()))\n\" 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:24.274Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -5" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:25.926Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:26.074Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=7
+timestamp=2026-08-13T02:17:26.264Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:26.283Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e8fb410011VtlarsGjRdtfs
+timestamp=2026-08-13T02:17:26.286Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:26.291Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:29.853Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 -c \"\nimport json\nd=json.load(open('/tmp/opencode/sess_export.json'))\nmsgs=d['messages']\nprint('n messages:', len(msgs))\nfor i,m in enumerate(msgs):\n    print(i, json.dumps({k:(v if not isinstance(v,(list,dict)) else type(v).__name__) for k,v in m.items()}, ensure_ascii=False)[:160])\n\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:30.166Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:30.316Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=8
+timestamp=2026-08-13T02:17:30.476Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:30.486Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e90bd1001V0eOKVyHx0caBD
+timestamp=2026-08-13T02:17:30.488Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:30.490Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:33.711Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 -c \"\nimport json\nd=json.load(open('/tmp/opencode/sess_export.json'))\nfor i,m in enumerate(d['messages']):\n    inf=m['info']\n    roles=[p.get('role','') for p in m['parts']]\n    print(i, 'info.role='+str(inf.get('role')), 'info.title='+repr(inf.get('title'))[:40], 'parts.roles='+str(roles))\n    for p in m['parts']:\n        if p.get('type')=='text' and p.get('role')=='user':\n            t=p.get('text','')\n            print('   user text:', repr(t[:100]))\n\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:33.961Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:34.061Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=9
+timestamp=2026-08-13T02:17:34.259Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:34.270Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e91a730011wWkL8wLndvxUl
+timestamp=2026-08-13T02:17:34.284Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:34.287Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:17:37.634Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 -c \"\nimport json\nd=json.load(open('/tmp/opencode/sess_export.json'))\nfor i in (0,3):\n    m=d['messages'][i]\n    print('== msg',i,'info:',json.dumps(m['info'],ensure_ascii=False)[:200])\n    for p in m['parts']:\n        print('   part type=',p.get('type'),'keys=',list(p.keys()))\n        if p.get('type')=='text': print('   text[:120]=',repr(p['text'][:120]))\n\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:17:37.794Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:37.859Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=10
+timestamp=2026-08-13T02:17:37.925Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:17:37.962Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e92946001Qj9y0SrXzlQ47z
+timestamp=2026-08-13T02:17:37.964Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:17:37.986Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:23.511Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode resolved=/tmp/opencode
+timestamp=2026-08-13T02:18:23.515Z level=INFO run=4d2e9958 message="resolved path" arg="\"$LOG\"" resolved=undefined
+timestamp=2026-08-13T02:18:23.515Z level=INFO run=4d2e9958 message="resolved path" arg=/root/configure/bin/ resolved=/root/configure/bin
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="date +%Y-%m-%d-%H-%M-%S" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"$LOG\" > /tmp/opencode/optim_log_name" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="mkdir -p /tmp/opencode" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===== .optim 会话日志 $TS =====\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"目标: 优化 oopencode.sh 用户输入记录 —— 实时记录 / 去除提示词记录 / 及时保存 / 防止意外丢失\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.516Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"约束: 不改变脚本对外行为(输出/退出码); 兼容 macOS(无 GNU 特性); 不访问工作目录之外内容(export 为 opencode 官方命令)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.517Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"工作目录: $(pwd) | 分支: $(git rev-parse --abbrev-ref HEAD 2>/dev/null) | HEAD: $(git log -1 --oneline 2>/dev/null)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.517Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern=pwd action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.517Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse --abbrev-ref HEAD 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.517Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git log -1 --oneline 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [基线/现状分析] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"现状: 记录完全依赖 agent 自觉(prompt 约定), 风险点:\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  ① 记录时机: 收到输入后 agent 何时写无硬约束 -> 崩溃前最后一条可能丢失\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  ② 提示词过滤: prompt 仅文字说明'首条系统注入除外', 由 agent 自行判断, 可能误记/漏记\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  ③ 路径: prompt 声称'绝对路径'但注入的是相对路径 \\${LIST_FILE}, 表述矛盾\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  ④ 无兜底: agent 漏写后无任何恢复机制\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"实测: DEBUG 日志(.agent.*.log)不含用户输入原文, 无法从日志恢复; opencode export <SID> 可导出完整会话 JSON(含 user 消息原文) -> 可行兜底\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [方案] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"1. prompt 增强: 明确四点(系统注入提示词一律不记录/先写后答/绝对路径/写入失败报告)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"2. 脚本兜底: trap EXIT -> 从 LOG_FILE 提取 session.id -> opencode export -> python3 提取 user 文本(跳过含'【用户输入记录】'标记的提示词消息) -> 与 LIST_FILE 比对 -> 追加补录缺失条目\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"3. 兜底定位为防丢失最后防线; agent 侧先写后答为主通道\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.518Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="mv \"$LOG\" /root/configure/bin/" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.519Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"log created: /root/configure/bin/$LOG\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:23.647Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:23.670Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=11
+timestamp=2026-08-13T02:18:23.703Z level=INFO run=4d2e9958 message=tracking hash=291b5de3481a96ef7c14399e7cca83cc173a2b18 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:23.709Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e9dc39001cLkXX0Eh43NK4E
+timestamp=2026-08-13T02:18:23.710Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:23.712Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:28.072Z level=INFO run=4d2e9958 message=evaluated permission=edit pattern=bin/oopencode.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:28.073Z level=INFO run=4d2e9958 message=formatting file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:28.076Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:28.176Z level=INFO run=4d2e9958 message=tracking hash=3589a828e20257586dfc1bc5b1e75ab334447743 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:28.207Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=12
+timestamp=2026-08-13T02:18:28.255Z level=INFO run=4d2e9958 message=tracking hash=3589a828e20257586dfc1bc5b1e75ab334447743 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:28.276Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e9edf4001TQNxZJLldDG0OA
+timestamp=2026-08-13T02:18:28.277Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:28.291Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:31.985Z level=INFO run=4d2e9958 message=evaluated permission=edit pattern=bin/oopencode.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:31.991Z level=INFO run=4d2e9958 message=formatting file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:31.994Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:32.200Z level=INFO run=4d2e9958 message=tracking hash=0563bc49abdceebd885180f6760e7e160046570c cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:32.235Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=13
+timestamp=2026-08-13T02:18:32.271Z level=INFO run=4d2e9958 message=tracking hash=0563bc49abdceebd885180f6760e7e160046570c cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:32.277Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8e9fdad001HPfaz5UGkG7yta
+timestamp=2026-08-13T02:18:32.277Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:32.294Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:37.485Z level=INFO run=4d2e9958 message=evaluated permission=edit pattern=bin/oopencode.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:37.486Z level=INFO run=4d2e9958 message=formatting file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:37.490Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:37.614Z level=INFO run=4d2e9958 message=tracking hash=0fddfdc246b2ff3465c6140588d3a1a0d15f4f95 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:37.644Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=14
+timestamp=2026-08-13T02:18:37.685Z level=INFO run=4d2e9958 message=tracking hash=0fddfdc246b2ff3465c6140588d3a1a0d15f4f95 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:37.702Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea12cf001Fxbep6OmOqinyT
+timestamp=2026-08-13T02:18:37.703Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:37.705Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:40.198Z level=INFO run=4d2e9958 message=evaluated permission=read pattern=bin/oopencode.sh action.permission=read action.pattern=* action.action=allow
+timestamp=2026-08-13T02:18:40.210Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:40.301Z level=INFO run=4d2e9958 message=tracking hash=0fddfdc246b2ff3465c6140588d3a1a0d15f4f95 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:40.325Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=15
+timestamp=2026-08-13T02:18:40.355Z level=INFO run=4d2e9958 message=tracking hash=0fddfdc246b2ff3465c6140588d3a1a0d15f4f95 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:40.360Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea1d47001gwFNOZdQKAyn5B
+timestamp=2026-08-13T02:18:40.360Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:40.362Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:43.162Z level=INFO run=4d2e9958 message=evaluated permission=edit pattern=bin/oopencode.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:43.162Z level=INFO run=4d2e9958 message=formatting file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:43.165Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:18:43.254Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:43.277Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=16
+timestamp=2026-08-13T02:18:43.312Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:43.325Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea28d0001m2TfnffWi0TgHq
+timestamp=2026-08-13T02:18:43.326Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:43.327Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:46.097Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash -n /root/configure/bin/oopencode.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:46.097Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"SYNTAX OK\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:47.846Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 - /tmp/opencode/sess_export.json /tmp/opencode/test_dummy.list <<'PYEOF'\nimport json, sys, datetime\nexp, lst = sys.argv[1], sys.argv[2]\nwith open(exp) as f:\n    d = json.load(f)\nusers = []\nfor m in d.get('messages', []):\n    if m.get('info', {}).get('role') != 'user':\n        continue\n    for p in m.get('parts', []):\n        if p.get('type') == 'text':\n            t = p.get('text', '')\n            if t and '【用户输入记录】' not in t:\n                users.append(t)\ntry:\n    with open(lst) as f:\n        content = f.read()\nexcept FileNotFoundError:\n    content = ''\nrecs = [t for t in users if t not in content]\nprint(f\"测试1: 提取到 {len(users)} 条真实输入 (提示词已跳过: {len(users)!=1 or users[0][:20]!='~optim'}条输入均为真实输入)\")\nprint(f\"  真实输入列表: {[u[:40] for u in users]}\")\nif recs:\n    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')\n    with open(lst, 'a') as f:\n        for t in recs:\n            f.write(f'---- [{ts}] 兜底补录 ----\\n{t}\\n')\n    print(f\"测试1: 补录 {len(recs)} 条\")\nPYEOF" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:47.968Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:47.989Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=17
+timestamp=2026-08-13T02:18:48.014Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:48.027Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea3b38001xawuJyw207lnms
+timestamp=2026-08-13T02:18:48.027Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:48.029Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:51.995Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/test_dummy.list resolved=/tmp/opencode/test_dummy.list
+timestamp=2026-08-13T02:18:51.997Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:18:51.998Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 - /tmp/opencode/sess_export.json /tmp/opencode/test_dummy.list <<'PYEOF'\nimport json, sys, datetime\nexp, lst = sys.argv[1], sys.argv[2]\nwith open(exp) as f:\n    d = json.load(f)\nusers = []\nfor m in d.get('messages', []):\n    if m.get('info', {}).get('role') != 'user':\n        continue\n    for p in m.get('parts', []):\n        if p.get('type') == 'text':\n            t = p.get('text', '')\n            if t and '【用户输入记录】' not in t:\n                users.append(t)\nwith open(lst) as f:\n    content = f.read()\nrecs = [t for t in users if t not in content]\nprint(f\"测试2 去重: 提取 {len(users)} 条, 需补录 {len(recs)} 条 (应为 0)\")\nPYEOF" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:51.998Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===测试文件内容===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:51.998Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cat /tmp/opencode/test_dummy.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:52.344Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:52.364Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=18
+timestamp=2026-08-13T02:18:52.394Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:52.399Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea4c4e001fORBAKImzlyoDR
+timestamp=2026-08-13T02:18:52.399Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:52.401Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:18:59.498Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/sess_export.json resolved=/tmp/opencode/sess_export.json
+timestamp=2026-08-13T02:18:59.501Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/t2.log resolved=/tmp/opencode/t2.log
+timestamp=2026-08-13T02:18:59.502Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/t2_missing.list resolved=/tmp/opencode/t2_missing.list
+timestamp=2026-08-13T02:18:59.502Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:18:59.502Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 -c \"\nimport json, datetime\nmsgs = [\n    {'info':{'role':'user'},'parts':[{'type':'text','text':'你是一个多身份智能体…【用户输入记录】…固定提示词全文'}]},\n    {'info':{'role':'assistant'},'parts':[{'type':'text','text':'ok'}]},\n    {'info':{'role':'user'},'parts':[{'type':'text','text':'第一行\\n第二行 带\\\"引号\\\"与\\$符号'}]},\n    {'info':{'role':'user'},'parts':[{'type':'text','text':'hello'}]},\n]\njson.dump({'messages':msgs}, open('/tmp/opencode/t2_export.json','w'))\nprint('fake export created')\n\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cp /tmp/opencode/sess_export.json /tmp/opencode/t2.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -o 'session.id=[A-Za-z0-9_-]*' /root/configure/bin/.agent.2026-08-13-10-14-18.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cut -d= -f2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"SID提取验证: $SID\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="python3 - /tmp/opencode/t2_export.json /tmp/opencode/t2_missing.list <<'PYEOF'\nimport json, sys, datetime\nexp, lst = sys.argv[1], sys.argv[2]\nwith open(exp) as f: d = json.load(f)\nusers = []\nfor m in d.get('messages', []):\n    if m.get('info', {}).get('role') != 'user': continue\n    for p in m.get('parts', []):\n        if p.get('type') == 'text':\n            t = p.get('text', '')\n            if t and '【用户输入记录】' not in t: users.append(t)\ntry:\n    with open(lst) as f: content = f.read()\nexcept FileNotFoundError: content = ''\nrecs = [t for t in users if t not in content]\nif recs:\n    ts = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')\n    with open(lst, 'a') as f:\n        for t in recs: f.write(f'---- [{ts}] 兜底补录 ----\\n{t}\\n')\nprint(f\"测试3: 提取{len(users)}条(提示词已跳过), 补录{len(recs)}条\")\nPYEOF" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.503Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"=== t2_missing.list (原样保留含引号/换行) ===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.504Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cat /tmp/opencode/t2_missing.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:18:59.602Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:59.621Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=19
+timestamp=2026-08-13T02:18:59.653Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:18:59.660Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea68a80013gvUHsvV1Z5rLe
+timestamp=2026-08-13T02:18:59.660Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:18:59.662Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:19:07.688Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/test_dummy.list resolved=/tmp/opencode/test_dummy.list
+timestamp=2026-08-13T02:19:07.691Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/t2_export.json resolved=/tmp/opencode/t2_export.json
+timestamp=2026-08-13T02:19:07.697Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/t2.log resolved=/tmp/opencode/t2.log
+timestamp=2026-08-13T02:19:07.697Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/t2_missing.list resolved=/tmp/opencode/t2_missing.list
+timestamp=2026-08-13T02:19:07.698Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:19:07.698Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash -c 'trap \"echo TRAP-OK(normal-exit)\" EXIT; echo main; exit 0'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:07.698Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash -c 'trap \"echo TRAP-OK(sigint-exit)\" EXIT; kill -INT $$; sleep 1'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:07.698Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:07.698Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="rm -f /tmp/opencode/test_dummy.list /tmp/opencode/t2_export.json /tmp/opencode/t2.log /tmp/opencode/t2_missing.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:08.131Z level=INFO run=4d2e9958 message=evaluated permission=read pattern=bin/oopencode.sh action.permission=read action.pattern=* action.action=allow
+timestamp=2026-08-13T02:19:08.145Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/oopencode.sh
+timestamp=2026-08-13T02:19:08.196Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:08.220Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=20
+timestamp=2026-08-13T02:19:08.250Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:08.256Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea8a3f001c0qqKZWNXtIrPW
+timestamp=2026-08-13T02:19:08.256Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:19:08.258Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:19:11.315Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash -c 'trap \"echo TRAP-OK-normal-exit\" EXIT; echo main; exit 0'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:11.315Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash -c 'trap \"echo TRAP-OK-INT-exit\" EXIT; kill -INT $$; sleep 1'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:11.315Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"exit=$?\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:11.415Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:11.435Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=21
+timestamp=2026-08-13T02:19:11.474Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:11.488Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ea96ce001yCxqU9DrfBm83e
+timestamp=2026-08-13T02:19:11.489Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:19:11.490Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:19:20.501Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/optim_log_name resolved=/tmp/opencode/optim_log_name
+timestamp=2026-08-13T02:19:20.506Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:19:20.507Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cat /tmp/opencode/optim_log_name" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.507Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.507Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [实现] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.508Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"改动文件: /root/configure/bin/oopencode.sh\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  oopencode.sh:12 新增 _PWD=\\$(pwd), 尾部 unset\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  oopencode.sh:44-47 prompt【用户输入记录】修订: 明确系统注入提示词一律不记录 / 先写后答 / 绝对路径 \\${_PWD}/\\${LIST_FILE}(原为相对路径,表述矛盾已修正) / 写入失败向用户报告\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  oopencode.sh:137-180 新增 _recover_inputs() 兜底函数 + trap '_recover_inputs' EXIT\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"    流程: LOG_FILE 提取 session.id -> opencode export -> python3 提取 user text(跳过含'【用户输入记录】'标记的消息=系统注入提示词) -> 与 LIST_FILE 比对 -> 追加补录缺失条目标记'兜底补录'\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [验证] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  1. bash -n 通过\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  2. 真实会话 export: opencode export ses_00719d... exit=0, JSON 含 messages[].info.role\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.509Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  3. 提取测试: 真实 export 中提示词(含标记)被跳过, 提取出 1 条真实输入(~optim,优化...) ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  4. 去重测试: 已录内容不重复补录 (补录0条) ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  5. 特殊字符测试: 多行/引号/\\$ 原样保留; 文件不存在自动创建 ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  6. trap 测试: 正常 exit 与 SIGINT exit 均触发 ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  7. SID 正则 [A-Za-z0-9_-] 在真实 LOG_FILE 提取完整 ✓ (旧正则 [a-z0-9_] 会截断大写,已用新正则)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [结论] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  收益: ①实时性: prompt 强制先写后答, 收到输入即落盘 ②提示词过滤: 双保险(prompt 明示 + 脚本按内容标记跳过) ③防丢失: agent 漏写/崩溃时脚本 EXIT trap 从官方会话导出补录\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  权衡: 每次会话结束新增一次 export + python 解析(秒级,一次性); export 失败时静默跳过不影响主流程\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  遗留: ①kill -9 强杀且会话未落盘时最后一条输入物理上无法恢复 ②补录条目标记'兜底补录'区别于 agent 编号条目(仅崩溃场景出现) ③兜底依赖 opencode export 命令(官方 CLI, 已验证本机可用)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  结束: $(date +%Y-%m-%d-%H-%M-%S)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="date +%Y-%m-%d-%H-%M-%S" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="ls -l /root/configure/bin/oopencode.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="awk '{print $1}'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.510Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="ls /root/configure/bin/.optim.*.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:19:20.631Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:20.651Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=22
+timestamp=2026-08-13T02:19:20.690Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:20.703Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8eabace001gnnJ8VI80N6E0a
+timestamp=2026-08-13T02:19:20.703Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:19:20.705Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:19:26.828Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:19:26.856Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=23
+timestamp=2026-08-13T02:19:26.860Z level=INFO run=4d2e9958 message="exiting loop" session.id=ses_00719d325ffeetTQaWLN4q5Sqb
+timestamp=2026-08-13T02:24:28.253Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=0
+timestamp=2026-08-13T02:24:28.274Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:24:28.327Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ef6c62001POwCZzfURHPhCG
+timestamp=2026-08-13T02:24:28.328Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:24:28.329Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:24:32.160Z level=INFO run=4d2e9958 message=evaluated permission=read pattern=bin/gback.sh action.permission=read action.pattern=* action.action=allow
+timestamp=2026-08-13T02:24:32.173Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/gback.sh
+timestamp=2026-08-13T02:24:32.269Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:24:32.291Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=1
+timestamp=2026-08-13T02:24:32.325Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:24:32.330Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8ef7c26001qOvWEyZ3TXip8F
+timestamp=2026-08-13T02:24:32.331Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:24:32.332Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="date +%Y-%m-%d-%H-%M-%S" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"$LOG\" > /tmp/opencode/optim2_log_name" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===== .optim 会话日志 $TS =====\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"目标: 修改 gback.sh —— 本地库强制被远程库覆盖, 多余本地部分直接删除, 最终与远程库完全一致\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"工作目录: $(pwd) | git版本: $(git --version)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern=pwd action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git --version" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.340Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [基线/现状分析] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.341Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"现有实现已覆盖: fetch --prune --prune-tags / reset --hard upstream / clean -fdx / 删多余本地分支 / 校验\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.341Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"缺口: ①注释(:3)声称删除'远程已不存在的本地分支与标签', 但代码(:70-86)仅处理 refs/heads, 未处理 refs/tags -> 本地独有标签不会被删除\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.341Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"     ②stash 不属于远程基准, 不会被清理也无提示\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:01.341Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"log created: $LOG\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.105Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest resolved=/tmp/opencode/gbtest
+timestamp=2026-08-13T02:25:02.108Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest resolved=/tmp/opencode/gbtest
+timestamp=2026-08-13T02:25:02.115Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest resolved=/tmp/opencode/gbtest
+timestamp=2026-08-13T02:25:02.115Z level=INFO run=4d2e9958 message="resolved path" arg=work resolved=/root/configure/bin/work
+timestamp=2026-08-13T02:25:02.116Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:02.116Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="rm -rf /tmp/opencode/gbtest" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.116Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="mkdir -p /tmp/opencode/gbtest" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.116Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git init -q --bare origin.git" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git clone -q origin.git work" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git config user.email t@t" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git config user.name t" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo v1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git add -A" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git commit -qm c1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch -M main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q -u origin main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.117Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"REMOTE-SETUP-OK\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:02.229Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:02.259Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=2
+timestamp=2026-08-13T02:25:02.287Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:02.293Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8eff13700105hqthl09a9ASh
+timestamp=2026-08-13T02:25:02.294Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:02.306Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:11.252Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"stash-内容\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git stash -q" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo s1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git add -A" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git commit -qm c3-local" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.256Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地已改不提交\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.257Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo u" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.257Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"ignored\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.257Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \".ignored.txt\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.258Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch local-only" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.258Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag local-tag" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.258Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.258Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===work状态===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.258Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git log --oneline -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:11.258Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git status --porcelain" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.356Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest resolved=/tmp/opencode/gbtest
+timestamp=2026-08-13T02:25:12.363Z level=INFO run=4d2e9958 message="resolved path" arg=rside resolved=/root/configure/bin/rside
+timestamp=2026-08-13T02:25:12.364Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:12.365Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git clone -q origin.git rside" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.365Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git config user.email r@r" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.365Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git config user.name r" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.365Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.365Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git add -A" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.365Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git commit -qm c2-remote" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin HEAD:main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -d v1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin :refs/tags/v1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.366Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch -D feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin :feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===远程现状===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="awk '{print $2}'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:12.551Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:12.664Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=3
+timestamp=2026-08-13T02:25:12.735Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:12.758Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f019e5001Bn3kPATh33AKwd
+timestamp=2026-08-13T02:25:12.759Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:12.763Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:21.706Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/rside resolved=/tmp/opencode/gbtest/rside
+timestamp=2026-08-13T02:25:21.710Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/rside/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:21.710Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git checkout -q -b main origin/main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.711Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git checkout -q main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.711Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo v2 >> f.txt" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.711Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git add -A" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.711Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git commit -qm c2-remote" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.711Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.712Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.712Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.712Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag rt" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.713Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin rt" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.713Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.713Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.713Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -d rt" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.713Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin :refs/tags/rt" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.713Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch -D feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.714Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git push -q origin :feature" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.714Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===远程现状===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.714Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.714Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="awk '{print $2}'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:21.839Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:21.885Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=4
+timestamp=2026-08-13T02:25:21.924Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:21.931Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f03de1001IPdwWS2G3zh8IS
+timestamp=2026-08-13T02:25:21.932Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:21.936Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:25.828Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash /root/configure/bin/gback.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="tail -25" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"===运行后===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git log --oneline -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git status --porcelain" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git stash list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.831Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="wc -l" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:25.934Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:25.965Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=5
+timestamp=2026-08-13T02:25:26.002Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:26.018Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f04dd0001InnQF8ZwkTXGmV
+timestamp=2026-08-13T02:25:26.019Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:26.020Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:44.590Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:25:44.593Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:44.593Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v2 $(git rev-parse c3-local~1)" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.593Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse c3-local~1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.593Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2指向: $(git rev-parse v2) (c1), 远程v2指向: $(git rev-parse origin/tags/v2 2>/dev/null || echo '无远程引用')\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.593Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.594Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse origin/tags/v2 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.594Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo '无远程引用'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.594Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse f4b175e^{commit}" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.594Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"--- fetch 后 ---\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.594Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git fetch --all --prune --prune-tags -q" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.594Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2指向: $(git rev-parse v2)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.595Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v1: $(git tag -l v1 | wc -l)个, local-tag: $(git tag -l local-tag | wc -l)个\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.595Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -l v1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.595Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="wc -l" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.595Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -l local-tag" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:44.710Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:44.740Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=6
+timestamp=2026-08-13T02:25:44.777Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:44.796Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f09727001WoIYeUT2QNbLvR
+timestamp=2026-08-13T02:25:44.797Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:44.800Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:49.212Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:25:49.216Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:49.216Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse HEAD~1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.216Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v2 \"$C1\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.216Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2 → $(git rev-parse v2 | cut -c1-7) (c1), 远程v2 → $(git rev-parse origin/tags/v2 | cut -c1-7) (c2)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.216Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.216Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cut -c1-7" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse origin/tags/v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git fetch --all --prune --prune-tags -q" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"--- fetch --all --prune --prune-tags 后 ---\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2 → $(git rev-parse v2 | cut -c1-7)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2 == 远程v2? $([ \"$(git rev-parse v2)\" = \"$(git rev-parse origin/tags/v2)\" ] && echo YES || echo \"NO(缺口实锤)\")\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo YES" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.217Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"NO(缺口实锤)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:49.334Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:49.358Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=7
+timestamp=2026-08-13T02:25:49.394Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:49.413Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f0a931001B5gH4E2RDAhTn7
+timestamp=2026-08-13T02:25:49.414Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:49.418Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:25:55.919Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:25:55.922Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:25:55.923Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -d v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.923Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse HEAD~1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.923Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v2 \"$C1\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.923Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2 → $(git rev-parse v2 | cut -c1-7) (c1), 远程v2 → $(git rev-parse refs/tags/v2 2>/dev/null | cut -c1-7) 注意:fetch会更新refs/tags/v2\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cut -c1-7" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse refs/tags/v2 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git fetch --all --prune --prune-tags 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -iv \"^From\\|^\\s*$\\|up to date\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -5" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"--- fetch 后 ---\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.924Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地 v2 → $(git rev-parse v2 | cut -c1-7)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.925Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"远程引用 refs/tags/v2 → $(git rev-parse refs/tags/v2 | cut -c1-7)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:55.925Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse refs/tags/v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:25:56.030Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:56.068Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=8
+timestamp=2026-08-13T02:25:56.104Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:25:56.137Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f0c36a001jPd2fXUbXdGg57
+timestamp=2026-08-13T02:25:56.139Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:25:56.142Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:08.808Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:26:08.814Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:26:08.815Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2 → $(git rev-parse v2 | cut -c1-7) (c1), 远程v2 → $(git ls-remote origin refs/tags/v2 | cut -c1-7)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.815Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.815Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cut -c1-7" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.816Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin refs/tags/v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.816Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git fetch --all --prune --prune-tags --force 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.816Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -iv \"^From\\|up to date\\|^$\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.816Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -4" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.817Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"fetch exit=$?\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.817Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"--- fetch --force 后 ---\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.817Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v2 → $(git rev-parse v2 | cut -c1-7)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.817Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地v1: $(git tag -l v1 | wc -l)个, local-tag: $(git tag -l local-tag | wc -l)个\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.817Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -l v1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.818Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="wc -l" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.818Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -l local-tag" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:08.880Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:08.922Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=9
+timestamp=2026-08-13T02:26:08.960Z level=INFO run=4d2e9958 message=tracking hash=fbc87c1915f0486e0e0f9817e4bcf8b7f9b913f9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:08.982Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f0f59f001k1BA3oTivCn519
+timestamp=2026-08-13T02:26:08.982Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:08.985Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:13.467Z level=INFO run=4d2e9958 message=evaluated permission=edit pattern=bin/gback.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:13.468Z level=INFO run=4d2e9958 message=formatting file=/root/configure/bin/gback.sh
+timestamp=2026-08-13T02:26:13.470Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/gback.sh
+timestamp=2026-08-13T02:26:13.615Z level=INFO run=4d2e9958 message=tracking hash=d859d2fa825e5afb9c527b64e83b0cf9b5e6c782 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:13.640Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=10
+timestamp=2026-08-13T02:26:13.678Z level=INFO run=4d2e9958 message=tracking hash=d859d2fa825e5afb9c527b64e83b0cf9b5e6c782 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:13.692Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f1080c001Up9S7F8IgJmOJF
+timestamp=2026-08-13T02:26:13.693Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:13.695Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:16.632Z level=INFO run=4d2e9958 message=evaluated permission=edit pattern=bin/gback.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:16.633Z level=INFO run=4d2e9958 message=formatting file=/root/configure/bin/gback.sh
+timestamp=2026-08-13T02:26:16.640Z level=INFO run=4d2e9958 message="touching file" file=/root/configure/bin/gback.sh
+timestamp=2026-08-13T02:26:16.764Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:16.790Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=11
+timestamp=2026-08-13T02:26:16.834Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:16.847Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f1145b001YJzoEzm3KBzGMs
+timestamp=2026-08-13T02:26:16.848Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:16.849Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:20.193Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:26:20.199Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:26:20.199Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash -n /root/configure/bin/gback.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.199Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -d v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.199Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag v2 HEAD~1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.199Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo s1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.199Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git add -A" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git commit -qm c4-local" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch local-only2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag lt2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"mod\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git stash -q" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"=== 运行前: $(git rev-parse --short HEAD) 本地v2=$(git rev-parse --short v2) ===\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse --short HEAD" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse --short v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="bash /root/configure/bin/gback.sh 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -v \"^Fetching\\|^From\\|HEAD is now\\|Removing\\|Reset branch\\|Branch 'main'\\|up to date\\|^$\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.200Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="head -30" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:20.311Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:20.334Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=12
+timestamp=2026-08-13T02:26:20.391Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:20.407Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f122310014kPLaeaGGLmysz
+timestamp=2026-08-13T02:26:20.408Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:20.411Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:24.359Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:26:24.366Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地tags: $(git tag | tr '\\n' ' ')\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="tr '\\n' ' '" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"远程tags: $(git ls-remote origin --tags 2>/dev/null | awk -F/ '{print $NF}' | sort -u | tr '\\n' ' ')\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin --tags 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="awk -F/ '{print $NF}'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="sort -u" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"本地branches: $(git branch | sed 's/ //' | tr '\\n' ' ')\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git branch" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="sed 's/ //'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.367Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"远程branches: $(git ls-remote origin refs/heads 2>/dev/null | awk -F/ '{print $NF}' | tr '\\n' ' ')\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin refs/heads 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"status: $(git status --porcelain | wc -l) 个差异\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git status --porcelain" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="wc -l" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"HEAD=$(git rev-parse --short HEAD) == origin/main=$(git rev-parse --short origin/main)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse --short HEAD" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.368Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git rev-parse --short origin/main" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:24.498Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:24.528Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=13
+timestamp=2026-08-13T02:26:24.560Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:24.564Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f132930012R860dM2lEqmNO
+timestamp=2026-08-13T02:26:24.565Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:24.567Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:28.242Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest/work resolved=/tmp/opencode/gbtest/work
+timestamp=2026-08-13T02:26:28.247Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/work/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:26:28.248Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"== ls-remote 原始输出 ==\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:28.248Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:28.248Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"== 本地 tag 指向 ==\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:28.249Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git tag -l --format='%(refname:short) -> %(objectname:short)' v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:28.249Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"== 远程 tag 指向 ==\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:28.249Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="git ls-remote origin refs/tags/v2" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:28.355Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:28.378Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=14
+timestamp=2026-08-13T02:26:28.417Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:28.446Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f1419e001WctLDRbd82DOWF
+timestamp=2026-08-13T02:26:28.447Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:28.449Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:35.194Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/optim2_log_name resolved=/tmp/opencode/optim2_log_name
+timestamp=2026-08-13T02:26:35.198Z level=INFO run=4d2e9958 message="resolved path" arg=/tmp/opencode/gbtest resolved=/tmp/opencode/gbtest
+timestamp=2026-08-13T02:26:35.205Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=external_directory pattern=/tmp/opencode/gbtest/* action.permission=external_directory action.pattern=/tmp/opencode/* action.action=allow
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="cat /tmp/opencode/optim2_log_name" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [实测与方案] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"场景构造(临时仓库 /tmp/opencode/gbtest): 本地独有提交/工作区修改/未跟踪+忽略文件/本地独有分支/本地独有tag(v1,local-tag,lt2)/冲突tag(v2本地指旧commit)/stash 2个; 远程推进c2+tag v2\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"实测1(未修改版): fetch --prune-tags 已删除本地独有tag(缺口①不存在); 但冲突tag场景 fetch 报 'would clobber existing tag' + Could not fetch origin, exit!=0 -> set -e 下整个脚本 ERROR 退出, '强制覆盖'完全不可用 [缺口②实锤]\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"实测2(git fetch --force): t [tag update] v2 -> v2 强制覆盖成功, exit=0, 独有tag同步修剪\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [改动] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  gback.sh:27  git fetch --all --prune --prune-tags --force (原无 --force)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  gback.sh:38-43 新增 stash 提示块 (fetch 后, 探测 git stash list 非空则提示, 不自动删除-破坏性)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.206Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [验证(修改后全流程回归)] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  冲突tag: 本地v2(旧commit)被强制覆盖为远程值 ✓ | 独有tag lt2 删除 ✓ | 独有分支 local-only2 删除 ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  独有提交 c4-local 放弃 ✓ | 文件差异覆盖 ✓ | stash 2个提示且保留 ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  终态: status 0 差异, HEAD==origin/main, 本地tags/branches 与远程完全一致 ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  bash -n 通过 ✓\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"---- [结论] ----\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  收益: 修复'本地tag与远程冲突时脚本直接失败'的功能性缺口, 使'强制被远程覆盖'在 tag 冲突场景下可用\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  权衡: fetch --force 亦强制更新远程跟踪分支引用(非快进), 与脚本'强制对齐'语义一致, 无副作用\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  遗留: stash 默认保留(破坏性操作, 提示用户手动 git stash clear); 游离HEAD/无上游分支仍安全报错退出\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="echo \"  结束: $(date +%Y-%m-%d-%H-%M-%S)\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="date +%Y-%m-%d-%H-%M-%S" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="rm -rf /tmp/opencode/gbtest" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="ls /root/configure/bin/.optim.2026-08-13-10-25-01.log" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.207Z level=INFO run=4d2e9958 message=evaluated permission=bash pattern="grep -c \"改动\" \"$LOG\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T02:26:35.291Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:35.321Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=15
+timestamp=2026-08-13T02:26:35.361Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:35.368Z level=INFO run=4d2e9958 message=process session.id=ses_00719d325ffeetTQaWLN4q5Sqb messageID=msg_ff8f15cbd001tmAGsIfyCsqzsi
+timestamp=2026-08-13T02:26:35.368Z level=INFO run=4d2e9958 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_00719d325ffeetTQaWLN4q5Sqb small=false agent=build mode=primary
+timestamp=2026-08-13T02:26:35.383Z level=INFO run=4d2e9958 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T02:26:39.790Z level=INFO run=4d2e9958 message=tracking hash=5bd96d75d319fe55487866d1dad6af92a5ae3d05 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T02:26:39.813Z level=INFO run=4d2e9958 message=loop session.id=ses_00719d325ffeetTQaWLN4q5Sqb step=16
+timestamp=2026-08-13T02:26:39.816Z level=INFO run=4d2e9958 message="exiting loop" session.id=ses_00719d325ffeetTQaWLN4q5Sqb
+timestamp=2026-08-13T02:27:34.799Z level=INFO run=4d2e9958 message="disposing all instances"
+timestamp=2026-08-13T02:27:34.800Z level=INFO run=4d2e9958 message="disposing instance" directory=/root/configure/bin

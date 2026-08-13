@@ -1,0 +1,30 @@
+===== tag 会话日志 =====
+---- [2026-08-13 10:38:29] 会话开始 ----
+工作目录: /root/configure
+分支: main
+HEAD: e747f6d 2026-08-13-10-27-37
+操作请求: 打 dev6 标签（用户确认，无类型歧义）
+---
+---- [2026-08-13 10:39:12] 类型判定与编号 ----
+输入信号: ~tag + 用户确认打 dev 标签 → TYPE=dev
+最新 dev 标签: dev5 → NEW_TAG=dev6
+基线: dev5（时间序最近标签，避免与 stab18 基线重复 dev5 已涵盖提交）
+---- [2026-08-13 10:39:12] 变更调查 dev5..HEAD ----
+$ git log dev5..HEAD --oneline
+e747f6d 2026-08-13-10-27-37
+efceb47 2026-08-13-10-16-32
+8fe2d95 2026-08-13-10-11-01
+af4ec72 2026-08-13-09-26-01
+$ git diff dev5..HEAD --stat
+ skills/optim/SKILL.md                  |   3 +-
+ skills/tag/SKILL.md                    | 331 ++++++++++++++++-----------------
+ skills/test/AGENTS.md                  |   6 +
+ skills/test/SKILL.md                   | 282 ++++++++++++++++++++++++++++
+ 20 files changed, 882 insertions(+), 186 deletions(-)
+exit=0
+---- [2026-08-13 10:39:15] 先推后打：push 当前分支 ----
+$ git push origin main
+exit=0
+---- [2026-08-13 10:39:22] 创建标签 dev6 ----
+$ git tag -a dev6 -m "follow dev5, 1. bin/oopencode.sh新增用户输入清单(.agent.<TS>.list)逐条记录与trap EXIT兜底补录，启动时预读最近5份历史清单注入prompt作参考; 2. bin/gback.sh fetch增加--force处理tag冲突并新增stash保留提示; 3. 新增skills/test(系统化测试)与skills/make(项目生成编排)技能，tag技能手册全面中文化重写; 4. analy技能新增参考知识库默认引入(docs/books/refer)并更名analy，debug/diff/init/optim技能增强触发词与日志预读; 5. 更新bin/与skills/的AGENTS.md技能清单与运行产物说明; [opencode]."
+exit=0

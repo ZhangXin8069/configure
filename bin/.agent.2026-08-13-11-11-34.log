@@ -1,0 +1,224 @@
+timestamp=2026-08-13T03:11:35.656Z level=INFO run=377c687b message="loading tui config" path=/root/.config/opencode/tui.json
+timestamp=2026-08-13T03:11:35.658Z level=INFO run=377c687b message="applying tui config" path=/root/.config/opencode/tui.json order=1
+timestamp=2026-08-13T03:11:36.420Z level=INFO run=ebf1bef8 message="creating instance" directory=/root/configure/bin
+timestamp=2026-08-13T03:11:36.421Z level=INFO run=ebf1bef8 message=fromDirectory directory=/root/configure/bin
+timestamp=2026-08-13T03:11:36.478Z level=INFO run=ebf1bef8 message=bootstrapping directory=/root/configure/bin
+timestamp=2026-08-13T03:11:36.483Z level=INFO run=ebf1bef8 message=loading path=/root/.config/opencode/config.json
+timestamp=2026-08-13T03:11:36.484Z level=INFO run=ebf1bef8 message=loading path=/root/.config/opencode/opencode.json
+timestamp=2026-08-13T03:11:36.484Z level=INFO run=ebf1bef8 message=loading path=/root/.config/opencode/opencode.jsonc
+timestamp=2026-08-13T03:11:36.514Z level=DEBUG run=ebf1bef8 message="loading config from /root/configure/.opencode/opencode.json"
+timestamp=2026-08-13T03:11:36.514Z level=INFO run=ebf1bef8 message=loading path=/root/configure/.opencode/opencode.json
+timestamp=2026-08-13T03:11:36.515Z level=DEBUG run=ebf1bef8 message="loading config from /root/configure/.opencode/opencode.jsonc"
+timestamp=2026-08-13T03:11:36.515Z level=INFO run=ebf1bef8 message=loading path=/root/configure/.opencode/opencode.jsonc
+timestamp=2026-08-13T03:11:36.531Z level=DEBUG run=ebf1bef8 message="loading config from /root/.opencode/opencode.json"
+timestamp=2026-08-13T03:11:36.531Z level=INFO run=ebf1bef8 message=loading path=/root/.opencode/opencode.json
+timestamp=2026-08-13T03:11:36.531Z level=DEBUG run=ebf1bef8 message="loading config from /root/.opencode/opencode.jsonc"
+timestamp=2026-08-13T03:11:36.531Z level=INFO run=ebf1bef8 message=loading path=/root/.opencode/opencode.jsonc
+timestamp=2026-08-13T03:11:36.535Z level=DEBUG run=ebf1bef8 message="loaded custom config from OPENCODE_CONFIG_CONTENT"
+timestamp=2026-08-13T03:11:36.551Z level=INFO run=ebf1bef8 message="all LSPs are disabled"
+timestamp=2026-08-13T03:11:36.552Z level=INFO run=ebf1bef8 message="all formatters are disabled"
+timestamp=2026-08-13T03:11:36.552Z level=INFO run=ebf1bef8 message=init
+timestamp=2026-08-13T03:11:37.469Z level=INFO run=ebf1bef8 message=init count=42
+timestamp=2026-08-13T03:11:37.555Z level=INFO run=ebf1bef8 message="watcher backend" directory=/root/configure/bin platform=linux backend=inotify
+timestamp=2026-08-13T03:11:37.562Z level=INFO run=ebf1bef8 message="project copy refresh started" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5
+timestamp=2026-08-13T03:11:37.600Z level=INFO run=ebf1bef8 message=created id=ses_006e5677fffeQzq6nGtrC6RGsB slug=cosmic-wolf version=1.18.18 projectID=2cc8c8f55c65496aa42f29371806790e41468fb5 directory=/root/configure/bin path=bin workspaceID=undefined parentID=undefined title="New session - 2026-08-13T03:11:37.600Z" agent=build model.id=deepseek-v4-flash model.providerID=opencode-go model.variant=max metadata=undefined permission=undefined cost=0 tokens.input=0 tokens.output=0 tokens.reasoning=0 tokens.cache.read=0 tokens.cache.write=0 time.created=1786590697600 time.updated=1786590697600
+timestamp=2026-08-13T03:11:37.776Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=0
+timestamp=2026-08-13T03:11:37.860Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=true agent=title mode=primary
+timestamp=2026-08-13T03:11:37.873Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:11:37.913Z level=INFO run=ebf1bef8 message="project copy refresh done" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5 updated=[] removed=[]
+timestamp=2026-08-13T03:11:38.045Z level=INFO run=ebf1bef8 message="booting location services" directory=/root/configure/bin workspaceID=undefined
+timestamp=2026-08-13T03:11:38.540Z level=INFO run=ebf1bef8 message=tracking hash=dbde07950a1889e05ae8ed7ffabff72fc69b3a23 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:11:38.547Z level=INFO run=ebf1bef8 message="shell tool using shell" shell=/usr/bin/bash
+timestamp=2026-08-13T03:11:38.597Z level=INFO run=ebf1bef8 message="watcher backend" directory=/root/configure/bin platform=linux backend=inotify
+timestamp=2026-08-13T03:11:38.601Z level=INFO run=ebf1bef8 message="project copy refresh started" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5
+timestamp=2026-08-13T03:11:39.160Z level=INFO run=ebf1bef8 message="project copy refresh done" projectID=2cc8c8f55c65496aa42f29371806790e41468fb5 updated=[] removed=[]
+timestamp=2026-08-13T03:11:39.163Z level=INFO run=ebf1bef8 message="booting location services" directory=/root/configure/bin workspaceID=undefined
+timestamp=2026-08-13T03:11:39.166Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91a9933001uRG9M59DMUfUKO
+timestamp=2026-08-13T03:11:39.168Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:11:39.177Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:11:42.569Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="printf '%s\\n' '---- [2026-08-13 11:11:40] 第 1 条用户输入 ----' '测试' >> /root/configure/bin/.agent.2026-08-13-11-11-34.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:11:42.701Z level=INFO run=ebf1bef8 message=tracking hash=bd423d71f24eea90d410164f48f147bf6a1f1b28 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:11:42.758Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=1
+timestamp=2026-08-13T03:11:42.807Z level=INFO run=ebf1bef8 message=tracking hash=4984e7bd437d9d6af8453171140ca326c461292b cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:11:42.815Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91aaca8001ZXlMN4E42UA5uv
+timestamp=2026-08-13T03:11:42.816Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:11:42.826Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:11:44.733Z level=INFO run=ebf1bef8 message=tracking hash=1833acce143b82c7d224012ec303a2c067f3a494 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:11:44.771Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=2
+timestamp=2026-08-13T03:11:44.772Z level=INFO run=ebf1bef8 message="exiting loop" session.id=ses_006e5677fffeQzq6nGtrC6RGsB
+timestamp=2026-08-13T03:12:37.018Z level=INFO run=ebf1bef8 message=cleanup prune=7.days
+timestamp=2026-08-13T03:14:51.793Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=0
+timestamp=2026-08-13T03:14:51.821Z level=INFO run=ebf1bef8 message=tracking hash=05575e379874f09352476eeb6c947ca666989506 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:14:51.851Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91d8f140013FShEhqDapNYsX
+timestamp=2026-08-13T03:14:51.852Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:14:51.853Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:14:54.666Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="printf '%s\\n' '---- [2026-08-13 11:12:00] 第 2 条用户输入 ----' '~make, 参考其他脚本，编写grm-cache.sh:依据${HOME/configure/lib/_gitignore，将此工作目录的git库中匹配${HOME/configure/lib/_gitignore的文件grm --cached' >> /root/configure/bin/.agent.2026-08-13-11-11-34.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:54.737Z level=INFO run=ebf1bef8 message=evaluated permission=skill pattern=make action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:54.871Z level=INFO run=ebf1bef8 message=tracking hash=5735b4e11a4856f776e10daba10672ef6edb3da7 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:14:54.910Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=1
+timestamp=2026-08-13T03:14:54.949Z level=INFO run=ebf1bef8 message=tracking hash=c8a99b49cdde26b3622aea8bc06d8f8e48a1df1e cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:14:54.964Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91d9b40001d6Kvz4puIpeBwg
+timestamp=2026-08-13T03:14:54.965Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:14:54.966Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:14:59.161Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="ls -1t .make.*.log 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.161Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -3" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.161Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ---" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.161Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="tail -40 \"$(ls -1t .make.*.log 2>/dev/null | head -1)\" 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.162Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.344Z level=INFO run=ebf1bef8 message=evaluated permission=read pattern=lib/_gitignore action.permission=read action.pattern=* action.action=allow
+timestamp=2026-08-13T03:14:59.353Z level=INFO run=ebf1bef8 message="touching file" file=/root/configure/lib/_gitignore
+timestamp=2026-08-13T03:14:59.725Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git rev-parse --is-inside-work-tree" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.725Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git rev-parse --abbrev-ref HEAD" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.725Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git log -1 --oneline" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.725Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git status --short" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.725Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -20" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:14:59.856Z level=INFO run=ebf1bef8 message=tracking hash=8b54d4b31e61ea1edf352c99f32d4c9f62f2686e cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:14:59.902Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=2
+timestamp=2026-08-13T03:14:59.953Z level=INFO run=ebf1bef8 message=tracking hash=cc9b856578b9a35a49106e4cf6102fe3d0b16879 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:14:59.958Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91daec10013BsZA20nF2VPr7
+timestamp=2026-08-13T03:14:59.959Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:14:59.961Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:15:37.623Z level=INFO run=ebf1bef8 message="resolved path" arg=gls.sh resolved=/root/configure/bin/gls.sh
+timestamp=2026-08-13T03:15:37.624Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="cat gls.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:37.624Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo =====" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:37.624Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -60 gpush.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:38.113Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git ls-files" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:38.113Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -5" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:38.113Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ----" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:38.113Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git -c core.excludesFile=/root/configure/lib/_gitignore check-ignore --no-index --stdin -v" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:38.113Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -10" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:15:38.338Z level=INFO run=ebf1bef8 message=tracking hash=e5992117547f2c75ad0132af63e542662200c1d9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:15:38.393Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=3
+timestamp=2026-08-13T03:15:38.445Z level=INFO run=ebf1bef8 message=tracking hash=12506db56da7d2c83907a8d3a424a61953372e08 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:15:38.460Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91e451b001DNf6Bs73uqy0Uf
+timestamp=2026-08-13T03:15:38.461Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:15:38.463Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:16:02.873Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="ls -la /root/configure/.gitignore" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:02.873Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ----" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:02.873Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git ls-files" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:02.873Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="wc -l" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:02.873Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git -c core.excludesFile=/root/configure/lib/_gitignore check-ignore --no-index --stdin -v" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:02.873Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep -c '^\\S*:.*:!\\|^\\S*:\\d*:!'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:02.989Z level=INFO run=ebf1bef8 message=tracking hash=6f28536fa88ce4172835ddfdc7e23f29d53d8bf9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:16:03.032Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=4
+timestamp=2026-08-13T03:16:03.075Z level=INFO run=ebf1bef8 message=tracking hash=2f3e62269b465d9e6a0d9fbdf89f249302c327c2 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:16:03.089Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91ea55b001YjJMLVNb0KjUge
+timestamp=2026-08-13T03:16:03.090Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:16:03.099Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:16:09.705Z level=INFO run=ebf1bef8 message="resolved path" arg=/root/configure/.git/info/exclude resolved=/root/configure/.git/info/exclude
+timestamp=2026-08-13T03:16:09.706Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="cat /root/configure/.git/info/exclude 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:09.706Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep -v '^#'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:09.706Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep -v '^$'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:09.706Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ==info-end==" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:09.706Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git ls-files" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:09.706Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git -c core.excludesFile=/root/configure/lib/_gitignore check-ignore --no-index --stdin -v" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:16:09.828Z level=INFO run=ebf1bef8 message=tracking hash=7bffa560718810c137070549f9608b2aff00e10b cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:16:09.863Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=5
+timestamp=2026-08-13T03:16:09.911Z level=INFO run=ebf1bef8 message=tracking hash=df091e56fbfc0ce2efc1ede8e5cc337ebdb8d3dd cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:16:09.919Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91ec00a001skqXZLML6aGD4b
+timestamp=2026-08-13T03:16:09.920Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:16:09.921Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:16:41.595Z level=INFO run=ebf1bef8 message=cancel session.id=ses_006e5677fffeQzq6nGtrC6RGsB
+timestamp=2026-08-13T03:16:41.598Z level=ERROR run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91ec00a001skqXZLML6aGD4b error=Aborted stack=undefined
+timestamp=2026-08-13T03:17:14.762Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=0
+timestamp=2026-08-13T03:17:14.798Z level=INFO run=ebf1bef8 message=tracking hash=cfb982a294b750942d141807a431a2b7be786be3 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:17:14.817Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff91fbd8d0010mvzyCanTNcLIy
+timestamp=2026-08-13T03:17:14.818Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:17:14.820Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:17:32.764Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="printf '%s\\n' '---- [2026-08-13 11:13:00] 第 3 条用户输入 ----' '~make, 参考其他脚本，编写grm-cache.sh:依据${HOME/configure/lib/_gitignore，将此工作目录的git库中匹配${HOME/configure/lib/_gitignore的文件grm --cached (外来目录除外：子库，示例库等)' >> /root/configure/bin/.agent.2026-08-13-11-11-34.list" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:33.202Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git rev-parse --show-toplevel" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:33.202Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ----" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:33.202Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="find /root/configure -maxdepth 3 -name .git -not -path '*/node_modules/*' 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:33.203Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern=sort action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:33.203Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="ls /root/configure" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:33.293Z level=INFO run=ebf1bef8 message=tracking hash=064f9a6fab73f106820421277085489fca40ac98 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:17:33.342Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=1
+timestamp=2026-08-13T03:17:33.377Z level=INFO run=ebf1bef8 message=tracking hash=77ba67480e9f7a3963c79e29c5321e2c3881c795 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:17:33.382Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff9200621001tEf8eX7ixKBaPf
+timestamp=2026-08-13T03:17:33.383Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:17:33.391Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:17:37.336Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="ls -la /root/configure/lib" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:37.337Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="head -40" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:37.337Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ----" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:37.337Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="find /root/configure -name '.git' -type d 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:37.337Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern=head action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:37.337Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="find /root/configure -name '.git' -type f 2>/dev/null" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:17:37.466Z level=INFO run=ebf1bef8 message=tracking hash=7013d05029c4dc3246ad5f7e0f0884c6a09b325b cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:17:37.554Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=2
+timestamp=2026-08-13T03:17:37.608Z level=INFO run=ebf1bef8 message=tracking hash=30c297f97c0f0c118f37a86425e28e8613518f1e cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:17:37.613Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff92016950013bnEJiH6GOxyRU
+timestamp=2026-08-13T03:17:37.614Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:17:37.616Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:06.483Z level=INFO run=ebf1bef8 message="resolved path" arg="\"$TMPR\"" resolved=undefined
+timestamp=2026-08-13T03:18:06.484Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="mktemp -d" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:06.484Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git init -q \"$TMPR\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:06.484Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git -C \"$TMPR\" -c core.excludesFile=/root/configure/lib/_gitignore check-ignore --no-index --stdin -v" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:06.484Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git -C /root/configure ls-files" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:06.484Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo \"exit=$?\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:06.484Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="rm -rf \"$TMPR\"" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:06.654Z level=INFO run=ebf1bef8 message=tracking hash=d6266395295b94c352e26c026d145e695d89c2ce cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:06.705Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=3
+timestamp=2026-08-13T03:18:06.754Z level=INFO run=ebf1bef8 message=tracking hash=45329bc3d911d262a6740d18f6e57156118680e4 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:06.762Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff9208874001Qe7YNgSjR44IoK
+timestamp=2026-08-13T03:18:06.763Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:06.765Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:37.168Z level=INFO run=ebf1bef8 message=evaluated permission=edit pattern=bin/grm-cache.sh action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:37.169Z level=INFO run=ebf1bef8 message=formatting file=/root/configure/bin/grm-cache.sh
+timestamp=2026-08-13T03:18:37.170Z level=INFO run=ebf1bef8 message="touching file" file=/root/configure/bin/grm-cache.sh
+timestamp=2026-08-13T03:18:37.313Z level=INFO run=ebf1bef8 message=tracking hash=bcc1d4f83df94033cbddea20e2856118d555747e cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:37.352Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=4
+timestamp=2026-08-13T03:18:37.392Z level=INFO run=ebf1bef8 message=tracking hash=e5067f2325186910071c8029348740d0e91c0a28 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:37.406Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff921002a001duiyhXK03OQGgs
+timestamp=2026-08-13T03:18:37.407Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:37.410Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:39.807Z level=INFO run=ebf1bef8 message="resolved path" arg=grm-cache.sh resolved=/root/configure/bin/grm-cache.sh
+timestamp=2026-08-13T03:18:39.808Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="chmod +x grm-cache.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:39.809Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="bash -n grm-cache.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:39.809Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo SYNTAX-OK" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:39.977Z level=INFO run=ebf1bef8 message=tracking hash=54f74cf4728201faa5fe6369e11a7c0da30851c6 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:40.013Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=5
+timestamp=2026-08-13T03:18:40.052Z level=INFO run=ebf1bef8 message=tracking hash=e78994f1aefa712698db2ab08827c39e2249da06 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:40.064Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff9210a90001dTza1VULQkIA4y
+timestamp=2026-08-13T03:18:40.065Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:40.066Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:42.514Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="bash /root/configure/bin/grm-cache.sh -n" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:42.593Z level=INFO run=ebf1bef8 message=tracking hash=b8bb47ccfa7724e53ad46af5a036e9befc5cf9b6 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:42.630Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=6
+timestamp=2026-08-13T03:18:42.685Z level=INFO run=ebf1bef8 message=tracking hash=32f04109f3dc1934db3034a75868be8bde460015 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:42.697Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff92114c90019Q5gNGmQR5kKda
+timestamp=2026-08-13T03:18:42.698Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:42.699Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:45.488Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="bash /root/configure/bin/grm-cache.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:45.677Z level=INFO run=ebf1bef8 message=tracking hash=10b89aba98f028e53c1b79a4023c1440c1ae1198 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:45.712Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=7
+timestamp=2026-08-13T03:18:45.752Z level=INFO run=ebf1bef8 message=tracking hash=fc80fa1c650c94d9efdfe7c9e576f3aa9eb766ef cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:45.787Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff92120d200178tE4A2Vc627Jv
+timestamp=2026-08-13T03:18:45.787Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:45.789Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:48.008Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="bash /root/configure/bin/grm-cache.sh 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:48.009Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep -v '^skip'" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:48.009Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="echo ----" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:48.009Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="git status --short" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:48.009Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep background" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:48.009Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="ls -la docs/background.jpeg" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:48.110Z level=INFO run=ebf1bef8 message=tracking hash=bf1db96ba8bf06081ae75af8c31183e8e47c4c2d cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:48.153Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=8
+timestamp=2026-08-13T03:18:48.193Z level=INFO run=ebf1bef8 message=tracking hash=a6c3a515c925b2e38c7ce753eb7220ea12244d12 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:48.205Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff9212a5c001lKoqmdh9YdCBBa
+timestamp=2026-08-13T03:18:48.205Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:48.206Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:51.511Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="bash ../scripts/script_alias.sh >/dev/null 2>&1" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:51.511Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep grm-cache ../tmp/scripts.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:51.511Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep grm-cache tmp/scripts.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:51.511Z level=INFO run=ebf1bef8 message=evaluated permission=bash pattern="grep -r grm-cache /root/configure/tmp/scripts.sh" action.permission=* action.action=allow action.pattern=*
+timestamp=2026-08-13T03:18:51.780Z level=INFO run=ebf1bef8 message=tracking hash=245d9510855c513dcb2061aa9adfe0f04b34e5d8 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:51.833Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=9
+timestamp=2026-08-13T03:18:51.879Z level=INFO run=ebf1bef8 message=tracking hash=86fa04d2ddf93412cb7b00477d12a00e3099a6a9 cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:51.886Z level=INFO run=ebf1bef8 message=process session.id=ses_006e5677fffeQzq6nGtrC6RGsB messageID=msg_ff92138bb001Ng2OqaGI1KoLBQ
+timestamp=2026-08-13T03:18:51.887Z level=INFO run=ebf1bef8 message=stream providerID=opencode-go modelID=deepseek-v4-flash session.id=ses_006e5677fffeQzq6nGtrC6RGsB small=false agent=build mode=primary
+timestamp=2026-08-13T03:18:51.888Z level=INFO run=ebf1bef8 message="llm runtime selected" llm.runtime=ai-sdk llm.provider=opencode-go llm.model=deepseek-v4-flash
+timestamp=2026-08-13T03:18:56.673Z level=INFO run=ebf1bef8 message=tracking hash=f29c67360fc95d4be0ce46b41af9e83e2b655f6b cwd=/root/configure/bin git=/root/.local/share/opencode/snapshot/2cc8c8f55c65496aa42f29371806790e41468fb5/bf81c7562945d1a95882b13bae92be84d79a6247
+timestamp=2026-08-13T03:18:56.708Z level=INFO run=ebf1bef8 message=loop session.id=ses_006e5677fffeQzq6nGtrC6RGsB step=10
+timestamp=2026-08-13T03:18:56.711Z level=INFO run=ebf1bef8 message="exiting loop" session.id=ses_006e5677fffeQzq6nGtrC6RGsB
+timestamp=2026-08-13T03:27:41.071Z level=INFO run=ebf1bef8 message="disposing all instances"
+timestamp=2026-08-13T03:27:41.073Z level=INFO run=ebf1bef8 message="disposing instance" directory=/root/configure/bin

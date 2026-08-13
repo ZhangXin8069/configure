@@ -1,0 +1,6 @@
+---- [2026-08-13 11:11:40] 第 1 条用户输入 ----
+测试
+---- [2026-08-13 11:12:00] 第 2 条用户输入 ----
+~make, 参考其他脚本，编写grm-cache.sh:依据${HOME/configure/lib/_gitignore，将此工作目录的git库中匹配${HOME/configure/lib/_gitignore的文件grm --cached
+---- [2026-08-13 11:13:00] 第 3 条用户输入 ----
+~make, 参考其他脚本，编写grm-cache.sh:依据${HOME/configure/lib/_gitignore，将此工作目录的git库中匹配${HOME/configure/lib/_gitignore的文件grm --cached (外来目录除外：子库，示例库等)
