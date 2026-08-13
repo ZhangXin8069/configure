@@ -1,6 +1,6 @@
 # AGENTS.md — bin 工具脚本
 
-工具 shell 脚本目录。每个 `.sh` 文件被 `scripts/script_alias.sh` 自动发现并生成别名（`alias gpush.sh='bash /path/to/bin/gpush.sh'`），由 `tmp/scripts.sh` 在 shell 启动时加载。
+工具 shell 脚本目录。`bin/` 由 `env.sh` 前置到 `PATH`，所有 `.sh`（含 `cl`/`op` 等符号链接）可直接按名调用（`gpush.sh`、`ssub.sh`）。脚本必须可执行且带 shebang。
 
 ## 脚本骨架约定
 
@@ -39,4 +39,4 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 - `.bat`/`.ps1` 为 Windows 对应版，**不**被别名生成器扫描（只扫 `.sh`）
 - `cctag` 二进制与 `claude_code-skill4git-tag.md` 已删除，git 标签管理技能移至 `../skills/tag/`
 - `.agent.*.log`（opencode 运行日志）与 `.agent.*.list`（会话用户输入清单）为运行产物，不入库
-- 新增脚本后运行 `bash ../scripts/script_alias.sh` 再 source 新 shell；校验语法 `bash -n <script>`
+- 新增脚本后 `chmod +x <script>` 并在新 shell（或 `source ~/.zshrc`）中直接按名调用；校验语法 `bash -n <script>`
