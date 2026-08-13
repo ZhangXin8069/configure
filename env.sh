@@ -11,8 +11,11 @@ mkdir -p ${_PATH}/bin ${_PATH}/docs ${_PATH}/lib ${HOME}/.local/bin
 # @SOURCE@
 # @EXPORT@
 # export TERM=xterm-256color
-export LANG=C.UTF-8
-export LC_ALL=C.UTF-8
+# @LOCALE@
+# 选择系统可用的 UTF-8 locale（C.UTF-8 优先，缺失时回退 en_US.UTF-8），避免 setlocale 警告
+_loc_utf8=$(locale -a 2>/dev/null | grep -iE '^(C\.utf-?8|en_US\.utf-?8)$' | sort | head -1)
+[ -n "$_loc_utf8" ] && export LANG="$_loc_utf8" LC_ALL="$_loc_utf8"
+unset _loc_utf8
 export PATH=${HOME}/.local/bin:${_PATH}/bin:$PATH
 # @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
