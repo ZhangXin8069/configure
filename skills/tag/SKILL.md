@@ -14,7 +14,7 @@ metadata:
     emoji: 🏷️
 ---
 
-# tag — Git tag management with three tag types
+# tag — Git 三类标签管理技能
 
 ## 核心原则
 
@@ -58,7 +58,7 @@ metadata:
 会话**第一步**先只读预读本技能的历史会话日志，快速了解仓库状态、提供对照参考：
 
 ```bash
-ls -1t .tag.*.log 2>/dev/null | head -5                 # 按时间倒序列出最近日志
+ls -1t .tag.*.log 2>/dev/null | head -3                 # 按时间倒序列出最近日志(优先较新, 最多3份)
 tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的尾部（汇总区）
 ```
 
@@ -67,124 +67,125 @@ tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的�
   避免重复 `git tag -l` 调查；② **对照参考**——上次的失败与重试原因、已改写/已删除标签供本次对照，
   防止重复踩坑
 - 约束：**只读不改**历史日志；无历史日志（首次运行）时正常跳过，不视为错误
+- 耗时控制：**优先较新日志**——默认仅预读最新一份的尾部汇总区（`tail -80` 上限）；
+  日志过大时仍只取尾部并注明截断；需更多对照时按时间倒序逐份追加，单份有行数限额，
+  预读总耗时以秒级为限，不逐份全文读取
 
-Manage annotated tags across three categories — `stab<N>`, `dev<N>`, `bug<N>` — each with independent numbering, plus optional sub-versions (`stab15_1`). Supports create, list, show, delete, and amend. Designed for Agent invocation — every operation returns structured output and handles edge cases explicitly.
+在三个类别——`stab<N>`、`dev<N>`、`bug<N>`——之间管理注释标签，各类别编号独立，支持可选的子版本（`stab15_1`）。支持创建、列出、查看、删除与改写。为 Agent 调用而设计——每次操作返回结构化输出并显式处理边界情形。
 
-## Three tag types
+## 三类标签
 
-| Type | Purpose | When to use |
+| 类型 | 用途 | 使用时机 |
 | --- | --- | --- |
-| `stab<N>` | Stable checkpoint | A piece of work is **completed** and stable. This is a milestone. |
-| `dev<N>` | Development snapshot | Work is **in progress** — save current state before continuing. |
-| `bug<N>` | Bug fix | A **bug was discovered** and fixed. Marks the fix point. |
+| `stab<N>` | 稳定里程碑 | 某工作**已完成**且稳定。这是里程碑。 |
+| `dev<N>` | 开发快照 | 工作**进行中**——继续前保存当前状态。 |
+| `bug<N>` | 修复标记 | 发现 **bug** 并已修复。标记修复点。 |
 
-Each type has its **own independent counter** starting from 0. `stab0`, `dev0`, `bug0` can all coexist.
+每类标签有**独立计数器**，从 0 开始。`stab0`、`dev0`、`bug0` 可以同时存在。
 
-## Trigger
+## 触发时机
 
-Invoke this skill when the user asks to:
+用户提出以下请求时调用本技能：
 
-- Create/apply a tag ("打标签", "tag", "标记一下", "版本标记")
+- 创建/应用标签（"打标签"、"tag"、"标记一下"、"版本标记"）
   - "stab" / "稳定版" / "完成了" / "完成" → `stab<N>`
   - "dev" / "开发中" / "暂存" / "保存进度" / "快照" → `dev<N>`
   - "bug" / "修复" / "修bug" / "补丁" / "fix" → `bug<N>`
-  - "stab15_1" / "子版本" / "修订" / "在stab15上补标签" → sub-version of that major (e.g. `stab15_2`)
-- List or search existing tags ("查看tag", "list tags", "有哪些标签")
-- Show tag details ("tag详情", "show tag stab3")
-- Delete a tag ("删除tag", "delete tag stab5")
-- Amend/reword a tag ("修改tag", "amend tag", "重写tag内容")
+  - "stab15_1" / "子版本" / "修订" / "在stab15上补标签" → 该主版本号的子版本（如 `stab15_2`）
+- 列出或搜索已有标签（"查看tag"、"list tags"、"有哪些标签"）
+- 查看标签详情（"tag详情"、"show tag stab3"）
+- 删除标签（"删除tag"、"delete tag stab5"）
+- 改写/重写标签（"修改tag"、"amend tag"、"重写tag内容"）
 
-**Auto-detection**: When the user doesn't explicitly specify a type, infer from context:
-- Mentioning a full tag name with an underscore (e.g. "stab15_1", "删掉 dev2_1") → that sub-version tag, used verbatim
-- Mentioning "子版本" / "修订" / "sub" + a major tag (e.g. "stab15的子版本") → next sub-version of that major
-- Mentioning "bug"/"修复"/"fix"/"补丁"/"问题" → `bug`
-- Mentioning "dev"/"暂存"/"保存"/"快照"/"继续" → `dev`
-- Mentioning "stab"/"完成"/"稳定"/"版本"/"发布" → `stab`
-- No clear signal → `dev` (default)
+**自动推断**：用户未明确指定类型时，按上下文推断：
+- 提到带下划线的完整标签名（如 "stab15_1"、"删掉 dev2_1"）→ 该子版本标签，原样使用
+- 提到 "子版本" / "修订" / "sub" + 主版本标签（如 "stab15的子版本"）→ 该主版本的下一子版本
+- 提到 "bug"/"修复"/"fix"/"补丁"/"问题" → `bug`
+- 提到 "dev"/"暂存"/"保存"/"快照"/"继续" → `dev`
+- 提到 "stab"/"完成"/"稳定"/"版本"/"发布" → `stab`
+- 无明确信号 → `dev`（默认）
 
-If ambiguous, ask: "Which tag type? [stab/dev/bug]"
+无法确定时提问："Which tag type? [stab/dev/bug]"
 
-## Tag naming convention
-
-```text
-stab0, stab1, stab2, ... stabN, stabN_1, stabN_2, ...   (stable checkpoints)
-dev0, dev1, dev2, ... devN, devN_1, ...                 (development snapshots)
-bug0, bug1, bug2, ... bugN, bugN_1, ...                 (bug fixes)
-```
-
-All counters start from 0 and increment independently. The first tag in each category uses `<type>0`.
-
-**Full grammar**: `^(stab|dev|bug)[0-9]+(_[0-9]+)?$` — e.g. `stab15`, `stab15_1`, `dev3_2`.
-
-## Sub-version tags (`<type><N>_<M>`)
-
-A sub-version is a **follow-up revision on top of an existing major tag** without advancing the major counter. It is used for small targeted fixes or iterations after a major tag is already placed.
-
-- `stab15_1` = first sub-version of `stab15`; it belongs to type `stab` and major `15`.
-- Minor `M` starts at **1** (`stab15_1` is the first sub-version of `stab15`; `_0` is never used).
-- Message format is identical to any other tag: `follow stab15, 1. 修复...; [opencode].` — the `follow <previous-tag-of-any-type>` rule makes the parent major (or the previous sub-version) the natural predecessor.
-- Version sort (`--sort=-v:refname`) orders them correctly: `stab15 < stab15_1 < stab15_2 < stab16`.
-- Sub-versions are **explicit requests only** — auto-numbering (Case C below) always produces a plain major tag. If the latest tag is `stab15_1`, auto-creating a `stab` tag yields `stab16`, not `stab15_2`. To get another sub-version, say so explicitly (e.g. "在 stab15 上再补一个标签").
-
-## Tag message format
-
-Every tag is an **annotated tag** with the following message format:
+## 标签命名约定
 
 ```text
-follow <previous-tag-of-any-type>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; [opencode].
+stab0, stab1, stab2, ... stabN, stabN_1, stabN_2, ...   (稳定里程碑)
+dev0, dev1, dev2, ... devN, devN_1, ...                 (开发快照)
+bug0, bug1, bug2, ... bugN, bugN_1, ...                 (修复标记)
 ```
 
-- The **very first tag** in the repo uses `<type>0 init, 1. ...; [opencode].` (no predecessor)
-- **All subsequent tags** (regardless of type) use `follow <previous-tag>, 1. ...;` — references the immediately previous tag regardless of type
-- Changelog items are numbered with English period + space (`1. `, `2. `, `3. `)
-- **Every item ends with `;`** (English semicolon), including the last item — no exceptions
-- All punctuation is English: `.` `,` `;` (the content text itself may be Chinese)
-- The suffix ` [opencode].` (preceded by a space, trailing English period) is always appended
-- The message is stored as the tag annotation (`git tag -a -m "..."`)
+所有计数器从 0 开始独立递增。每类第一个标签用 `<type>0`。
 
-### Changelog item guidelines
+**完整文法**：`^(stab|dev|bug)[0-9]+(_[0-9]+)?$` —— 如 `stab15`、`stab15_1`、`dev3_2`。
 
-When constructing changelog items from diffs and commit messages:
+## 子版本标签（`<type><N>_<M>`）
 
-1. **Group related changes** — all changes to a single subsystem/feature count as one item
-2. **Order by importance** — structural/architectural → new features → fixes → cleanups
-3. **One sentence each** — no nested lists, no multi-line items
-4. **Omit trivial changes** — whitespace, comment-only edits, generated files
-5. **Use action-oriented phrasing** — "重构env.sh加载逻辑" not "env.sh被修改了"
+子版本是**在既有主版本标签之上的后续修订**，不推进主版本计数器。用于主版本标签已放置后的小型定向修复或迭代。
 
-Example:
+- `stab15_1` = `stab15` 的第一个子版本；属于类型 `stab`、主版本号 `15`。
+- 子版本号 `M` 从 **1** 开始（`stab15_1` 是 `stab15` 的第一个子版本；`_0` 从不使用）。
+- 消息格式与其他标签完全一致：`follow stab15, 1. 修复...; [opencode].` —— `follow <任意类型的前一标签>` 规则使父主版本（或前一子版本）成为自然前驱。
+- 版本排序（`--sort=-v:refname`）正确排序：`stab15 < stab15_1 < stab15_2 < stab16`。
+- 子版本**仅显式请求**——自动编号（下文 Case C）总是产生普通主版本标签。若最新标签是 `stab15_1`，自动创建 `stab` 标签得到 `stab16` 而非 `stab15_2`。要再打子版本需显式说明（如 "在 stab15 上再补一个标签"）。
+
+## 标签消息格式
+
+每个标签都是**注释标签**，消息格式如下：
+
+```text
+follow <任意类型的前一标签>, 1. 变更说明一; 2. 变更说明二; 3. 变更说明三; [opencode].
+```
+
+- 仓库中**第一个标签**使用 `<type>0 init, 1. ...; [opencode].`（无前驱）
+- **后续所有标签**（无论类型）使用 `follow <前一标签>, 1. ...;` —— 引用紧邻的前一标签，不论其类型
+- 变更项用英文句点 + 空格编号（`1. `、`2. `、`3. `）
+- **每项以 `;` 结尾**（英文分号），包括最后一项——无例外
+- 所有标点用英文：`.` `,` `;`（内容文字本身可为中文）
+- 后缀 ` [opencode].`（前有空格、后接英文句点）始终追加
+- 消息作为标签注释存储（`git tag -a -m "..."`）
+
+### 变更项编写准则
+
+从 diff 与提交信息构造变更项时：
+
+1. **相关改动分组**——同一子系统/功能的全部改动算一项
+2. **按重要性排序**——结构/架构 → 新功能 → 修复 → 清理
+3. **每项一句话**——不嵌套列表、不多行
+4. **省略琐碎改动**——空白、纯注释、生成文件
+5. **用动作导向措辞**——"重构env.sh加载逻辑" 而非 "env.sh被修改了"
+
+示例：
 
 ```text
 follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增cctag Agent技能，替代ccgpush; 3. 修复zshrc中oh-my-zsh插件加载顺序; 4. 清理bin/中过期脚本; [opencode].
 ```
 
----
+## 操作
 
-## Operations
+### 1. 创建新标签
 
-### 1. Create a new tag
+这是主要操作。确定标签类型，分析该类型最近标签以来的变更，构建变更清单，创建注释标签。
 
-This is the primary operation. It determines the tag type, analyzes changes since the last tag of that type, builds a changelog, and creates an annotated tag.
+#### Step 1.1 — 确定标签类型与下一个编号
 
-#### Step 1.1 — Determine tag type and next number
+确定标签类型（`TYPE`）：`stab`、`dev`、`bug` 之一。按「触发时机」的自动推断规则确定；有歧义时询问用户。
 
-Determine the tag type (`TYPE`): one of `stab`, `dev`, or `bug`. Use auto-detection rules from the Trigger section. If ambiguous, ask the user.
+然后处理三种情形之一：
 
-Then handle one of three cases:
-
-**Case A — Explicit full tag name**: The user names the tag exactly (e.g. "打 stab15_1 标签"). Use it verbatim:
+**Case A — 显式完整标签名**：用户精确指定标签名（如 "打 stab15_1 标签"）。原样使用：
 
 ```bash
-NEW_TAG="stab15_1"   # user-specified, must match ^(stab|dev|bug)[0-9]+(_[0-9]+)?$
+NEW_TAG="stab15_1"   # 用户指定，必须匹配 ^(stab|dev|bug)[0-9]+(_[0-9]+)?$
 if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
     echo "Tag ${NEW_TAG} already exists — offer to amend it or use the next number"
 fi
 ```
 
-**Case B — Generic sub-version request**: The user wants a follow-up on an existing major tag without naming the minor (e.g. "在 stab15 上补一个标签" / "stab15 的子版本"). Compute the next minor of that major (minors start at 1):
+**Case B — 泛化子版本请求**：用户想在既有主版本标签上补打而不指定子版本号（如 "在 stab15 上补一个标签" / "stab15 的子版本"）。计算该主版本的下一子版本号（子版本从 1 开始）：
 
 ```bash
-TYPE="stab"; MAJOR=15   # from user input
+TYPE="stab"; MAJOR=15   # 来自用户输入
 SUB_TAGS=$(git tag -l "${TYPE}${MAJOR}_[0-9]*" --sort=-v:refname)
 if [ -z "$SUB_TAGS" ]; then
     NEXT_MINOR=1
@@ -195,10 +196,10 @@ fi
 NEW_TAG="${TYPE}${MAJOR}_${NEXT_MINOR}"
 ```
 
-**Case C — Auto-numbering**: No explicit name or sub-version request. Find the latest tag of this type, **strip any `_M` suffix**, and take the next **major**. A sub-version tag counts toward its own major, so after `stab15_1` the next auto tag is `stab16`:
+**Case C — 自动编号**：无显式名称或子版本请求。找出该类型的最近标签，**去掉任何 `_M` 后缀**，取下一个**主版本号**。子版本标签计入其主版本，所以 `stab15_1` 之后自动创建的是 `stab16`：
 
 ```bash
-TYPE="stab"   # or dev, bug — determined in the step above
+TYPE="stab"   # 或 dev、bug——由上一步确定
 LAST_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)?$" | head -1)
 if [ -z "$LAST_TAG" ]; then
     NEW_NUM=0
@@ -209,48 +210,48 @@ fi
 NEW_TAG="${TYPE}${NEW_NUM}"
 ```
 
-**Edge case**: Tags sharing the prefix but not numeric-suffixed (e.g. `stab-final`) are excluded by the `grep -E` filter and do not affect numbering.
+**边界情形**：共享前缀但非数字后缀的标签（如 `stab-final`）被 `grep -E` 过滤排除，不影响编号。
 
-#### Step 1.2 — Review changes since baseline
+#### Step 1.2 — 查看基线以来的变更
 
-The **baseline** is the most recent tag of **any type** (stab, dev, or bug). If no tags exist, use the first commit.
+**基线** = 最近一个**任意类型**（stab/dev/bug）的标签。若无标签，用第一个提交。
 
 ```bash
-# Baseline = latest tag of ANY type (sub-version tags included; version sort
-# places them above their parent, so stab15_1 is picked over stab15)
+# 基线 = 任意类型的最新标签（含子版本标签；版本排序将其排在父标签之上，
+# 所以 stab15_1 优先于 stab15 被选中）
 BASELINE=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)?$' | head -1)
-# If no tags exist, use the first commit
+# 无标签时用第一个提交
 if [ -z "$BASELINE" ]; then
     BASELINE=$(git rev-list --max-parents=0 HEAD)
 fi
 ```
 
-Review changes:
+查看变更：
 
 ```bash
-# Commits since baseline
+# 基线以来的提交
 git log ${BASELINE}..HEAD --oneline --no-merges
 
-# Files changed
+# 变更文件
 git diff ${BASELINE}..HEAD --stat
 
-# Full diff for detailed analysis (limit to 500 lines)
+# 完整 diff 用于详细分析（限制 500 行）
 git diff ${BASELINE}..HEAD -- . | head -500
 ```
 
-**Edge case — no previous commits**: If the repo has no commits yet, skip the diff review. The changelog should simply state "初始提交".
+**边界情形 — 无历史提交**：仓库尚无提交时跳过 diff 查看，变更清单直接写"初始提交"。
 
-**Edge case — no changes since baseline**: If `git diff ${BASELINE}..HEAD --stat` is empty, inform the user there are no new changes to tag. Do NOT create an empty tag unless the user explicitly requests it.
+**边界情形 — 基线以来无变更**：`git diff ${BASELINE}..HEAD --stat` 为空时告知用户没有可打标的新变更。除非用户明确要求，否则**不创建空标签**。
 
-#### Step 1.3 — Build the changelog
+#### Step 1.3 — 构建变更清单
 
-Analyze the collected diffs and commit messages to produce the tag message. Apply the changelog guidelines from above.
+分析收集到的 diff 与提交信息生成标签消息，套用上文变更项编写准则。
 
-- For `bug` tags: focus on what was broken, how it was fixed, and what was affected.
-- For `dev` tags: describe what was done so far, what's still in progress (optional), and the current state.
-- For `stab` tags: describe completed work comprehensively.
+- `bug` 标签：聚焦什么坏了、如何修复、影响范围。
+- `dev` 标签：描述已做工作、仍在进行中的部分（可选）与当前状态。
+- `stab` 标签：全面描述已完成的工作。
 
-Present the proposed message, then **proceed immediately — 默认不等待确认**，展示后直接进入 Step 1.4：
+展示拟用消息，然后**直接继续——默认不等待确认**，展示后直接进入 Step 1.4：
 
 ```text
 Type:    dev
@@ -261,9 +262,9 @@ Changes: 3 files changed, 85 insertions(+), 12 deletions(-)
 → 展示后直接创建并推送，不阻塞等待确认。
 ```
 
-**If the user intervenes/rejects**, ask what to change — reword a specific item, add a missing item, or remove an item.
+**若用户介入/否决**，询问要改什么——重写某一条、补一条缺失项或删除某项。
 
-#### Step 1.4 — Push current commits (before tag)
+#### Step 1.4 — 先推送当前提交（打标签前）
 
 **打标签的前置必需步骤**：先 push 当前分支，确保远程已包含即将被打标的提交，之后才能执行 Step 1.5 创建标签。**默认执行，无需确认**；push 失败按循环重试原则处理并记入日志，重试仍未成功则**暂停打标签并报告用户**，不创建指向本地独有提交的标签：
 
@@ -272,24 +273,24 @@ BRANCH=$(git rev-parse --abbrev-ref HEAD)
 git push origin "$BRANCH"
 ```
 
-**Edge case — no remote**: If `git remote` is empty, skip all push steps and note that no remote is configured.
+**边界情形 — 无远程**：`git remote` 为空时跳过所有 push 步骤并注明未配置远程。
 
-#### Step 1.5 — Create the tag
+#### Step 1.5 — 创建标签
 
 ```bash
 git tag -a "$NEW_TAG" -m "$TAG_MESSAGE"
 ```
 
-Verify creation:
+验证创建：
 
 ```bash
-git tag -l "$NEW_TAG"                        # Confirm tag exists
-git tag -l --format='%(subject)' "$NEW_TAG"  # Show the tag message
+git tag -l "$NEW_TAG"                        # 确认标签存在
+git tag -l --format='%(subject)' "$NEW_TAG"  # 显示标签消息
 ```
 
-#### Step 1.6 — Push the tag (after tag)
+#### Step 1.6 — 推送标签（打标签后）
 
-After creating the tag, push it to remote. **默认执行，无需确认**（push 失败自动重试并记入日志）：
+创建标签后推送到远程。**默认执行，无需确认**（push 失败自动重试并记入日志）：
 
 ```bash
 git push origin "$NEW_TAG"
@@ -297,25 +298,25 @@ git push origin "$NEW_TAG"
 
 ---
 
-### 2. List tags
+### 2. 列出标签
 
-List tags, optionally filtered by type:
+列出标签，可按类型过滤：
 
 ```bash
-# List all tags (all three types, sub-versions included)
+# 列出全部标签（三类全部，含子版本）
 git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)?$'
 
-# Filter by type (e.g., only stab tags) — sub-versions are included
+# 按类型过滤（如仅 stab 标签）——子版本包含在内
 TYPE="dev"
 git tag -l "${TYPE}[0-9]*" --sort=-v:refname --format='%(refname:short) | %(taggerdate:short) | %(subject)'
 
-# Count by type (sub-versions count toward their type)
+# 按类型计数（子版本计入其类型）
 git tag -l 'stab[0-9]*' | wc -l
 git tag -l 'dev[0-9]*'  | wc -l
 git tag -l 'bug[0-9]*'  | wc -l
 ```
 
-Output format (grouped by type, sub-version listed above its parent):
+输出格式（按类型分组，子版本列在父标签之上）：
 
 ```text
 === stab (4 tags) ===
@@ -332,149 +333,149 @@ dev0   | 2026-07-09 | follow stab3, 1. 开始yyy功能开发; [opencode].
 bug0   | 2026-07-09 | follow dev1, 1. 修复zzz空指针异常; [opencode].
 ```
 
-**Edge case — no tags**: Report "No cctag tags found in this repository."
+**边界情形 — 无标签**：报告 "No cctag tags found in this repository."
 
 ---
 
-### 3. Show a specific tag
+### 3. 查看单个标签
 
-Show detailed information about a single tag (any type):
+显示单个标签（任意类型）的详细信息：
 
 ```bash
-# Show tag annotation
+# 显示标签注释
 git tag -l --format='%(subject)%0a%(body)' "$TAG_NAME"
 
-# Show tag author info and date
+# 显示标签作者信息与日期
 git tag -l --format='Type: %(refname:short)%0aAuthor: %(taggername) <%(taggeremail)>%0aDate: %(taggerdate:iso)%0aMessage: %(subject)' "$TAG_NAME"
 
-# Show commits between this tag and its predecessor (any type, sub-versions included)
+# 显示该标签与其前驱之间的提交（任意类型，含子版本）
 PREV_TAG=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)?$' | grep -A1 "^$TAG_NAME$" | tail -1)
 if [ -n "$PREV_TAG" ]; then
     git log ${PREV_TAG}..${TAG_NAME} --oneline --no-merges
 fi
 ```
 
-**Edge case — tag not found**: Report "Tag 'xxx' does not exist. Use 'list' to see available tags."
+**边界情形 — 标签不存在**：报告 "Tag 'xxx' does not exist. Use 'list' to see available tags."
 
-**Edge case — first tag of a type**: Note that there is no previous tag of this type to diff against.
+**边界情形 — 该类型首个标签**：注明该类型没有可对比的前一标签。
 
 ---
 
-### 4. Delete a tag
+### 4. 删除标签
 
-Delete a tag both locally and remotely:
+在本地与远程同时删除标签：
 
 ```bash
-# Confirm before deleting
+# 删除前确认
 git tag -l --format='%(subject)' "$TAG_NAME"
 
-# Delete locally
+# 删除本地
 git tag -d "$TAG_NAME"
 
-# Delete remotely (if it exists there)
+# 删除远程（若存在于远程）
 git push origin :refs/tags/"$TAG_NAME" 2>/dev/null
 ```
 
-**Edge case — tag not found locally**: Check remote: `git ls-remote --tags origin "$TAG_NAME"`. If found remotely but not locally, fetch first then delete.
+**边界情形 — 本地找不到标签**：检查远程：`git ls-remote --tags origin "$TAG_NAME"`。若远程存在而本地没有，先 fetch 再删除。
 
-**Edge case — force delete**: If the user passes `--force` or the tag has already been pushed, confirm explicitly before deleting the remote tag — this is a destructive operation that affects all collaborators.
+**边界情形 — 强制删除**：用户传入 `--force` 或标签已推送时，删除远程标签前必须显式确认——这是影响所有协作者的破坏性操作。
 
 ---
 
-### 5. Amend a tag
+### 5. 改写标签
 
-Rewrite the message of an existing tag (any type):
+重写既有标签（任意类型）的消息：
 
-#### Step 5.1 — Identify the target tag
+#### Step 5.1 — 确定目标标签
 
 ```bash
-# User-specified tag (sub-versions work the same, e.g. "stab15_1")
-TARGET_TAG="dev2"   # from user input
+# 用户指定的标签（子版本同理，如 "stab15_1"）
+TARGET_TAG="dev2"   # 来自用户输入
 
-# Or amend latest of a given type
-TYPE="stab"   # from user input or auto-detected
+# 或改写某类型的最新标签
+TYPE="stab"   # 来自用户输入或自动推断
 TARGET_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)?$" | head -1)
 ```
 
-#### Step 5.2 — Show current tag content
+#### Step 5.2 — 显示当前标签内容
 
 ```bash
 git tag -l --format='%(subject)' "$TARGET_TAG"
 ```
 
-#### Step 5.3 — Review changes since the tag's predecessor
+#### Step 5.3 — 查看标签前驱以来的变更
 
-Use the immediate predecessor tag of any type as baseline (same logic as Step 1.2).
+用任意类型的紧邻前驱标签作为基线（逻辑同 Step 1.2）。
 
-#### Step 5.4 — Build new message
+#### Step 5.4 — 构建新消息
 
-Propose a new message. This may be entirely rewritten or just partially edited — follow the user's instructions. Keep the same tag type.
+提出新消息。可整体重写或仅部分编辑——遵循用户指示。保持同一标签类型。
 
-#### Step 5.5 — Push current commits, replace tag, push tag
+#### Step 5.5 — 推送当前提交、替换标签、推送标签
 
-**改写已推送标签属破坏性操作，整体流程须先经用户确认（见核心原则与下方 Warning）；确认之后推送步骤默认执行，不再逐次询问**：
+**改写已推送标签属破坏性操作，整体流程须先经用户确认（见核心原则与下方警告）；确认之后推送步骤默认执行，不再逐次询问**：
 
 ```bash
-# Push current branch first
+# 先推送当前分支
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 git push origin "$BRANCH"
 
-# Delete old tag locally
+# 删除旧标签（本地）
 git tag -d "$TARGET_TAG"
 
-# Delete old tag remotely
+# 删除旧标签（远程）
 git push origin :refs/tags/"$TARGET_TAG" 2>/dev/null
 
-# Re-create with new message (at the same commit)
+# 以新消息重新创建（同一提交）
 git tag -a "$TARGET_TAG" -m "$NEW_MESSAGE"
 
-# Push updated tag
+# 推送更新后的标签
 git push origin "$TARGET_TAG"
 ```
 
-**Warning**: Amending a pushed tag rewrites history for anyone who has already pulled the old tag. Always warn the user before deleting a remote tag.
+**警告**：改写已推送标签会为任何已拉取旧标签的人重写历史。删除远程标签前必须警告用户。
 
 ---
 
-### 6. Cherry-pick: tag a specific range
+### 6. 指定区间打标（cherry-pick）
 
-When the user wants to tag changes between two specific points:
+用户想对两个特定点之间的变更打标签时：
 
 ```bash
-# Use a specified base ref
-BASE_REF="stab5"         # user-specified
-HEAD_REF="HEAD"          # default, or user-specified
+# 使用指定的基线 ref
+BASE_REF="stab5"         # 用户指定
+HEAD_REF="HEAD"          # 默认，或用户指定
 git log ${BASE_REF}..${HEAD_REF} --oneline --no-merges
 git diff ${BASE_REF}..${HEAD_REF} --stat
 ```
 
-Proceed with Steps 1.1–1.6, substituting `$BASE_REF` for the baseline.
+以 `$BASE_REF` 替代基线，按 Steps 1.1–1.6 继续。
 
 ---
 
-## Error handling summary
+## 错误处理
 
-| Scenario | Action |
+| 场景 | 处理 |
 | --- | --- |
-| Ambiguous tag type | Ask user: "Which tag type? [stab/dev/bug]" |
-| User names a sub-version tag (e.g. `stab15_1`) | Recognize verbatim; use for show/delete/amend/create |
-| Requested sub-version tag already exists | Report; offer amend or the next minor number |
-| Auto-numbering after a sub-version tag | Next major (`stab15_1` → `stab16`); request `stab15_2` explicitly for another sub-version |
-| No previous tags at all | Use first commit as baseline |
-| No commits in repo | Abort; report nothing to tag |
-| No changes since baseline | Report; do not create an empty tag unless explicitly requested |
-| No remote configured | Skip both push steps; note the absence |
-| Branch push before tagging fails | Diagnose, fix, retry; if still failing, pause and report — do not create the tag |
-| User requests local-only | Create/amend locally only, skip push; record in session log |
-| Tag name collision | Increment N and retry (should not happen with auto-numbering) |
-| Tag already exists remotely | Warn if local and remote messages differ |
-| Amend on non-existent tag | Report the tag doesn't exist; suggest listing |
-| Push/create/delete fails (network, conflict) | Diagnose from error, fix, and retry (loop until success); record attempts in the session log |
-| User rejects changelog (intervenes) | Allow reword of specific items or full rewrite |
+| 标签类型有歧义 | 询问用户："Which tag type? [stab/dev/bug]" |
+| 用户指定子版本标签（如 `stab15_1`） | 原样识别；用于查看/删除/改写/创建 |
+| 请求的子版本标签已存在 | 报告；提供改写或下一个子版本号 |
+| 子版本标签之后自动编号 | 下一主版本（`stab15_1` → `stab16`）；要另一子版本须显式请求 `stab15_2` |
+| 完全没有之前的标签 | 用第一个提交作为基线 |
+| 仓库无提交 | 中止；报告无内容可打标签 |
+| 基线以来无变更 | 报告；除非用户明确要求，否则不创建空标签 |
+| 未配置远程 | 跳过两个 push 步骤；注明无远程 |
+| 打标签前的分支推送失败 | 诊断、修复、重试；仍失败则暂停并报告——不创建标签 |
+| 用户要求仅本地 | 仅本地创建/改写，跳过 push；记入会话日志 |
+| 标签名冲突 | 递增编号重试（自动编号下不应发生） |
+| 远程已有同标签 | 本地与远程消息不一致时警告 |
+| 改写不存在的标签 | 报告标签不存在；建议列出 |
+| push/创建/删除失败（网络、冲突） | 从错误诊断、修复并重试（循环直至成功）；重试记入会话日志 |
+| 用户否决变更清单（介入） | 允许重写特定项或整体重写 |
 
-## Agent output conventions
+## Agent 输出约定
 
-After each operation, report a structured summary:
+每次操作后报告结构化汇总：
 
 ```text
 ✓ Tag dev3 created
@@ -485,7 +486,7 @@ After each operation, report a structured summary:
   Log:     .tag.2026-08-12-19-19-43.log (retries 0)
 ```
 
-For listing:
+列出时：
 
 ```text
 stab9  2026-07-09  follow stab8, 1. 重构lib目录结构; 2. 新增cctag技能; [opencode].
