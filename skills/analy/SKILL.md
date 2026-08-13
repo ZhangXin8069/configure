@@ -2,7 +2,9 @@
 name: analy
 description: |
   仓库分析技能：只读分析当前 git 仓库中的所有文档与代码，解析用户的输入（主题/问题），
-  每个结论附精确参考源（文件:行号），生成 LaTeX 源文件并编译 PDF 文档输出到当前工作目录的 docs/ 文件夹。
+  侧重讲明多份资料之间的联系与层次逻辑，解析代码时结合其对应对象（如格点代码与粒子物理图像），
+  每个结论附精确参考源（文件:行号），生成逻辑连贯、层次分明、多色彩标识的 LaTeX/PDF 文档
+  输出到当前工作目录的 docs/ 文件夹。
   当用户要求"分析"、"analy"、"解析"、"分析仓库"、"分析一下"、"解读这个仓库"、"生成分析报告"、
   "把分析做成PDF"、"输出分析文档" 时使用此技能；输入形式 `{~analy 用户输入}` 或 `{$用户输入}`，
   `{...}` 内为用户给定的分析主题/问题，技能将其解析为分析任务。
@@ -39,6 +41,12 @@ metadata:
    参考类目录视为参考知识库，**默认自动引入，不依赖主题**；存在即建全量索引并阅读说明类文件
    建立背景认知，主题聚焦时在其中检索相关内容并入证据链，使解析更全面深入（"解析越多越好"）；
    目录不存在或文件不可解析时静默跳过并在覆盖范围中如实注明；全程只读。
+9. **多资料联系与层次逻辑**：分析涉及多份资料（文档/代码/配置/参考书）时，必须讲明各部分
+   之间的联系——引用/依赖/包含关系、层级归属（入口层/核心层/工具层/文档层）与共同主题线，
+   报告以"联系与层次"呈现，**重联系轻罗列**，避免资料堆砌。
+10. **代码-对象对应**：解析代码时先识别代码所描述的对象（物理图像/业务实体/系统组件，
+    如格点 QCD 代码对应粒子物理图像），建立"代码符号 ↔ 对象概念"映射，用对象语言解释
+    代码行为与动机，再落到实现细节。
 
 ## 会话日志
 
@@ -191,6 +199,28 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
    纳入证据链；参考源清单中类型标注为"参考"；参考内容与仓库主题无关联时注明"未命中"，不强行引用；
 6. 主题在仓库中无依据时：记录"未找到相关证据"，报告阶段如实说明。
 
+**多资料联系与层次梳理**（多份资料参与分析时必做）：
+
+1. **角色定位**：为每份资料标定角色与层次——入口（启动/主流程）、核心实现（算法/逻辑）、
+   工具支持（辅助脚本/库）、配置声明（参数/环境）、文档说明（README/AGENTS.md）、参考背景（知识库）；
+2. **关系梳理**：找出资料间的真实联系——引用/依赖/包含链（如 `env.sh → tmp/scripts.sh` 生成链、
+   `lib/` 版本化目录的演进关系、配置与脚本的配对），以及共同主题线（多份资料如何围绕主题分工协作）；
+3. **层次呈现**：报告"联系与层次"小节输出——层级归属表（资料 | 层次 | 角色）、依赖链图
+   （`A → B → C` 文本链）、分工说明；无直接联系时如实注明并列关系（同层协作）；
+4. **重联系轻罗列**：每份资料既要单独解读（要点 + 参考源），又必须说明其与整体的位置关系，
+   使多资料分析呈"织网"而非"堆砌"。
+
+**代码-对象映射**（解析代码/脚本时必做）：
+
+1. **识别对象**：先回答"这段代码在描述什么对象"——物理图像（如格点场、夸克传播子、Wilson 线、
+   plaquette）、业务实体（配置项、任务、产物）或系统组件（模块、服务、数据流）；
+2. **建立映射**：代码符号 ↔ 对象概念对照（如 `hopping 项 ↔ 夸克在相邻格点间跃迁`、
+   `plaquette 变量 ↔ 最小格点环元`、`smeared 特征向量 ↔ 光滑化后的夸克场源`），映射关系记入
+   会话日志并在报告"对象映射"小节呈现为表格（代码符号 | 对象概念 | 物理/业务含义）；
+3. **对象语言解释**：代码片段后附对象说明（如"该函数构造 $F_{\mu\nu}$ 场强张量，对应
+   $\bar\psi\gamma^\mu D_\mu\psi$ 中的规范场"），用物理图像讲清"为什么这样做"再讲"怎么实现"；
+4. **纯工程代码**：无明确物理/业务对象时，说明其工程角色（构建、部署、校验、统计），不强行造对象。
+
 ### Step 5. 生成 LaTeX 源文件
 
 生成 `docs/analy_<slug>_<YYYYMMDD>.tex`，遵循以下模板结构：
@@ -205,6 +235,23 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
 \usepackage{booktabs}
 \usepackage{hyperref}
 \usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}      % 结论/要点彩色框
+\usepackage{titlesec}             % 章节标题着色
+
+% ===== 色彩体系（全文档统一标识，见生成要点第 5 条）=====
+\definecolor{accent}{HTML}{1F4E79}        % 主色（深蓝）：章节标题
+\definecolor{evidence}{HTML}{1E8449}      % 仓库证据（绿）：参考源/证据句
+\definecolor{reference}{HTML}{8C6D1F}     % 参考背景（棕）：知识库/书籍
+\definecolor{conclusion}{HTML}{8B1A1A}    % 结论（深红）：要点框
+\definecolor{codebg}{HTML}{F4F6F7}        % 代码块底色（浅灰）
+
+% ===== 层次分明的标题：主色着色 =====
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{accent!70!black}}{\thesubsection}{1em}{}
+
+% ===== 彩色标识框 =====
+\newtcolorbox{conclbox}{colback=conclusion!6,colframe=conclusion,title=结论}
+\newtcolorbox{refbox}{colback=reference!6,colframe=reference,title=参考背景}
 
 \title{主题标题}
 \author{opencode analy}
@@ -212,17 +259,19 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
 
 \lstset{
   basicstyle=\ttfamily\footnotesize,
-  backgroundcolor=\color{gray!10},
+  backgroundcolor=\color{codebg},
   frame=single,
   breaklines=true,
   language=bash,   % 按实际内容调整
   firstnumber=auto,
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{evidence!70!black},
 }
 
 \begin{document}
 \maketitle
 \begin{abstract}
-  摘要：主题、分析范围（覆盖的目录/文件）、核心结论。
+  摘要：主题、分析范围（覆盖的目录/文件）、核心结论、资料联系概览（N 份资料，层次与主线）。
 \end{abstract}
 
 \tableofcontents
@@ -231,7 +280,10 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
   % 结构树、git 信息、统计数字（全部实测）
 
 \section{主题分析}
-  % 分小节；每个结论后紧跟参考源 \texttt{\detokenize{file:line}}
+  % 分小节；层次分明：整体→部分→细节
+  % 每小节主题句先行；每个结论后紧跟参考源 \texttt{\detokenize{file:line}}
+  % 多资料主题：本节的"联系与层次"子节呈现层级表/依赖链
+  % 代码主题：本节的"对象映射"子节呈现代码符号↔对象概念表格
 
 \section{关键代码/文档片段}
   % 代码片段一律直接引用仓库原文件，保真展示：
@@ -241,21 +293,37 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
   % booktabs 表格：文件:行号 | 类型 | 内容/作用
 
 \section{结论与局限}
-  % 结论汇总 + 分析覆盖范围与未覆盖项
+  % 结论框 \begin{conclbox}...\end{conclbox} 汇总
+  % 引用知识库结论放入 \begin{refbox}...\end{refbox}
+  % + 分析覆盖范围与未覆盖项
 
 \end{document}
 ```
 
 生成要点：
 
-1. **参考源格式**：正文引用统一用 `\texttt{\detokenize{bin/xxx.sh:12-18}}`，
+1. **逻辑连贯**：全文一条主线——摘要（点题）→ 概览（背景）→ 主题分析（分层展开）→ 关键片段
+   （证据）→ 参考清单 → 结论（收束）；每节主题句先行、节末小结并自然引出下节；
+   小节的划分按层次（整体→部分→细节），同一主题的内容不散落多节。
+2. **层次分明**：标题按层级组织（section → subsection → subsubsection），每层只承担一个
+   逻辑角色（背景/分析/证据/结论）；同层内容用统一句式与标识；多资料主题必含
+   "联系与层次"子节（层级表 + 依赖链），代码主题必含"对象映射"子节（映射表）。
+3. **参考源格式**：正文引用统一用 `\texttt{\detokenize{bin/xxx.sh:12-18}}`，
    避免下划线/`#` 等字符逃逸问题；
-2. **代码保真**：所有代码片段用 `\lstinputlisting[firstline=,lastline=]{绝对路径}`，
+4. **代码保真**：所有代码片段用 `\lstinputlisting[firstline=,lastline=]{绝对路径}`，
    其中 `firstline`/`lastline` 为实测行号；大片段整文件引用（省略 firstline/lastline）；
-3. **特殊字符**：正文中出现的 `$ % # & _ { }` 由 LaTeX 转义，路径与代码一律走
+5. **色彩与标识（全文档统一）**：
+   - 章节标题：accent 深蓝（`titlesec` 着色）；
+   - 结论要点：conclusion 深红 `conclbox` 框（仅"结论与局限"节用）；
+   - 参考背景：reference 棕色 `refbox` 框（知识库/书籍来源的旁证）；
+   - 仓库证据与参考源：evidence 绿色 `\textcolor{evidence}{...}`；
+   - 代码块：codebg 浅灰底色，关键字 accent 蓝、注释 evidence 绿；
+   - 表头（参考源清单）用 booktabs 粗线分隔，类型列"仓库/参考"分色标注；
+   - 色彩仅为增强可读性，去除后不影响信息完整；不使用除上述 5 色外的额外颜色。
+6. **特殊字符**：正文中出现的 `$ % # & _ { }` 由 LaTeX 转义，路径与代码一律走
    `\detokenize` / `\lstinputlisting`，不做手工转写；
-4. **表格数据**：参考源清单中的文件数、行号与 Step 4 实测一致，不臆造。
-5. **参考资料声明**：报告"仓库概览"与"结论与局限"节中声明已引入的参考目录清单
+7. **表格数据**：参考源清单中的文件数、行号与 Step 4 实测一致，不臆造。
+8. **参考资料声明**：报告"仓库概览"与"结论与局限"节中声明已引入的参考目录清单
    （如 `docs/(11 文件)`、`books/(无，未引入)`），命中主题的参考条目在"参考源清单"表中
    类型列标注"参考"，便于区分仓库证据与参考背景。
 
@@ -306,6 +374,7 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 | 主题含糊 | 提问确认（全仓库概览 / 指定主题），不擅自定义 |
 | 无 LaTeX 工具链 | 报告缺项；提供安装建议（`apt install texlive-xetex texlive-lang-chinese` 等），不静默跳过 |
 | 缺 ctex/宏包 | 尝试安装；不可行则改用纯英文模板/替代方案并注明 |
+| 缺 tcolorbox/titlesec | 尝试安装；不可行则退化——框用 `\textcolor`+粗体/斜体替代，标题不着色，其余模板不变并注明 |
 | 主题无匹配证据 | 明确报告"未找到相关依据"，并附仓库结构概览供用户改题 |
 | LaTeX 转义错误 | 正文特殊字符转义；代码/路径走 `\detokenize`/`\lstinputlisting` |
 | 编译失败 | 读 `.log` 定位行号修复重编（循环尝试直至成功），失败原因记入日志 |
@@ -321,5 +390,8 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 - 分析全程只读：不改仓库文件、不暂存、不提交；唯一写操作是 docs/ 下的 `.tex` 与 `.pdf`；
 - 所有结论、统计、行号必须实测，不编造证据；
 - 代码片段用 `\lstinputlisting` 直引仓库原文件，保证 PDF 与仓库逐字节一致；
+- 多资料分析重联系轻罗列：每份资料必须有角色定位与关系说明，报告含"联系与层次"呈现；
+- 代码解析必做对象映射：先想"这段代码在描述什么对象/物理图像"，再讲"怎么实现"；
+- 报告用色规范统一（accent/evidence/reference/conclusion/codebg 五色），不引入额外颜色；
 - 涉及 git 跟踪内容时提示用户自行提交（不代提交）；
 - 会话日志 `.analy.<时间戳>.log` 不入库，由用户决定保留或清理。
