@@ -11,8 +11,8 @@ mkdir -p ${_PATH}/bin ${_PATH}/docs ${_PATH}/lib ${HOME}/.local/bin
 # @SOURCE@
 # @EXPORT@
 # export TERM=xterm-256color
-export LANG=zh_CN.UTF-8
-export LC_ALL=zh_CN.UTF-8
+export LANG=C.UTF-8
+export LC_ALL=C.UTF-8
 export PATH=${HOME}/.local/bin:${_PATH}/bin:$PATH
 # @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
