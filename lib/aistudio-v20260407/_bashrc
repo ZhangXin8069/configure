@@ -209,6 +209,9 @@ fi
 pushd ${HOME}/configure
 source ./env.sh
 popd
+pushd ${HOME}/PyQCU
+source ./env.sh
+popd
 pushd ${HOME}
 source ./env.sh
 popd
