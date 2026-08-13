@@ -1,10 +1,8 @@
 ---
 name: skill-creator
 description: |
-  技能创建与优化技能：创建新 skill、修改并优化已有 skill、评估 skill 性能。
-  吸收 Anthropic 官方 skill-creator 方法论——先定意图与触发时机，草稿 → 测试用例 →
-  用户评估 → 迭代优化 → 描述触发优化；遵循分级披露（SKILL.md 精简、reference 拆分）、
-  解释 why 而非堆 MUST、触发描述写"何时使用"。
+  技能创建与优化技能：创建新 skill、修改并优化已有 skill、评估 skill 性能，
+  吸收 Anthropic 官方 skill-creator 与 obra/superpowers writing-skills 方法论。
   当用户要求"创建skill"、"写一个技能"、"优化skill"、"改进技能"、"skill怎么写"、
   "技能格式"、"评估技能"、"技能触发" 时使用此技能；与 make/optim 配合：
   优化本目录 skill 用本技能（参考网络最佳实践），纯性能优化用 optim 技能。
@@ -129,9 +127,20 @@ metadata:
 1. 写 2-3 个真实用户口吻的测试提示词（"试试这个……""帮我……"），与用户确认；
 2. 有/无技能对照运行（新建：无技能基线；优化：旧版本基线）：
    - 用旧版本快照 `cp -r <skill-path> <工作区>/skill-snapshot/` 作为基线；
-   - 组织结果到工作区（如 `<skill-name>-workspace/iteration-1/eval-0/`）；
+   - 组织结果到工作区：`<skill-name>-workspace/iteration-<N>/eval-<ID>/with_skill|without_skill|old_skill/outputs/`；
+   - **同回合并行启动**全部有/无技能运行，不先跑完一边再跑另一边；每次运行完成立即
+     保存 `timing.json`（total_tokens/duration_ms——只出现在任务完成通知里，错过不补）；
+   - 运行期间起草断言（客观可验证、命名有描述性），断言可脚本化判断的写脚本而非人眼；
 3. 收集定性反馈（用户审阅输出）与定量指标（测试项通过率、耗时、token 数）；
-4. 依据反馈重写 → 复测，循环直至用户满意、反馈全为空或不再有实质进展。
+4. 汇总后做 **analyst pass**（吸收 anthropics/skills skill-creator）：读基准数据找
+   聚合统计掩盖的模式——无技能也通过的断言（非判别性，删之）、高方差评估项（可能不稳定）、
+   时间/token 权衡；把结论写进结果说明，不只给数字；
+5. **跨测试用例找重复工作**：若多个测试的 agent 都独立写了同类辅助脚本/重复多步操作
+   （如都写了 `create_docx.py`），把该脚本打包进本技能 `scripts/` 并让技能引用它——
+   省去每次调用重新发明轮子；
+6. 依据反馈重写 → 复测，循环直至用户满意、反馈全为空或不再有实质进展；
+7. **盲比较（可选进阶）**：用户要求严格对比新旧版本时，把两份输出交给独立的第三方
+   agent（不告知哪个是哪个）评判质量，再分析胜因；通常人工审阅循环已足够。
 
 ### Step 5. 触发描述优化
 

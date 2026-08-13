@@ -1,14 +1,12 @@
 ---
 name: tdd
 description: |
-  测试驱动开发技能：实现任何新功能/修 bug 时先写失败测试，观察其失败（证明测的是
-  对的东西），再写最小代码使其通过，重构保持全绿——RED-GREEN-REFACTOR 循环；
-  铁律：无失败测试在前则无生产代码，先写了代码就删除重来，无例外。
+  测试驱动开发技能：实现任何新功能/修 bug 时先写失败测试，观察其失败后再写最小代码使其通过。
   当用户要求"tdd"、"测试驱动开发"、"先写测试再实现"、"红绿循环"、
   "先写失败用例"、"测试先行"、"修这个bug时先写个测试" 时使用此技能；
   与 test 区分：test 验证既有产出（评估），tdd 是开发方法（先测试后实现）。
-  吸收 superpowers test-driven-development 方法论（铁律+反合理化表+红旗清单）；
-  纯验证流程用 test 技能，编写实现计划用 plan 技能。
+  吸收 superpowers test-driven-development 方法论；纯验证流程用 test 技能，
+  编写实现计划用 plan 技能。
 metadata:
   openclaw:
     emoji: 🧱

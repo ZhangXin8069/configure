@@ -1,14 +1,13 @@
 ---
 name: review
 description: |
-  代码审查技能：对代码改动执行系统性审查——早审查常审查（每个任务/大功能完成时、
-  合并前必审），派发审查子代理并裁剪精确上下文（绝不传会话历史），问题按严重度分级
-  （Critical 立即修/Important 继续前修/Minor 记录后修），审查者错误时用技术推理反驳。
+  代码审查技能：对代码改动执行系统性审查——评估问题并分级跟进
+  （Critical 立即修/Important 继续前修/Minor 记录后修）。
   当用户要求"审查代码"、"code review"、"检查改动质量"、"提交前审查"、"审一下"、
   "review"、"看看有没有问题"、"质量检查" 时使用此技能；与 diff 区分：diff 只查看
   改动内容，review 评估问题并分级跟进。
-  吸收 superpowers requesting-code-review 方法论（子代理审查 + 精确上下文）；
-  纯查看改动用 diff 技能，修复审查发现的问题用 debug 技能。
+  吸收 superpowers requesting-code-review 方法论；纯查看改动用 diff 技能，
+  修复审查发现的问题用 debug 技能。
 metadata:
   openclaw:
     emoji: 🔎
