@@ -1,1 +1,77 @@
-./lib/_gitignore
+*.ipynb_checkpoints
+tmp/*
+lib/_package/linux/2048
+*.sw*
+*.Identifier
+*.DS_Store
+*.log.txt
+*~
+*.swp
+
+# ==== 通用构建产物 ====
+*.metadata
+*build
+*draft
+*CMakeFiles
+*cmake_install.cmake
+*CMakeCache.txt
+*Makefile
+*.o
+*.so
+*.out
+*.nvvp
+*.nsys-rep
+*.profile
+*.prof
+
+# ==== Python/Jupyter ====
+*.egg-info
+*__pycache__
+*.pytest_cache
+*.pyc
+
+# ==== 数据文件 ====
+*.sqlite
+*.h5*
+*.hdf5*
+*.hdf
+*.npy
+*.npz
+
+# ==== 日志 ====
+*.log
+*.bak
+*.cache
+*.err
+
+# ==== opencode 运行产物（不入库）====
+.agent.*.log
+.agent.*.list
+
+# ==== LaTeX ====
+*.aux
+*.toc
+*.fls
+*.nav
+*.snm
+*.xdv
+*.vrb
+*.fdb_latexmk
+
+# ==== 环境/配置/图片/其他 ====
+*.env
+*.c
+*.bin
+*dist
+# *.png
+*.jpg
+*.jpeg
+*.json
+*.csv
+*.tsv
+*RemoteSystemsTempFiles
+.ssub.sh
+.vscode
+
+# ==== 例外 ====
+!examples/zhangxin/iog_reader/iog.so
