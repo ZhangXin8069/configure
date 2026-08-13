@@ -84,13 +84,16 @@ unset PROJECT_CONTEXT
 
 # 历史用户输入预读：按文件名（ISO 时间戳）倒序读取最近 HIST_LIMIT 份 .agent.*.list（每份限 HIST_MAX_LINES 行），注入 prompt 作为后续参考
 # 仅匹配 .list（用户输入清单），显式排除 .log（opencode 运行日志，体积大且非用户输入，一律不读）
+# HIST_SKIP：不再预读的清单（历史任务已完成、无参考价值；head 多取 #SKIP 份补偿配额）
 HIST_LIMIT=5
 HIST_MAX_LINES=200
+HIST_SKIP=(.agent.2026-08-13-10-36-35.list)
 HISTORY_CONTEXT=""
 HIST_FILES=()
 while IFS= read -r _hf; do
+    case " ${HIST_SKIP[*]} " in *" ${_hf} "*) continue ;; esac
     HIST_FILES+=("${_hf}")
-done < <(ls -1 .agent.*.list 2>/dev/null | grep -v '\.log$' | sort -r | head -n "${HIST_LIMIT}")
+done < <(ls -1 .agent.*.list 2>/dev/null | grep -v '\.log$' | sort -r | head -n $((HIST_LIMIT + ${#HIST_SKIP[@]})))
 if (( ${#HIST_FILES[@]} > 0 )); then
     HIST_COUNT="${#HIST_FILES[@]}"
     HISTORY_CONTEXT=$'\n\n\n### 历史用户输入（由 oopencode.sh 自动预读注入，供上下文参考） ###'
@@ -107,7 +110,7 @@ if (( ${#HIST_FILES[@]} > 0 )); then
     done
     PROMPT="${PROMPT}${HISTORY_CONTEXT}"
 fi
-unset HISTORY_CONTEXT HIST_FILES _hf
+unset HISTORY_CONTEXT HIST_FILES HIST_SKIP _hf
 
 # 模型选择：默认 -f DeepSeek V4 Flash；-p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
 case "${1:-f}" in
