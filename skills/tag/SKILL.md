@@ -38,8 +38,35 @@ metadata:
 - 文件名格式：`.tag.<时间戳>.log`（例如 `.tag.2026-08-12-19-19-43.log`）
 - 时间戳格式：`%Y-%m-%d-%H-%M-%S`：`TS=$(date +%Y-%m-%d-%H-%M-%S)`
 - 日志**不入库**（与仓库 `.agent.*.log` 约定一致），全程**追加**写入（`>>`）
-- 记录内容：操作类型与目标标签、基线、拟用消息、用户确认结果（如有询问）、push/删除结果、
-  失败与重试原因、最终汇总
+- 记录内容（**会话头**）：
+  1. 开始时间、工作目录、git 分支与 HEAD（`git rev-parse --abbrev-ref HEAD`、`git log -1 --oneline`）、
+     操作请求（打/列/看/删/改 + 目标标签）；
+- 记录内容（**过程**）：
+  2. 类型判定与编号计算过程（输入信号 → 推断类型 → LAST_TAG/LAST_NUM → NEW_TAG）；
+  3. 基线标签与变更调查输出（`git log <基线>..HEAD`、`git diff --stat` 统计）；
+  4. 关键命令与实际输出（`$ <命令>` + `exit=<退出码>`），如 `git tag -l`、`git push`、`git tag -d`；
+  5. 用户确认结果（如有询问）；push/创建/删除/改写结果；每次失败与重试：失败命令、
+     错误输出、重试命令与次数；
+- 记录内容（**会话尾**）：
+  6. 最终汇总（结构化输出）；结束时间、总耗时；遗留项（如未推送、本地独有标签）与下一步建议。
+
+**记录规范**：关键事件以分隔行标记 `---- [YYYY-MM-DD HH:MM:SS] 事件描述 ----`；
+命令统一记作 `$ <命令>` 并在结果行标注退出码；全程不覆盖、只追加。
+
+## 历史日志预读（快速上手与对照参考）
+
+会话**第一步**先只读预读本技能的历史会话日志，快速了解仓库状态、提供对照参考：
+
+```bash
+ls -1t .tag.*.log 2>/dev/null | head -5                 # 按时间倒序列出最近日志
+tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的尾部（汇总区）
+```
+
+- 默认预读**最新一份**日志的尾部（最新标签、基线、推送状态、遗留项）；需更多对照时按时间倒序逐份追加读取，不一次全读
+- 目的：① **快速上手**——从上次汇总直接掌握最新标签与推送状态，编号计算基线直接沿用，
+  避免重复 `git tag -l` 调查；② **对照参考**——上次的失败与重试原因、已改写/已删除标签供本次对照，
+  防止重复踩坑
+- 约束：**只读不改**历史日志；无历史日志（首次运行）时正常跳过，不视为错误
 
 Manage annotated tags across three categories — `stab<N>`, `dev<N>`, `bug<N>` — each with independent numbering, plus optional sub-versions (`stab15_1`). Supports create, list, show, delete, and amend. Designed for Agent invocation — every operation returns structured output and handles edge cases explicitly.
 
