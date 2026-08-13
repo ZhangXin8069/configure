@@ -16,3 +16,8 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `make` | 项目生成：生成对象为用户指定的项目，编排调用本目录全部技能（init/tag/debug/optim/diff/analy/test）完成全流程（解析需求→调查规划→最小改动实现→系统化测试→循环优化→复查→归档→打标），细节要求为所有技能的汇总，`.make.<时间戳>.log` 会话日志 |
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范，`.skill-creator.<时间戳>.log` 会话日志 |
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`，`.plan.<时间戳>.log` 会话日志 |
+| `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作；生成类任务首轮复用 make，单步任务转对应技能，`.all.<时间戳>.log` 会话日志 |
+| `up` | 技能库升级：本地基线调查→GitHub 最佳实践调研（连接失败一直重试至成功）→差距分析（现状 vs 最佳实践对照表）→优化/补充/新增/debug 本目录 skill→验证闭环→收敛评估；借鉴外部实践注明出处（仓库+技能名），`.up.<时间戳>.log` 会话日志 |
+| `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论，`.brainstorm.<时间戳>.log` 会话日志 |
+| `review` | 代码审查：早审查常审查、子代理审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；吸收 superpowers requesting-code-review，`.review.<时间戳>.log` 会话日志 |
+| `tdd` | 测试驱动开发：铁律（无失败测试则无生产代码，先写代码即删除重来）、RED-GREEN-REFACTOR 循环、验证失败/通过双强制、反合理化表+红旗清单；吸收 superpowers test-driven-development，`.tdd.<时间戳>.log` 会话日志 |
