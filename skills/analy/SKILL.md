@@ -35,6 +35,10 @@ metadata:
    路径含空格/中文、LaTeX 特殊字符等边界情形逐一处理。
 7. **编译闭环**：生成 `.tex` → 编译 → 验证 PDF 产物存在且内容正确；编译失败读 `.log` 定位修复，
    循环尝试直至成功或用户终止。
+8. **默认引入参考知识库**：git 家目录（被分析仓库根）下的 `docs`、`books`、`refer` 等
+   参考类目录视为参考知识库，**默认自动引入，不依赖主题**；存在即建全量索引并阅读说明类文件
+   建立背景认知，主题聚焦时在其中检索相关内容并入证据链，使解析更全面深入（"解析越多越好"）；
+   目录不存在或文件不可解析时静默跳过并在覆盖范围中如实注明；全程只读。
 
 ## 会话日志
 
@@ -143,6 +147,24 @@ wc -l $(find . -name "*.sh" -not -path "./.git/*") 2>/dev/null | tail -1   # 总
 - 按主题相关性给文件打标签（入口、配置、脚本、文档、资源）；
 - 记录索引统计（文件总数/类型分布）供报告"仓库概览"节使用。
 
+**参考知识库索引**（默认引入，不依赖主题）：
+
+```bash
+# 参考目录清单：git 家目录下 docs/books/refer/references 等，存在即引入，缺者跳过并注明
+for d in docs books refer references; do
+  [ -d "$d" ] && { echo "== $d =="; find "$d" -type f | sort; }
+done
+# 可检索文本规模统计（md/txt/tex 等可直接 grep；pdf 用 pdftotext 提取文本后检索）
+find docs books refer references -type f \
+  \( -name "*.md" -o -name "*.txt" -o -name "*.tex" -o -name "*.pdf" \) 2>/dev/null | wc -l
+```
+
+- 阅读参考目录中的说明类文件（如 `docs/AGENTS.md`、`*_settings.md`、`*_requirement.txt`）
+  与书籍目录/前言，建立仓库背景认知——这些内容常解释仓库用途、环境依赖与配置动机；
+- `.pdf` 书籍/文档用 `pdftotext <文件> -` 提取文本参与检索（仅检索不落盘）；
+- 图片/二进制等不可解析文件仅列文件名，不读取、不参与检索，报告中注明；
+- 参考目录不属于仓库时（如 books/ 尚未创建）如实记录"未引入"，不报错。
+
 ### Step 4. 主题聚焦（证据收集）
 
 针对解析出的主题，用 grep/glob/read 定位相关文件与代码段：
@@ -151,6 +173,12 @@ wc -l $(find . -name "*.sh" -not -path "./.git/*") 2>/dev/null | tail -1   # 总
 # 主题关键词定位（示例：主题为"环境加载链"）
 grep -rn "source\|PATH" env.sh lib/ --include="*.sh" -l
 grep -n "关键函数名\|关键变量" <文件>
+
+# 参考知识库主题检索（命中文件纳入参考证据，读取相关段落）
+grep -rni "主题关键词" docs/ books/ refer/ --include="*.md" --include="*.txt" \
+  --include="*.tex" -l 2>/dev/null
+# 参考书籍文本检索（pdf 先提取文本，仅检索不落盘）
+for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键词" | head -5; done
 ```
 
 1. **每个结论收集证据**：相关 `文件:行号`、代码段、文档段落；
@@ -158,7 +186,9 @@ grep -n "关键函数名\|关键变量" <文件>
 3. **代码片段**：记录 `文件 + firstline + lastline`，后续用 `\lstinputlisting` 直接引用，
    **不复制转写**；
 4. **关联追踪**：入口文件 → 被引用的模块 → 数据/配置，形成依赖链证据；
-5. 主题在仓库中无依据时：记录"未找到相关证据"，报告阶段如实说明。
+5. **参考知识库引入**：检索命中的参考文件用 read 读相关段落，作为背景资料/旁证
+   纳入证据链；参考源清单中类型标注为"参考"；参考内容与仓库主题无关联时注明"未命中"，不强行引用；
+6. 主题在仓库中无依据时：记录"未找到相关证据"，报告阶段如实说明。
 
 ### Step 5. 生成 LaTeX 源文件
 
@@ -224,6 +254,9 @@ grep -n "关键函数名\|关键变量" <文件>
 3. **特殊字符**：正文中出现的 `$ % # & _ { }` 由 LaTeX 转义，路径与代码一律走
    `\detokenize` / `\lstinputlisting`，不做手工转写；
 4. **表格数据**：参考源清单中的文件数、行号与 Step 4 实测一致，不臆造。
+5. **参考资料声明**：报告"仓库概览"与"结论与局限"节中声明已引入的参考目录清单
+   （如 `docs/(11 文件)`、`books/(无，未引入)`），命中主题的参考条目在"参考源清单"表中
+   类型列标注"参考"，便于区分仓库证据与参考背景。
 
 ### Step 6. 编译 PDF 到 docs/
 
@@ -255,7 +288,8 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 ✓ 分析完成
   主题:   <解析出的任务定义>
   覆盖:   <调查的目录/文件范围，统计数字>
-  证据:   <参考源 N 处，其中代码片段 M 处（lstinputlisting 直引）>
+  参考:   <引入的参考知识库：docs(N 文件)/books(N 文件)/refer(N 文件)，未引入者注明>
+  证据:   <参考源 N 处，其中代码片段 M 处（lstinputlisting 直引），参考背景 K 处>
   产物:   docs/analy_<slug>_<YYYYMMDD>.pdf (N 页, X KB)
   源码:   docs/analy_<slug>_<YYYYMMDD>.tex
   结论:   <核心结论摘要>
@@ -277,6 +311,8 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 | 路径含空格/中文 | `\lstinputlisting` 用绝对路径引号包裹；PDF 文件名用拼音 slug 规避 |
 | 产物重名 | 追加序号（`_2`），不覆盖已有 PDF |
 | docs/ 不存在 | `mkdir -p docs` 创建 |
+| 参考目录不存在 | 静默跳过，覆盖范围/总结中注明（如"books/ 不存在，未引入"） |
+| 参考文件不可解析 | 图片/二进制仅列文件名不参与检索，报告中注明 |
 | 引用行号与实际不符 | 引用前用 read/grep 核实，绝不凭记忆写行号 |
 
 ## 注意事项
