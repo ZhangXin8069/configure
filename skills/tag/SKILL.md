@@ -1,18 +1,18 @@
 ---
 name: tag
 description: |
-  Git 标签管理技能，管理三类独立编号的标签：stab<N>（稳定里程碑）、dev<N>（开发快照）、bug<N>（修复标记），
+  Git 标签管理技能，管理四类独立编号的标签：stab<N>（稳定里程碑）、dev<N>（开发快照）、bug<N>（修复标记）、test<N>（测试标记），
   支持子版本标签如 stab15_1（stab15 的后续修订）。
   当用户要求打标签、创建/应用 tag（"打标签"、"tag"、"标记一下"、"版本标记"、"子版本"）、
   暂存进度（"dev"、"暂存"、"保存进度"、"快照"）、标记完成（"stab"、"完成"、"稳定版"）、
-  修复打标（"bug"、"修复"、"补丁"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
+  修复打标（"bug"、"修复"、"补丁"）、测试打标（"test"、"测试"、"测试完成"），或查看/列出/搜索标签（"查看tag"、"list tags"）、
   查看标签详情（"tag详情"）、删除标签（"删除tag"）、修改/重写标签（"修改tag"、"amend"）时使用此 skill。
 metadata:
   openclaw:
     emoji: 🏷️
 ---
 
-# tag — Git 三类标签管理技能
+# tag — Git 四类标签管理技能
 
 ## 核心原则
 
@@ -51,31 +51,27 @@ metadata:
 **记录规范**：关键事件以分隔行标记 `---- [YYYY-MM-DD HH:MM:SS] 事件描述 ----`；
 命令统一记作 `$ <命令>` 并在结果行标注退出码；全程不覆盖、只追加。
 
-## 历史日志预读（快速上手与对照参考）
+## 历史日志预读（关键信息速览）
 
-会话**第一步**先只读预读本技能的历史会话日志，快速了解仓库状态、提供对照参考：
+会话**第一步**只读预读本技能**最新一份**历史日志的**尾部汇总区**（只关注关键信息，不做深入解析）：
 
 ```bash
-ls -1t .tag.*.log 2>/dev/null | head -3                 # 按时间倒序列出最近日志(优先较新, 最多3份)
-tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的尾部（汇总区）
+tail -20 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 尾部汇总区：上次任务/结论/遗留项
 ```
 
-- 默认预读**最新一份**日志的尾部（最新标签、基线、推送状态、遗留项）；需更多对照时按时间倒序逐份追加读取，不一次全读
-- 目的：① **快速上手**——从上次汇总直接掌握最新标签与推送状态，编号计算基线直接沿用，
-  避免重复 `git tag -l` 调查；② **对照参考**——上次的失败与重试原因、已改写/已删除标签供本次对照，
-  防止重复踩坑
-- 约束：**只读不改**历史日志；无历史日志（首次运行）时正常跳过，不视为错误
-- 耗时控制：**优先较新日志**——默认仅预读最新一份的尾部汇总区（`tail -80` 上限）；日志过大时仍只取尾部并注明截断；需更多对照时按时间倒序逐份追加，单份有行数限额，预读总耗时以秒级为限，不逐份全文读取
+- 关键信息：① 上次任务/对象；② 结论或收敛结果；③ 遗留项与下一步建议——其余（过程轮次、命令细节）一律跳过，不做深入 think
+- 约束：只读不改；无历史日志（首次运行）时正常跳过，不视为错误；总耗时以秒级为限
 
-在三个类别——`stab<N>`、`dev<N>`、`bug<N>`——之间管理注释标签，各类别编号独立，支持可选的子版本（`stab15_1`）。支持创建、列出、查看、删除与改写。为 Agent 调用而设计——每次操作返回结构化输出并显式处理边界情形。
+在四个类别——`stab<N>`、`dev<N>`、`bug<N>`、`test<N>`——之间管理注释标签，各类别编号独立，支持可选的子版本（`stab15_1`）。支持创建、列出、查看、删除与改写。为 Agent 调用而设计——每次操作返回结构化输出并显式处理边界情形。
 
-## 三类标签
+## 四类标签
 
 | 类型 | 用途 | 使用时机 |
 | --- | --- | --- |
 | `stab<N>` | 稳定里程碑 | 某工作**已完成**且稳定。这是里程碑。 |
 | `dev<N>` | 开发快照 | 工作**进行中**——继续前保存当前状态。 |
 | `bug<N>` | 修复标记 | 发现 **bug** 并已修复。标记修复点。 |
+| `test<N>` | 测试标记 | **测试**相关工作已完成（新增/通过/回归）。标记测试点。 |
 
 每类标签有**独立计数器**，从 0 开始。`stab0`、`dev0`、`bug0` 可以同时存在。
 
@@ -87,6 +83,7 @@ tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的�
   - "stab" / "稳定版" / "完成了" / "完成" → `stab<N>`
   - "dev" / "开发中" / "暂存" / "保存进度" / "快照" → `dev<N>`
   - "bug" / "修复" / "修bug" / "补丁" / "fix" → `bug<N>`
+  - "test" / "测试" / "测试完成" / "回归通过" → `test<N>`
   - "stab15_1" / "子版本" / "修订" / "在stab15上补标签" → 该主版本号的子版本（如 `stab15_2`）
 - 列出或搜索已有标签（"查看tag"、"list tags"、"有哪些标签"）
 - 查看标签详情（"tag详情"、"show tag stab3"）
@@ -97,11 +94,12 @@ tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的�
 - 提到带下划线的完整标签名（如 "stab15_1"、"删掉 dev2_1"）→ 该子版本标签，原样使用
 - 提到 "子版本" / "修订" / "sub" + 主版本标签（如 "stab15的子版本"）→ 该主版本的下一子版本
 - 提到 "bug"/"修复"/"fix"/"补丁"/"问题" → `bug`
+- 提到 "test"/"测试"/"回归"/"验证" → `test`
 - 提到 "dev"/"暂存"/"保存"/"快照"/"继续" → `dev`
 - 提到 "stab"/"完成"/"稳定"/"版本"/"发布" → `stab`
 - 无明确信号 → `dev`（默认）
 
-无法确定时提问："Which tag type? [stab/dev/bug]"
+无法确定时提问："Which tag type? [stab/dev/bug/test]"
 
 ## 标签命名约定
 
@@ -109,11 +107,12 @@ tail -80 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 预读最新一份的�
 stab0, stab1, stab2, ... stabN, stabN_1, stabN_2, ...   (稳定里程碑)
 dev0, dev1, dev2, ... devN, devN_1, ...                 (开发快照)
 bug0, bug1, bug2, ... bugN, bugN_1, ...                 (修复标记)
+test0, test1, test2, ... testN, testN_1, ...            (测试标记)
 ```
 
 所有计数器从 0 开始独立递增。每类第一个标签用 `<type>0`。
 
-**完整文法**：`^(stab|dev|bug)[0-9]+(_[0-9]+)?$` —— 如 `stab15`、`stab15_1`、`dev3_2`。
+**完整文法**：`^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$` —— 如 `stab15`、`stab15_1`、`dev3_2`。
 
 ## 子版本标签（`<type><N>_<M>`）
 
@@ -165,14 +164,14 @@ follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增c
 
 #### Step 1.1 — 确定标签类型与下一个编号
 
-确定标签类型（`TYPE`）：`stab`、`dev`、`bug` 之一。按「触发时机」的自动推断规则确定；有歧义时询问用户。
+确定标签类型（`TYPE`）：`stab`、`dev`、`bug`、`test` 之一。按「触发时机」的自动推断规则确定；有歧义时询问用户。
 
 然后处理三种情形之一：
 
 **Case A — 显式完整标签名**：用户精确指定标签名（如 "打 stab15_1 标签"）。原样使用：
 
 ```bash
-NEW_TAG="stab15_1"   # 用户指定，必须匹配 ^(stab|dev|bug)[0-9]+(_[0-9]+)?$
+NEW_TAG="stab15_1"   # 用户指定，必须匹配 ^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$
 if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
     echo "Tag ${NEW_TAG} already exists — offer to amend it or use the next number"
 fi
@@ -195,7 +194,7 @@ NEW_TAG="${TYPE}${MAJOR}_${NEXT_MINOR}"
 **Case C — 自动编号**：无显式名称或子版本请求。找出该类型的最近标签，**去掉任何 `_M` 后缀**，取下一个**主版本号**。子版本标签计入其主版本，所以 `stab15_1` 之后自动创建的是 `stab16`：
 
 ```bash
-TYPE="stab"   # 或 dev、bug——由上一步确定
+TYPE="stab"   # 或 dev、bug、test——由上一步确定
 LAST_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)?$" | head -1)
 if [ -z "$LAST_TAG" ]; then
     NEW_NUM=0
@@ -210,12 +209,12 @@ NEW_TAG="${TYPE}${NEW_NUM}"
 
 #### Step 1.2 — 查看基线以来的变更
 
-**基线** = 最近一个**任意类型**（stab/dev/bug）的标签。若无标签，用第一个提交。
+**基线** = 最近一个**任意类型**（stab/dev/bug/test）的标签。若无标签，用第一个提交。
 
 ```bash
 # 基线 = 任意类型的最新标签（含子版本标签；版本排序将其排在父标签之上，
 # 所以 stab15_1 优先于 stab15 被选中）
-BASELINE=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)?$' | head -1)
+BASELINE=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$' | head -1)
 # 无标签时用第一个提交
 if [ -z "$BASELINE" ]; then
     BASELINE=$(git rev-list --max-parents=0 HEAD)
@@ -244,6 +243,7 @@ git diff ${BASELINE}..HEAD -- . | head -500
 分析收集到的 diff 与提交信息生成标签消息，套用上文变更项编写准则。
 
 - `bug` 标签：聚焦什么坏了、如何修复、影响范围。
+- `test` 标签：聚焦测试了什么（新增/回归/覆盖项）、结果如何。
 - `dev` 标签：描述已做工作、仍在进行中的部分（可选）与当前状态。
 - `stab` 标签：全面描述已完成的工作。
 
@@ -298,8 +298,8 @@ git push origin "$NEW_TAG"
 列出标签，可按类型过滤：
 
 ```bash
-# 列出全部标签（三类全部，含子版本）
-git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)? \|'
+# 列出全部标签（四类全部，含子版本）
+git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)? \|'
 
 # 按类型过滤（如仅 stab 标签）——子版本包含在内
 TYPE="dev"
@@ -309,6 +309,7 @@ git tag -l "${TYPE}[0-9]*" --sort=-v:refname --format='%(refname:short) | %(tagg
 git tag -l 'stab[0-9]*' | wc -l
 git tag -l 'dev[0-9]*'  | wc -l
 git tag -l 'bug[0-9]*'  | wc -l
+git tag -l 'test[0-9]*' | wc -l
 ```
 
 输出格式（按类型分组，子版本列在父标签之上）：
@@ -326,6 +327,9 @@ dev0   | 2026-07-09 | follow stab3, 1. 开始yyy功能开发; [opencode].
 
 === bug (1 tag) ===
 bug0   | 2026-07-09 | follow dev1, 1. 修复zzz空指针异常; [opencode].
+
+=== test (1 tag) ===
+test0  | 2026-07-10 | follow bug0, 1. 新增功能回归测试套件; [opencode].
 ```
 
 **边界情形 — 无标签**：报告 "No cctag tags found in this repository."
@@ -344,7 +348,7 @@ git tag -l --format='%(subject)%0a%(body)' "$TAG_NAME"
 git tag -l --format='Type: %(refname:short)%0aAuthor: %(taggername) <%(taggeremail)>%0aDate: %(taggerdate:iso)%0aMessage: %(subject)' "$TAG_NAME"
 
 # 显示该标签与其前驱之间的提交（任意类型，含子版本）
-PREV_TAG=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)?$' | grep -A1 "^$TAG_NAME$" | tail -1)
+PREV_TAG=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$' | grep -A1 "^$TAG_NAME$" | tail -1)
 if [ -n "$PREV_TAG" ]; then
     git log ${PREV_TAG}..${TAG_NAME} --oneline --no-merges
 fi
@@ -452,7 +456,7 @@ git diff ${BASE_REF}..${HEAD_REF} --stat
 
 | 场景 | 处理 |
 | --- | --- |
-| 标签类型有歧义 | 询问用户："Which tag type? [stab/dev/bug]" |
+| 标签类型有歧义 | 询问用户："Which tag type? [stab/dev/bug/test]" |
 | 用户指定子版本标签（如 `stab15_1`） | 原样识别；用于查看/删除/改写/创建 |
 | 请求的子版本标签已存在 | 报告；提供改写或下一个子版本号 |
 | 子版本标签之后自动编号 | 下一主版本（`stab15_1` → `stab16`）；要另一子版本须显式请求 `stab15_2` |
@@ -489,6 +493,7 @@ stab8  2026-07-08  follow stab7, 1. 新增xxx功能; 2. ...;
 dev1   2026-07-09  follow bug0, 1. 实现xxx模块框架; [opencode].
 dev0   2026-07-09  follow stab3, 1. 开始yyy功能开发; [opencode].
 bug0   2026-07-09  follow dev1, 1. 修复zzz空指针异常; [opencode].
+test0  2026-07-10  follow bug0, 1. 新增yyy回归测试; [opencode].
 ```
 
 ## 注意事项
