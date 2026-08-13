@@ -1,15 +1,8 @@
 ---
 name: init
 description: |
-  仓库/目录初始化技能：为本库的每一个目录 init（创建或更新 AGENTS.md；如有其他 agent 的 init
-  文件，例如 CLAUDE.md、CODEX.md、GEMINI.md、.cursorrules、.github/copilot-instructions.md 等，
-  则参考之，并将其重命名为 .<原文件名>.<时间戳>.bak，仅供格式参考）。
-  如果目录中有新建内容为 agent 生成，则在本库根目录（git 家目录）的 .opencode/skills/ 中添加生成此内容的完整 skill；
-  自动归档不在本库根目录的 skill，合并存放到 {本库根目录}/.opencode/skills/；
-  AGENTS.md 存放在所有本库所属的目录中，排除显然的外来文件夹（例如 lib/_oh-my-zsh、agent/LQCD_Master），
-  这些外来文件夹下的 AGENTS.md 也执行归档、合并；
-  如有其他 agent 的 skills 目录，例如 .claude、.codex、.cursor、.copilot、.comate、.codebuddy、
-  .windsurf 等，则参考之，并将其重命名为 .<原目录名>.md.<时间戳>.bak（仅供格式参考）。
+  仓库/目录初始化技能：为仓库内目录创建或更新 AGENTS.md，归档其他 agent 的 init 文件
+  （CLAUDE.md/CODEX.md/.claude 等），把 agent 生成内容对应的 skill 归档到技能目录。
   当用户要求初始化仓库或目录（"init"、"初始化"、"生成AGENTS.md"、"为每个目录生成AGENTS.md"、
   "归档agent配置"、"收集skill"、"整理仓库"）时使用此技能。
 metadata:

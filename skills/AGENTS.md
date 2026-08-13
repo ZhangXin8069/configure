@@ -21,3 +21,4 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论，`.brainstorm.<时间戳>.log` 会话日志 |
 | `review` | 代码审查：早审查常审查、子代理审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；吸收 superpowers requesting-code-review，`.review.<时间戳>.log` 会话日志 |
 | `tdd` | 测试驱动开发：铁律（无失败测试则无生产代码，先写代码即删除重来）、RED-GREEN-REFACTOR 循环、验证失败/通过双强制、反合理化表+红旗清单；吸收 superpowers test-driven-development，`.tdd.<时间戳>.log` 会话日志 |
+| `auto` | 全自动前缀执行（元技能）：`~auto-<技能名> <任务>` 前缀启动任意技能，启动时一次性预授权权限与配置（唯一交互），此后 0 请求，自动循环调用其他技能直至收敛，除非强制中断（Ctrl+C/`~stop`）；停滞保护防空转、收敛后自动收尾（diff/init/tag），`.auto.<时间戳>.log` 会话日志 |
