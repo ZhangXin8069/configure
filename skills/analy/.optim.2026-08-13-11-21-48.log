@@ -1,0 +1,45 @@
+---- [2026-08-13 11:21:48] 会话开始 ----
+目标: 查找网络上与 analy skill 类似的模范 skill，结合模范优化本 analy skill (SKILL.md)
+约束: SKILL.md 为唯一权威内容可改动；AGENTS.md 只读参考；优化不改对外行为（触发词/输出命名/工作流语义）
+工作目录: /root/configure/skills/analy
+git 分支: main; HEAD: 5695bc2 2026-08-13-11-03-01
+---- 基线分析 ----
+397 SKILL.md
+---- [2026-08-13 11:22:31] 网络调研与瓶颈分析 ----
+模范来源: 
+ 1) anthropics/skills skill-creator (官方 skill 书写规范: 渐进式披露 <500行, why 驱动表述, description pushy 防 undertrigger, Examples 模式, 测试评估闭环)
+ 2) anthropics/skills pdf (文档类模范: 精简 frontmatter, 触发词穷举+pushy, Quick Start/表格/Next Steps 导航)
+ 3) opencode.ai/docs/skills (运行平台规范: frontmatter 仅 name/description/license/compatibility/metadata; metadata 须 string->string map; name 正则 ^[a-z0-9]+(-[a-z0-9]+)*$ 1-64 字符; description 1-1024 字符)
+瓶颈/差距清单: 
+ B1 frontmatter metadata.openclaw.emoji 为嵌套 map, 不符合 opencode string->string map 规范 -> 平铺为 emoji: 📊
+ B2 description 未充分利用触发机制(模范: 防 undertrigger 要 pushy, 穷举使用场景) -> 强化
+ B3 缺'何时使用/何时不用'边界节(与 debug/optim/init/diff/test 竞争关系) -> 新增
+ B4 缺 Examples(Input->Output 模式, 模范必备) -> 新增
+ B5 缺交付前质量检查清单 -> 新增
+ B6 语言偏 MUST 式(模范: 解释 why 而非 ALWAYS/NEVER 堆砌) -> 选择性润色
+ B7 397 行接近 500 行上限; 模板/要点部分冗余 -> 结构合并, 目标 <= 420 行
+---- [2026-08-13 11:23:44] 实现与验证 ----
+改动: SKILL.md 全量重写 (397 -> 463 行, +66 行)
+  1) frontmatter: metadata 平铺 emoji: 📊 (string->string map, 符合 opencode 规范); description 增强 pushy 触发(547 字符, 限 1-1024)
+  2) 新增'何时使用/何时不用'节: 触发场景穷举 + 与 debug/optim/diff/init/test/make 边界表
+  3) 新增'质量检查清单'节: 11 项交付前核验
+  4) 新增'示例'节: 3 个典型输入->任务定义->产物示例
+  5) 语言润色: 关键环节补 why (行号核实/命名一致性/全景索引意图)
+  6) 合并'触发时机'节入'何时使用'; 其余章节(核心原则10条/输入解析/命名约定/Step1-8/模板/错误处理表/注意事项)原样保留
+验证: 
+  $ python3 yaml 解析 frontmatter -> keys=[name,description,metadata], metadata={emoji: 📊}, desc=547 字符, name 正则 ^[a-z0-9]+(-[a-z0-9]+)*$ 通过
+  $ git diff 对比: 关键内容计数 核心原则/输入解析规则/输出命名约定/xelatex/错误处理/注意事项/conclbox/refbox/tcolorbox 全部保留(旧=新), 对象映射/参考知识库/lstinputlisting/detokenize 增强(新>旧), 无丢失
+  行数 463 < 模范上限 500 (skill-creator: SKILL.md <500 lines ideal)
+权衡: 新增 4 个模范必备元素(边界表/清单/示例/触发强化) 使行数 +17%, 仍低于 500 上限; 保留 LaTeX 模板于正文(核心必用资源, 不自包含性换行数)
+结论: 基线 397 行/嵌套 metadata/无边界节/无示例/无清单 -> 优化后 463 行/metadata 合规/边界+清单+示例齐备/触发强化
+遗留: description 触发效果可后续用 20 条触发/不触发 eval 量化验证(skill-creator 建议, 需运行环境支持)
+---- [2026-08-13 11:27:53] 第 2 次迭代 ----
+用户需求: 核心原则第 8 条参考知识库目录清单扩展: docs/books/refer + examples/reports/补充/代码/文档/汇报
+瓶颈假设: 参考目录清单散落三处(原则8/Step3索引/Step4检索), 原清单仅 docs/books/refer/references, 无法覆盖 examples/reports 及中文名参考目录
+改动:
+  SKILL.md:70-73 原则 8: 目录清单扩展为 docs/books/refer/references/examples/reports/补充/代码/文档/汇报 及同类命名, 声明'以本原则为准, Step 3/4 命令与之一致, 清单可扩展'
+  SKILL.md:151-157 Step 3: for 循环与 find 命令同步扩展(含中文目录名), 注释注明与原则 8 一致
+  SKILL.md:177-178 Step 4: grep 检索命令同步扩展
+验证: grep 一致性检查 5 处引用全部含新清单; 行数 463 -> 466
+结论: 参考知识库覆盖范围扩展, 三处清单一致; 中文目录名在 bash 命令中合法(引用路径即可)
+遗留: 错误处理表'参考目录不存在'示例保持通用(books/), 无需逐目录列举

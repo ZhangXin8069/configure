@@ -1,0 +1,29 @@
+===== .optim 会话日志 2026-08-13-10-25-01 =====
+目标: 修改 gback.sh —— 本地库强制被远程库覆盖, 多余本地部分直接删除, 最终与远程库完全一致
+工作目录: /root/configure/bin | git版本: git version 2.34.1
+
+---- [基线/现状分析] ----
+现有实现已覆盖: fetch --prune --prune-tags / reset --hard upstream / clean -fdx / 删多余本地分支 / 校验
+缺口: ①注释(:3)声称删除'远程已不存在的本地分支与标签', 但代码(:70-86)仅处理 refs/heads, 未处理 refs/tags -> 本地独有标签不会被删除
+     ②stash 不属于远程基准, 不会被清理也无提示
+
+---- [实测与方案] ----
+场景构造(临时仓库 /tmp/opencode/gbtest): 本地独有提交/工作区修改/未跟踪+忽略文件/本地独有分支/本地独有tag(v1,local-tag,lt2)/冲突tag(v2本地指旧commit)/stash 2个; 远程推进c2+tag v2
+实测1(未修改版): fetch --prune-tags 已删除本地独有tag(缺口①不存在); 但冲突tag场景 fetch 报 'would clobber existing tag' + Could not fetch origin, exit!=0 -> set -e 下整个脚本 ERROR 退出, '强制覆盖'完全不可用 [缺口②实锤]
+实测2(git fetch --force): t [tag update] v2 -> v2 强制覆盖成功, exit=0, 独有tag同步修剪
+
+---- [改动] ----
+  gback.sh:27  git fetch --all --prune --prune-tags --force (原无 --force)
+  gback.sh:38-43 新增 stash 提示块 (fetch 后, 探测 git stash list 非空则提示, 不自动删除-破坏性)
+
+---- [验证(修改后全流程回归)] ----
+  冲突tag: 本地v2(旧commit)被强制覆盖为远程值 ✓ | 独有tag lt2 删除 ✓ | 独有分支 local-only2 删除 ✓
+  独有提交 c4-local 放弃 ✓ | 文件差异覆盖 ✓ | stash 2个提示且保留 ✓
+  终态: status 0 差异, HEAD==origin/main, 本地tags/branches 与远程完全一致 ✓
+  bash -n 通过 ✓
+
+---- [结论] ----
+  收益: 修复'本地tag与远程冲突时脚本直接失败'的功能性缺口, 使'强制被远程覆盖'在 tag 冲突场景下可用
+  权衡: fetch --force 亦强制更新远程跟踪分支引用(非快进), 与脚本'强制对齐'语义一致, 无副作用
+  遗留: stash 默认保留(破坏性操作, 提示用户手动 git stash clear); 游离HEAD/无上游分支仍安全报错退出
+  结束: 2026-08-13-10-26-35
