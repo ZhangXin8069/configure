@@ -14,7 +14,8 @@ description: |
   对应什么物理"），也应使用本技能；无法判断时优先尝试触发而非跳过。
   只读分析、证据驱动、参考源可追溯；定位/修复 bug 用 debug 技能，性能优化用 optim 技能。
 metadata:
-  emoji: 📊
+  openclaw:
+    emoji: 📊
 ---
 
 # analy — 仓库分析 + LaTeX PDF 报告生成技能
