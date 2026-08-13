@@ -302,7 +302,7 @@ git push origin "$NEW_TAG"
 
 ```bash
 # 列出全部标签（三类全部，含子版本）
-git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)?$'
+git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug)[0-9]+(_[0-9]+)? \|'
 
 # 按类型过滤（如仅 stab 标签）——子版本包含在内
 TYPE="dev"
