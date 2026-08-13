@@ -82,7 +82,8 @@ tail -80 "$(ls -1t .make.*.log 2>/dev/null | head -1)"   # 预读最新一份的
   "生成上次分析的 PDF 报告"、"实现 xxx 功能"
 - 与其他技能配合：生成内容为 agent 产出 → init 归集 skill；生成过程报错 → debug；
   性能不足 → optim；生成后打标签 → tag；生成后查看改动 → diff；分析类项目 → analy；
-  生成完成后验证 → test；多步骤任务先规划 → plan；优化 skill 自身 → skill-creator
+  生成完成后验证 → test；多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；
+  需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；skill 库升级 → up
 
 ## 技能编排矩阵（自行调用本目录其他技能）
 
