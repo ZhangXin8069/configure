@@ -18,7 +18,7 @@
 | `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用 |
 | `lib/` | 版本化环境配置与基础模板 |
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
-| `skills/` | agent 技能（init、tag、debug、optim、diff），`{~skill-name}` 触发 |
+| `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm），`{~skill-name}` 触发 |
 | `docs/` | 参考文档、包清单、图片素材 |
 
 ## 版本化配置约定（lib/{name}-v{YYYYMMDD}/）
