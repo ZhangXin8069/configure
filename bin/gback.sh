@@ -23,7 +23,8 @@ if [[ "${BRANCH}" == "HEAD" ]]; then
 fi
 echo "Branch:  ${BRANCH}"
 
-git fetch --all --prune --prune-tags || {
+# --force：本地 tag 与远程同名但指向不同提交时，强制覆盖为远程值（否则 fetch 报 would clobber existing tag 而失败）
+git fetch --all --prune --prune-tags --force || {
     echo "ERROR: git fetch 失败。"
     exit 1
 }
@@ -33,6 +34,12 @@ UPSTREAM=$(git rev-parse --abbrev-ref "${BRANCH}@{upstream}" 2>/dev/null) || {
     exit 1
 }
 echo "Upstream: ${UPSTREAM}"
+
+# 0. stash 提示：stash 不属于远程基准，不自动删除（破坏性），仅提示
+N_STASH=$(git stash list 2>/dev/null | wc -l)
+if (( N_STASH > 0 )); then
+    echo "提示: 存在 ${N_STASH} 个 stash（保留未删除，如需清除请手动执行 git stash clear）"
+fi
 
 # 1. 本地独有提交 —— 放弃
 UNPUSHED=$(git log --oneline --reverse "${UPSTREAM}..${BRANCH}" 2>/dev/null || true)
