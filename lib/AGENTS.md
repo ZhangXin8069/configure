@@ -11,7 +11,7 @@
 | 目录 | 部署到 | 用途 |
 |---|---|---|
 | `_bashrc` | `~/.bashrc` | Bash 配置（交互检测/历史/PS1 含窗口标题+dircolors/补全/函数；末尾存在才 source env.sh） |
-| `_zshrc` | `~/.zshrc` | Zsh 配置（oh-my-zsh + p10k instant prompt；存在才 source env.sh；`DISABLE_UNTRACKED_FILES_DIRTY` 加速大仓库） |
+| `_zshrc` | `~/.zshrc` | Zsh 配置（oh-my-zsh + p10k instant prompt；存在才 source env.sh；`DISABLE_UNTRACKED_FILES_DIRTY` 勿启用，未跟踪文件需显示 ✗） |
 | `_vimrc` | `~/.vimrc` | Vim 配置 |
 | `_vim/` | `~/.vim/` | 完整 vim 运行时（plugged 插件、colors、UltiSnips、spell） |
 | `_oh-my-zsh/` | `~/.oh-my-zsh/` | 完整 oh-my-zsh 安装（含 custom 插件/主题） |
