@@ -58,7 +58,7 @@ cat << 'USAGE'
   ├──────────────────────────────────────────────────────────────┤
   │                                                              │
   │  启动链                                                      │
-  │    .zshrc / .bashrc  →  ~/configure/env.sh → bin/ 进 PATH   │
+  │    .zshrc / .bashrc  →  ~/configure/env.sh → bin/ 进 PATH    │
   │    bin/ 下命令直接按名调用, 加载 git 别名和 env 变量         │
   │                                                              │
   │  oh-my-zsh                                                   │
