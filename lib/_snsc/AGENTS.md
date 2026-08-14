@@ -1,6 +1,6 @@
 # AGENTS.md — _snsc
 
-NSC（超算中心）集群共享配置目录（不部署到 `$HOME`）：
+SNSC（超算中心）集群共享配置目录（不部署到 `$HOME`）：
 
 - `sysroot.sh` — VS Code Remote Server 在 CentOS 7（自定义 glibc）上的兼容环境变量（链接器/LD 路径/patchelf）
 - `vscode-sysroot-ursetto-env.sh` — 一键安装脚本：解压 sysroot tgz 到 `~/.vscode-server` 并 source 配置
