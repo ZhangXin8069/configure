@@ -13,6 +13,12 @@ metadata:
 
 # skill-creator — 技能创建与优化技能
 
+## TODO 管理（全局约定）
+
+执行第一步用 **todowrite 工具**生成**详细 TODO 列表**：按任务分解为可独立验证的
+子步骤、按依赖排序；**每完成一个子步骤立即调用 todowrite 更新状态**（进行中/完成）；
+收尾时核对全部完成。约定全文见 `skills/AGENTS.md`「TODO 生成与实时更新约定」。
+
 创建新 skill 并迭代改进：意图捕获 → 草稿 → 测试用例 → 用户评估 → 重写循环 →
 触发描述优化。设计原则源自 Anthropic 官方 skill-creator 与 Agent Skills 规范。
 

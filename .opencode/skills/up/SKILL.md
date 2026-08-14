@@ -13,6 +13,12 @@ metadata:
 
 # up — 技能库升级技能
 
+## TODO 管理（全局约定）
+
+执行第一步用 **todowrite 工具**生成**详细 TODO 列表**：按任务分解为可独立验证的
+子步骤、按依赖排序；**每完成一个子步骤立即调用 todowrite 更新状态**（进行中/完成）；
+收尾时核对全部完成。约定全文见 `skills/AGENTS.md`「TODO 生成与实时更新约定」。
+
 把"技能库持续更新"固化为可重复流程：本地基线调查 → GitHub 最佳实践调研（重试至成功）→
 差距分析 → 执行（优化/补充/新增/debug）→ 验证 → 收敛评估 → 升级汇总。
 借鉴来源（anthropics/skills、obra/superpowers writing-skills 等）必须注明出处。
