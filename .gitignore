@@ -65,6 +65,7 @@
 *RemoteSystemsTempFiles
 .ssub.sh
 .vscode
+*.env.sh
 
 # ==== 例外 ====
 !examples/zhangxin/iog_reader/iog.so
