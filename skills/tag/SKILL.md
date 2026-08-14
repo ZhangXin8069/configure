@@ -62,8 +62,6 @@ tail -20 "$(ls -1t .tag.*.log 2>/dev/null | head -1)"   # 尾部汇总区：上�
 - 关键信息：① 上次任务/对象；② 结论或收敛结果；③ 遗留项与下一步建议——其余（过程轮次、命令细节）一律跳过，不做深入 think
 - 约束：只读不改；无历史日志（首次运行）时正常跳过，不视为错误；总耗时以秒级为限
 
-在四个类别——`stab<N>`、`dev<N>`、`bug<N>`、`test<N>`——之间管理注释标签，各类别编号独立，支持可选的子版本（`stab15_1`）。支持创建、列出、查看、删除与改写。为 Agent 调用而设计——每次操作返回结构化输出并显式处理边界情形。
-
 ## 四类标签
 
 | 类型 | 用途 | 使用时机 |
@@ -312,24 +310,14 @@ git tag -l 'bug[0-9]*'  | wc -l
 git tag -l 'test[0-9]*' | wc -l
 ```
 
-输出格式（按类型分组，子版本列在父标签之上）：
+输出格式（按类型分组，子版本列在父标签之上；dev/bug/test 组同格式）：
 
 ```text
 === stab (4 tags) ===
 stab15_1 | 2026-08-07 | follow stab15, 1. 修复set-env.sh相对路径引用; [opencode].
-stab15   | 2026-08-07 | follow stab14, 1. 新增save-env.sh脚本; 2. ...; [opencode].
-stab9    | 2026-07-09 | follow stab8, 1. 重构lib目录结构; 2. ...
+stab15   | 2026-08-07 | follow stab14, 1. 新增save-env.sh脚本; [opencode].
+stab9    | 2026-07-09 | follow stab8, 1. 重构lib目录结构; [opencode].
 stab0    | 2026-07-01 | stab0 init, 1. 初始化配置仓库; [opencode].
-
-=== dev (2 tags) ===
-dev1   | 2026-07-09 | follow bug0, 1. 实现xxx模块框架; [opencode].
-dev0   | 2026-07-09 | follow stab3, 1. 开始yyy功能开发; [opencode].
-
-=== bug (1 tag) ===
-bug0   | 2026-07-09 | follow dev1, 1. 修复zzz空指针异常; [opencode].
-
-=== test (1 tag) ===
-test0  | 2026-07-10 | follow bug0, 1. 新增功能回归测试套件; [opencode].
 ```
 
 **边界情形 — 无标签**：报告 "No cctag tags found in this repository."
