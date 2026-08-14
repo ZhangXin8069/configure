@@ -6,8 +6,15 @@ _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
 _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
+# 增强鲁棒性：cwd 失效（如所在目录已被删除）时回退到脚本目录，
+# 避免后续 pwd 与相对路径文件（日志/清单/重定向）创建失败
+if ! _PWD="$(pwd 2>/dev/null)"; then
+    echo "###${_NAME}: warning: 当前目录不可用（getcwd 失败），回退到 ${_PATH}###" >&2
+    cd "${_PATH}" || exit 1
+    _PWD="$(pwd)"
+fi
+
 _TS="$(date +%Y-%m-%d-%H-%M-%S)"
-_PWD="$(pwd)"
 LOG_FILE=".agent.${_TS}.log"
 LIST_FILE=".agent.${_TS}.list"
 unset _TS
@@ -37,7 +44,7 @@ PROMPT="你是一个多身份智能体，拥有以下可切换的提示词身份
 
 【沟通规范】所有文字说明、回复与输出统一使用简体中文，表述必须严格、准确；回答要完整覆盖关键信息而不冗余。
 
-【技能与环境】自动加载并使用 ${HOME}/configure/skills 下的技能；当输入形如 {~skill-name} 的指令时，执行 ${HOME}/configure/skills/skill-name 对应的技能。必要时自动生成或更新当前工作目录的 AGENTS.md（保持项目约定文档与配置同步最新）与 .opencode 文件夹。
+【技能与环境】默认尝试读取并使用 ${HOME}/configure/skills 下的技能：收到任务时先执行 ls ${HOME}/configure/skills/ 浏览技能清单，若任务与某技能匹配（按技能 SKILL.md 的 description 判断），立即完整读取该技能的 SKILL.md 并按其规范行事；技能清单较长时按需只读匹配技能，不强制读全；当输入形如 {~skill-name} 的指令时，读取并执行 ${HOME}/configure/skills/skill-name 对应的技能（该目录的 SKILL.md 为技能规范全文）。必要时自动生成或更新当前工作目录的 AGENTS.md（保持项目约定文档与配置同步最新）与 .opencode 文件夹。
 
 【用户输入记录】本会话的所有用户输入必须逐条原样保存到文件 ${_PWD}/${LIST_FILE}（绝对路径）：系统注入的固定提示词（含自动注入的项目上下文）不是用户输入，一律不记录；收到每条真实用户输入后，在输出任何回复之前立即追加写入（先写后答，保证会话中断也不丢失），无需向用户确认；文件不存在则自动创建。每条格式为：
 ---- [YYYY-MM-DD HH:MM:SS] 第 N 条用户输入 ----
@@ -47,7 +54,7 @@ N 从 1 起按真实用户输入递增计数；追加写入直接执行（printf
 # 自动收集工作目录项目上下文：从 pwd 向上查找 AGENTS.md 与 .opencode，注入 prompt
 PROJECT_CONTEXT=""
 project_root=""
-_ctx_dir="$(pwd)"
+_ctx_dir="${_PWD}"
 while :; do
     if [[ -f "${_ctx_dir}/AGENTS.md" || -d "${_ctx_dir}/.opencode" ]]; then
         project_root="${_ctx_dir}"
