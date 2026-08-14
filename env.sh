@@ -6,17 +6,14 @@ case "$_SRC" in
     *) _DIR=. ;;
 esac
 _PATH=$(cd "$_DIR" && pwd)
-# @MKDIR@
-mkdir -p ${_PATH}/bin ${_PATH}/docs ${_PATH}/lib ${HOME}/.local/bin
-# @SOURCE@
 # @EXPORT@
+# export TERM=xterm
 # export TERM=xterm-256color
-# @LOCALE@
+# @@LOCALE@@
 # 选择系统可用的 UTF-8 locale（C.UTF-8 优先，缺失时回退 en_US.UTF-8），避免 setlocale 警告
 _loc_utf8=$(locale -a 2>/dev/null | grep -iE '^(C\.utf-?8|en_US\.utf-?8)$' | sort | head -1)
 [ -n "$_loc_utf8" ] && export LANG="$_loc_utf8" LC_ALL="$_loc_utf8"
 unset _loc_utf8
-export PATH=${HOME}/.local/bin:${_PATH}/bin:$PATH
 # @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
 # export PATH=${MPI_HOME}/bin:$PATH
@@ -29,6 +26,10 @@ export PATH=${HOME}/.local/bin:${_PATH}/bin:$PATH
 # export LD_LIBRARY_PATH=${CUDA_HOME}/lib:$LD_LIBRARY_PATH
 # export CUDA_INCLUDE_PATH=${CUDA_HOME}/include:$CUDA_INCLUDE_PATH
 # export MANPATH=${CUDA_HOME}/share/man:$MANPATH
+# @@PATH@@
+export PATH=${_PATH}/bin:${HOME}/.opencode/bin:${HOME}/.local/bin:${HOME}/sbin:${HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+# @@LD_LIBRARY_PATH@@
+export LD_LIBRARY_PATH=${HOME}/.local/lib:${HOME}/slib:${HOME}/lib:/usr/local/lib:/usr/lib:/usr/lib64:/usr/libx32:/usr/lib32:/lib:/lib64:/libx32:/lib32:$LD_LIBRARY_PATH
 # @ALIAS@
 alias ...=../..
 alias ....=../../..
