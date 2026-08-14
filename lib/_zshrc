@@ -17,9 +17,6 @@ ZSH_THEME="robbyrussell"
 # 自动更新策略: disabled / auto / reminder
 # zstyle ':omz:update' mode disabled
 
-# 大仓库加速: 忽略未跟踪文件的 dirty 检查 (git_prompt_info 不再显示 untracked 标记)
-DISABLE_UNTRACKED_FILES_DIRTY="true"
-
 # 插件 (缺失时 oh-my-zsh 跳过并提示; 先 git clone 到 $ZSH_CUSTOM/plugins/)
 # git clone https://github.com/zsh-users/zsh-syntax-highlighting.git ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-syntax-highlighting
 # git clone https://github.com/zsh-users/zsh-autosuggestions ${ZSH_CUSTOM:-~/.oh-my-zsh/custom}/plugins/zsh-autosuggestions
