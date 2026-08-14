@@ -12,13 +12,13 @@ _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 pushd ~
 mkdir -p .oh-my-zsh
-mv ./.bashrc .bashrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
+# mv ./.bashrc .bashrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
 mv ./.zshrc .zshrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
 mv .oh-my-zsh .oh-my-zsh."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
 # 首次安装 oh-my-zsh (取消注释以下两行):
 # apt install zsh wget
 # sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
-cp -r ${_PATH}/../lib/_bashrc .bashrc
+# cp -r ${_PATH}/../lib/_bashrc .bashrc
 cp -r ${_PATH}/../lib/_zshrc .zshrc
 cp -r ${_PATH}/../lib/_oh-my-zsh .oh-my-zsh
 popd
