@@ -23,7 +23,7 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 | 类别 | 脚本 |
 |---|---|
 | Git | `gpush.sh`（add -A + 时间戳提交 + push 分支与标签）、`gpull.sh`、`gback.sh`、`dgtag.sh`、`gls.sh`、`git_init.sh` |
-| 跨仓库批量 | `zgALLpush/pull.sh`、`zgCONFIGUREpush/pull.sh`、`zgLATTICE-PDFpush/pull.sh`、`zgPYQCUpush/pull.sh`（相对路径 `../../repo-name`） |
+| 跨仓库批量 | `zgALLpush/pull.sh`、`zgCONFIGUREpush/pull.sh`、`zgPyQCDpush/pull.sh`、`zgPYQCUpush/pull.sh`（相对路径 `../../repo-name`） |
 | HPC/Slurm | `ssub.sh`（内嵌模板：gpu-debug 分区、2 GPU）、`ssqueue.sh`、`zsqueue.sh`、`ssrun.sh`、`sstop.sh`、`ssnake.sh`、`ssnsc.sh`、`ssjtu.sh` |
 | 系统 | `cpupower.sh`（按 `$_NAME` 分发，`conservative/ondemand/performance/powersave.sh` 为符号链接）、`swap.sh`（64GB /var/swapfile）、`apt_install.sh`、`pip_install.sh`、`poweroff.sh`、`reboot.sh` |
 | 启动器 | `cclaude.sh`（Claude Code）、`oopencode.sh`（opencode build agent，含固定中文 prompt；每次会话生成 `.agent.<TS>.log` 运行日志与 `.agent.<TS>.list` 用户输入清单）、`ddocker.sh`、`ccloudmusic.sh`、`zipython.sh`、`zjulab.sh`、`vscode_unset.sh` |
