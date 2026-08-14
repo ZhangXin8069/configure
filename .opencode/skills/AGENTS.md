@@ -1,0 +1,41 @@
+# AGENTS.md — skills 技能目录
+
+agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter + 正文）。输入形如 `{~skill-name}` 时执行 `skills/skill-name` 对应技能。
+
+## 日志预读策略（全局约定）
+
+所有技能会话预读历史日志（`.X.<时间戳>.log`）时遵循**关键信息速览**策略：
+
+- 只读**最新 1 份**日志的**尾部汇总区**（`tail -20` 上限），不列多份、不逐份追加
+- 只提取关键信息：上次任务/对象、结论或收敛结果、遗留项与下一步建议
+- 不做深入解析：过程轮次、命令细节一律跳过，不做逐行 think；总耗时以秒级为限
+- 无历史日志（首次运行）时正常跳过，不视为错误；只读不改
+
+## TODO 生成与实时更新约定（全局约定）
+
+所有技能会话**执行第一步**必须用 **todowrite 工具**生成**详细 TODO 列表**（吸收 Anthropic 官方
+skill-creator "add steps to your TodoList"）：按任务分解为可独立验证的子步骤、
+按依赖排序，**每完成一个子步骤立即调用 todowrite 更新状态**（进行中/完成），
+收尾时核对全部完成——详细 TODO 防漏步（多步骤任务的隐性步骤易被跳过），
+也是进度证据，0 交互模式（auto）下尤其必要。各技能 SKILL.md 均内嵌本约定。
+
+## 技能
+
+| 技能 | 用途 |
+|---|---|
+| `init` | 仓库/目录初始化：逐目录创建/更新 AGENTS.md，归档各 agent 的 init 文件（CLAUDE.md/CODEX.md/.claude 等 → `.X.<时间戳>.bak`），把 agent 生成内容对应的完整 skill 放到上一级 `skills/`；两阶段执行（先调查后写）、幂等、`.init.<时间戳>.log` 会话日志 |
+| `tag` | Git 标签管理：`stab<N>`/`dev<N>`/`bug<N>`/`test<N>` 四类独立编号 + 子版本（如 `stab15_1`），含创建/列出/查看/删除/改写；先看后打、默认同步远程、破坏性操作前确认、`.tag.<时间戳>.log` 会话日志 |
+| `debug` | 调试/排错：先复现后定位、证据驱动、二分收敛、不变量校验，最小修复并验证闭环（含 git bisect、bash -x/-n 排查） |
+| `optim` | 性能/效率优化：先测量后优化、基准驱动、主导项分析（复杂度/调用开销/IO/启动），最小改动、验证闭环，循环迭代至成功 |
+| `diff` | 查看/分析代码改动：先定范围后执行、只读不改、先概览后详情、证据驱动、边界校验（工作区/暂存区/版本间对比，含冲突标记、调试残留、未跟踪/二进制/重命名检查），`.diff.<时间戳>.log` 会话日志 |
+| `analy` | 仓库分析：只读分析当前 git 库全部文档与代码，解析 `{$用户输入}` 主题，侧重多份资料的联系与层次逻辑、代码-对象映射（如格点代码与粒子物理图像），结论附参考源（`文件:行号`），代码片段用 `\lstinputlisting` 直引原文件，LaTeX（ctex+xelatex）编译带色彩标识的 PDF 输出到当前目录 `docs/`，`.analy.<时间戳>.log` 会话日志 |
+| `test` | 系统化测试：默认测试对象为上次 agent 生成的工作（参考 `.agent.*.list` 格式），可指定项目；中间变量自行计算并保存，中间/最终结果与图表落盘 `test_out/`，失败按 debug 循环修复、通过按 optim 循环优化，支持设备切换（GPU 优先/CPU/NPU）与多精度切换（默认 fp32），数据读写间精度转换显式管理，`.test.<时间戳>.log` 会话日志 |
+| `make` | 项目生成：生成对象为用户指定的项目，编排调用本目录全部技能（init/tag/debug/optim/diff/analy/test）完成全流程（解析需求→调查规划→最小改动实现→系统化测试→循环优化→复查→归档→打标），细节要求为所有技能的汇总，`.make.<时间戳>.log` 会话日志 |
+| `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范，`.skill-creator.<时间戳>.log` 会话日志 |
+| `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`，`.plan.<时间戳>.log` 会话日志 |
+| `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作；生成类任务首轮复用 make，单步任务转对应技能，`.all.<时间戳>.log` 会话日志 |
+| `up` | 技能库升级：本地基线调查→GitHub 最佳实践调研（连接失败一直重试至成功）→差距分析（现状 vs 最佳实践对照表）→优化/补充/新增/debug 本目录 skill→验证闭环→收敛评估；借鉴外部实践注明出处（仓库+技能名），`.up.<时间戳>.log` 会话日志 |
+| `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论，`.brainstorm.<时间戳>.log` 会话日志 |
+| `review` | 代码审查：早审查常审查、子代理审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；吸收 superpowers requesting-code-review，`.review.<时间戳>.log` 会话日志 |
+| `tdd` | 测试驱动开发：铁律（无失败测试则无生产代码，先写代码即删除重来）、RED-GREEN-REFACTOR 循环、验证失败/通过双强制、反合理化表+红旗清单；吸收 superpowers test-driven-development，`.tdd.<时间戳>.log` 会话日志 |
+| `auto` | 全自动前缀执行（元技能）：`~auto-<技能名> <任务>` 前缀启动任意技能，启动时一次性预授权权限与配置（唯一交互），此后 0 请求，自动循环调用其他技能直至收敛，除非强制中断（Ctrl+C/`~stop`）；停滞保护防空转、收敛后自动收尾（diff/init/tag），`.auto.<时间戳>.log` 会话日志 |

@@ -15,7 +15,7 @@ _PATH=$(cd "${_DIR}" && pwd)
 # 选择系统可用的 UTF-8 locale（C.UTF-8 优先，缺失时回退 en_US.UTF-8），避免 setlocale 警告
 # 已生效 UTF-8 LANG 时跳过检测（省 4 个子进程）; 检测仅一次 grep, 免 sort/head
 case "${LANG:-}" in
-*[Uu][Tt][Ff][-]?8*)
+*[Uu][Tt][Ff]8*|*[Uu][Tt][Ff]-8*)
     : ;;
 *)
     _loc_utf8=$(locale -a 2>/dev/null | grep -im1 -E '^(C\.utf8|C\.UTF-8|en_US\.utf8|en_US\.UTF-8)$')
