@@ -4,17 +4,21 @@
 
 ## 入口与加载链
 
-`env.sh` 被 **source**（不可直接执行），由 `.zshrc`/`.bashrc` 引入，负责：
+`env.sh` 被 **source**（不可直接执行），由 `~/.zshrc` 与 `~/.bashrc` 引入（`[ -r ]` 存在才 source，避免缺失报错），负责：
 
-1. 将 `bin/` 与 `~/.local/bin` 前置到 `PATH`（`bin/` 下 `.sh` 脚本直接按名调用，如 `gpush.sh`）
-2. source `lib/_git_aliases.sh`（git 别名）
-3. 定义导航/grep 等 shell 别名
+1. 将 `bin/`、`~/.opencode/bin`、`~/.local/bin` 等前置到 `PATH`（**防重复**：已含仓库 `bin` 前缀则跳过，可安全多次 source）
+2. 设置 `LD_LIBRARY_PATH`（仓库 `lib/` 优先，防重复规则同 PATH）
+3. 检测 UTF-8 locale：`LANG` 已是 UTF-8 时跳过；否则单 `grep -im1` 查 `C.UTF-8`/`en_US.UTF-8`
+4. source `lib/_git_aliases.sh`（git 别名）
+5. 定义两 shell 通用别名（导航/grep/ls 系/常用工具；`history=omz_history`、`which-command=whence` 仅 zsh 下定义，按 `$ZSH_VERSION` 分支）
+
+点文件部署：`bin/sh_init.sh [-b|-z|-a]`——`-b` 仅部署 bashrc；`-z` 部署 zshrc 与 oh-my-zsh（默认）；`-a` 全部；旧文件备份带时间戳。
 
 ## 目录结构
 
 | 路径 | 用途 |
 |---|---|
-| `env.sh` | 环境主入口（shell 启动时被 source），将 `bin/` 加入 PATH |
+| `env.sh` | 环境主入口（shell 启动时被 source）：PATH/LD_LIBRARY_PATH（防重复）、locale、git 别名、两 shell 通用别名 |
 | `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用 |
 | `lib/` | 版本化环境配置与基础模板 |
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
