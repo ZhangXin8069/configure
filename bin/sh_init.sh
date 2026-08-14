@@ -30,7 +30,7 @@ cat << 'USAGE'
   ├──────────────────────────────────────────────────────────────┤
   │                                                              │
   │  启动链                                                      │
-  │    .zshrc  →  ~/configure/env.sh  →  bin/ 进 PATH           │
+  │    .zshrc  →  ~/configure/env.sh  →  bin/ 进 PATH            │
   │    bin/ 下 66 个命令直接按名调用, 加载 git 别名和 env 变量   │
   │                                                              │
   │  oh-my-zsh                                                   │
@@ -38,7 +38,7 @@ cat << 'USAGE'
   │    插件: git, z, zsh-syntax-highlighting,                    │
   │          zsh-autosuggestions, you-should-use                 │
   │                                                              │
-  │  常用命令 (bin/ 直调)                                       │
+  │  常用命令 (bin/ 直调)                                        │
   │    gpush.sh / gpull.sh   Git 推送/拉取                       │
   │    gback.sh              Git 分支备份                        │
   │    gls.sh                Git 仓库列表                        │
