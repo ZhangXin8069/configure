@@ -65,7 +65,6 @@ export PATH=/Users/zhangxin/lib/btop/bin:$PATH
 ## ENV
 export KMP_DUPLICATE_LIB_OK=TRUE
 export PATH=/Library/TeX/texbin:$PATH
-export PATH="/Users/zhangxin/.opencode/bin:$PATH"
 export HOMEBREW_NO_AUTO_UPDATE=1
 
 ## PYTHONPATH
