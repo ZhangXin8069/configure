@@ -1,27 +1,55 @@
 #!/usr/bin/env bash
 # Shell 终端配置脚本
-# 功能: 备份 ~/.bashrc ~/.zshrc ~/.oh-my-zsh, 部署新版 (从 lib/ 复制)
-# 主题: robbyrussell + zsh-syntax-highlighting + zsh-autosuggestions
-# 启动: .zshrc → ~/configure/env.sh → bin/ 进 PATH → 66 个命令直调
+# 功能: 备份 ~/.bashrc ~/.zshrc ~/.oh-my-zsh, 从 lib/ 部署新版
+# 用法: sh_init.sh [-b|-z|-a]
+#   -b  仅部署 bashrc
+#   -z  部署 zshrc 与 oh-my-zsh (默认)
+#   -a  全部部署
+# 启动链: ~/.zshrc → ~/configure/env.sh → bin/ 进 PATH → 命令直调
+set -euo pipefail
 
-_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
-    pwd
-)
+_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
 _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-pushd ~
-mkdir -p .oh-my-zsh
-# mv ./.bashrc .bashrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
-mv ./.zshrc .zshrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
-mv .oh-my-zsh .oh-my-zsh."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null
-# 首次安装 oh-my-zsh (取消注释以下两行):
-# apt install zsh wget
-# sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
-# cp -r ${_PATH}/../lib/_bashrc .bashrc
-cp -r ${_PATH}/../lib/_zshrc .zshrc
-cp -r ${_PATH}/../lib/_oh-my-zsh .oh-my-zsh
-popd
+
+mode=z
+while getopts "bza" opt; do
+    case "$opt" in
+    b) mode=b ;;
+    z) mode=z ;;
+    a) mode=a ;;
+    *) echo "用法: ${_NAME} [-b|-z|-a]  (b=bashrc, z=zshrc+oh-my-zsh, a=全部; 默认 z)" >&2
+       exit 1 ;;
+    esac
+done
+
+# 备份旧目标(带时间戳)并部署新版本
+deploy()
+{
+    local src=$1 dst=$2
+    if [ -e "$dst" ]; then
+        mv "$dst" "$dst.$(date "+%Y-%m-%d-%H-%M-%S").bak"
+    fi
+    cp -r "$src" "$dst"
+}
+
+if [[ $mode == b || $mode == a ]]; then
+    deploy "${_PATH}/../lib/_bashrc" "${HOME}/.bashrc"
+fi
+
+if [[ $mode == z || $mode == a ]]; then
+    if command -v zsh >/dev/null 2>&1; then
+        deploy "${_PATH}/../lib/_zshrc" "${HOME}/.zshrc"
+    else
+        echo "警告: 未安装 zsh (apt install zsh wget), 跳过 .zshrc 部署" >&2
+    fi
+    if [ -d "${_PATH}/../lib/_oh-my-zsh" ]; then
+        deploy "${_PATH}/../lib/_oh-my-zsh" "${HOME}/.oh-my-zsh"
+    else
+        echo "警告: lib/_oh-my-zsh 缺失, 跳过; 可手动官方安装:" >&2
+        echo "  sh -c \"\$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)\"" >&2
+    fi
+fi
 
 cat << 'USAGE'
 
@@ -30,12 +58,12 @@ cat << 'USAGE'
   ├──────────────────────────────────────────────────────────────┤
   │                                                              │
   │  启动链                                                      │
-  │    .zshrc  →  ~/configure/env.sh  →  bin/ 进 PATH            │
-  │    bin/ 下 66 个命令直接按名调用, 加载 git 别名和 env 变量   │
+  │    .zshrc / .bashrc  →  ~/configure/env.sh → bin/ 进 PATH   │
+  │    bin/ 下命令直接按名调用, 加载 git 别名和 env 变量         │
   │                                                              │
   │  oh-my-zsh                                                   │
   │    主题: robbyrussell                                        │
-  │    插件: git, z, zsh-syntax-highlighting,                    │
+  │    插件: git, zsh-syntax-highlighting,                       │
   │          zsh-autosuggestions, you-should-use                 │
   │                                                              │
   │  常用命令 (bin/ 直调)                                        │
