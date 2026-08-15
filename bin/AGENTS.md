@@ -26,20 +26,19 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 | 跨仓库批量 | `zgALLpush/pull.sh`、`zgCONFIGUREpush/pull.sh`、`zgPyQCDpush/pull.sh`、`zgPYQCUpush/pull.sh`（相对路径 `../../repo-name`） |
 | HPC/Slurm | `ssub.sh`（内嵌模板：gpu-debug 分区、2 GPU）、`ssqueue.sh`、`zsqueue.sh`、`ssrun.sh`、`sstop.sh`、`ssnake.sh`、`ssnsc.sh`、`ssjtu.sh` |
 | 系统 | `cpupower.sh`（按 `$_NAME` 分发，`conservative/ondemand/performance/powersave.sh` 为符号链接）、`swap.sh`（64GB /var/swapfile）、`apt_install.sh`、`pip_install.sh`、`poweroff.sh`、`reboot.sh` |
-| 启动器 | `cclaude.sh`（Claude Code）、`oopencode.sh`（opencode build agent，prompt 取自同目录 `oopencode-prompt.txt` 单一来源；每次会话生成 `.agent.<TS>.log` 运行日志与 `.agent.<TS>.list` 用户输入清单）、`oopencode.bat`（Windows 对应版，同一 prompt 模板）、`ddocker.sh`、`ccloudmusic.sh`、`zipython.sh`、`zjulab.sh`、`vscode_unset.sh` |
-| 隐蔽启动器 | `unix-op.out`（编译二进制，fork+stdin 方式以 `unix-op -s` 伪装运行同目录 `oopencode.sh`，ps/top/htop 不显示 opencode 明文；源码 `unix-op.c`，重编译 `gcc -O2 -Wall -o unix-op.out unix-op.c`）、`win-op.exe`（软链接 → `oopencode.bat`，Windows 侧同名启动入口） |
+| 启动器 | `cclaude.sh`（Claude Code）、`oopencode.sh`（opencode build agent，prompt 取自同目录 `oopencode-prompt.txt` 单一来源；每次会话生成 `.agent.<TS>.log` 运行日志与 `.agent.<TS>.list` 用户输入清单）、`oopencode.bat`（Windows 对应版，同一 prompt 模板）、`oopencode-snsc.sh`（HPC/snsc 变体：自动收集工作目录 AGENTS.md/.opencode 项目上下文注入 prompt，硬编码调用 vscode-server 内手动部署的 debug 二进制；经 `ops` 软链接调用，`-p/-q/-k/-g` 选模型）、`ddocker.sh`、`ccloudmusic.sh`、`zipython.sh`、`zjulab.sh`、`vscode_unset.sh` |
 | 初始化 | `sh_init.sh`（引导 shell：`-b` 仅部署 _bashrc，`-z` 部署 _zshrc+_oh-my-zsh（默认），`-a` 全部；备份旧点文件带时间戳；zsh/oh-my-zsh 缺失时警告）、`vim_init.sh`、`zerotier_init.sh` |
 | 工具 | `wwa.sh`、`ddu.sh`、`llog.sh`、`zsearch.sh`、`zlog.sh`、`cp-small.sh`（cp 包装：跳过 >1MB 文件并记录清单到目标目录）、`mv-small.sh`（mv 包装，同规则） |
 | 平台 | `xxattr.sh`（macOS）、`xx99.sh`（X99 工作站） |
 | 游戏 | `ttetris.sh`、`ssnake.sh`、`z2048.sh`、`zasciiquarium.sh`、`aaclock.sh` |
 
-`cl` 与 `op` 为符号链接（→ cclaude.sh / oopencode.sh）。
+`cl`、`op` 与 `ops` 为符号链接（→ cclaude.sh / oopencode.sh / oopencode-snsc.sh）。
 
 ## 平台与注意事项
 
 - `.bat`/`.ps1` 为 Windows 对应版，**不**被别名生成器扫描（只扫 `.sh`）
-- `oopencode-prompt.txt` 为 op 系列（`oopencode.sh`/`oopencode.bat`/`unix-op.out`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}`/`${LIST_FILE}` 占位符，运行时替换）：`oopencode.sh` 经 bash 参数展开替换、`oopencode.bat` 经 PowerShell 替换；**修改 prompt 只改此文件**，勿在脚本内再内嵌
-- `unix-op.out` 与 `win-op.exe` 为隐蔽启动器：仅作进程名伪装入口，不改变 `oopencode.sh`/`oopencode.bat` 本身行为
+- `oopencode-prompt.txt` 为 op 系列（`oopencode.sh`/`oopencode.bat`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}`/`${LIST_FILE}` 占位符，运行时替换）：`oopencode.sh` 经 bash 参数展开替换、`oopencode.bat` 经 PowerShell 替换；**修改 prompt 只改此文件**，勿在脚本内再内嵌
+- 隐蔽启动器方案已回退：源码 `unix-op.c` 与软链接 `win-op.exe` 已删除；遗留二进制 `unix-op.out`（不入库）可自行清理
 - `cctag` 二进制与 `claude_code-skill4git-tag.md` 已删除，git 标签管理技能移至 `../skills/tag/`
 - `.agent.*.log`（opencode 运行日志）与 `.agent.*.list`（会话用户输入清单）为运行产物，不入库
 - 新增脚本后 `chmod +x <script>` 并在新 shell（或 `source ~/.zshrc`）中直接按名调用；校验语法 `bash -n <script>`

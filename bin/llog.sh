@@ -1,4 +1,4 @@
-ll#!/usr/bin/env bash
+#!/usr/bin/env bash
 _PATH=$(
     cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
     pwd
