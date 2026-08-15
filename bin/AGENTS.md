@@ -38,7 +38,6 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 - `.bat`/`.ps1` 为 Windows 对应版，**不**被别名生成器扫描（只扫 `.sh`）
 - `oopencode-prompt.txt` 为 op 系列（`oopencode.sh`/`oopencode.bat`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}`/`${LIST_FILE}` 占位符，运行时替换）：`oopencode.sh` 经 bash 参数展开替换、`oopencode.bat` 经 PowerShell 替换；**修改 prompt 只改此文件**，勿在脚本内再内嵌
-- 隐蔽启动器方案已回退：源码 `unix-op.c` 与软链接 `win-op.exe` 为失败产物已删除；遗留二进制 `unix-op.out`（不入库）可自行清理
 - `cctag` 二进制与 `claude_code-skill4git-tag.md` 已删除，git 标签管理技能移至 `../skills/tag/`
 - `.agent.*.log`（opencode 运行日志）与 `.agent.*.list`（会话用户输入清单）为运行产物，不入库
 - 新增脚本后 `chmod +x <script>` 并在新 shell（或 `source ~/.zshrc`）中直接按名调用；校验语法 `bash -n <script>`
