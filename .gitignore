@@ -66,13 +66,3 @@
 .ssub.sh
 .vscode
 *.env.sh
-
-# ==== 例外 ====
-!examples/zhangxin/iog_reader/iog.so
-
-# ==== 大体积冗余文件 ====
-docs/background.png
-
-# ==== 临时工作目录 ====
-tmp/
-scripts/
