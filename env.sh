@@ -97,3 +97,4 @@ if [ -n "${ZSH_VERSION}" ]; then
 fi
 # @@ZHANGXIN@@
 # alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
+alias nv-smi='nvidia-smi -l 1'
