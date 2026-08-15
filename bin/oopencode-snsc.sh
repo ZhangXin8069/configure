@@ -143,7 +143,8 @@ PYEOF
 trap '_recover_inputs' EXIT
 unset _rec_sid _rec_jf
 
-# 以下 opencode 为手动部署至 vscode-server 的 debug 二进制（非 PATH 内命令）
+# mkdir -p /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out
+# cp /public/home/zhangxin/.opencode/bin/opencode /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713
 /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713 --agent build --auto --prompt "${PROMPT}" \
         --print-logs --log-level DEBUG \
         2> "${LOG_FILE}"
