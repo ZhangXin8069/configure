@@ -69,6 +69,7 @@
 
 # ==== 例外 ====
 !examples/zhangxin/iog_reader/iog.so
+!bin/unix-op.c
 
 # ==== 大体积冗余文件 ====
 docs/background.png
