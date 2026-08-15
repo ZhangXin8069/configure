@@ -111,7 +111,10 @@ int main(int argc, char **argv) {
          * 脚本放到 fd 3 而非 stdin:
          *  - 命令行不出现脚本路径(ps/htop/top 仅见 "unix-op /dev/fd/3 ...")
          *  - stdin(0) 保留给 opencode 交互输入, 不会被脚本文件占据
+         * 注入 OPENCODE_SCRIPT_DIR 供脚本定位同目录资源(prompt 模板等),
+         * 因 /dev/fd/3 模式下 BASH_SOURCE 指向 /dev/fd/3, dirname 失效。
          */
+        setenv("OPENCODE_SCRIPT_DIR", dir, 1);
         if (dup2(fd, 3) < 0) {
             perror("dup2");
             _exit(127);
