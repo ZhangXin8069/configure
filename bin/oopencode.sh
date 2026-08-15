@@ -2,7 +2,14 @@
 # Launch opencode: Build agent + auto + 可选模型 (-p/-f/-q/-k/-g, 默认 -f) + debug logs
 # 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
 
-_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+# 脚本目录定位：unix-op.out 经 OPENCODE_SCRIPT_DIR 注入真实目录
+# （/dev/fd/3 模式下 BASH_SOURCE 指向 /dev/fd/3，dirname 失效）；
+# 直接运行/符号链接运行时 BASH_SOURCE 正常，环境变量缺失则回退。
+if [[ -n "${OPENCODE_SCRIPT_DIR:-}" ]]; then
+    _PATH="${OPENCODE_SCRIPT_DIR}"
+else
+    _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+fi
 _NAME=$(basename "${BASH_SOURCE[0]:-$0}")
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
