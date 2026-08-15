@@ -199,6 +199,17 @@ bash -n <script>        # 语法检查（本库规范）
    **完整阅读**参考实现（不跳行、不凭印象"适配"），逐项列出工作与损坏之间的
    差异——不假设"这不可能有关系"，任何差异都值得验证（吸收 systematic-debugging
    Phase 2 模式分析）。
+7. **沿调用栈向后追溯**（错误深在调用栈时，吸收 systematic-debugging
+   root-cause-tracing）：从错误点沿调用链**逐层向上回溯**——"谁用坏值调用了这里？
+   坏值从哪来？"直至找到源头，在源头修复而非症状处打补丁；每层记录进出数据，
+   坏值首次出现的位置即根因候选（与二分互补：二分砍范围，追溯找源头）。
+8. **超时类 bug 用条件轮询替代固定超时**（吸收 systematic-debugging
+   condition-based-waiting）：不要盲目加大 sleep——轮询真实完成条件
+   （文件出现/端口就绪/进程退出/日志关键字），带超时上限与失败诊断输出：
+   ```bash
+   for i in $(seq 1 30); do [ -f done.flag ] && break; sleep 2; done
+   [ -f done.flag ] || { echo "TIMEOUT: done.flag 30s 内未出现"; ps -ef | grep <task>; }
+   ```
 
 ### Step 4. 确定根因
 
@@ -224,6 +235,10 @@ bash -n <script>        # 语法检查（本库规范）
 3. 跑仓库校验：`bash -n <改动脚本>`；有测试框架则运行相关测试；
    lint/typecheck 若存在必须运行；
 4. `git diff` 审查：改动仅含预期内容，无引入新问题。
+5. **多层防御验证**（吸收 systematic-debugging defense-in-depth）：根因修复后，
+   在**数据流各层**（输入校验、中间处理、输出边界）确认坏值不再到达——单一位置
+   修复可能只堵住当前路径，其他入口同样可能把坏值带进来；验证修复处前后各层
+   的进出值一致。
 
 ### Step 7. 总结（结构化输出）
 

@@ -166,6 +166,10 @@ metadata:
 ### Step 4. 测试与评估
 
 1. 写 2-3 个真实用户口吻的测试提示词（"试试这个……""帮我……"），与用户确认；
+   **测试提示词必须实质化**（吸收官方 skill-creator 触发机制理解）：技能只在任务
+   复杂到模型无法轻易处理时触发——单步简单查询（"读这个文件""算 2+2"）即使描述
+   完全匹配也可能不触发；测试用例要具体（文件路径/数值/上下文/多步骤），
+   简单查询是差的测试用例，会低估触发率；
 2. 有/无技能对照运行（新建：无技能基线；优化：旧版本基线）：
    - 用旧版本快照 `cp -r <skill-path> <工作区>/skill-snapshot/` 作为基线；
    - 组织结果到工作区：`<skill-name>-workspace/iteration-<N>/eval-<ID>/with_skill|without_skill|old_skill/outputs/`；
@@ -198,6 +202,18 @@ metadata:
 2. 与用户确认查询集，评估当前 description 触发率；
 3. 根据失败样例优化 description（补充触发词/场景），复测对比；
 4. 更新 frontmatter，向用户展示前后对比。
+
+**结构化评估产物**（吸收官方 skill-creator 最新版，有脚本环境时落地；无脚本环境
+简化为文件记录）：评估数据按规范落盘，保证可复现与跨轮对比——
+
+- `evals/evals.json`：测试用例集 `{"skill_name": ..., "evals": [{"id", "prompt",
+  "expected_output", "files", "assertions"}]}`（断言字段后补）；
+- 每轮运行目录 `eval-<id>/` 下：`eval_metadata.json`（eval_id/eval_name/prompt/
+  assertions——断言客观可验证、命名有描述性）、`timing.json`（total_tokens/
+  duration_ms——只在任务完成通知中出现，错过不补）、`grading.json`（断言评分，
+  字段必须是 `text`/`passed`/`evidence`，viewer 依赖）；
+- 聚合 `benchmark.json`/`benchmark.md`（pass_rate + 时间/token 的 mean±stddev
+  与 delta）；聚合统计掩盖的模式由 analyst pass 揭示。
 
 **优化循环**（吸收官方 skill-creator Description Optimization，有脚本环境时）：
 
