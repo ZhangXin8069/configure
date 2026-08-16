@@ -1,4 +1,50 @@
 # Git aliases (from oh-my-zsh git plugin, retained for bash users)
+# bash 兜底: 以下 helper 在 zsh 由 oh-my-zsh 提供(git_current_branch/git_main_branch/
+# git_develop_branch), 本文件被 env.sh 在 bash/zsh 两 shell source; bash 下缺失则补定义.
+# 已有定义(zsh/oh-my-zsh 先加载)时跳过, 避免覆盖.
+if ! command -v git_current_branch >/dev/null 2>&1; then
+    git_current_branch() {
+        # git 当前分支名（bash 版，替代 zsh 的 ${ref#refs/heads/} 语义）
+        local _gb_ref
+        _gb_ref="$(git symbolic-ref --quiet HEAD 2>/dev/null)" || return 1
+        echo "${_gb_ref#refs/heads/}"
+    }
+fi
+if ! command -v git_main_branch >/dev/null 2>&1; then
+    git_main_branch() {
+        # 主分支名：按常见名探测，回退远程 HEAD（bash 版，替代 zsh 的 ${ref:t}）
+        local _mb_ref _mb_remote
+        command git rev-parse --git-dir >/dev/null 2>&1 || return 1
+        for _mb_ref in refs/heads/main refs/heads/master refs/heads/trunk \
+                       refs/remotes/origin/main refs/remotes/origin/master \
+                       refs/remotes/upstream/main refs/remotes/upstream/master; do
+            if git show-ref -q --verify "${_mb_ref}"; then
+                echo "${_mb_ref##*/}"
+                return 0
+            fi
+        done
+        for _mb_remote in origin upstream; do
+            _mb_ref="$(git rev-parse --abbrev-ref "${_mb_remote}/HEAD" 2>/dev/null)"
+            case "${_mb_ref}" in
+                "${_mb_remote}"/*) echo "${_mb_ref#${_mb_remote}/}"; return 0 ;;
+            esac
+        done
+        return 1
+    }
+fi
+if ! command -v git_develop_branch >/dev/null 2>&1; then
+    git_develop_branch() {
+        # 开发分支名（bash 版）
+        local _db_ref
+        for _db_ref in refs/heads/develop refs/heads/development refs/heads/main refs/heads/master; do
+            if git show-ref -q --verify "${_db_ref}"; then
+                echo "${_db_ref##*/}"
+                return 0
+            fi
+        done
+        return 1
+    }
+fi
 alias g=git
 alias ga='git add'
 alias gaa='git add --all'
@@ -75,6 +121,14 @@ alias gfo='git fetch origin'
 alias gg='git gui citool'
 alias gga='git gui citool --amend'
 alias ggpull='git pull origin "$(git_current_branch)"'
+ggu() {
+    # git pull --rebase origin <branch>（默认当前分支）; bash/zsh 通用
+    local _ggu_b
+    if [ "$#" -ne 1 ]; then
+        _ggu_b="$(git_current_branch)"
+    fi
+    git pull --rebase origin "${_ggu_b:-$1}"
+}
 alias ggpur=ggu
 alias ggpush='git push origin "$(git_current_branch)"'
 alias ggsup='git branch --set-upstream-to=origin/$(git_current_branch)'
@@ -82,8 +136,11 @@ alias ghh='git help'
 alias gignore='git update-index --assume-unchanged'
 alias gignored='git ls-files -v | grep "^[[:lower:]]"'
 alias git-svn-dcommit-push='git svn dcommit && git push github $(git_main_branch):svntrunk'
-alias gk='\gitk --all --branches &!'
-alias gke='\gitk --all $(git log --walk-reflogs --pretty=%h) &!'
+# zsh 专有别名（bash 下不定义，避免 noglob/print -Pu2/&! 等语法在 bash 报错）
+if [ -n "${ZSH_VERSION}" ]; then
+    alias gk='\gitk --all --branches &!'
+    alias gke='\gitk --all $(git log --walk-reflogs --pretty=%h) &!'
+fi
 alias gl='git pull'
 alias glg='git log --stat'
 alias glgg='git log --graph'
@@ -91,7 +148,9 @@ alias glgga='git log --graph --decorate --all'
 alias glgm='git log --graph --max-count=10'
 alias glgp='git log --stat --patch'
 alias glo='git log --oneline --decorate'
-alias globurl='noglob urlglobber '
+if [ -n "${ZSH_VERSION}" ]; then
+    alias globurl='noglob urlglobber '
+fi
 alias glod='git log --graph --pretty="%Cred%h%Creset -%C(auto)%d%Creset %s %Cgreen(%ad) %C(bold blue)<%an>%Creset"'
 alias glods='git log --graph --pretty="%Cred%h%Creset -%C(auto)%d%Creset %s %Cgreen(%ad) %C(bold blue)<%an>%Creset" --date=short'
 alias glog='git log --oneline --decorate --graph'
@@ -182,17 +241,22 @@ alias gswc='git switch --create'
 alias gswd='git switch $(git_develop_branch)'
 alias gswm='git switch $(git_main_branch)'
 alias gta='git tag --annotate'
-alias gtl='gtl(){ git tag --sort=-v:refname -n --list "${1}*" }; noglob gtl'
+if [ -n "${ZSH_VERSION}" ]; then
+    alias gtl='gtl(){ git tag --sort=-v:refname -n --list "${1}*" }; noglob gtl'
+fi
 alias gts='git tag --sign'
 alias gtv='git tag | sort -V'
 alias gunignore='git update-index --no-assume-unchanged'
 alias gunwip='git rev-list --max-count=1 --format="%s" HEAD | grep -q "\--wip--" && git reset HEAD~1'
-alias gup=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gup%F{yellow}\' is a deprecated alias, using \'%F{green}gpr%F{yellow}\' instead.%f"\n    gpr'
-alias gupa=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupa%F{yellow}\' is a deprecated alias, using \'%F{green}gpra%F{yellow}\' instead.%f"\n    gpra'
-alias gupav=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupav%F{yellow}\' is a deprecated alias, using \'%F{green}gprav%F{yellow}\' instead.%f"\n    gprav'
-alias gupom=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupom%F{yellow}\' is a deprecated alias, using \'%F{green}gprom%F{yellow}\' instead.%f"\n    gprom'
-alias gupomi=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupomi%F{yellow}\' is a deprecated alias, using \'%F{green}gpromi%F{yellow}\' instead.%f"\n    gpromi'
-alias gupv=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupv%F{yellow}\' is a deprecated alias, using \'%F{green}gprv%F{yellow}\' instead.%f"\n    gprv'
+# zsh 专有（gup* 为弃用提示别名, 用 print -Pu2 着色, bash 下无 print 内置命令）
+if [ -n "${ZSH_VERSION}" ]; then
+    alias gup=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gup%F{yellow}\' is a deprecated alias, using \'%F{green}gpr%F{yellow}\' instead.%f"\n    gpr'
+    alias gupa=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupa%F{yellow}\' is a deprecated alias, using \'%F{green}gpra%F{yellow}\' instead.%f"\n    gpra'
+    alias gupav=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupav%F{yellow}\' is a deprecated alias, using \'%F{green}gprav%F{yellow}\' instead.%f"\n    gprav'
+    alias gupom=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupom%F{yellow}\' is a deprecated alias, using \'%F{green}gprom%F{yellow}\' instead.%f"\n    gprom'
+    alias gupomi=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupomi%F{yellow}\' is a deprecated alias, using \'%F{green}gpromi%F{yellow}\' instead.%f"\n    gpromi'
+    alias gupv=$'\n    print -Pu2 "%F{yellow}[oh-my-zsh] \'%F{red}gupv%F{yellow}\' is a deprecated alias, using \'%F{green}gprv%F{yellow}\' instead.%f"\n    gprv'
+fi
 alias gwch='git whatchanged -p --abbrev-commit --pretty=medium'
 alias gwip='git add -A; git rm $(git ls-files --deleted) 2> /dev/null; git commit --no-verify --no-gpg-sign --message "--wip-- [skip ci]"'
 alias gwipe='git reset --hard && git clean --force -df'
