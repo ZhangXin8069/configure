@@ -10,8 +10,10 @@
 cd docs
 xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex"
 xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex"
-# 溢出检查：Overfull 计数为 0 才交付（>0 按第 10 节定位修复后重编）
+# 溢出检查：Overfull（行宽溢出）与 Float too large（图表溢出页面）计数均为 0 才交付
+# （>0 按第 4 节定位修复后重编）
 grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
+grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 ```
 
 ## 1. 模板骨架（复制即用）
@@ -25,6 +27,7 @@ grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
 \documentclass[UTF8]{ctexart}
 % 宏包顺序固定，不可调整（存在依赖：tcolorbox 依赖 xcolor 等）
 \usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}             % 图片（必须限宽高，见防溢出第 4 节）
 \usepackage{amsmath}              % 公式编号 \label/\eqref 交叉引用
 \usepackage{microtype}            % 微排版，缓解长词/URL 溢出
 \usepackage{listings}             % 代码直引 \lstinputlisting
@@ -132,17 +135,17 @@ grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
 % ================= 2 主体结构（核心目的一）=================
 \section{主体结构}
 <分层架构: 入口层/核心层/工具层/配置层/文档层/参考层，每层职责一句话>
-\begin{table}[htbp]\centering
-\begin{tabularx}{\textwidth}{llX}
+% 注意: 一律用 xltabular（跨页）——table 环境不能跨页，表超一页会溢出页面底部
+\begin{xltabular}{\textwidth}{llX}
 \toprule
 \textcolor{struct}{层次} & 目录 & \textcolor{struct}{职责} \\
 \midrule
+\endhead
 入口层 & <路径> & <一句话> \\
 核心层 & <路径> & <一句话> \\
 \bottomrule
-\end{tabularx}
 \caption{主体结构分层（数据来源: 全库索引实测）}
-\end{table}
+\end{xltabular}
 
 % ================= 3 各部分关系（核心目的二）=================
 \section{各部分关系}
@@ -170,6 +173,44 @@ grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
 \subsection{<子主题 1>}
 % 主题句先行 → 分析 → 证据(\textcolor{evidence}{\texttt{\detokenize{...}}}) → 小结
 % 多资料主题必含"联系与层次"子节（层级表/依赖链）; 代码主题必含"对象映射"子节（映射表）
+
+% ---- 主题为"一项具体工作"时: 本节约占正文一半以上篇幅, 按 15 步框架组织 ----
+% 先判定工作性质再选 A/B 框架（A 代码工作 / B 物理工作）; 编号小节齐全, 缺证据步骤标注
+% \textcolor{warn}{未验证}或"无相关依据", 不跳过编号; 每步附参考源（evidence 绿）
+\subsection{工作全流程重现（A 代码工作框架）}
+% A1 目的与前期准备: 为什么做、前置条件/环境准备
+% A2 输入: 数据/参数/配置/依赖（表或列表 + 参考源）
+% A3 输出（应是什么）: 预期产物与结果形式
+% A4 整体框架: 模块/文件组织、主流程（层级表或依赖链）
+% A5 关键细节: 关键函数/算法/数据结构、易错点（\lstinputlisting 直引片段）
+% A6 任务如何正确执行: 步骤/命令（\textcolor{evidence}{\texttt{\detokenize{...}}}）
+% A7 实际执行情况: 实测命令与输出（记录于日志的实测结果）
+% A8 实际输出情况: 实测产物清单与关键数值
+% A9 结果分析: 结合生成的图表（\includegraphics 限宽高）、日志与其他文件逐项解读
+% A10 综合分析: 与仓库整体联系、对象映射、深层原因
+% A11 结尾总结: 结论框（conclbox）收束
+% A12 结尾评价: 优缺点、可改进处
+% A13 补充说明: 假设/局限/未覆盖项（warnbox）
+% A14 参考源: 本步全部证据汇总（见第 7 节参考源清单）
+% A15 附录与附件（如有）: 原始日志/配置/数据引用
+
+% ---- B 物理工作框架（被分析对象为物理推导/理论/计算/实验）----
+\subsection{工作全流程重现（B 物理工作框架）}
+% B1 目的与前期准备
+% B2 输入: 公理、定理、假设、假说、模型（逐项列出 + 参考源）
+% B3 输出（应是什么）: 公式、定理、假说、理论预言、判断
+% B4 整体推理框架: 推导/论证主线（推理链 A→B→C）
+% B5 推导关键细节: 关键步骤、近似、边界条件（公式 \label/\eqref 编号）
+% B6 任务如何正确执行: 推导/计算/实验的正确步骤
+% B7 实际执行情况: 实测过程与记录
+% B8 实际输出情况: 实测公式/数据结果
+% B9 结果分析: 结合图表/日志/文件解读（含量纲检查与极限校验）
+% B10 综合分析: 与物理图像/模型联系、自洽性
+% B11 结尾总结: 结论框收束
+% B12 结尾评价: 理论价值与局限
+% B13 补充说明: 适用范围、未验证预言
+% B14 参考源
+% B15 附录与附件（如有）
 
 % ================= 6 关键代码/文档片段 =================
 \section{关键代码/文档片段}
@@ -243,14 +284,16 @@ grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
 | 长词/URL | `\emergencystretch{3em}` + `microtype`；**URL 一律 `\url{...}` 包裹**（正文裸 URL 的 `&` 等字符会报错，实测验证） | Overfull 计数 |
 | 彩色框跨页 | 全部 `breakable` | 目测分页处 |
 | 超宽公式 | `align` 分行 + `&` 对齐，不写超长单行 | Overfull 计数 |
-| 图片溢出 | 宽度统一 `\includegraphics[width=0.9\textwidth]` | 目测 |
+| 图片溢出页面 | 宽度统一 `\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]`——宽高双重限制（长截图/大图高度同样受限），禁止裸 `\includegraphics{...}`；多图并排用 minipage | grep "Float too large" |
+| 长表溢出页面底部 | `table` 环境**不可跨页**，表超一页即溢出页面（Float too large）——所有可能超一页的表一律用 `xltabular` 跨页（表头重复用 `\endhead`，标题用 `\caption`），短表（≤8 行）才可留在 table 环境 | grep "Float too large" |
 | X 列内行内公式 | 数学模式断点少，超长行内公式会溢出（实测 6.6pt）——**表格 X 列避免超长行内公式**；长公式移入正文 `equation` 编号，表内只放短符号或引用编号 | Overfull 计数 |
 | 长路径 token | `\texttt{\detokenize{...}}` 无断点，超列宽即溢出（实测 97pt）——**路径 token 用 `\texttt{\nolinkurl{...}}`**（可在 `.:/_` 后断行，实测 X 列内无溢出）且**长 token（>20 字符）只能放 X 列**：l 列不换行，34 字符等宽 token 放 l 列实测溢出 10pt 量级；短路径可用 `\detokenize` | Overfull 计数 |
 | 无空格畸形超长行 | 单个 token 超 120 字符且无空格时 listings 断行失效（实测：178 字符行溢出无法用参数消除）——**该行从引用范围剔除并在正文注明**（"第 N 行为 M 字符无空格赋值行，超出 listings 安全断行能力，略去；全文见 文件:N"），报告附注如实声明 | Overfull 计数 |
 
-编译后必须运行 `grep -c "Overfull" <file>.log`：
-计数为 0 才可交付；>0 时按 `.log` 中 `file-line-error` 行号定位修复（优先缩减代码片段行数/
-表格列文本/公式换行），修复后重编直至为 0。
+编译后必须运行 `grep -c "Overfull" <file>.log` 与 `grep -c "Float too large" <file>.log`：
+**两个计数都为 0 才可交付**（Overfull=行宽溢出，Float too large=图表溢出页面，分开定位）；
+>0 时按 `.log` 中 `file-line-error` 行号定位修复（Overfull 优先缩减代码片段行数/
+表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），修复后重编直至为 0。
 
 ## 5. 内容丰富度要求（逻辑通顺 + 内容充实）
 
@@ -258,6 +301,11 @@ grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
    项目思路（灵魂）→ 主题分析（深入）→ 关键片段（证据）→ 参考源清单 → 结论（收束）；
    每节主题句先行、节末小结并自然引出下节；
 2. **三视角必齐**：结构/关系/思路三节任何报告都不可缺（核心目的）；
-3. **每层都要有**：整体→部分→细节 逐层展开，不跳跃；
-4. **表格密度**：统计表、层级表、关系表、映射表、参考源表齐全；每表 caption + 数据来源；
-5. **语句过渡**：节间用过渡句衔接（"上一节回答了结构，这一节回答关系"），避免各节孤立。
+3. **具体工作必走 15 步框架**：主题为"一项具体工作"时，主题分析节按
+   「分析思路框架」A（代码）/B（物理）15 步编号小节完整组织，每步至少
+   **一段分析 + 一个证据（文件:行号/图表/日志）**，该节篇幅占正文一半以上；
+   第 9 步（结果分析）必须实际查看生成的图表、日志与其他文件后撰写；
+4. **每层都要有**：整体→部分→细节 逐层展开，不跳跃；
+5. **表格密度**：统计表、层级表、关系表、映射表、参考源表齐全；每表 caption + 数据来源；
+6. **语句过渡**：节间用过渡句衔接（"上一节回答了结构，这一节回答关系"），避免各节孤立；
+7. **参考源密度**：参考源清单条数 ≥ 报告小节数，正文每节均有 evidence 绿参考源标注。
