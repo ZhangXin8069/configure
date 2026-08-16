@@ -136,14 +136,17 @@ grep -rn "TBD\|TODO" */SKILL.md 2>/dev/null || echo "无占位符 OK"
 ### Step 3. GitHub 最佳实践调研（失败一直重试）
 
 ```bash
-# 首选 raw 文件（干净文本）；超时/失败换 github.com 页面；仍失败再试并加长超时
+# 首选 raw 文件（干净文本）；超时/解码失败（Decode error）换 github.com 页面；
+# 仍失败换 GitHub API 路径（实测：README raw 解码失败 → api.github.com/.../contents 成功）；
+# 再失败加长超时重试
 webfetch https://raw.githubusercontent.com/<owner>/<repo>/main/skills/<name>/SKILL.md
+webfetch https://api.github.com/repos/<owner>/<repo>/contents/skills/<name>   # 备选
 ```
 
 - 来源候选：anthropics/skills（官方）、obra/superpowers（社区方法论）、
   agentskills.io（规范）等，按相关性选择；
 - **重试策略**：连接失败不停止——重试直至成功或用户终止；每次失败记录
-  （URL、错误、第 N 次重试）；换路径（raw → 页面 → 加超时）再试；
+  （URL、错误、第 N 次重试）；换路径（raw → 页面 → API → 加超时）再试；
 - 记录获取成功的来源清单（URL + 技能名 + 吸收要点）。
 
 ### Step 4. 差距分析（对照表）
