@@ -116,15 +116,16 @@ done
 - 与其他技能配合：生成内容为 agent 产出 → init 归集 skill；生成过程报错 → debug；
   性能不足 → optim；生成后打标签 → tag；生成后查看改动 → diff；分析类项目 → analy；
   生成完成后验证 → test；多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；
-  需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；skill 库升级 → up
+  需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；skill 库升级 → up；
+  多独立子任务（多文件调查/多用例测试）→ dispatch 并行派发
 
 ## 技能编排矩阵（自行调用本目录其他技能）
 
 | 阶段 | 调用技能 | 关键要求（落实细则） |
 |---|---|---|
-| 调查与规划 | init（两阶段）、diff（先定范围）、analy（全库调查）、plan（复杂任务计划） | 阶段 A 只读调查；计划表确认后进入阶段 B；复杂任务先用 plan 编写实现计划 |
+| 调查与规划 | init（两阶段）、diff（先定范围）、analy（全库调查）、plan（复杂任务计划）、dispatch（多目录/多文件并行调查） | 阶段 A 只读调查；计划表确认后进入阶段 B；复杂任务先用 plan 编写实现计划；多独立调查域并行派发 |
 | 实现 | （本技能直接执行） | 最小改动、既有约定、`bash -n`/lint/typecheck |
-| 测试 | test | 先定通过标准；证据驱动；中间结果落盘 `test_out/`；失败转 debug |
+| 测试 | test、dispatch（多用例并行验证） | 先定通过标准；证据驱动；中间结果落盘 `test_out/`；失败转 debug；独立用例可并行 |
 | 修复 | debug | 先复现→证据→二分→不变量→最小修复→回归，循环至成功 |
 | 优化 | optim | 先测量基线→主导项→最小改动→回归全部测试，不虚报收益 |
 | 分析报告 | analy | 结论附 `文件:行号`；`\lstinputlisting` 直引原文件；编译 PDF 到 `docs/` |

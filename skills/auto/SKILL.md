@@ -122,7 +122,8 @@ done
   "做完为止"、"不要问我"、"无限循环"、"跑完为止"、"搞定为止"
 - 与其他技能配合：目标技能未指定 → 默认 all（全流程收敛编排）；
   目标技能不存在 → 启动时列出候选供一次性确认；
-  纯单步任务（debug/optim/test/analy）→ 直接以单技能为目标的 auto 模式
+  纯单步任务（debug/optim/test/analy）→ 直接以单技能为目标的 auto 模式；
+  多独立子任务 → ~auto-dispatch 并行派发（子代理批量执行后整合）
 - 不适用：任务需要持续人工决策/评审（如内容创作风格、架构评审）→ 用对应技能常规模式
 
 ## 工作流程
@@ -132,7 +133,7 @@ done
 ```text
 输入: ~auto-<target> <task>
 target = 前缀中的技能名（all/make/debug/optim/test/analy/diff/tag/init/plan/review/
-         tdd/skill-creator/up/auto 之一）；缺省默认 all
+         tdd/skill-creator/up/dispatch/auto 之一）；缺省默认 all
 task   = 前缀后的完整任务描述
 ```
 
