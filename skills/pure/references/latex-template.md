@@ -10,8 +10,10 @@
 cd docs
 xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex"
 xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex"
-# 溢出检查：Overfull 计数为 0 才交付（>0 按第 4 节定位修复后重编）
+# 溢出检查：Overfull（行宽溢出）与 Float too large（图表溢出页面）计数均为 0 才交付
+# （>0 按第 4 节定位修复后重编）
 grep -c "Overfull" "pure_<slug>_<YYYYMMDD>.log"
+grep -c "Float too large" "pure_<slug>_<YYYYMMDD>.log"
 ```
 
 ## 1. 模板骨架（复制即用）
@@ -20,11 +22,12 @@ grep -c "Overfull" "pure_<slug>_<YYYYMMDD>.log"
 % ============================================================
 % pure 报告 — 规范模板 v2（xelatex + ctex）
 % 用途: 穷尽剖析项目核心部分（算法 / 物理图像与公式 / 代码-物理映射）
-% 编译: 见本文件第 0 节；交付前 Overfull 计数必须为 0
+% 编译: 见本文件第 0 节；交付前 Overfull 与 Float too large 计数必须为 0
 % ============================================================
 \documentclass[UTF8]{ctexart}
 % 宏包顺序固定，不可调整（存在依赖：tcolorbox 依赖 xcolor 等）
 \usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}             % 图片（必须限宽高，见防溢出第 4 节）
 \usepackage{amsmath}              % 公式编号 \label/\eqref 交叉引用
 \usepackage{microtype}            % 微排版，缓解长词/URL 溢出
 \usepackage{listings}             % 代码直引 \lstinputlisting
@@ -135,14 +138,19 @@ C2 & <部分名> & 排除 & <排除理由> \\
 % 每个"深挖"部分一节（subsection），按项目性质选用以下三类剖析框架：
 
 \subsection{<核心部分 1>}
-% —— 纯代码框架 ——
+% —— 纯代码框架（15 步全流程重现: 目的与准备 → 输入/输出 → 整体框架 → 关键细节 →
+%    正确执行 → 实际执行 → 实际输出 → 结果分析(图表/日志) → 综合分析 →
+%    总结/评价/补充 → 参考源/附录；每步附参考源，缺证据标注未验证）——
 % 算法原理(输入/输出/步骤) → 复杂度分析(时间/空间) → 正确性论证(不变量/边界) →
 % 独特竞争力(与朴素实现/通用库的差异与优势量化)
 \begin{algobox}
 \textbf{核心算法:} <算法名与一句原理>；复杂度 <O(n log n) 等，实测或推导并注明>
 \end{algobox}
 
-% —— 纯物理框架 ——
+% —— 纯物理框架（15 步全流程重现: 目的与准备 → 输入(公理/定理/假设/模型) →
+%    输出(公式/定理/预言/判断) → 整体推理框架 → 推导关键细节 → 正确执行 →
+%    实际执行 → 实际输出 → 结果分析(图表/日志) → 综合分析 → 总结/评价/补充 →
+%    参考源/附录）——
 % 物理图像(一句话图像+直观理解) → 模型设定(自由度/参数/几何/边界条件) →
 % 公式推导链(方程编号 \label{eq:xxx}，每步注明依据: 定义/对称性/近似/量纲) →
 % 极限与退化校验(极端参数下公式行为是否合理)
@@ -174,16 +182,16 @@ C2 & <部分名> & 排除 & <排除理由> \\
 % ================= 3 独特性与竞争力评估 =================
 \section{独特性与竞争力评估}
 % 逐项评估: 独特点 | 对比基准 | 优势证据(实测数据/推导结果) | 局限
-\begin{table}[htbp]\centering
-\begin{tabularx}{\textwidth}{lXX}
+% 一律用 xltabular 跨页（table 环境不可跨页，长表溢出页面底部）
+\begin{xltabular}{\textwidth}{lXX}
 \toprule
 \textcolor{algo}{独特点} & 对比基准 & 优势与证据 \\
 \midrule
+\endhead
 <独特点> & <基准> & <证据/数据> \\
 \bottomrule
-\end{tabularx}
 \caption{独特性评估（数据来源: 实测/推导）}
-\end{table}
+\end{xltabular}
 
 % ================= 4 关键片段与公式 =================
 \section{关键片段与公式}
@@ -254,14 +262,16 @@ C2 & <部分名> & 排除 & <排除理由> \\
 | 长词/URL | `\emergencystretch{3em}` + `microtype`；**URL 一律 `\url{...}` 包裹**（正文裸 URL 的 `&` 等字符会报错，实测验证） | Overfull 计数 |
 | 彩色框跨页 | 全部 `breakable` | 目测分页处 |
 | 超宽公式 | `align` 分行 + `&` 对齐，不写超长单行 | Overfull 计数 |
-| 图片溢出 | 宽度统一 `\includegraphics[width=0.9\textwidth]` | 目测 |
+| 图片溢出页面 | 宽度统一 `\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]`——宽高双重限制（长截图/大图高度同样受限），禁止裸 `\includegraphics{...}`；多图并排用 minipage | grep "Float too large" |
+| 长表溢出页面底部 | `table` 环境**不可跨页**，表超一页即溢出页面（Float too large）——所有可能超一页的表一律用 `xltabular` 跨页（表头重复用 `\endhead`，标题用 `\caption`），短表（≤8 行）才可留在 table 环境 | grep "Float too large" |
 | X 列内行内公式 | 数学模式断点少，超长行内公式会溢出（实测 6.6pt）——**表格 X 列避免超长行内公式**；长公式移入正文 `equation` 编号，表内只放短符号或引用编号 | Overfull 计数 |
 | 长路径 token | `\texttt{\detokenize{...}}` 无断点，超列宽即溢出（实测 97pt）——**路径 token 用 `\texttt{\nolinkurl{...}}`**（可在 `.:/_` 后断行，实测 X 列内无溢出）且**只能放 X 列**：l 列不换行，34 字符等宽 token 放 l 列实测溢出 10pt 量级；中文/短路径可用 `\detokenize` | Overfull 计数 |
 | 无空格畸形超长行 | 单个 token 超 120 字符且无空格时 listings 断行失效（实测：178 字符行溢出无法用参数消除）——**该行从引用范围剔除并在正文注明**（"第 N 行为 M 字符无空格赋值行，超出 listings 安全断行能力，略去；全文见 文件:N"），报告附注如实声明 | Overfull 计数 |
 
-编译后必须运行 `grep -c "Overfull" <file>.log`：
-计数为 0 才可交付；>0 时按 `.log` 中 `file-line-error` 行号定位修复（优先缩减代码片段行数/
-表格列文本/公式换行），修复后重编直至为 0。
+编译后必须运行 `grep -c "Overfull" <file>.log` 与 `grep -c "Float too large" <file>.log`：
+**两个计数都为 0 才可交付**（Overfull=行宽溢出，Float too large=图表溢出页面，分开定位）；
+>0 时按 `.log` 中 `file-line-error` 行号定位修复（Overfull 优先缩减代码片段行数/
+表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），修复后重编直至为 0。
 
 ## 5. 内容丰富度要求（逻辑通顺 + 内容充实）
 
@@ -270,7 +280,12 @@ C2 & <部分名> & 排除 & <排除理由> \\
    参考源清单 → 结论（收束）；每节主题句先行、节末小结并自然引出下节；
 2. **穷尽性可见**：核心部分总清单三态（深挖/浅析/排除）必须填满，报告结尾重述
    "N 深挖 / M 浅析 / K 排除"，证明穷尽而非挑选；
-3. **每层都要有**：每部分剖析遵循 原理→证据→独特点 三层，不跳跃；
-4. **表格密度**：核心部分清单表、映射表、独特性评估表、参考源表齐全；
+3. **深挖部分必走 15 步框架**：每个"深挖"部分按 A（代码）/B（物理）15 步全流程重现
+   （目的与准备/输入/输出/整体框架/关键细节/正确执行/实际执行/实际输出/
+   结果分析（结合图表、日志、其他文件）/综合分析/总结/评价/补充/参考源/附录），
+   每步至少一段分析 + 一个证据，缺证据步骤标注 `未验证` 不跳过编号；
+4. **每层都要有**：每部分剖析遵循 原理→证据→独特点 三层，不跳跃；
+5. **表格密度**：核心部分清单表、映射表、独特性评估表、参考源表齐全；
    纯物理报告公式密度高（推导链带编号），纯代码报告算法框图/复杂度表密度高；
-5. **语句过渡**：节间用过渡句衔接，各核心部分剖析之间对照呼应（共同设计动机/递进关系）。
+6. **语句过渡**：节间用过渡句衔接，各核心部分剖析之间对照呼应（共同设计动机/递进关系）；
+7. **参考源密度**：参考源清单条数 ≥ 深挖部分数 ×2，每个深挖部分至少 2 个证据。
