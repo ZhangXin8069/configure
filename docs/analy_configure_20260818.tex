@@ -1,0 +1,262 @@
+% ============================================================
+% analy 报告 — 规范模板 v2（xelatex + ctex）
+% 用途: 仓库分析报告（主体结构 / 各部分关系 / 项目思路 / 主题分析）
+% 编译: 见 latex-template.md 第 0 节；交付前 Overfull 计数必须为 0
+% ============================================================
+\documentclass[UTF8]{ctexart}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xltabular}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{evidence}{HTML}{1E8449}
+\definecolor{reference}{HTML}{8C6D1F}
+\definecolor{conclusion}{HTML}{8B1A1A}
+\definecolor{codebg}{HTML}{F4F6F7}
+\definecolor{struct}{HTML}{3B3B98}
+\definecolor{relation}{HTML}{0E7C7B}
+\definecolor{idea}{HTML}{B03A2E}
+\definecolor{warn}{HTML}{D35400}
+\definecolor{hl}{HTML}{FDF6E3}
+
+\setlength{\emergencystretch}{3em}
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=relation}
+
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{struct}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{struct!70!black}}{\thesubsubsection}{1em}{}
+
+\newtcolorbox{conclbox}{breakable,colback=conclusion!6,colframe=conclusion,title=结论}
+\newtcolorbox{refbox}{breakable,colback=reference!6,colframe=reference,title=参考背景}
+\newtcolorbox{ideabox}{breakable,colback=idea!6,colframe=idea,title=项目思路}
+\newtcolorbox{warnbox}{breakable,colback=warn!6,colframe=warn,title=局限与风险}
+\newtcolorbox{keybox}{breakable,colback=hl,colframe=accent,title=要点}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  language=bash,
+  firstnumber=auto,
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{evidence!70!black},
+  stringstyle=\color{struct},
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{accent}{$\hookrightarrow$}\space},
+  keepspaces=true,
+  columns=flexible,
+  numbers=left,numberstyle=\tiny\color{struct!60!black},
+}
+
+\title{configure 仓库全库分析（结构与 env.sh 加载链）}
+\author{opencode analy}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本报告对 \texttt{/root/configure}（作者 ZhangXin 的个人 shell / 点文件配置仓库）做全库只读分析。
+分析范围覆盖顶层入口 \texttt{env.sh}、\texttt{bin/}（121 个工具脚本）、\texttt{lib/}
+（33 个版本化配置目录 + 15 个非版本化基础配置）、\texttt{skills/}（19 个 agent 技能）、
+\texttt{docs/} 与说明文件。核心结论（三视角）：(1) 主体结构为「入口层(env.sh) → 基础配置层(lib/\_*) →
+版本化环境层(lib/*-v\{YYYYMMDD\}) → 工具层(bin/) → 文档/技能层(docs/,skills/)」的分层体系；
+(2) 各部分关系以 \texttt{env.sh} 的 source 链为主线（\texttt{env.sh → lib/\_git\_aliases.sh}），
+加载链防重复（PATH/LD\_LIBRARY\_PATH 拼接前做 \texttt{case} 前缀检测）；(3) 项目思路是以
+「版本化目录 + @SECTION@ 标记」实现多机环境的可追溯与可复现。主题分析聚焦 env.sh 加载链的
+逐段机制与 lib 版本化约定。
+\end{abstract}
+
+\tableofcontents
+
+% ================= 1 仓库概览 =================
+\section{仓库概览}
+\subsection{定位与说明文件}
+\texttt{configure} 是个人 shell / 点文件配置仓库，为多台机器（工作站、笔记本、HPC 集群、容器、云端）
+提供版本化 shell 配置、工具脚本与环境引导。其入口与加载链说明集中于仓库根的 \texttt{AGENTS.md}
+（\texttt{\nolinkurl{AGENTS.md:1-30}}），README 仅一行指向 docs（\texttt{\nolinkurl{README.md:1-2}}）。
+
+\subsection{规模统计与 git 信息}
+\begin{table}[htbp]\centering
+\begin{tabular}{ll}
+\toprule
+指标 & 实测值 \\
+\midrule
+顶层说明文件 & 4（AGENTS.md / README.md / LICENSE / env.sh） \\
+\texttt{bin/} 文件数 & 121（sh 66 / bat 10 / ps1 2 / 其它 43） \\
+\texttt{bin/} 总行数 & 4286 \\
+\texttt{lib/} 文件数 & 2305 \\
+\texttt{lib/} 版本化目录数 & 33（name-v\{YYYYMMDD\} 形式） \\
+\texttt{skills/} 文件数 & 98（19 个技能目录） \\
+\texttt{docs/} 文件数 & 10 \\
+提交数 & 约 600+（最近提交 691078b，2026-08-18） \\
+标签数 & 33+（stab 系列至 stab33） \\
+\bottomrule
+\end{tabular}
+\caption{仓库实测统计（数据来源: find/wc/git 实测，2026-08-18）}
+\end{table}
+
+% ================= 2 主体结构 =================
+\section{主体结构}
+仓库按「加载顺序」与「职责」自然分层，各层成员与职责如下（数据来源: 全库索引实测
+\texttt{\nolinkurl{AGENTS.md:22-40}}）。
+
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{struct}{层次} & 路径 & \textcolor{struct}{职责} \\
+\midrule
+\endhead
+入口层 & \texttt{env.sh} & 被 \texttt{\textasciitilde/.zshrc}/\texttt{\textasciitilde/.bashrc} source；统一注入 PATH/LD\_LIBRARY\_PATH/locale/git 别名/通用别名（\texttt{\nolinkurl{env.sh:1-4}}） \\
+基础配置层 & \texttt{lib/\_*} & 15 个下划线前缀基础配置：\_bashrc、\_zshrc、\_vimrc、\_git\_aliases.sh、\_oh-my-zsh、\_opencode、\_package、\_docker、\_font、\_mac、\_snsc、\_vim、\_claude\_code、\_gitignore、\_ohmyzsh\_install.sh \\
+版本化环境层 & \texttt{lib/*-v\{YYYYMMDD\}} & 33 个带日期的机器/场景专属环境配置（如 \texttt{mac-v20260815}、\texttt{dcu-v20260227}、\texttt{docker-v20260408}），更新时新建不覆盖旧版 \\
+工具层 & \texttt{bin/} & 121 个可调用脚本（git 辅助、容器、AI 客户端、系统工具等），由 env.sh 注入 PATH 后按名调用 \\
+文档层 & \texttt{docs/} & 参考文档、包清单（apt\_requirement.txt / pip\_requirement.txt）、图片素材 \\
+技能层 & \texttt{skills/} & 19 个 agent 技能（init/tag/debug/analy/pure/\ldots），被 opencode 调用 \\
+约定层 & \texttt{AGENTS.md} & 仓库总览与加载链约定文档 \\
+\bottomrule
+\caption{主体结构分层（数据来源: 全库索引实测）}
+\end{xltabular}
+
+% ================= 3 各部分关系 =================
+\section{各部分关系}
+\subsection{加载主链}
+\texttt{env.sh} 是唯一的加载入口：由 shell 启动文件 source，再以 source 拉入 \texttt{lib/\_git\_aliases.sh}
+（\texttt{\nolinkurl{env.sh:68-69}}）。点文件部署由 \texttt{bin/sh\_init.sh} 完成（\texttt{[-b|-z|-a]}，
+将仓库配置写入 \texttt{\textasciitilde/.zshrc} 与 \texttt{\textasciitilde/.bashrc}，旧文件带时间戳备份）。
+
+\begin{keybox}
+\textbf{依赖主链:} \textcolor{relation}{env.sh → lib/\_git\_aliases.sh}；
+\textbf{部署链:} \textcolor{relation}{bin/sh\_init.sh → \textasciitilde/.zshrc / \textasciitilde/.bashrc → source env.sh}。
+\end{keybox}
+
+\subsection{版本化配置演进关系}
+\texttt{lib/} 下同时存在「非版本化基础配置（\_*）」与「版本化环境目录（*-v\{YYYYMMDD\}）」。
+约定：更新某环境配置时\emph{新建}带当天日期的目录，\emph{不改动}旧目录（\texttt{\nolinkurl{AGENTS.md:42-46}}），
+从而保证历史配置可参考、可回退。\texttt{env.sh} 用 \texttt{@SECTION@}（单@，激活块）与
+\texttt{@@SECTION@@}（双@，注释块）分节（\texttt{\nolinkurl{AGENTS.md:47-49}}）。
+
+\subsection{工具脚本与入口的配对}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{relation}{关系} & 对象 & \textcolor{relation}{说明} \\
+\midrule
+\endhead
+注入 & env.sh → bin/ & env.sh 将 \texttt{bin/} 前置 PATH，脚本按名调用（\texttt{\nolinkurl{env.sh:38-43}}） \\
+source & env.sh → lib/\_git\_aliases.sh & 加载 git 别名（\texttt{\nolinkurl{env.sh:68-69}}） \\
+部署 & bin/sh\_init.sh → \textasciitilde/.zshrc & 点文件软/硬链接部署（\texttt{\nolinkurl{AGENTS.md:18-21}}） \\
+归档 & skills/ → agent 生成内容 & init 技能将 agent 生成内容归集为 skill（\texttt{\nolinkurl{AGENTS.md:21}}） \\
+\bottomrule
+\caption{各部分引用/依赖关系（数据来源: 实测）}
+\end{xltabular}
+
+% ================= 4 项目思路 =================
+\section{项目思路}
+\subsection{设计意图}
+三层设计意图：(1) \textbf{可移植}——env.sh 用 \texttt{\_SRC=\$\{BASH\_SOURCE[0]\}} 解析仓库绝对路径
+（\texttt{\nolinkurl{env.sh:5-10}}），使配置可在任意机器按绝对路径定位；(2) \textbf{防重复}——PATH 与
+LD\_LIBRARY\_PATH 拼接前以 \texttt{case ":/*:"} 检测是否已含仓库前缀，避免多次 source 导致无限拼接
+（\texttt{\nolinkurl{env.sh:38-49}}）；(3) \textbf{可追溯}——lib 版本化目录 + @SECTION@ 标记，使环境
+配置变更可定位到具体日期版本。
+
+\subsection{演进脉络}
+git 历史显示提交高度密集（2026-08-16 单日约 14 次提交，\texttt{\nolinkurl{git log -15}}），标签已达
+\texttt{stab33}，说明仓库处于活跃维护期，采用「稳定里程碑」节奏打标。lib 中 mac 版本目录出现多个日期
+（\texttt{mac-v20251207 / mac-v20260730 / mac-v20260814 / mac-v20260815}），印证「更新即新建目录」的版本化约定。
+
+\subsection{典型工作流}
+一次典型任务：编辑 \texttt{env.sh} 或 \texttt{lib/} 下某版本化配置 → 通过 \texttt{bin/gpush.sh}
+（\texttt{\nolinkurl{bin/gpush.sh:1-15}}）提交推送 → 在新机器上 \texttt{bin/sh\_init.sh -z} 部署点文件 →
+新 shell 启动 source \texttt{env.sh} 完成环境引导。
+
+\begin{ideabox}
+该仓库的本质是「用 git 版本化一切 shell 环境」：入口单一（env.sh）、配置分层（基础 vs 版本化）、
+部署可逆（时间戳备份）。其「思路」是把多机环境差异收敛为「同一份仓库 + 不同机器目录」。
+\end{ideabox}
+
+% ================= 5 主题分析 =================
+\section{主题分析：env.sh 加载链逐段机制}
+\subsection{5.1 路径解析（A 框架：目的与输入）}
+env.sh 被 source 而非执行（\texttt{\nolinkurl{env.sh:1-3}}）。它先用 \texttt{\_SRC=\$\{BASH\_SOURCE[0]:-\$\{0\}\}}
+取得自身来源，再经 \texttt{case} 截取目录、\texttt{cd \&\& pwd} 得到仓库绝对路径 \texttt{\_PATH}
+（\texttt{\nolinkurl{env.sh:5-10}}）。这是后续所有相对路径解析的锚点（确证）。
+
+
+\subsection{5.2 locale 检测（A 框架：关键细节）}
+仅当 \texttt{LANG} 未命中 UTF-8 模式时才检测：单次 \texttt{locale -a | grep -im1} 取
+\texttt{C.UTF-8/en\_US.UTF-8}，避免 setlocale 警告；命中则跳过以省子进程（\texttt{\nolinkurl{env.sh:17-25}}）。
+此为「按需检测、防重复、省开销」原则的典型体现（确证）。
+
+
+\subsection{5.3 PATH / LD\_LIBRARY\_PATH 防重复拼接（A 框架：核心算法）}
+PATH 拼接前以 \texttt{\detokenize{case ":$PATH:" in *":$_PATH/bin:*"}} 判定是否已含仓库 bin 前缀，
+仅当缺失时才前置（\texttt{\nolinkurl{env.sh:38-43}}）。LD\_LIBRARY\_PATH 同理（\texttt{\nolinkurl{env.sh:44-49}}）。
+这保证 env.sh 被多次 source（如 zshrc 与 bashrc 同时加载，或嵌套 shell）时 PATH 不无限增长（确证，推断其动机为避免重复路径导致的命令解析歧义与启动变慢）。
+
+
+\subsection{5.4 git 别名与通用别名（A 框架：装配）}
+第 68-69 行 source \texttt{lib/\_git\_aliases.sh}（267 行，含大量 git 别名）；随后定义两 shell 通用别名
+（导航 \texttt{...=../..}、grep/ls 系、常用工具 python/pip 映射等），并对 zsh 专有别名
+（\texttt{history=omz\_history}、\texttt{which-command=whence}）按 \texttt{\$ZSH\_VERSION} 分支定义
+（\texttt{\nolinkurl{env.sh:68-97}}）。这种「通用先行、专有后补」的分支结构保证了 bash 与 zsh 双兼容（确证）。
+
+
+\subsection{5.5 @SECTION@ 标记机制（A 框架：可复现性）}
+env.sh 中的 \texttt{@@LOCALE@@ / @@OPENMPI@@ / @@CUDA@@ / @@PATH@@} 双@块为注释型配置位，安装命令首次
+运行后保留为注释、只留生效的 export（\texttt{\nolinkurl{AGENTS.md:47-49}}）。单@块（\texttt{@INIT@、
+@EXPORT@、@ALIAS@}）为激活分节标记，便于脚本化定位与替换（确证）。
+
+
+% ================= 6 关键片段 =================
+\section{关键代码/文档片段}
+\lstinputlisting[firstline=38,lastline=49]{/root/configure/env.sh}
+
+\lstinputlisting[firstline=5,lastline=10]{/root/configure/env.sh}
+
+% ================= 7 参考源清单 =================
+\section{参考源清单}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{evidence}{参考源} & 类型 & 内容/作用 \\
+\midrule
+\endhead
+\texttt{\nolinkurl{env.sh:1-10}} & 仓库 & 入口声明与路径解析 \\
+\texttt{\nolinkurl{env.sh:17-25}} & 仓库 & locale UTF-8 按需检测 \\
+\texttt{\nolinkurl{env.sh:38-49}} & 仓库 & PATH/LD\_LIBRARY\_PATH 防重复拼接 \\
+\texttt{\nolinkurl{env.sh:68-69}} & 仓库 & source lib/\_git\_aliases.sh \\
+\texttt{\nolinkurl{env.sh:94-97}} & 仓库 & zsh 专有别名分支 \\
+\texttt{\nolinkurl{lib/_git_aliases.sh}} & 仓库资产 & git 别名集合（267 行） \\
+\texttt{\nolinkurl{AGENTS.md:18-49}} & 仓库文档 & 加载链与版本化约定 \\
+\texttt{\nolinkurl{bin/gpush.sh:1-15}} & 仓库资产 & 提交推送辅助脚本 \\
+\texttt{\nolinkurl{git log -15}} & 仓库 & 提交密度与活跃度证据 \\
+\bottomrule
+\end{xltabular}
+
+% ================= 8 结论与局限 =================
+\section{结论与局限}
+\begin{conclbox}
+\textbf{结构}：入口单一（env.sh）→ 基础配置（lib/\_*）+ 版本化环境（lib/*-v\{date\}）→ 工具（bin/）→
+文档/技能（docs/,skills/）的分层体系。\\
+\textbf{关系}：以 env.sh 的 source 链（→ lib/\_git\_aliases.sh）与 sh\_init.sh 部署链为主轴。\\
+\textbf{思路}：用 git 版本化一切 shell 环境，以「版本化目录 + @SECTION@ 标记 + 防重复加载」实现多机
+环境的可追溯、可复现、可部署。
+\end{conclbox}
+
+\begin{warnbox}
+\textcolor{warn}{未验证}：(1) \texttt{bin/} 下 43 个「其它」文件（含 Windows \texttt{.bat}/PowerShell）未逐一读取，
+仅按类型统计；(2) lib 内 33 个版本化目录的具体差异未逐目录 diff；(3) 部分技能（skills/）的内部逻辑未深入，
+本报告聚焦仓库配置主线。以上不影响三视角结论，但 pure 报告可进一步深挖。
+\end{warnbox}
+
+\end{document}
