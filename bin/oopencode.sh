@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch opencode: Build agent + auto + 可选模型 (-p/-f/-q/-k/-g, 默认 -f) + debug logs
+# Launch opencode: Build agent + auto + 可选模型 (-h/-p/-f/-q/-k/-g, 默认 -h) + debug logs
 # 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
 
 # 脚本目录定位：unix-op.out 经 OPENCODE_SCRIPT_DIR 注入真实目录
@@ -75,19 +75,21 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
-# 模型选择：默认 -f DeepSeek V4 Flash；-p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
-case "${1:-f}" in
+# 模型选择：默认 -h Hy3 (high)；-p Pro / -f Flash / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
+VARIANT="max"
+case "${1:-h}" in
     -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
     -q) MODEL_ID="opencode-go/qwen3.8-max";      MODEL_NAME="Qwen3.8 Max";;
     -k) MODEL_ID="opencode-go/kimi-k3";          MODEL_NAME="Kimi K3";;
     -g) MODEL_ID="opencode-go/gpt-5.6-luna";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
-    -f|*) MODEL_ID="opencode-go/deepseek-v4-flash"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
+    -f) MODEL_ID="opencode-go/deepseek-v4-flash"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
+    -h|*) MODEL_ID="opencode-go/hy3";            MODEL_NAME="Hy3"; VARIANT="high";;
 esac
 
-export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"max"}}}'
+export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
 
 echo "============================================================"
-echo "  OpenCode: build | auto | ${MODEL_NAME} (max)"
+echo "  OpenCode: build | auto | ${MODEL_NAME} (${VARIANT})"
 echo "  log: ${LOG_FILE}"
 echo "  user-input list: ${LIST_FILE}"
 if [[ -n "${project_root}" ]]; then
