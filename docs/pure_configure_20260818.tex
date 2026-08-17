@@ -1,0 +1,243 @@
+% ============================================================
+% pure 报告 — 规范模板 v2（xelatex + ctex）
+% 用途: 仓库核心部分穷尽剖析（纯代码向：shell 配置仓库的独特机制）
+% 编译: 见 latex-template.md 第 0 节；交付前 Overfull 计数必须为 0
+% ============================================================
+\documentclass[UTF8]{ctexart}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xltabular}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{evidence}{HTML}{1E8449}
+\definecolor{reference}{HTML}{8C6D1F}
+\definecolor{conclusion}{HTML}{8B1A1A}
+\definecolor{codebg}{HTML}{F4F6F7}
+\definecolor{struct}{HTML}{3B3B98}
+\definecolor{relation}{HTML}{0E7C7B}
+\definecolor{idea}{HTML}{B03A2E}
+\definecolor{warn}{HTML}{D35400}
+\definecolor{hl}{HTML}{FDF6E3}
+% —— pure 场景色 ——
+\definecolor{algo}{HTML}{CA6F1E}      % 算法/机制(橙): 核心逻辑
+\definecolor{phys}{HTML}{6C3483}      % 物理(紫): 本仓库无，预留
+\definecolor{map}{HTML}{B03A6E}       % 映射(玫红): 预留
+
+\setlength{\emergencystretch}{3em}
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=relation}
+
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{struct}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{struct!70!black}}{\thesubsubsection}{1em}{}
+
+\newtcolorbox{conclbox}{breakable,colback=conclusion!6,colframe=conclusion,title=结论}
+\newtcolorbox{refbox}{breakable,colback=reference!6,colframe=reference,title=参考背景}
+\newtcolorbox{ideabox}{breakable,colback=idea!6,colframe=idea,title=项目思路}
+\newtcolorbox{warnbox}{breakable,colback=warn!6,colframe=warn,title=局限与风险}
+\newtcolorbox{keybox}{breakable,colback=hl,colframe=accent,title=要点}
+\newtcolorbox{algobox}{breakable,colback=algo!6,colframe=algo,title=机制/算法}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  language=bash,
+  firstnumber=auto,
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{evidence!70!black},
+  stringstyle=\color{struct},
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{accent}{$\hookrightarrow$}\space},
+  keepspaces=true,
+  columns=flexible,
+  numbers=left,numberstyle=\tiny\color{struct!60!black},
+}
+
+\title{configure 仓库核心部分穷尽剖析}
+\author{opencode pure}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本报告对 \texttt{/root/configure}（shell / 点文件配置仓库）的\emph{核心部分}做穷尽剖析。
+项目性质判定：\textcolor{algo}{纯代码向}（166 个 shell 脚本、622 个 markdown、28 个 python，无物理推导）。
+核心部分候选清单共 8 项，经三态分配：\textbf{深挖 3 项}（C1 env.sh 防重复加载逻辑、C3 lib 版本化目录
++ @SECTION@ 标记约定、C8 zsh/bash 双兼容分支）、\textbf{浅析 3 项}（C2 locale 按需检测、C4 sh\_init.sh
+点文件部署、C5 git 别名体系）、\textbf{排除 2 项}（C6 bin/ 通用工具脚本集合、C7 skills/ agent 技能库）。
+最强竞争力归结为两点：① 用 \texttt{case} 前缀检测实现的「PATH/LD\_LIBRARY\_PATH 防重复拼接」，
+保证 env.sh 可安全多次 source；② 以「日期版本化目录 + 单/双@分节标记」实现多机环境配置的可追溯与可复现。
+\end{abstract}
+
+\tableofcontents
+
+% ================= 1 项目定位与核心部分清单 =================
+\section{项目定位与核心部分清单}
+\subsection{性质判定}
+\begin{table}[htbp]\centering
+\begin{tabular}{ll}
+\toprule
+判定线索 & 实测 \\
+\midrule
+主体文件 & shell 脚本（sh 166、py 28）、配置（md 622） \\
+独特性载体 & 加载机制 / 版本化约定（非通用算法库） \\
+物理内容 & 无（纯工程配置） \\
+\bottomrule
+\end{tabular}
+\caption{项目性质判定（纯代码向；数据来源: find/wc 实测）}
+\end{table}
+\textcolor{algo}{判定结论}：纯代码向。仓库本质是一套「被 source 的环境引导脚本 + 版本化配置」，
+其独特竞争力在于\textbf{加载机制的健壮性}与\textbf{配置组织的可追溯性}，而非具体算法。
+
+\subsection{核心部分候选清单（三态闭环）}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{algo}{编号} & 候选 & 三态 / 理由 \\
+\midrule
+\endhead
+C1 & env.sh + 防重复 PATH/LD\_LIBRARY\_PATH & \textcolor{algo}{深挖}：仓库加载正确性的核心保障 \\
+C2 & locale UTF-8 按需检测 & 浅析：稳健但属常见模式 \\
+C3 & lib 版本化目录 + @SECTION@ 标记 & \textcolor{algo}{深挖}：多机环境可追溯的关键设计 \\
+C4 & sh\_init.sh 点文件部署 & 浅析：部署入口，逻辑直接 \\
+C5 & git 别名体系（\_git\_aliases.sh） & 浅析：约定俗成，非独有 \\
+C6 & bin/ 通用工具脚本集合 & 排除：通用脚手架，无独特竞争力 \\
+C7 & skills/ agent 技能库 & 排除：agent 元配置，非本仓库环境核心 \\
+C8 & zsh/bash 双兼容分支 & \textcolor{algo}{深挖}：决定配置跨 shell 可用性的关键 \\
+\bottomrule
+\caption{核心部分候选清单（三态填满，无未处理项）}
+\end{xltabular}
+
+% ================= 2 逐部分深剖（深挖） =================
+\section{逐部分深度剖析}
+
+\subsection{C1 env.sh 防重复加载逻辑（深挖，A 代码框架）}
+\textbf{A1 目的与前期准备}：env.sh 可能被 \texttt{\textasciitilde/.zshrc} 与 \texttt{\textasciitilde/.bashrc}
+同时 source，或被嵌套子 shell 重复加载；若不防重复，PATH 将无限拼接导致命令解析歧义与启动变慢
+（\texttt{\nolinkurl{env.sh:38-43}}）。\\
+\textbf{A2 输入}：当前 \texttt{\$PATH} / \texttt{\$LD\_LIBRARY\_PATH} 与环境变量。\\
+\textbf{A3 输出}：前置了仓库 \texttt{bin/} 等目录、且不含重复前缀的 PATH。\\
+\textbf{A4 整体框架}：以 \texttt{\detokenize{case ":$PATH:" in *":$_PATH/bin:*"}} 前缀匹配判定是否已含仓库路径
+（\texttt{\nolinkurl{env.sh:40-43}}）。\\
+\textbf{A5 关键细节}：使用 \texttt{:\$PATH:} 首尾补冒号，使「完整路径段」可被 \texttt{*":\ldots/bin:"*} 精确匹配，
+避免子串误判（如 \texttt{/x/bin} 误匹配 \texttt{/xy/bin}）。\\
+\textbf{A6 正确执行}：任意 shell 启动自动 source，无需手动调用。\\
+\textbf{A7 实际执行}：实测 env.sh 第 38-49 行（本次会话已读取）。\\
+\textbf{A8 实际输出}：首次加载后 PATH 含 \texttt{\_PATH/bin:} 前缀；二次加载因命中 case 分支而跳过。\\
+\textbf{A9 结果分析}：防重复保证幂等性——这是「可安全多次 source」的工程正确性要点。\\
+\textbf{A10 综合分析}：与 C8 双兼容分支共同构成 env.sh 的健壮性底座。\\
+\textbf{A11 结尾总结}：\begin{algobox}单@/双@ 之外的「防重复拼接」是 env.sh 最核心、最具复用价值的机制。\end{algobox}
+\textbf{A12 结尾评价}：优点——幂等、零开销（仅一次 case 匹配）；可改进——未对重复项做去重清理，仅「跳过拼接」。\\
+\textbf{A13 补充说明}：LD\_LIBRARY\_PATH 采用同一模式（\texttt{\nolinkurl{env.sh:46-49}}）。\\
+\textbf{A14 参考源}：\texttt{\nolinkurl{env.sh:38-49}}。\\
+\textbf{A15 附录}：代码片段见第 5 节。
+
+\subsection{C3 lib 版本化目录与 @SECTION@ 标记（深挖）}
+\textbf{A1 目的}：为多机（工作站/笔记本/HPC/容器/云端）保存各自环境配置，且变更可追溯。\\
+\textbf{A2 输入}：机器/场景专属的环境变量与安装命令。\\
+\textbf{A3 输出}：形如 \texttt{lib/mac-v20260815/}、\texttt{lib/dcu-v20260227/} 的版本化目录（实测 33 个）。\\
+\textbf{A4 整体框架}：更新配置时\emph{新建}带当天日期目录、\emph{不改动}旧目录（\texttt{\nolinkurl{AGENTS.md:42-46}}）。\\
+\textbf{A5 关键细节}：env.sh 用 \texttt{@SECTION@}（单@，激活块）与 \texttt{@@SECTION@@}（双@，注释块）分节
+（\texttt{\nolinkurl{AGENTS.md:47-49}}），安装命令首次运行后保留为注释、只留生效的 export，保证可复现。\\
+\textbf{A6 正确执行}：复制旧版本目录 → 改名加新日期 → 修改 → 在 env.sh 中引用新路径。\\
+\textbf{A7 实际执行}：\texttt{ls lib/} 实测见 mac 连续多日期版本（\texttt{mac-v20251207 / mac-v20260730 / mac-v20260814 / mac-v20260815}）。\\
+\textbf{A8 实际输出}：33 个 \texttt{*-v\{YYYYMMDD\}} 目录 + 15 个 \texttt{\_*} 基础配置。\\
+\textbf{A9 结果分析}：版本化使「回退到某日环境」成为 O(1) 操作，是仓库可维护性的关键。\\
+\textbf{A10 综合分析}：与 git 提交/标签（stab33）形成双层可追溯。\\
+\textbf{A11 结尾总结}：\begin{algobox}「日期即版本号」是把时间维度引入配置管理的简洁而有效的设计。\end{algobox}
+\textbf{A12 结尾评价}：优点——零工具依赖、人类可读；可改进——目录无元数据文件说明适用范围。\\
+\textbf{A13 补充说明}：非版本化 \texttt{\_*} 配置（\_zshrc/\_vimrc 等）为跨机通用基础件。\\
+\textbf{A14 参考源}：\texttt{\nolinkurl{AGENTS.md:42-49}}、\texttt{\nolinkurl{lib/}}。\\
+\textbf{A15 附录}：见第 5 节。
+
+\subsection{C8 zsh/bash 双兼容分支（深挖）}
+\textbf{A1 目的}：同一份 env.sh 在 zsh 与 bash 下均可用且不覆盖各自内置语义。\\
+\textbf{A2 输入}：\texttt{\$ZSH\_VERSION} 环境变量（bash 下为空）。\\
+\textbf{A3 输出}：zsh 下额外定义 \texttt{history=omz\_history}、\texttt{which-command=whence}。\\
+\textbf{A4 整体框架}：\texttt{if [ -n "\$\{ZSH\_VERSION\}" ]; then \ldots fi} 分支（\texttt{\nolinkurl{env.sh:94-97}}）。\\
+\textbf{A5 关键细节}：仅在 zsh 定义专有别名，bash 下留给其原生 \texttt{history}。\\
+\textbf{A6 正确执行}：source env.sh 时按当前 shell 自动分支。\\
+\textbf{A7 实际执行}：实测 env.sh 94-97 行。\\
+\textbf{A8 实际输出}：zsh 获得 OMZ 兼容别名。\\
+\textbf{A9 结果分析}：避免「在 bash 下误定义 history 导致内置失效」的兼容性 bug。\\
+\textbf{A10 综合分析}：与 C1 共同保证「一份配置，两种 shell」。\\
+\textbf{A11 结尾总结}：\begin{algobox}以 \texttt{\$ZSH\_VERSION} 存在性做特征检测，是跨 shell 配置的常见但关键的正确性手段。\end{algobox}
+\textbf{A12 结尾评价}：优点——最小分支、零副作用；可改进——未对 fish 等其它 shell 兼容。\\
+\textbf{A13 补充说明}：git 别名中 zsh 专有的 \texttt{gk/gke/globurl} 在 \texttt{lib/\_git\_aliases.sh} 内同样按 \texttt{\$ZSH\_VERSION} 分支。\\
+\textbf{A14 参考源}：\texttt{\nolinkurl{env.sh:94-97}}、\texttt{\nolinkurl{AGENTS.md:23-24}}。\\
+\textbf{A15 附录}：见第 5 节。
+
+% ================= 3 浅析部分 =================
+\section{浅析部分}
+\subsection{C2 locale 按需检测}
+仅当 \texttt{LANG} 未命中 UTF-8 时才单次 \texttt{grep -im1} 取 \texttt{C.UTF-8/en\_US.UTF-8}
+（\texttt{\nolinkurl{env.sh:17-25}}）；命中即跳过以省子进程。属稳健但常见的模式，故浅析。
+
+\subsection{C4 sh\_init.sh 点文件部署}
+\texttt{bin/sh\_init.sh [-b|-z|-a]} 部署 bashrc / zshrc+oh-my-zsh / 全部，旧文件带时间戳备份
+（\texttt{\nolinkurl{AGENTS.md:18-21}}）。逻辑直接，无独特算法，浅析。
+
+\subsection{C5 git 别名体系}
+\texttt{lib/\_git\_aliases.sh}（267 行）集中定义 git 别名；zsh 专有别名按 \texttt{\$ZSH\_VERSION} 分支
+（\texttt{\nolinkurl{AGENTS.md:23-24}}）。属约定俗成内容，浅析。
+
+% ================= 4 排除部分 =================
+\section{排除部分}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{warn}{编号} & 排除项 & \textcolor{warn}{理由} \\
+\midrule
+\endhead
+C6 & bin/ 通用工具脚本集合（121 个） & 多为对 git/docker/系统命令的薄封装，通用脚手架，无独特竞争力 \\
+C7 & skills/ agent 技能库（19 个） & 属 agent 元配置，描述「如何分析本仓库」而非「仓库环境本身」，非核心 \\
+\bottomrule
+\caption{排除项（三态闭环：深挖 3 / 浅析 3 / 排除 2）}
+\end{xltabular}
+
+% ================= 5 关键片段 =================
+\section{关键代码/文档片段}
+\lstinputlisting[firstline=38,lastline=49]{/root/configure/env.sh}
+\lstinputlisting[firstline=94,lastline=97]{/root/configure/env.sh}
+
+% ================= 6 参考源清单 =================
+\section{参考源清单}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{evidence}{参考源} & 类型 & 内容/作用 \\
+\midrule
+\endhead
+\texttt{\nolinkurl{env.sh:38-49}} & 仓库 & PATH/LD\_LIBRARY\_PATH 防重复拼接（C1） \\
+\texttt{\nolinkurl{env.sh:17-25}} & 仓库 & locale 按需检测（C2） \\
+\texttt{\nolinkurl{env.sh:94-97}} & 仓库 & zsh 专有别名分支（C8） \\
+\texttt{\nolinkurl{AGENTS.md:42-49}} & 仓库文档 & 版本化目录 + @SECTION@ 约定（C3） \\
+\texttt{\nolinkurl{AGENTS.md:18-24}} & 仓库文档 & sh\_init.sh 部署 / git 别名分支 \\
+\texttt{\nolinkurl{lib/}} & 仓库资产 & 33 个版本化目录实测 \\
+\bottomrule
+\end{xltabular}
+
+% ================= 7 结论 =================
+\section{结论与局限}
+\begin{conclbox}
+\textbf{最强竞争力（2 点）}：① env.sh 的「防重复 PATH 拼接」（C1）——以 \texttt{case} 前缀检测保证
+幂等加载；② lib 版本化目录 + @SECTION@ 标记（C3）——把时间维度引入配置管理，实现多机环境可追溯、
+可复现。C8 双兼容分支是二者生效的前提。C2/C4/C5 为稳健但通用的支撑机制；C6/C7 排除为通用脚手架与元配置。
+\end{conclbox}
+\begin{warnbox}
+\textcolor{warn}{未验证}：① 33 个版本化目录的内部差异未逐目录 diff；② C6 中个别脚本（如 gpush.sh）可能含
+独特逻辑，但整体判定为通用脚手架；③ 未做「与朴素 dotfiles 方案（如直接软链）」的定量对比，独特性结论为
+定性（确证 + 推断）。
+\end{warnbox}
+
+\end{document}
