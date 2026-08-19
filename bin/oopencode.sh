@@ -88,7 +88,7 @@ case "${1:--m}" in
     -h|*) MODEL_ID="opencode-go/hy3";            MODEL_NAME="Hy3"; VARIANT="high";;
 esac
 
-export OPENCODE_CONFIG_CONTENT='{"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
+export OPENCODE_CONFIG_CONTENT='{"lsp":true,"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
 
 echo "============================================================"
 echo "  OpenCode: build | auto | ${MODEL_NAME} (${VARIANT})"
