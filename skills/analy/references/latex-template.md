@@ -191,7 +191,7 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 % A11 结尾总结: 结论框（conclbox）收束
 % A12 结尾评价: 优缺点、可改进处
 % A13 补充说明: 假设/局限/未覆盖项（warnbox）
-% A14 参考源: 本步全部证据汇总（见第 7 节参考源清单）
+% A14 参考源: 本步全部证据汇总（见第 9 节参考源清单）
 % A15 附录与附件（如有）: 原始日志/配置/数据引用
 
 % ---- B 物理工作框架（被分析对象为物理推导/理论/计算/实验）----
@@ -218,7 +218,41 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 % 每段 ≤40 行（防页面溢出）；长文件按关键段分多次引用
 \lstinputlisting[firstline=10,lastline=25]{/绝对/路径/文件.sh}
 
-% ================= 7 参考源清单 =================
+% ================= 7 本次大任务图表详览（必须穷尽，图表清单闭合） =================
+\section{本次大任务图表详览}
+% 本次大任务产生的全部图表必须在此集中清单并逐项详介；每项含来源与生成方式、数据含义、逐项解读、与结论关联、局限；置于结果分析中详述后本节集中原始图与清单
+% 清单表（xltabular 跨页，清单闭合为交付前提）
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+编号 & 图表文件/数据来源 & 详尽介绍（生成方式/含义/解读/关联） \\
+\midrule
+\endhead
+F1 & \texttt{\nolinkurl{.optim.<TS>.log:基准表}} & 头部开销 1000次对比等，来源：\texttt{\nolinkurl{.optim.<TS>.log}} 实测；生成：bash 计时循环；含义：旧1.93s→新0.010s/188倍；解读见第5节A9；关联：证明主导项优化有效 \\
+\bottomrule
+\caption{本次大任务图表清单（穷尽，数据来源：实测）}
+\end{xltabular}
+% 逐图详述（每个 figure 配详尽介绍，位置合理：结果分析中解读，本节原始图）
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{<图表路径>}
+\caption{<图表标题>（来源与生成方式详述）}
+\end{figure}
+
+% ================= 8 本次大任务日志关键内容汇编（必须穷尽，日志清单闭合） =================
+\section{本次大任务日志关键内容汇编}
+% 本次大任务产生的全部日志关键内容必须在此集中清单并逐项详介；每项含日志路径、用途、关键条目摘录、详尽解读、与结论关联；原始片段用 \lstinputlisting 直引
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+编号 & 日志文件 & 详尽介绍（用途/关键条目/解读/关联） \\
+\midrule
+\endhead
+L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键：头部188倍等；解读见第5节A9；关联：支撑结论 \\
+\bottomrule
+\caption{本次大任务日志清单（穷尽，原始片段见下方）}
+\end{xltabular}
+% 逐日志关键片段（详尽介绍置于结果/综合分析合理位置，本节集中原始片段）
+\lstinputlisting[firstline=1,lastline=40]{/绝对/路径/.optim.<TS>.log}
+
+% ================= 9 参考源清单 =================
 \section{参考源清单}
 % xltabular 跨页防溢出; X 列放"内容/作用"文本列
 \begin{xltabular}{\textwidth}{llX}
@@ -231,7 +265,7 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 \bottomrule
 \end{xltabular}
 
-% ================= 8 结论与局限 =================
+% ================= 10 结论与局限 =================
 \section{结论与局限}
 \begin{conclbox}
 <核心结论汇总: 结构-关系-思路三视角各一句 + 主题结论>
@@ -298,7 +332,7 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 ## 5. 内容丰富度要求（逻辑通顺 + 内容充实）
 
 1. **一条主线**：摘要（点题）→ 概览（背景）→ 主体结构（骨架）→ 各部分关系（织网）→
-   项目思路（灵魂）→ 主题分析（深入）→ 关键片段（证据）→ 参考源清单 → 结论（收束）；
+   项目思路（灵魂）→ 主题分析（深入）→ 关键片段（证据）→ 本次大任务图表详览（穷尽）→ 本次大任务日志汇编（穷尽）→ 参考源清单 → 结论（收束）；
    每节主题句先行、节末小结并自然引出下节；
 2. **三视角必齐**：结构/关系/思路三节任何报告都不可缺（核心目的）；
 3. **具体工作必走 15 步框架**：主题为"一项具体工作"时，主题分析节按
