@@ -81,6 +81,7 @@ alias du='du -h'
 alias free='free -h'
 alias path='echo -e ${PATH//:/\\n}'
 # 常用工具
+alias v='vim'
 alias python='python3'
 alias pip='pip3'
 alias py='python'
