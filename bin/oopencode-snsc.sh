@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch opencode: Build agent + auto + 可选模型 (-h/-p/-f/-q/-k/-g/-m, 默认 -m) + debug logs
+# Launch opencode: Build agent + auto + 可选模型 (-h/-p/-f/-q/-k/-g/-m, 默认 -f) + debug logs
 # 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
 
 # 脚本目录定位：unix-op.out 经 OPENCODE_SCRIPT_DIR 注入真实目录
@@ -75,10 +75,11 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
-# 模型选择：默认 -m Muse Spark 1.2 (xhigh)；-h Hy3 (high) / -p Pro / -f Flash / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
+# 模型选择：默认 -f DeepSeek V4 Flash；-h Hy3 (high) / -p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh)
+# -m: Build auto·Muse Spark 1.2 Contributor OpenCode Go·xhigh
 VARIANT="max"
-case "${1:--m}" in
-    -m) MODEL_ID="opencode-go/muse-spark-1.2";   MODEL_NAME="Muse Spark 1.2"; VARIANT="xhigh";;
+case "${1:--f}" in
+    -m) MODEL_ID="opencode-go/muse-spark-1.2";   MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
     -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
     -q) MODEL_ID="opencode-go/qwen3.8-max";      MODEL_NAME="Qwen3.8 Max";;
     -k) MODEL_ID="opencode-go/kimi-k3";          MODEL_NAME="Kimi K3";;
