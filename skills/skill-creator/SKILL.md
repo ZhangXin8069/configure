@@ -1,11 +1,8 @@
 ---
 name: skill-creator
 description: |
-  技能创建与优化技能：创建新 skill、修改并优化已有 skill、评估 skill 性能，
-  吸收 Anthropic 官方 skill-creator 与 obra/superpowers writing-skills 方法论。
   当用户要求"创建skill"、"写一个技能"、"优化skill"、"改进技能"、"skill怎么写"、
-  "技能格式"、"评估技能"、"技能触发" 时使用此技能；与 make/optim 配合：
-  优化本目录 skill 用本技能（参考网络最佳实践），纯性能优化用 optim 技能。
+  "技能格式"、"评估技能"、"技能触发" 时使用此技能；与 make/optim 配合时按职责分流。
 metadata:
   openclaw:
     emoji: 🛠️
@@ -26,9 +23,17 @@ metadata:
 
 1. **先捕获意图，不臆断**：新 skill 做什么、何时触发、输出格式、是否需测试用例，
    四项缺项先提问确认——所有问题在**第一次交互一次性全部提出**（编号列表），用户一次回答，不逐次追问。
-2. **触发描述是核心**：frontmatter 的 `description` 是技能触发的**唯一机制**；
-   必须写清"做什么"+"何时使用"（用户常说的词/场景），并适度"pushy"
-   （Claude 倾向于少触发，描述要主动提示适用场景）。
+2. **触发描述是核心（SDO，见 obra/superpowers writing-skills）**：frontmatter 的 `description` 是技能触发的**唯一机制**；
+    必须**只写触发条件**（用户常说的词/场景），**不总结工作流**——总结流程的描述会让 agent 按描述 shortcut 跳过正文（SDO 实测）；
+    并适度"pushy"（Claude 倾向于少触发，描述要主动提示适用场景）。
+    Bad/Good 对比（源自 writing-skills SDO）：
+    ```yaml
+    # ❌ BAD: 总结工作流 — agent 可能照描述执行而跳过正文流程图
+    description: Use when executing plans - dispatches subagent per task with code review between tasks
+    # ✅ GOOD: 仅触发条件，不含流程
+    description: Use when executing implementation plans with independent tasks
+    ```
+    措辞微测试（micro-test wording，源自 writing-skills）要求：每个指令变体**新上下文单样本** + **无指令对照** + **每变体≥5次重复** + **逐条人工阅读命中**；方差是信号——5次收敛同一形状说明措辞有效，5种解释说明措辞未约束行为。
 3. **分级披露（progressive disclosure）**：SKILL.md 保持精简（理想 <500 行）；
    过长内容拆到 `references/` 并按需读取；脚本放 `scripts/`（可执行、确定性任务）；
    资源放 `assets/`。
