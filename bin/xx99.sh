@@ -11,8 +11,10 @@
 
 set -euo pipefail
 
-_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "### ${_NAME} started : $(date "+%Y-%m-%d-%H-%M-%S") ###"
 
 readonly TARGET_HOST="172.25.193.104"

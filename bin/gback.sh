@@ -3,8 +3,10 @@
 #   · 多余的就删：本地未跟踪/忽略文件、本地独有提交、远程已不存在的本地分支与标签
 #   · 缺失的就补：远程有而本地缺失或被修改的跟踪文件，从远程恢复
 
-_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 set -euo pipefail
@@ -75,10 +77,12 @@ git checkout -B "${BRANCH}" "${UPSTREAM}"
 
 # 4. 本地多余分支（远程已不存在）—— 删除，保持引用一致
 REMOTE_BRANCHES=$(git for-each-ref --format='%(refname:short)' refs/remotes | sed 's|^[^/]*/||' | sort -u)
+declare -A _remote_map
+while IFS= read -r _rb; do [[ -n "${_rb}" ]] && _remote_map["${_rb}"]=1; done <<<"${REMOTE_BRANCHES}"
 EXTRA_LOCAL=""
 while IFS= read -r b; do
     [[ "${b}" == "${BRANCH}" ]] && continue
-    grep -qxF "${b}" <<<"${REMOTE_BRANCHES}" || EXTRA_LOCAL+="${b}"$'\n'
+    [[ -n "${_remote_map[${b}]+x}" ]] || EXTRA_LOCAL+="${b}"$'\n'
 done < <(git for-each-ref --format='%(refname:short)' refs/heads)
 if [[ -n "${EXTRA_LOCAL}" ]]; then
     echo "删除本地多余分支（远程已不存在）："
@@ -108,7 +112,7 @@ fi
 EXTRA_REMAIN=""
 while IFS= read -r b; do
     [[ "${b}" == "${BRANCH}" ]] && continue
-    grep -qxF "${b}" <<<"${REMOTE_BRANCHES}" || EXTRA_REMAIN+="${b}"$'\n'
+    [[ -n "${_remote_map[${b}]+x}" ]] || EXTRA_REMAIN+="${b}"$'\n'
 done < <(git for-each-ref --format='%(refname:short)' refs/heads)
 if [[ -z "${EXTRA_REMAIN}" ]]; then
     echo "OK: 无本地多余分支"

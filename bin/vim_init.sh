@@ -6,11 +6,10 @@
 # 图标: 纯 ASCII 符号, 兼容所有终端
 # 主题: solarized dark + vim-airline
 
-_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
-    pwd
-)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 pushd ~
 mv ./.vimrc .vimrc."$(date "+%Y-%m-%d-%H-%M-%S")".bak 2>/dev/null

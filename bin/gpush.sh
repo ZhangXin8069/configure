@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # gpush — Stage all changes, commit, and push from anywhere inside a repo
 
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+_NAME=${_SRC##*/}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 # Locate the git repository root (works from any subdirectory)

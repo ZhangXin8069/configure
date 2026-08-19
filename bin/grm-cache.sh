@@ -2,8 +2,10 @@
 # grm-cache — 依据 lib/_gitignore 规则，将已跟踪且匹配的文件移出 git 索引 (git rm --cached)，外来目录（子库、_ 前缀目录等）除外
 
 set -euo pipefail
-_PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 GITIGNORE="${HOME}/configure/lib/_gitignore"

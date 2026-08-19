@@ -3,11 +3,10 @@
 # 并将被放弃文件的清单保存到目标目录（.too-large-files.<时间戳>.list），
 # 其余参数语义与行为等同 cp。
 
-_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
-    pwd
-)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 LIMIT=$((1024 * 1024))
@@ -79,7 +78,10 @@ else
 fi
 
 list_dir="$dest"
-[ -d "$dest" ] || list_dir="$(dirname "$dest")"
+if [ ! -d "$dest" ]; then
+    list_dir="${dest%/*}"
+    case "$dest" in */*) [ -z "$list_dir" ] && list_dir="/";; *) list_dir=".";; esac
+fi
 mkdir -p "$list_dir" 2>/dev/null || {
     echo "${_NAME}: cannot create '$list_dir'" >&2
     exit 1
@@ -92,7 +94,7 @@ echo "skipped-file list: ${list}"
 resolve_target() {
     local src="$1"
     if [ -d "$dest" ]; then
-        echo "$dest/$(basename "$src")"
+        echo "$dest/${src##*/}"
     elif [ "${#sources[@]}" -eq 1 ]; then
         echo "$dest"
     else

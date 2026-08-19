@@ -6,11 +6,10 @@
 # Email: liungkejin@gmail.com
 #
 #!/usr/bin/env bash
-_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
-    pwd
-)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 EXITFLAG="/tmp/tetris_exit.flag"
 WRITEFILE="/tmp/tetris_pipe.in"

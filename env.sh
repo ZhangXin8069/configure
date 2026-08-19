@@ -4,10 +4,10 @@
 # @INIT@
 _SRC=${BASH_SOURCE[0]:-${0}}
 case "${_SRC}" in
-    */*) _DIR=${_SRC%/*} ;;
+    */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/" ;;
     *) _DIR=. ;;
 esac
-_PATH=$(cd "${_DIR}" && pwd)
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 # @EXPORT@
 # export TERM=xterm
 # export TERM=xterm-256color

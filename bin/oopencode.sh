@@ -5,12 +5,14 @@
 # 脚本目录定位：unix-op.out 经 OPENCODE_SCRIPT_DIR 注入真实目录
 # （/dev/fd/3 模式下 BASH_SOURCE 指向 /dev/fd/3，dirname 失效）；
 # 直接运行/符号链接运行时 BASH_SOURCE 正常，环境变量缺失则回退。
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
 if [[ -n "${OPENCODE_SCRIPT_DIR:-}" ]]; then
     _PATH="${OPENCODE_SCRIPT_DIR}"
 else
-    _PATH=$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)
+    if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 fi
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 # 增强鲁棒性：cwd 失效（如所在目录已被删除）时回退到脚本目录，
@@ -48,7 +50,8 @@ while :; do
         project_root="${_ctx_dir}"
         break
     fi
-    _parent="$(dirname "${_ctx_dir}")"
+    _parent="${_ctx_dir%/*}"
+    [ -z "${_parent}" ] && _parent="/"
     [[ "${_parent}" == "${_ctx_dir}" ]] && break
     _ctx_dir="${_parent}"
 done

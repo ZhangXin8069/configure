@@ -3,11 +3,10 @@
 # 功能: 配置 git 用户名/邮箱, 生成 ed25519 SSH 密钥, 打印公钥
 # 用法: 将打印的公钥添加到 Gitee / GitHub 后, 执行 ssh -T git@gitee.com 验证
 
-_PATH=$(
-    cd "$(dirname "${BASH_SOURCE[0]:-$0}")"
-    pwd
-)
-_NAME=$(basename "${BASH_SOURCE[0]:-$0}")
+_SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 git config --global user.name "zhangxin"
 git config --global user.email "zhangxin8069@qq.com"
