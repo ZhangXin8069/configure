@@ -47,7 +47,7 @@ rem   * OPENCODE_CONFIG_CONTENT set in this process env (inherited)
 rem   * prompt file read as-is (UTF-8, multiline preserved)
 rem   * ${HOME}/${_PWD}/${LIST_FILE} placeholders substituted
 rem   * stderr redirected to .agent.<TS>.log (cmd-level redirect)
-set OPENCODE_CONFIG_CONTENT={"agent":{"build":{"model":"%MODEL_ID%","variant":"%VARIANT%"}}}
+set OPENCODE_CONFIG_CONTENT={"lsp":true,"agent":{"build":{"model":"%MODEL_ID%","variant":"%VARIANT%"}}}
 
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$p=[IO.File]::ReadAllText('%_PATH%oopencode-prompt.txt');" ^
