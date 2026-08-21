@@ -6,7 +6,7 @@ title OpenCode Launcher
 rem ============================================================
 rem  oopencode.bat - Windows launcher for opencode (build agent)
 rem  Reference: oopencode.sh (Unix). Prompt read from oopencode-prompt.txt.
-rem  Usage: oopencode.bat [-h|-p|-f|-q|-k|-g|-m]  (default -m)
+rem  Usage: oopencode.bat [-h|-o|-p|-f|-q|-k|-g|-m]  (default -m)
 rem ============================================================
 
 set "_PATH=%~dp0"
@@ -14,10 +14,12 @@ set "_PWD=%CD%"
 
 rem ---- model selection (default -m Build auto·Muse Spark 1.2 Contributor OpenCode Go xhigh) ----
 rem -m: Build auto·Muse Spark 1.2 Contributor OpenCode Go·xhigh
+rem -o: Build auto · Ox Alpha Free (Unlimited) OpenCode Go·max
 set "MODEL_ID=opencode-go/muse-spark-1.2"
 set "MODEL_NAME=Build auto·Muse Spark 1.2 Contributor OpenCode Go"
 set "VARIANT=xhigh"
 if /i "%~1"=="-m" (set "MODEL_ID=opencode-go/muse-spark-1.2" & set "MODEL_NAME=Build auto·Muse Spark 1.2 Contributor OpenCode Go" & set "VARIANT=xhigh")
+if /i "%~1"=="-o" (set "MODEL_ID=opencode-go/ox-alpha-free" & set "VARIANT=max")
 if /i "%~1"=="-p" (set "MODEL_ID=opencode-go/deepseek-v4-pro" & set "VARIANT=max")
 if /i "%~1"=="-q" (set "MODEL_ID=opencode-go/qwen3.8-max" & set "VARIANT=max")
 if /i "%~1"=="-k" (set "MODEL_ID=opencode-go/kimi-k3" & set "VARIANT=max")
