@@ -78,11 +78,13 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
-# 模型选择：默认 -f DeepSeek V4 Flash；-h Hy3 (high) / -p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh)
+# 模型选择：默认 -f DeepSeek V4 Flash；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh)
 # -m: Build auto·Muse Spark 1.2 Contributor OpenCode Go·xhigh
+# -o: Build auto · Ox Alpha Free (Unlimited) OpenCode Go·max
 VARIANT="max"
 case "${1:--f}" in
     -m) MODEL_ID="opencode-go/muse-spark-1.2";   MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
+    -o) MODEL_ID="opencode-go/ox-alpha-free";    MODEL_NAME="Build auto · Ox Alpha Free (Unlimited) OpenCode Go";;
     -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
     -q) MODEL_ID="opencode-go/qwen3.8-max";      MODEL_NAME="Qwen3.8 Max";;
     -k) MODEL_ID="opencode-go/kimi-k3";          MODEL_NAME="Kimi K3";;
