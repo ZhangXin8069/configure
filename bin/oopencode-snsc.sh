@@ -158,6 +158,31 @@ else
 fi
 echo "============================================================"
 
+# 实时活动监视器：opencode run 的文本/事件在回合完成时批量到达，
+# 唯一实时流是 DEBUG 日志——tail -F 跟踪其新写入的关键活动行（工具调用/权限/错误），
+# 以 [HH:MM:SS] [LEVEL] 紧凑行实时输出到终端（GNU tail 用 -s 0.2 近实时；BSD 回退默认 -F）
+_LIVE_PID=""
+_tail_args()
+{
+    local _iu
+    if tail --version 2>/dev/null | head -1 | grep -q GNU; then
+        _iu="-s 0.2 --pid=$$"
+    else
+        _iu="-s 0.2"
+    fi
+    printf '%s\n' "${_iu}"
+}
+_live_log() {
+    local _iu; _iu="$(_tail_args)"
+    ( tail ${_iu} -n 0 -F "${LOG_FILE}" 2>/dev/null | \
+      while IFS= read -r _lt; do
+          case "${_lt}" in *level=ERROR*|*level=WARN*|*' tool '*|*permission=*) ;; *) continue ;; esac
+          printf '[%s] %s\n' "$(date +%H:%M:%S)" \
+                 "$(sed -E 's/timestamp=[^ ]+ level=([A-Z]+) run=[^ ]+ message=/[\1] /; s/"//g' <<<"${_lt}" | cut -c1-140)"
+      done ) &
+    _LIVE_PID=$!
+}
+
 # 兜底防丢失：trap EXIT（任何退出路径均触发）——从 LOG_FILE 提取 session.id，export 会话 JSON，
 # python3 提取 user 消息文本（跳过系统注入提示词），与 LIST_FILE 比对后追加补录缺失的用户输入
 _recover_inputs() {
@@ -201,7 +226,11 @@ PYEOF
     fi
     rm -f "${_rec_jf}"
 }
-trap '_recover_inputs' EXIT
+_cleanup() {
+    _recover_inputs
+    [[ -n "${_LIVE_PID:-}" ]] && kill "${_LIVE_PID}" 2>/dev/null
+}
+trap '_cleanup' EXIT
 unset _rec_sid _rec_jf
 
 # mkdir -p /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/
@@ -220,6 +249,7 @@ else
         echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2
         exit 66
     fi
+    _live_log
     echo "---- drive: prompt round start $(date "+%F-%T") ----"
     "${_BIN}" run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
             2> "${LOG_FILE}"

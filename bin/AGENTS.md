@@ -38,7 +38,7 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 - `.bat`/`.ps1` 为 Windows 对应版，**不**被别名生成器扫描（只扫 `.sh`）
 - `oopencode-prompt.txt` 为 op 系列（`oopencode.sh`/`oopencode.bat`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}`/`${LIST_FILE}` 占位符，运行时替换）：`oopencode.sh` 经 bash 参数展开替换、`oopencode.bat` 经 PowerShell 替换；**修改 prompt 只改此文件**，勿在脚本内再内嵌
-- **op 系列驱动模式**（三脚本一致）：`-file/--file PATH` 指定指令文件，`-time/--time DUR` 指定「继续」间隔（默认 30s；支持 `30`/`30s`/`5m`/`2h`）。给出任一即进入无人值守驱动：headless `run --agent build --auto` 链——先发 prompt 并等其回合完成，从 `.agent` 日志提取 `session.id=`，再将文件内容作为第一条指令发送，之后每间隔发送「继续」，直至 Ctrl+C 或连续 3 次失败终止；仅给模型旗标时保持原 TUI 交互。示例：`op -o -file /root/PyQCU/logs/v20260824.txt --time 30s`
+- **op 系列驱动模式**（三脚本一致）：`-file/--file PATH` 指定指令文件，`-time/--time DUR` 指定「继续」间隔（默认 30s；支持 `30`/`30s`/`5m`/`2h`）。给出任一即进入无人值守驱动：headless `run --agent build --auto` 链——先发 prompt 并等其回合完成，从 `.agent` 日志提取 `session.id=`，再将文件内容作为第一条指令发送，之后每间隔发送「继续」，直至 Ctrl+C 或连续 3 次失败终止；仅给模型旗标时保持原 TUI 交互。驱动期间后台 `tail -F` 实时监视 `.agent` 日志，将工具调用/权限评估/错误以 `[HH:MM:SS] [LEVEL]` 紧凑行输出到终端（`opencode run` 的文本与 json 事件均在回合完成时批量到达，唯一实时流是 DEBUG 日志）。示例：`op -o -file /root/PyQCU/logs/v20260824.txt --time 30s`
 - `cctag` 二进制与 `claude_code-skill4git-tag.md` 已删除，git 标签管理技能移至 `../skills/tag/`
 - `.agent.*.log`（opencode 运行日志）与 `.agent.*.list`（会话用户输入清单）为运行产物，不入库
 - 新增脚本后 `chmod +x <script>` 并在新 shell（或 `source ~/.zshrc`）中直接按名调用；校验语法 `bash -n <script>`
