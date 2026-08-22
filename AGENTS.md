@@ -19,7 +19,7 @@
 | 路径 | 用途 |
 |---|---|
 | `env.sh` | 环境主入口（shell 启动时被 source）：PATH/LD_LIBRARY_PATH（防重复）、locale、git 别名、两 shell 通用别名 |
-| `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用 |
+| `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用；op 系列（`oopencode.sh`/`oopencode-snsc.sh`/`oopencode.bat`）支持 `-file/--file` + `-time/--time` 无人值守驱动模式，详见 `bin/AGENTS.md`「op 系列驱动模式」 |
 | `lib/` | 版本化环境配置与基础模板 |
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm），`{~skill-name}` 触发 |
