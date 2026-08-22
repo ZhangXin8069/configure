@@ -78,11 +78,58 @@ if [[ -n "${project_root}" ]]; then
 fi
 unset PROJECT_CONTEXT
 
+# ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
+# 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [-file PATH] [-time DUR]
+#   -file/--file PATH : 驱动模式——prompt 回合完成后以文件内容为第一条指令，
+#                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
+#   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
+# 仅给模型旗标时保持原有 TUI 交互模式不变
+MODEL_FLAG="-f"
+DRIVE_FILE=""
+DRIVE_INTERVAL=""
+DRIVE_MODE=0
+while (( $# )); do
+    case "$1" in
+        -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; shift;;
+        -file|--file)
+            if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
+            DRIVE_FILE="$2"; DRIVE_MODE=1; shift 2;;
+        -time|--time)
+            if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
+            _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
+        *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [-file PATH] [-time 30s]）###" >&2; exit 64;;
+    esac
+done
+
+# 时长解析："30"→30 秒；支持 s/m/h 后缀（30s/5m/2h）
+_parse_interval() {
+    local v="$1" u n
+    u="${v: -1}"
+    case "$u" in
+        [0-9]) n="$v"; u="s";;
+        [smh]) n="${v%?}";;
+        *) return 1;;
+    esac
+    [[ "$n" =~ ^[0-9]+$ ]] || return 1
+    (( n > 0 )) || return 1
+    case "$u" in
+        s) printf '%s\n' "$n";;
+        m) printf '%s\n' "$((n * 60))";;
+        h) printf '%s\n' "$((n * 3600))";;
+    esac
+}
+if [[ -n "${_ti_raw:-}" ]]; then
+    if ! DRIVE_INTERVAL="$(_parse_interval "${_ti_raw}")"; then
+        echo "###${_NAME}: ERROR: --time '${_ti_raw}' 格式无效（示例: 30 / 30s / 5m / 2h）###" >&2
+        exit 64
+    fi
+fi
+unset _ti_raw _parse_interval
+[[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
+
 # 模型选择：默认 -f DeepSeek V4 Flash；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh)
-# -m: Build auto·Muse Spark 1.2 Contributor OpenCode Go·xhigh
-# -o: Build auto · Ox Alpha Free (Unlimited) OpenCode Go·max
 VARIANT="max"
-case "${1:--f}" in
+case "${MODEL_FLAG}" in
     -m) MODEL_ID="opencode-go/muse-spark-1.2";   MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
     -o) MODEL_ID="opencode-go/ox-alpha-free";    MODEL_NAME="Build auto · Ox Alpha Free (Unlimited) OpenCode Go";;
     -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
@@ -90,7 +137,7 @@ case "${1:--f}" in
     -k) MODEL_ID="opencode-go/kimi-k3";          MODEL_NAME="Kimi K3";;
     -g) MODEL_ID="opencode-go/gpt-5.6-luna";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
     -f) MODEL_ID="opencode-go/deepseek-v4-flash"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
-    -h|*) MODEL_ID="opencode-go/hy3";            MODEL_NAME="Hy3"; VARIANT="high";;
+    -h) MODEL_ID="opencode-go/hy3";              MODEL_NAME="Hy3"; VARIANT="high";;
 esac
 
 export OPENCODE_CONFIG_CONTENT='{"lsp":true,"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
@@ -103,6 +150,11 @@ if [[ -n "${project_root}" ]]; then
     echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
 else
     echo "  project context: 未发现 AGENTS.md / .opencode（仅使用固定 prompt）"
+fi
+if (( DRIVE_MODE )); then
+    echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
+else
+    echo "  mode: TUI interactive"
 fi
 echo "============================================================"
 
@@ -154,9 +206,68 @@ unset _rec_sid _rec_jf
 
 # mkdir -p /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/
 # cp /public/home/zhangxin/.opencode/bin/opencode /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713
-/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713 --agent build --auto --prompt "${PROMPT}" \
-        --print-logs --log-level DEBUG \
-        2> "${LOG_FILE}"
+_BIN=/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713
+
+if (( ! DRIVE_MODE )); then
+    # 原有 TUI 交互模式（无 -file/-time 时行为完全不变）
+    "${_BIN}" --agent build --auto --prompt "${PROMPT}" \
+            --print-logs --log-level DEBUG \
+            2> "${LOG_FILE}"
+else
+    # ---- 驱动模式：headless opencode run 链式驱动 ----
+    # 回合1 prompt → 从日志提取 session.id →（可选）回合2 文件首指令 → 每 N 秒「继续」
+    if [[ -n "${DRIVE_FILE}" && ! -r "${DRIVE_FILE}" ]]; then
+        echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2
+        exit 66
+    fi
+    echo "---- drive: prompt round start $(date "+%F-%T") ----"
+    "${_BIN}" run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
+            2> "${LOG_FILE}"
+    _drv_rc=$?
+    if (( _drv_rc != 0 )); then
+        echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
+        exit "${_drv_rc}"
+    fi
+    _drv_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+    if [[ -z "${_drv_sid}" ]]; then
+        echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session.id，驱动终止###" >&2
+        exit 1
+    fi
+    echo "---- drive: session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
+    if [[ -n "${DRIVE_FILE}" ]]; then
+        _drv_instr="$(<"${DRIVE_FILE}")"
+        echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
+        "${_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "${_drv_instr}" \
+                2>> "${LOG_FILE}"
+        _drv_rc=$?
+        if (( _drv_rc != 0 )); then
+            echo "###${_NAME}: warning: 首条指令回合退出码 ${_drv_rc}，仍进入继续循环###" >&2
+        fi
+        unset _drv_instr
+    else
+        echo "---- drive: 未提供 -file，跳过首条指令直接进入继续循环 ----"
+    fi
+    _nudges=0
+    _fails=0
+    while :; do
+        sleep "${DRIVE_INTERVAL}"
+        if "${_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
+                2>> "${LOG_FILE}"; then
+            _nudges=$((_nudges + 1))
+            _fails=0
+            echo "---- drive: 继续 #${_nudges} ok $(date "+%F-%T") ----"
+        else
+            _drv_rc=$?
+            _fails=$((_fails + 1))
+            echo "###${_NAME}: warning: 继续发送失败 ${_fails}/3（退出码 ${_drv_rc}）###" >&2
+            if (( _fails >= 3 )); then
+                echo "###${_NAME}: ERROR: 连续 3 次「继续」失败，驱动循环终止（累计成功 ${_nudges} 次）###" >&2
+                break
+            fi
+        fi
+    done
+    unset _BIN _drv_sid _drv_rc _nudges _fails
+fi
 
 if [[ -s "${LIST_FILE}" ]]; then
     echo "user inputs -> ${LIST_FILE}（$(wc -l < "${LIST_FILE}") 行）"
