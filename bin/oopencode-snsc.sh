@@ -130,7 +130,7 @@ unset _ti_raw _parse_interval
 # 模型选择：默认 -f DeepSeek V4 Flash；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh)
 VARIANT="max"
 case "${MODEL_FLAG}" in
-    -m) MODEL_ID="opencode-go/muse-spark-1.2";   MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
+    -m) MODEL_ID="opencode-go/muse-spark-1.2-contributor"; MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
     -o) MODEL_ID="opencode-go/ox-alpha-free";    MODEL_NAME="Build auto · Ox Alpha Free (Unlimited) OpenCode Go";;
     -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
     -q) MODEL_ID="opencode-go/qwen3.8-max";      MODEL_NAME="Qwen3.8 Max";;
