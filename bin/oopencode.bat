@@ -57,7 +57,7 @@ goto parse_args
 :args_done
 
 rem ---- model selection (default -m Build auto·Muse Spark 1.2 Contributor OpenCode Go xhigh) ----
-set "MODEL_ID=opencode-go/muse-spark-1.2"
+set "MODEL_ID=opencode-go/muse-spark-1.2-contributor"
 set "MODEL_NAME=Build auto·Muse Spark 1.2 Contributor OpenCode Go"
 set "VARIANT=xhigh"
 if "%MODEL_FLAG%"=="-o" (set "MODEL_ID=opencode-go/ox-alpha-free" & set "MODEL_NAME=Build auto · Ox Alpha Free (Unlimited) OpenCode Go" & set "VARIANT=max")
