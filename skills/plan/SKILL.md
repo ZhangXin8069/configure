@@ -84,7 +84,7 @@ metadata:
 - [ ] **Step 4: 运行确认通过**
       运行: `pytest ...` 预期: PASS
 - [ ] **Step 5: 交付检查**
-`git diff --check`；有 Git 且有本次改动时按公共契约创建本地 commit，不 push。
+`git diff --check`；有 Git 且有本次改动时不自动暂存、提交或推送；用户明确要求时按指定范围执行。
 ```
 
 计划文档头部：
