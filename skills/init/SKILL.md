@@ -235,7 +235,7 @@ find <repo_root> -name "SKILL.md" \
 - 散落 skill 均已归集到本库根 `.opencode/skills/`（同名同内容跳过、差异并列保留），原位置保留；
 - 外来文件夹下的 `AGENTS.md` 均已归档（`.AGENTS.md.<时间戳>.bak`）且价值内容已并入本库根 `AGENTS.md`；
 - **幂等校验**：再次以 dry-run 运行阶段 A，应输出"无变更"；
-- 输出结构化汇总（见下）；若有重命名涉及 git 跟踪文件，按公共契约只暂存本次文件并创建本地 commit，不 push。
+- 输出结构化汇总（见下）；若有重命名涉及 git 跟踪文件，按公共契约执行检查，不自动暂存、提交或推送。
 
 ---
 
@@ -280,7 +280,7 @@ find <repo_root> -name "SKILL.md" \
   清单外新登记:  .gemini/ (Gemini CLI, 2 处)
   幂等校验:      再次 dry-run 无变更 ✓
 
-  提示:          git 跟踪的重命名已按公共契约处理（本地 commit，不 push）
+  提示:          git 跟踪的重命名已按公共契约检查（不自动提交或推送）
 ```
 
 dry-run 阶段输出计划表（仅列有动作项）：
