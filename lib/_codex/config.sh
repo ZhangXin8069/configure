@@ -163,6 +163,9 @@ def set_top_level(lines, key, value):
     if not found:
         if insert_at is None:
             insert_at = len(new_lines)
+        if insert_at > 0 and new_lines[insert_at - 1].strip() != "":
+            new_lines.insert(insert_at, "")
+            insert_at += 1
         new_lines.insert(insert_at, "%s = %s" % (key, fmt_str(value)))
         return new_lines, True
     return new_lines, val_changed
