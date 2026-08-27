@@ -94,6 +94,36 @@ analy 织网（整体参考），pure 掘井（细节参考）。二者按流水
    `.tex` 源文件与编译产物 `.pdf`。大任务中产生的全部图表与终端实测输出须列清单并逐项解读，
    说明来源、含义、结论关联与局限，确保结果分析、综合分析和附录无遗漏。
 
+## 工作流的统一 LaTeX 表达
+
+凡是算法、伪代码、公式推导、编程思路、数据处理或验证过程等具有顺序、迭代或分支关系的内容，
+在生成报告中统一用下列单列 `table[htbp]` 结构承载；它是工作流的主表达，流程图只补充跨模块关系。
+每行只写一个动作或推导转移，`\quad`/`\quad\quad` 表示层级。算法按“输入→初始化→循环→分支/更新→
+收敛→输出”组织，公式推导在每行写出等式或箭头并标注定义、对称性、近似、量纲或边界条件，编程思路按
+“输入→状态/数据结构→核心处理→校验/错误分支→输出”组织。真实报告中的公式、符号、数据和证据必须替换为
+本次核验内容；长流程按语义拆成多个表格，不能靠缩小字号解决溢出。
+
+```latex
+\begin{table}[htbp]
+  \centering
+  \caption*{Workflow. Algorithm, derivation, and implementation}
+  \small
+  \begin{tabular}{@{}l@{}}
+    $\text{Input: } D,\; x^{(0)},\; \varepsilon$ \\
+    $\text{Initialize: } \mathrm{state}\gets(D,x^{(0)},\varepsilon)$ \\
+    $\text{for } k=0,1,\ldots\ \text{ iterate:}$ \\
+    \quad $\text{derive/update } F_{k+1}=T(F_k)\quad(\text{definition/symmetry/approximation})$ \\
+    \quad $\text{implement } \mathrm{state}\gets\mathrm{update}(\mathrm{state},D)$ \\
+    \quad $\text{if } \lVert r_{k+1}\rVert\le\varepsilon\ \text{ then stop}$ \\
+    \quad $\text{else } k\gets k+1$ \\
+    $\text{end for}$ \\
+    $\text{Output: } F_{\mathrm{out}},\;\mathrm{state},\;\text{verified evidence}$ \\
+  \end{tabular}
+\end{table}
+```
+
+表格标题注明算法/推导主题及“示意”或数据来源；表格下方保留必要的 `文件:行号`、命令或参考源。
+
 ## 输入解析规则
 
 | 输入形式 | 解析方式 |
