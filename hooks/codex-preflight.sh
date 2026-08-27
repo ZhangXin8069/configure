@@ -21,10 +21,15 @@ printf 'repo_root=%s\n' "$repo_root"
 printf 'branch=%s\n' "$branch"
 
 instruction_count=0
+declare -A seen_instructions=()
 for instruction in \
     "$repo_root/AGENTS.md" \
     "$repo_root/CODEX.md" \
     "$PWD/AGENTS.md"; do
+    if [[ -n "${seen_instructions[$instruction]+x}" ]]; then
+        continue
+    fi
+    seen_instructions[$instruction]=1
     if [[ -f "$instruction" ]]; then
         printf 'instruction=%s\n' "$instruction"
         instruction_count=$((instruction_count + 1))
