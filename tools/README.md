@@ -6,7 +6,7 @@
 
 ### `configure-check.sh`
 
-只读检查当前配置仓库的四棵 agent 配置树（`skills/`、`tools/`、`hooks/`、`plugins/`）：检查技能 frontmatter、技能目录说明、Shell 脚本语法与执行权限，以及已有 Codex 插件 manifest 的基本 JSON/name/version/path 完整性。
+只读检查当前配置仓库的四棵 agent 配置树（`skills/`、`tools/`、`hooks/`、`plugins/`）：检查技能 frontmatter、技能目录说明，检查 `tools/` 与 `hooks/` 中 Shell 脚本的语法和执行权限，以及已有 Codex 插件 manifest 的基本 JSON/name/version/path 完整性。
 
 ```bash
 tools/configure-check.sh
@@ -29,4 +29,3 @@ tools/configure-check.sh --root /path/to/configure
 ## 选择原则
 
 优先采用发行版或上游正式发布的可验证版本；安装前核对许可证、架构、更新日期和来源校验。`configure-check.sh` 是本目录唯一的本地运行入口，第三方工具均为可选能力，不会被它自动下载或调用。
-
