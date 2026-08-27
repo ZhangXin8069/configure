@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Launch opencode: Build agent + auto + 可选模型 (-h/-o/-p/-f/-q/-k/-g/-m, 默认 -m) + debug logs
+# Launch opencode: Build agent + auto + 可选模型 (-h/-o/-p/-f/-q/-k/-g/-m, 默认 -f) + debug logs
 # 自动收集工作目录（向上查找）的 AGENTS.md 与 .opencode，注入 prompt
 
 # 脚本目录定位：unix-op.out 经 OPENCODE_SCRIPT_DIR 注入真实目录
@@ -12,7 +12,7 @@ if [[ -n "${OPENCODE_SCRIPT_DIR:-}" ]]; then
 else
     if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 fi
-_NAME=${_SRC##*/}
+_NAME=${OPENCODE_LAUNCHER_NAME:-${_SRC##*/}}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 # 增强鲁棒性：cwd 失效（如所在目录已被删除）时回退到脚本目录，
@@ -27,6 +27,16 @@ _TS="$(date +%Y-%m-%d-%H-%M-%S)"
 LOG_FILE=".agent.${_TS}.log"
 LIST_FILE=".agent.${_TS}.list"
 unset _TS
+
+# opencode 可执行文件：可用 OPENCODE_BIN 覆盖（例如 HPC/snsc 上的绝对路径）。
+_OPENCODE_BIN="${OPENCODE_BIN:-}"
+if [[ -z "${_OPENCODE_BIN}" ]]; then
+    _OPENCODE_BIN="$(command -v opencode 2>/dev/null || true)"
+fi
+if [[ -z "${_OPENCODE_BIN}" ]]; then
+    echo "###${_NAME}: ERROR: 未找到 opencode，请安装 opencode 或设置 OPENCODE_BIN###" >&2
+    exit 127
+fi
 
 # prompt 单一来源：同目录 oopencode-prompt.txt（模板含 ${HOME}/${_PWD}/${LIST_FILE} 占位符）
 # 占位符按运行时值替换；文件缺失时给出明确报错并退出（防静默用空 prompt）
@@ -79,25 +89,39 @@ fi
 unset PROJECT_CONTEXT
 
 # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
-# 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [-file PATH] [-time DUR]
+# 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+#   --model MODEL     : 直接指定模型 ID，覆盖模型旗标；也可用 OPENCODE_MODEL 环境变量覆盖。
+#   --variant LEVEL   : 直接指定 build agent 的 variant（max/xhigh/high/low 等）。
 #   -file/--file PATH : 驱动模式——prompt 回合完成后以文件内容为第一条指令，
 #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
 #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
 # 仅给模型旗标时保持原有 TUI 交互模式不变
-MODEL_FLAG="-m"
+MODEL_FLAG="${OPENCODE_DEFAULT_MODEL_FLAG:--f}"
+MODEL_OVERRIDE="${OPENCODE_MODEL:-}"
+VARIANT_OVERRIDE="${OPENCODE_VARIANT:-}"
 DRIVE_FILE=""
 DRIVE_INTERVAL=""
 DRIVE_MODE=0
 while (( $# )); do
     case "$1" in
         -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; shift;;
+        --model)
+            if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
+            MODEL_OVERRIDE="$2"; shift 2;;
+        --variant)
+            if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
+            VARIANT_OVERRIDE="$2"; shift 2;;
+        --help)
+            echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+            echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
+            exit 0;;
         -file|--file)
             if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
             DRIVE_FILE="$2"; DRIVE_MODE=1; shift 2;;
         -time|--time)
             if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
             _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
-        *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [-file PATH] [-time 30s]）###" >&2; exit 64;;
+        *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
     esac
 done
 
@@ -127,18 +151,25 @@ fi
 unset _ti_raw _parse_interval
 [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
 
-# 模型选择：默认 -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh)；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -f Flash / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
+# 模型选择：默认 -f DeepSeek V4 Flash (2x usage)；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh) / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
+# 各旗标默认模型可用 OPENCODE_MODEL_M/O/P/Q/K/G/F/H 环境变量覆盖；OPENCODE_MODEL/--model 直接覆盖。
 VARIANT="max"
 case "${MODEL_FLAG}" in
-    -m) MODEL_ID="opencode-go/muse-spark-1.2-contributor"; MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
-    -o) MODEL_ID="opencode-go/ox-alpha-free";    MODEL_NAME="Build auto · Ox Alpha Free (Unlimited) OpenCode Go";;
-    -p) MODEL_ID="opencode-go/deepseek-v4-pro";  MODEL_NAME="DeepSeek V4 Pro (New)";;
-    -q) MODEL_ID="opencode-go/qwen3.8-max";      MODEL_NAME="Qwen3.8 Max";;
-    -k) MODEL_ID="opencode-go/kimi-k3";          MODEL_NAME="Kimi K3";;
-    -g) MODEL_ID="opencode-go/gpt-5.6-luna";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
-    -f) MODEL_ID="opencode-go/deepseek-v4-flash"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
-    -h) MODEL_ID="opencode-go/hy3";              MODEL_NAME="Hy3"; VARIANT="high";;
+    -m) MODEL_ID="${OPENCODE_MODEL_M:-opencode-go/muse-spark-1.2-contributor}"; MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
+    -o) MODEL_ID="${OPENCODE_MODEL_O:-opencode-go/ox-alpha-free}";    MODEL_NAME="Build auto · Ox Alpha Free (Unlimited) OpenCode Go";;
+    -p) MODEL_ID="${OPENCODE_MODEL_P:-opencode-go/deepseek-v4-pro}";  MODEL_NAME="DeepSeek V4 Pro (New)";;
+    -q) MODEL_ID="${OPENCODE_MODEL_Q:-opencode-go/qwen3.8-max}";      MODEL_NAME="Qwen3.8 Max";;
+    -k) MODEL_ID="${OPENCODE_MODEL_K:-opencode-go/kimi-k3}";          MODEL_NAME="Kimi K3";;
+    -g) MODEL_ID="${OPENCODE_MODEL_G:-opencode-go/gpt-5.6-luna}";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
+    -f) MODEL_ID="${OPENCODE_MODEL_F:-opencode-go/deepseek-v4-flash}"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
+    -h) MODEL_ID="${OPENCODE_MODEL_H:-opencode-go/hy3}";              MODEL_NAME="Hy3"; VARIANT="high";;
+    *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
 esac
+if [[ -n "${MODEL_OVERRIDE}" ]]; then
+    MODEL_ID="${MODEL_OVERRIDE}"
+    MODEL_NAME="${MODEL_OVERRIDE}（override）"
+fi
+[[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT="${VARIANT_OVERRIDE}"
 
 export OPENCODE_CONFIG_CONTENT='{"lsp":true,"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
 
@@ -146,6 +177,9 @@ echo "============================================================"
 echo "  OpenCode: build | auto | ${MODEL_NAME} (${VARIANT})"
 echo "  log: ${LOG_FILE}"
 echo "  user-input list: ${LIST_FILE}"
+if [[ "${OPENCODE_LAUNCHER_VARIANT:-main}" == snsc ]]; then
+    echo "  launcher: snsc/HPC"
+fi
 if [[ -n "${project_root}" ]]; then
     echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
 else
@@ -189,10 +223,10 @@ _recover_inputs() {
     local _rec_sid _rec_jf
     _rec_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
     [[ -n "${_rec_sid}" ]] || return 0
-    command -v opencode >/dev/null 2>&1 || return 0
+    [[ -x "${_OPENCODE_BIN}" ]] || return 0
     command -v python3  >/dev/null 2>&1 || return 0
     _rec_jf="/tmp/opencode/${LIST_FILE}.export.json"
-    if opencode export "${_rec_sid}" 2>/dev/null > "${_rec_jf}"; then
+    if "${_OPENCODE_BIN}" export "${_rec_sid}" 2>/dev/null > "${_rec_jf}"; then
         python3 - "${_rec_jf}" "${LIST_FILE}" <<'PYEOF'
 import json, sys, datetime
 exp, lst = sys.argv[1], sys.argv[2]
@@ -235,7 +269,7 @@ unset _rec_sid _rec_jf
 
 if (( ! DRIVE_MODE )); then
     # 原有 TUI 交互模式（无 -file/-time 时行为完全不变）
-    opencode --agent build --auto --prompt "${PROMPT}" \
+    "${_OPENCODE_BIN}" --agent build --auto --prompt "${PROMPT}" \
             --print-logs --log-level DEBUG \
             2> "${LOG_FILE}"
 else
@@ -247,7 +281,7 @@ else
     fi
     _live_log
     echo "---- drive: prompt round start $(date "+%F-%T") ----"
-    opencode run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
+    "${_OPENCODE_BIN}" run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
             2> "${LOG_FILE}"
     _drv_rc=$?
     if (( _drv_rc != 0 )); then
@@ -263,7 +297,7 @@ else
     if [[ -n "${DRIVE_FILE}" ]]; then
         _drv_instr="$(<"${DRIVE_FILE}")"
         echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
-        opencode run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "${_drv_instr}" \
+        "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "${_drv_instr}" \
                 2>> "${LOG_FILE}"
         _drv_rc=$?
         if (( _drv_rc != 0 )); then
@@ -277,7 +311,7 @@ else
     _fails=0
     while :; do
         sleep "${DRIVE_INTERVAL}"
-        if opencode run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
+        if "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
                 2>> "${LOG_FILE}"; then
             _nudges=$((_nudges + 1))
             _fails=0
@@ -301,5 +335,5 @@ elif [[ -f "${LIST_FILE}" ]]; then
     echo "user inputs -> ${LIST_FILE}（空）"
 fi
 echo "logs -> ${LOG_FILE}"
-unset _PWD
+unset _OPENCODE_BIN _PWD
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

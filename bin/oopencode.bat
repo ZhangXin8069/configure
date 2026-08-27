@@ -6,7 +6,10 @@ title OpenCode Launcher
 rem ============================================================
 rem  oopencode.bat - Windows launcher for opencode (build agent)
 rem  Reference: oopencode.sh (Unix). Prompt read from oopencode-prompt.txt.
-rem  Usage: oopencode.bat [-h|-o|-p|-f|-q|-k|-g|-m] [-file PATH] [-time DUR]  (default -m)
+rem  Usage: oopencode.bat [-h|-o|-p|-f|-q|-k|-g|-m] [--model MODEL] [--variant LEVEL]
+rem                       [-file PATH] [-time DUR]  (default -f)
+rem    --model MODEL : override model id directly (env OPENCODE_MODEL also works)
+rem    --variant LVL : override build agent variant (max/xhigh/high/low etc.)
 rem    -file PATH : drive mode - after the prompt round completes, send file
 rem                 content as first instruction, then send "continue" every -time
 rem                 until Ctrl+C or 3 consecutive failures
@@ -17,13 +20,30 @@ set "_PATH=%~dp0"
 set "_PWD=%CD%"
 
 rem ---- arg parsing loop: model flags + drive options ----
-set "MODEL_FLAG=-m"
+set "MODEL_FLAG=-f"
+set "MODEL_OVERRIDE="
+set "VARIANT_OVERRIDE="
 set "DRIVE_FILE="
 set "DRIVE_TIME="
 :parse_args
 if "%~1"=="" goto args_done
 set "_a=%~1"
-if "%_a%"=="-m" (set "MODEL_FLAG=-m") else if "%_a%"=="-o" (set "MODEL_FLAG=-o") else if "%_a%"=="-p" (set "MODEL_FLAG=-p") else if "%_a%"=="-q" (set "MODEL_FLAG=-q") else if "%_a%"=="-k" (set "MODEL_FLAG=-k") else if "%_a%"=="-g" (set "MODEL_FLAG=-g") else if "%_a%"=="-f" (set "MODEL_FLAG=-f") else if "%_a%"=="-h" (set "MODEL_FLAG=-h") else if /i "%_a%"=="-file" (
+if "%_a%"=="-m" (set "MODEL_FLAG=-m") else if "%_a%"=="-o" (set "MODEL_FLAG=-o") else if "%_a%"=="-p" (set "MODEL_FLAG=-p") else if "%_a%"=="-q" (set "MODEL_FLAG=-q") else if "%_a%"=="-k" (set "MODEL_FLAG=-k") else if "%_a%"=="-g" (set "MODEL_FLAG=-g") else if "%_a%"=="-f" (set "MODEL_FLAG=-f") else if "%_a%"=="-h" (set "MODEL_FLAG=-h") else if /i "%_a%"=="--model" (
+    if "%~2"=="" (echo ERROR: %_a% missing model argument & exit /b 64)
+    set "MODEL_OVERRIDE=%~2"
+    shift
+    shift
+    goto parse_args
+) else if /i "%_a%"=="--variant" (
+    if "%~2"=="" (echo ERROR: %_a% missing level argument & exit /b 64)
+    set "VARIANT_OVERRIDE=%~2"
+    shift
+    shift
+    goto parse_args
+) else if /i "%_a%"=="--help" (
+    echo Usage: %~nx0 [-h^-o^-p^-f^-q^-k^-g^-m] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]
+    exit /b 0
+) else if /i "%_a%"=="-file" (
     if "%~2"=="" (echo ERROR: %_a% missing path argument & exit /b 64)
     set "DRIVE_FILE=%~2"
     shift
@@ -56,17 +76,29 @@ shift
 goto parse_args
 :args_done
 
-rem ---- model selection (default -m Build auto·Muse Spark 1.2 Contributor OpenCode Go xhigh) ----
-set "MODEL_ID=opencode-go/muse-spark-1.2-contributor"
-set "MODEL_NAME=Build auto·Muse Spark 1.2 Contributor OpenCode Go"
-set "VARIANT=xhigh"
+rem ---- model selection (default -f DeepSeek V4 Flash 2x usage) ----
+set "MODEL_ID=opencode-go/deepseek-v4-flash"
+set "MODEL_NAME=DeepSeek V4 Flash (2x usage)"
+set "VARIANT=max"
+if "%MODEL_FLAG%"=="-m" (set "MODEL_ID=opencode-go/muse-spark-1.2-contributor" & set "MODEL_NAME=Build auto·Muse Spark 1.2 Contributor OpenCode Go" & set "VARIANT=xhigh")
 if "%MODEL_FLAG%"=="-o" (set "MODEL_ID=opencode-go/ox-alpha-free" & set "MODEL_NAME=Build auto · Ox Alpha Free (Unlimited) OpenCode Go" & set "VARIANT=max")
 if "%MODEL_FLAG%"=="-p" (set "MODEL_ID=opencode-go/deepseek-v4-pro" & set "MODEL_NAME=DeepSeek V4 Pro (New)" & set "VARIANT=max")
 if "%MODEL_FLAG%"=="-q" (set "MODEL_ID=opencode-go/qwen3.8-max" & set "MODEL_NAME=Qwen3.8 Max" & set "VARIANT=max")
 if "%MODEL_FLAG%"=="-k" (set "MODEL_ID=opencode-go/kimi-k3" & set "MODEL_NAME=Kimi K3" & set "VARIANT=max")
 if "%MODEL_FLAG%"=="-g" (set "MODEL_ID=opencode-go/gpt-5.6-luna" & set "MODEL_NAME=GPT-5.6 Luna (2x usage)" & set "VARIANT=max")
-if "%MODEL_FLAG%"=="-f" (set "MODEL_ID=opencode-go/deepseek-v4-flash" & set "MODEL_NAME=DeepSeek V4 Flash (2x usage)" & set "VARIANT=max")
 if "%MODEL_FLAG%"=="-h" (set "MODEL_ID=opencode-go/hy3" & set "MODEL_NAME=Hy3" & set "VARIANT=high")
+if defined OPENCODE_MODEL_M if "%MODEL_FLAG%"=="-m" set "MODEL_ID=%OPENCODE_MODEL_M%"
+if defined OPENCODE_MODEL_O if "%MODEL_FLAG%"=="-o" set "MODEL_ID=%OPENCODE_MODEL_O%"
+if defined OPENCODE_MODEL_P if "%MODEL_FLAG%"=="-p" set "MODEL_ID=%OPENCODE_MODEL_P%"
+if defined OPENCODE_MODEL_Q if "%MODEL_FLAG%"=="-q" set "MODEL_ID=%OPENCODE_MODEL_Q%"
+if defined OPENCODE_MODEL_K if "%MODEL_FLAG%"=="-k" set "MODEL_ID=%OPENCODE_MODEL_K%"
+if defined OPENCODE_MODEL_G if "%MODEL_FLAG%"=="-g" set "MODEL_ID=%OPENCODE_MODEL_G%"
+if defined OPENCODE_MODEL_F if "%MODEL_FLAG%"=="-f" set "MODEL_ID=%OPENCODE_MODEL_F%"
+if defined OPENCODE_MODEL_H if "%MODEL_FLAG%"=="-h" set "MODEL_ID=%OPENCODE_MODEL_H%"
+if defined OPENCODE_MODEL set "MODEL_ID=%OPENCODE_MODEL%"
+if defined MODEL_OVERRIDE set "MODEL_ID=%MODEL_OVERRIDE%"
+if defined MODEL_OVERRIDE set "MODEL_NAME=%MODEL_OVERRIDE% (override)"
+if defined VARIANT_OVERRIDE set "VARIANT=%VARIANT_OVERRIDE%"
 
 rem ---- timestamp & log/list file names ----
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd-HH-mm-ss"') do set "_TS=%%i"
@@ -104,6 +136,7 @@ if not defined DRIVE_FILE if not defined DRIVE_TIME goto tui_launch
 rem ---- drive mode: headless opencode run chain ----
 rem   round 1: prompt -> extract session.id -> optional first instruction -> "continue" every interval
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$opencode=if($env:OPENCODE_BIN){$env:OPENCODE_BIN}else{'opencode'};" ^
   "$msg=[string][char]0x7EE7+[char]0x7EED;" ^
   "$iv='%DRIVE_TIME%';" ^
   "if ($iv -eq '') { $sec=30 } else {" ^
@@ -115,7 +148,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$p=[IO.File]::ReadAllText('%_PATH%oopencode-prompt.txt');" ^
   "$p=$p.Replace('${HOME}',$env:USERPROFILE).Replace('${_PWD}','%_PWD%').Replace('${LIST_FILE}','%LIST_FILE%');" ^
   "Write-Host ('---- drive: prompt round start ' + (Get-Date -Format 'yyyy-MM-dd-HH:mm:ss'));" ^
-  "& opencode run --agent build --auto --print-logs --log-level DEBUG $p 2>>'%LOG_FILE%';" ^
+  "& $opencode run --agent build --auto --print-logs --log-level DEBUG $p 2>>'%LOG_FILE%';" ^
   "if ($LASTEXITCODE -ne 0) { Write-Host ('ERROR: prompt round failed, rc=' + $LASTEXITCODE); exit $LASTEXITCODE }" ^
   "$m=Select-String -Path '%LOG_FILE%' -Pattern 'session.id=([A-Za-z0-9_-]+)' | Select-Object -First 1;" ^
   "if (-not $m) { Write-Host 'ERROR: cannot extract session.id'; exit 1 }" ^
@@ -124,13 +157,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "if ('%DRIVE_FILE%' -ne '') {" ^
   "  if (-not (Test-Path '%DRIVE_FILE%')) { Write-Host ('ERROR: --file not readable: %DRIVE_FILE%'); exit 66 }" ^
   "  Write-Host ('---- drive: first instruction <- %DRIVE_FILE% ----');" ^
-  "  & opencode run -s $sid --agent build --auto --print-logs --log-level DEBUG ([IO.File]::ReadAllText('%DRIVE_FILE%')) 2>>'%LOG_FILE%';" ^
+  "  & $opencode run -s $sid --agent build --auto --print-logs --log-level DEBUG ([IO.File]::ReadAllText('%DRIVE_FILE%')) 2>>'%LOG_FILE%';" ^
   "  if ($LASTEXITCODE -ne 0) { Write-Host ('WARN: first-instruction round rc=' + $LASTEXITCODE + ', entering continue loop anyway') }" ^
   "} else { Write-Host '---- drive: no -file, enter continue loop directly ----' }" ^
   "$nudges=0; $fails=0;" ^
   "while ($true) {" ^
   "  Start-Sleep -Seconds $sec;" ^
-  "  & opencode run -s $sid --agent build --auto --print-logs --log-level DEBUG $msg 2>>'%LOG_FILE%';" ^
+  "  & $opencode run -s $sid --agent build --auto --print-logs --log-level DEBUG $msg 2>>'%LOG_FILE%';" ^
   "  if ($LASTEXITCODE -eq 0) { $nudges++; $fails=0; Write-Host ('---- drive: continue #' + $nudges + ' ok ' + (Get-Date -Format 'yyyy-MM-dd-HH:mm:ss')) }" ^
   "  else { $fails++; Write-Host ('WARN: continue send failed ' + $fails + '/3'); if ($fails -ge 3) { Write-Host ('ERROR: 3 consecutive failures, stop (total ok=' + $nudges + ')'); break } }" ^
   "}"
@@ -138,9 +171,10 @@ goto run_done
 
 :tui_launch
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$opencode=if($env:OPENCODE_BIN){$env:OPENCODE_BIN}else{'opencode'};" ^
   "$p=[IO.File]::ReadAllText('%_PATH%oopencode-prompt.txt');" ^
   "$p=$p.Replace('${HOME}',$env:USERPROFILE).Replace('${_PWD}','%_PWD%').Replace('${LIST_FILE}','%LIST_FILE%');" ^
-  "& opencode --agent build --auto --prompt $p --print-logs --log-level DEBUG" 2> "%LOG_FILE%"
+  "& $opencode --agent build --auto --prompt $p --print-logs --log-level DEBUG" 2> "%LOG_FILE%"
 
 :run_done
 echo.
