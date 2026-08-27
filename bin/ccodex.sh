@@ -49,7 +49,7 @@ PROMPT="${PROMPT//\$\{_PWD\}/${_PWD}}"
 PROMPT="${PROMPT//\$\{LIST_FILE\}/${LIST_FILE}}"
 unset PROMPT_FILE
 
-# 自动收集工作目录项目上下文：从 pwd 向上查找 AGENTS.md 与 .codex，注入 prompt。
+# 自动收集工作目录项目上下文：从 pwd 向上查找 AGENTS.md 与 .codex；AGENTS.md 仅注入关键摘要。
 PROJECT_CONTEXT=""
 project_root=""
 _ctx_dir="${_PWD}"
@@ -65,18 +65,34 @@ while :; do
 done
 unset _ctx_dir _parent
 
+# 提取 AGENTS.md 的高信号信息，避免把整份说明重复放入 prompt。
+# 保留标题、概要以及与入口/约束/命令/验证/当前 Codex 入口直接相关的行；
+# 完整文件仍保留路径，由模型在任务确有需要时定向读取。
+_agents_key_info() {
+    awk '
+        function is_key(line) {
+            return line ~ /(入口|目录|命令|测试|验证|约定|必须|禁止|默认|路径|权限|环境|驱动|模型|prompt|可执行|shebang|source|启动|运行|调用|Codex|ccodex|co 系列|\.codex|bash -n)/
+        }
+        NR <= 3 && NF { print; next }
+        /^#{1,3}[[:space:]]/ { print; next }
+        /^[[:space:]]*[-*][[:space:]]/ && is_key($0) { print; next }
+        /^[[:space:]]*[0-9]+[.)][[:space:]]/ && is_key($0) { print; next }
+        /^\|/ && $0 ~ /(ccodex|co 系列|Codex|入口|命令|测试|验证|默认|路径|驱动|模型|配置|权限)/ { print; next }
+    ' "$1"
+}
+
 if [[ -n "${project_root}" ]]; then
     PROJECT_CONTEXT=$'\n\n\n### 工作目录项目上下文（由 ccodex.sh 自动注入） ###'
     if [[ -f "${project_root}/AGENTS.md" ]]; then
-        PROJECT_CONTEXT+=$'\n\n===== AGENTS.md ('"${project_root}"$'/AGENTS.md) =====\n'
-        _n_lines="$(wc -l < "${project_root}/AGENTS.md")"
-        if (( _n_lines > 400 )); then
-            PROJECT_CONTEXT+="$(head -400 "${project_root}/AGENTS.md")"
-            PROJECT_CONTEXT+=$'\n\n...（AGENTS.md 共 '"${_n_lines}"$' 行，已截断；完整内容请自行读取 '"${project_root}"$'/AGENTS.md）'
+        PROJECT_CONTEXT+=$'\n\n===== AGENTS.md 关键摘要 ('"${project_root}"$'/AGENTS.md) =====\n'
+        _agents_summary="$(_agents_key_info "${project_root}/AGENTS.md")"
+        if [[ -n "${_agents_summary}" ]]; then
+            PROJECT_CONTEXT+="${_agents_summary}"
         else
-            PROJECT_CONTEXT+="$(<"${project_root}/AGENTS.md")"
+            PROJECT_CONTEXT+='（未提取到摘要；请按当前任务需要定向读取该文件）'
         fi
-        unset _n_lines
+        PROJECT_CONTEXT+=$'\n\n...（仅注入关键摘要；完整 AGENTS.md 请按当前任务需要定向读取）'
+        unset _agents_summary
     fi
     if [[ -d "${project_root}/.codex" ]]; then
         PROJECT_CONTEXT+=$'\n\n===== .codex 目录结构 ('"${project_root}"$'/.codex) =====\n'
@@ -85,6 +101,7 @@ if [[ -n "${project_root}" ]]; then
     PROMPT="${PROMPT}${PROJECT_CONTEXT}"
 fi
 unset PROJECT_CONTEXT
+unset -f _agents_key_info
 
 # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
 # 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL]
@@ -192,7 +209,7 @@ if [[ "${CODEX_LAUNCHER_VARIANT:-main}" == snsc ]]; then
     echo "  launcher: snsc/HPC"
 fi
 if [[ -n "${project_root}" ]]; then
-    echo "  project context: ${project_root}（AGENTS.md 与 .codex 已注入 prompt）"
+        echo "  project context: ${project_root}（AGENTS.md 关键摘要与 .codex 已注入 prompt）"
 else
     echo "  project context: 未发现 AGENTS.md / .codex（仅使用固定 prompt）"
 fi

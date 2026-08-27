@@ -7,7 +7,7 @@ rem ============================================================
 rem  ccodex.bat - Windows launcher for Codex
 rem  Reference: ccodex.sh (Unix). Prompt read from ccodex-prompt.txt.
 rem  Usage: ccodex.bat [-h|-o|-p|-f|-q|-k|-g|-m] [--model MODEL]
-rem                    [-file PATH] [-time DUR]  (default -m)
+rem                    [-file PATH] [-time DUR]  (default -m, GPT-5.6-Luna max)
 rem ============================================================
 
 set "_PATH=%~dp0"
