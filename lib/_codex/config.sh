@@ -80,6 +80,13 @@ check_status() {
 import sys
 try:
     import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        print("（需 python3.11+ 或 tomli 库解析）")
+        sys.exit(0)
+try:
     d = tomllib.load(open(sys.argv[1], "rb"))
     out = []
     if d.get("model"): out.append("model=" + d["model"])
@@ -129,8 +136,9 @@ def find_top_level(lines):
             return None  # 未进入任何 table，全部为顶层区域
     return len(lines)
 
-def set_top_level(key, value):
-    nonlocal_changed = False
+def set_top_level(lines, key, value):
+    found = False
+    val_changed = False
     in_table = False
     insert_at = None
     new_lines = []
@@ -143,18 +151,23 @@ def set_top_level(key, value):
         if not in_table and not s.startswith("#") and "=" in s:
             k = s.split("=", 1)[0].strip()
             if k == key:
-                new_lines.append("%s = %s" % (key, fmt_str(value)))
-                nonlocal_changed = True
+                found = True
+                new_line = "%s = %s" % (key, fmt_str(value))
+                if ln.strip() == new_line:
+                    new_lines.append(ln)
+                else:
+                    new_lines.append(new_line)
+                    val_changed = True
                 continue
         new_lines.append(ln)
-    if not nonlocal_changed:
+    if not found:
         if insert_at is None:
             insert_at = len(new_lines)
         new_lines.insert(insert_at, "%s = %s" % (key, fmt_str(value)))
-        nonlocal_changed = True
-    return new_lines, nonlocal_changed
+        return new_lines, True
+    return new_lines, val_changed
 
-def add_provider(spec):
+def add_provider(lines, spec):
     parts = spec.split("=", 2)
     if len(parts) < 2 or not parts[0]:
         print("错误: --provider 需要 NAME=base_url=ENV_KEY[=wire_api] 格式: %s" % spec, file=sys.stderr)
@@ -180,17 +193,17 @@ def add_provider(spec):
     ]
     return lines + block, True
 
-new_lines, changed = lines, False
+new_lines = lines
 i = 0
 while i < len(ops):
     op = ops[i]
     if op == "set" and i + 2 < len(ops) + 1:
         k, v = ops[i + 1], ops[i + 2]
-        new_lines, c = set_top_level(k, v)
+        new_lines, c = set_top_level(new_lines, k, v)
         changed = changed or c
         i += 3
     elif op == "provider" and i + 1 < len(ops):
-        new_lines, c = add_provider(ops[i + 1])
+        new_lines, c = add_provider(new_lines, ops[i + 1])
         changed = changed or c
         i += 2
     else:
@@ -212,7 +225,7 @@ write_config() {
     if [ -f "$CONFIG_FILE" ]; then
         cp "$CONFIG_FILE" "$CONFIG_FILE.bak.$(date +%Y%m%d-%H%M%S)"
     fi
-    printf '%s' "$payload" > "$CONFIG_FILE.tmp"
+    printf '%s\n' "$payload" > "$CONFIG_FILE.tmp"
     mv "$CONFIG_FILE.tmp" "$CONFIG_FILE"
     printf '已写: %s\n' "$CONFIG_FILE"
 }
