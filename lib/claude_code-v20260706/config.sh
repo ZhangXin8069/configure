@@ -159,7 +159,7 @@ for kv in sys.argv[1:]:
 print(json.dumps(d))' $env_args)"
     fi
     if [ ${#PERM_ALLOW[@]} -gt 0 ] || [ ${#PERM_DENY[@]} -gt 0 ]; then
-        local pa pd
+        local pa="" pd=""
         for t in "${PERM_ALLOW[@]}"; do pa+=" $t"; done
         for t in "${PERM_DENY[@]}"; do pd+=" $t"; done
         merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
