@@ -24,6 +24,14 @@
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm），`{~skill-name}` 触发 |
 | `docs/` | 参考文档、包清单、图片素材 |
+| `hooks/` | Codex agent hook 适配层与独立 Git 质量门禁；不会自动修改 Codex 配置或 `core.hooksPath` |
+| `plugins/` | Codex 插件推荐索引与显式安装器；不自动安装第三方插件 |
+| `tools/` | 配置仓库维护工具与上游工具推荐信息 |
+| `lib/_clash/` | Clash 代理环境安装包包装目录；`setup.sh --check` 仅检查，默认执行会解压覆盖子目录 |
+
+## 外部组件边界
+
+`lib/_clash/clash-for-linux` 是 Git 索引中的外来 gitlink，上游自身的实现细节不属于本仓库维护范围；本仓库只通过父目录的 `lib/_clash/setup.sh` 解压和检查它。父脚本使用 `BASH_SOURCE` 与 Git 根目录动态定位，检查入口为 `bash lib/_clash/setup.sh --check`；需要代理环境时由子目录的 `env.sh` 提供 `source env.sh --status` 检查。
 
 ## 版本化配置约定（lib/{name}-v{YYYYMMDD}/）
 
