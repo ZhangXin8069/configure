@@ -50,7 +50,7 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
 
 ```latex
 % ============================================================
-% report 组会汇报 — 16:9 Beamer 模板
+% report 学术成果展示 — 16:9 Beamer 模板
 % 编译: xelatex 两遍；交付前 Overfull=0, Float too large=0
 % ============================================================
 \documentclass[UTF8,aspectratio=169,11pt]{ctexbeamer}
