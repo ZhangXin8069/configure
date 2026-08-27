@@ -285,9 +285,8 @@ main() {
     fi
 
     # merge_toml 退出码: 0=有变更 1=无变更 2=参数错误
-    local merged rc
-    merged="$(merge_toml "${ops[@]}")"
-    rc=$?
+    local merged rc=0
+    merged="$(merge_toml "${ops[@]}")" || rc=$?
     case $rc in
         0) ;;
         1) printf 'config.toml: 无变更\n'; return 0;;
