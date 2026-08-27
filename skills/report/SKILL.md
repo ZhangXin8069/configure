@@ -13,7 +13,7 @@ metadata:
 
 ## 执行前置
 
-遵循当前目录 `AGENTS.md` 的「技能执行公共契约」；首步建立 TODO，按需读取本技能 reference，
+遵循当前目录 `AGENTS.md` 的「技能执行公共契约」；首步建立任务清单（TODO），按需读取本技能 reference，
 验证后再声明完成。生成正文前完整读取 `references/report-guide.md`；生成 `.tex` 前完整读取
 `references/latex-template.md`。本技能的交付物是当前项目 `docs/` 下同名的横板 `.tex` 与 `.pdf`，
 不是只给提纲或只给文字稿。
