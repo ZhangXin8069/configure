@@ -10,6 +10,7 @@ ERRORS=0
 WARNINGS=0
 SKILL_COUNT=0
 TOOL_SCRIPT_COUNT=0
+HOOK_SCRIPT_COUNT=0
 PLUGIN_MANIFEST_COUNT=0
 
 usage() {
@@ -125,21 +126,39 @@ if [[ -d "$ROOT/skills" ]]; then
     pass "技能目录检查完成：$SKILL_COUNT 个"
 fi
 
-if [[ -d "$ROOT/tools" ]]; then
-    while IFS= read -r -d '' tool_script; do
-        TOOL_SCRIPT_COUNT=$((TOOL_SCRIPT_COUNT + 1))
-        if [[ ! -x "$tool_script" ]]; then
-            fail "工具脚本不可执行：${tool_script#"$ROOT/"}"
+check_shell_tree() {
+    local tree="$1"
+    local script_count=0
+    local script_path
+    local first_line
+
+    [[ -d "$ROOT/$tree" ]] || return 0
+    while IFS= read -r -d '' script_path; do
+        script_count=$((script_count + 1))
+        if [[ ! -x "$script_path" ]]; then
+            fail "$tree 脚本不可执行：${script_path#"$ROOT/"}"
         fi
-        if ! IFS= read -r first_line < "$tool_script" || [[ "$first_line" != '#!'* ]]; then
-            fail "工具脚本缺少 shebang：${tool_script#"$ROOT/"}"
+        if ! IFS= read -r first_line < "$script_path" || [[ "$first_line" != '#!'* ]]; then
+            fail "$tree 脚本缺少 shebang：${script_path#"$ROOT/"}"
         fi
-        if ! bash -n "$tool_script"; then
-            fail "工具脚本语法错误：${tool_script#"$ROOT/"}"
+        if ! bash -n "$script_path"; then
+            fail "$tree 脚本语法错误：${script_path#"$ROOT/"}"
         fi
-    done < <(find "$ROOT/tools" -type f -name '*.sh' -print0 | sort -z)
-    pass "工具脚本检查完成：$TOOL_SCRIPT_COUNT 个"
-fi
+    done < <(
+        find "$ROOT/$tree" -type f \( -name '*.sh' -o -name 'pre-commit' -o -name 'pre-push' \) -print0 |
+            sort -z
+    )
+
+    if [[ "$tree" == tools ]]; then
+        TOOL_SCRIPT_COUNT=$script_count
+    else
+        HOOK_SCRIPT_COUNT=$script_count
+    fi
+    pass "$tree 脚本检查完成：$script_count 个"
+}
+
+check_shell_tree tools
+check_shell_tree hooks
 
 if [[ -d "$ROOT/plugins" ]]; then
     while IFS= read -r -d '' manifest; do
@@ -201,8 +220,8 @@ PY
     fi
 fi
 
-printf '摘要：skills=%d，tools-shell=%d，plugin-manifests=%d，warnings=%d，errors=%d\n' \
-    "$SKILL_COUNT" "$TOOL_SCRIPT_COUNT" "$PLUGIN_MANIFEST_COUNT" "$WARNINGS" "$ERRORS"
+printf '摘要：skills=%d，tools-shell=%d，hooks-shell=%d，plugin-manifests=%d，warnings=%d，errors=%d\n' \
+    "$SKILL_COUNT" "$TOOL_SCRIPT_COUNT" "$HOOK_SCRIPT_COUNT" "$PLUGIN_MANIFEST_COUNT" "$WARNINGS" "$ERRORS"
 
 if ((ERRORS > 0)); then
     exit 1
