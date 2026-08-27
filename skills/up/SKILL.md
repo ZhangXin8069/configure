@@ -8,7 +8,7 @@ metadata:
     emoji: ⬆️
 ---
 
-# up — 技能库升级技能
+# up — agent 配置库升级技能
 
 ## 执行前置
 
@@ -46,6 +46,13 @@ metadata:
    安全和不越权等不变量，禁止递归自改造成无限循环。
 9. **内部联动更新（三查 + 双目录）**：技能核心流程变化后检查调用链、互鉴表、技能表/计数和
    `.opencode/skills` 镜像；外部升级与内部联动缺一不可，只引入不联动会留下断链。
+
+## Git 收尾
+
+有 Git 且存在本次会话产生的文件改动时，先执行 `git diff --check` 和定向差异复查，只核对本次
+文件，不使用 `git add -A`/`git add .`。用户明确授权提交时，再只暂存本次文件、执行
+`git diff --cached --check` 并创建本地提交，不推送；未获授权时不暂存、不提交，只报告检查结果。
+无 Git 或无本次改动时立即跳过。
 
 ## 触发时机
 
@@ -89,8 +96,15 @@ for rel in skills tools hooks plugins; do
   fi
 done
 
-# skills：目录完整性、frontmatter、技能表与镜像。
-for f in $(rg --files --hidden -g 'SKILL.md' "$REPO_ROOT/skills" 2>/dev/null); do
+# skills：目录完整性、frontmatter、技能表与镜像；空/不完整目录不能被文件扫描漏掉。
+find "$REPO_ROOT/skills" -mindepth 1 -maxdepth 1 -type d -print 2>/dev/null |
+while IFS= read -r d; do
+  [ -f "$d/SKILL.md" ] || printf 'MISSING SKILL.md: %s\n' "$d"
+  [ -f "$d/AGENTS.md" ] || printf 'MISSING AGENTS.md: %s\n' "$d"
+done
+
+rg --files --hidden -g 'SKILL.md' "$REPO_ROOT/skills" 2>/dev/null |
+while IFS= read -r f; do
   d="${f%/SKILL.md}"
   name="${d##*/}"
   rg -q "^name: $name$" "$f" || printf 'NAME MISMATCH: %s\n' "$f"
@@ -129,9 +143,9 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
 | 类型 | 参考源 | 热榜/检索入口 | 排序字段与用途 |
 |---|---|---|---|
-| 代码托管 | GitHub | [Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` |
-| 代码托管 | Gitee | [Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 |
-| 代码托管 | GitLab | [Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` |
+| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` |
+| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 |
+| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` |
 | 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc`，保留其原生 star 字段；用于补充开源生态样本 |
 | 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 |
 | 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 |
@@ -217,8 +231,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 3. **保留不变量**：候选不得删除四树范围、多源热榜、失败重试、差距表、验证闭环、安全边界、
    不提交/不推送和镜像同步等既有契约；不得把临时 URL、令牌、运行日志或机器特征写进技能。
 4. **单轮单变更**：每轮最多采纳一个候选，只改 `skills/up/SKILL.md` 及其必要的技能表、
-   `AGENTS.md` 和 `.opencode/skills` 镜像；不在自我进化轮中顺带改其他技能。记录采纳/拒绝理由
-   与验证证据，不创建过程记录文件。
+   `AGENTS.md` 和 `.opencode/skills` 镜像；不在自我进化轮中顺带改其他技能。在终端摘要中记录
+   采纳/拒绝理由与验证证据，不创建过程记录文件。
 5. **回归与停止**：改动后重跑结构检查和三类真实提示词（四树升级、多源 star 热榜、up 自改）；
    候选未改善行为、破坏不变量或验证失败则修正该候选并保留遗留项。一次 up 调用最多进行一轮
    自我进化，下一轮只在出现新证据时继续，避免递归自改和无效空转。
