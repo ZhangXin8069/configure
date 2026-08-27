@@ -81,6 +81,7 @@ cat << 'USAGE'
   │    md                    mkdir -p                            │
   │    py                    python3                             │
   │    cl                    claude                              │
+  │    co / cos             Codex / Codex HPC                    │
   │    his                   history 最近记录                    │
   │                                                              │
   │  生效                                                        │
