@@ -3,7 +3,8 @@ name: analy
 description: |
   当用户要求分析、解析、解读或梳理仓库结构、代码与文档关系、项目思路，或要求生成可追溯
   的分析报告/PDF，或要为后续 agent 建立仓库整体参考时使用；输入 `{~analy ...}` 或 `{$...}`
-  时也使用。用户虽未说“分析”但目标是理解仓库全貌、代码对象或配置加载链时同样使用。
+  时也使用。用户虽未说“分析”但目标是理解仓库全貌、代码对象或配置加载链时同样使用；
+  分析报告或其下游展示出现版式溢出、内容遮挡、页脚/列边界侵入时也使用。
 metadata:
   openclaw:
     emoji: 📊
@@ -33,7 +34,8 @@ metadata:
 
 本技能的价值在于让"分析结论"可追溯、可复用：每个说法都有据可查（文件:行号），代码片段与仓库
 逐字节一致，多份资料的关系呈现为"织网"而非"堆砌"，并提供稳定的后续 agent 交接入口。分析全程只读，
-唯一写操作是 docs/ 下的产物。
+唯一写操作是 docs/ 下的产物。凡是可能交给 `report` 的密集公式、表格、流程图或代码片段，还要在交接
+信息中标明视觉类型、占用等级、合法拆分边界和已知版式风险，避免展示层只能凭正文猜页面布局。
 
 ## 核心原则
 
@@ -54,12 +56,15 @@ metadata:
 6. **证据驱动，参考源可追溯**：每个分析结论必须对应真实存在的内容，附 `文件:行号` 参考源；
    代码片段**用 `\lstinputlisting[firstline,lastline]` 直接引用仓库原文件**，不做转写、不手抄，
    保证 PDF 中片段与仓库实际内容逐字节一致；统计数字实测，量纲与边界情形校验；收尾形成可检索的
-   证据索引，方便后续 agent 定位原文。
+   证据索引，方便后续 agent 定位原文；对拟进入图表/公式/代码视觉的证据同步记录内容边界和版式风险。
    主题在仓库中找不到证据时明确报告"未找到相关依据"，绝不编造文件路径、代码或数据。
 7. **编译闭环与防溢出**：生成 `.tex` → 编译 → 验证 PDF 产物存在且内容正确；
    交付前从编译终端输出确认 `Overfull` 与 `Float too large` 均为 **0**
    （行宽溢出/图表溢出页面两类；长代码/长表/长词/公式/图片均按模板防溢出规则处理，
-   见 `references/latex-template.md`）；编译失败依据终端错误定位修复，循环尝试直至成功或用户终止。
+   见 `references/latex-template.md`）；再逐页渲染检查边界、框体、列间和页脚是否可见遮挡，
+   因为“无 Overfull”不能证明 TikZ 节点或彩色框没有侵入邻接区域；TikZ 的节点、路径标签、独立标签
+   和箭头须分别按包围盒检查，标签优先使用带显式安全间距的 `above/below/left/right`；编译失败依据终端
+   错误定位修复，循环尝试直至成功或用户终止。
 8. **默认引入参考知识库**：git 家目录（被分析仓库根）下的参考类目录
    （`docs`、`books`、`refer`、`references`、`examples`、`reports`、`补充`、`代码`、`文档`、`汇报`
    及同类命名的目录，清单可扩展，以本原则为准，Step 3/4 命令与之一致）视为参考知识库，
@@ -245,7 +250,8 @@ find docs books refer references examples reports 补充 代码 文档 汇报 -t
 ```bash
 # 主题关键词定位（示例：主题为"环境加载链"）
 grep -rn "source\|PATH" env.sh lib/ --include="*.sh" -l
-grep -n "关键函数名\|关键变量" <文件>
+target_file="path/to/file"
+grep -n "关键函数名\|关键变量" "$target_file"
 
 # 参考知识库主题检索（目录清单同核心原则第 8 条/Step 3；命中文件纳入参考证据，读取相关段落）
 grep -rni "主题关键词" docs/ books/ refer/ references/ examples/ reports/ 补充/ 代码/ 文档/ 汇报/ \
@@ -303,6 +309,20 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
 | 证据与状态 | 关键 `文件:行号`、确证/推断/未验证标记 |
 | 交接动作 | 可直接调用的下游技能（如 `pure`/`debug`/`test`/`report`）及其原因 |
 
+**展示版式交接字段（存在 `report` 下游时必填）**：
+
+| 字段 | 必须包含 |
+|---|---|
+| 视觉对象 | 证据 ID、主张、视觉类型（公式/表格/代码/流程/图）和来源 |
+| 占用预算 | 宽度位置（行内/单列/整页）、高度等级（短/中/高）及行数/节点数/代码行数 |
+| 拆分边界 | 不可拆单元、允许的语义分页点，以及下一页需重复的上下文 |
+| 版式风险 | 长公式/路径/URL、表格列、TikZ 外框、彩色框或页脚冲突；对应的缓解动作 |
+
+将上述交接内容整理为可被 `pure`/`report` 消费的 `content_payload`，每个密集对象至少使用同一组字段：
+`content_id | claim_id | evidence_ids | visual_type | width_budget | height_budget | min_font_pt |
+item_count | split_allowed | split_boundary | risks | mitigation`。其中 `item_count` 按对象记录公式行、表格行、代码行或 TikZ 节点数，
+`width_budget` 必须说明行内/单列/整页及列间距约束，`risks` 要单列节点外框、路径标签、独立标签和箭头风险。
+
 ### Step 5. 生成 LaTeX 源文件
 
 生成 `docs/analy_<slug>_<YYYYMMDD>.tex`，**必须遵循 `references/latex-template.md`**
@@ -338,11 +358,12 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
    同一颜色在全文只表达同一类含义；色彩仅为增强可读性，去除后不影响信息完整。
 7. **科研严谨**：结论分级标注（`确证`/`推断`/`未验证`）；统计数字后标来源；
    表格 caption 注明"数据来源: 实测"；公式编号 + `\eqref` 引用（若有）。
-8. **防溢出**：`grep -c Overfull` 与 `grep -c "Float too large"` 交付前必须均为 0——
+8. **防溢出与版式交接**：`grep -c Overfull` 与 `grep -c "Float too large"` 交付前必须均为 0——
    长表用 xltabular 跨页/X 列、图片限宽高
    （`width=0.9\textwidth,height=0.6\textheight,keepaspectratio`）、长词靠
    `\emergencystretch`+microtype、彩色框全部 breakable、公式用 align 分行；
-   全部措施与模板第 4 节一致，不自行删减。
+   每个密集视觉同时登记视觉类型、宽高占用、拆分边界和风险；无警告时仍须渲染所有页面，
+   高风险页面用 `\overfullrule=5pt` 诊断编译复核边界。全部措施与模板第 4 节一致，不自行删减。
 9. **特殊字符**：正文中出现的 `$ % # & _ { }` 由 LaTeX 转义，路径与代码一律走
    `\detokenize` / `\lstinputlisting`，不做手工转写。
 10. **表格数据**：参考源清单中的文件数、行号与 Step 4 实测一致，不臆造。
@@ -355,10 +376,41 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
 
 ```bash
 cd docs
-# 中文文档：xelatex 编译两遍（目录/引用正确解析）；以退出码和终端警告复核
-xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex"
-xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex"
-# 纯英文可退化为 pdflatex（同参数）
+# 中文文档：在临时目录 xelatex 编译两遍，避免 aux/log 污染 docs/
+tex_name="analy_<slug>_<YYYYMMDD>.tex"
+pdf_stem="${tex_name%.tex}"
+build_dir=$(mktemp -d)
+render_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir" "$render_dir"' EXIT
+compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
+  -output-directory "$build_dir" "$tex_name" 2>&1 &&
+  xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
+  -output-directory "$build_dir" "$tex_name" 2>&1)" || {
+  printf '%s\n' "$compile_output"
+  exit 1
+}
+pdf_file="$build_dir/$pdf_stem.pdf"
+test -s "$pdf_file"
+overfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Overfull' || true)
+float_count=$(printf '%s\n' "$compile_output" | grep -c 'Float too large' || true)
+overfull_hbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\hbox' || true)
+overfull_vbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\vbox' || true)
+underfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Underfull' || true)
+printf 'Overfull=%s Float_too_large=%s overfull_hbox=%s overfull_vbox=%s underfull=%s\n' \
+  "$overfull_count" "$float_count" "$overfull_hbox" "$overfull_vbox" "$underfull_count"
+test "$overfull_count" -eq 0
+test "$float_count" -eq 0
+test "$overfull_hbox" -eq 0
+test "$overfull_vbox" -eq 0
+pdfinfo "$pdf_file" | rg 'Pages|Page size|File size'
+pages_actual=$(pdfinfo "$pdf_file" | awk '$1 == "Pages:" {print $2}')
+pdftoppm -png -r 100 "$pdf_file" "$render_dir/page" >/dev/null
+rendered_pages=$(rg --files "$render_dir" | rg -c '/page-[0-9]+\.png$' || true)
+printf 'pages_actual=%s pages_rendered=%s\n' "$pages_actual" "$rendered_pages"
+test "$pages_actual" -eq "$rendered_pages"
+# 全部页面人工检查通过后执行：记录 pages_expected=pages_actual=pages_rendered=pages_checked，再复制最终 PDF
+cp "$pdf_file" "$pdf_stem.pdf"
+# 纯英文可退化为 pdflatex，但仍须保留同样的临时目录、计数和全页检查
 ```
 
 - 编译错误：依据终端 `file-line-error` 行号定位（宏错误/转义错误/缺宏包），修复后重编；
@@ -376,7 +428,13 @@ ls -lh docs/analy_<slug>_<YYYYMMDD>.pdf        # 存在且非空
 pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容（标题/结论/参考源出现）
 ```
 
-- PDF 页数、大小、抽检文本与报告预期一致；
+- 用 `pdftoppm` 将 PDF 全部页面渲染到 `mktemp -d`，先逐页检查外框/页脚/表格/公式/代码块，
+  再对有警告或高风险的页面提高分辨率复核；必要时在临时诊断编译中打开 `\overfullrule=5pt`，
+  不把诊断标记版当作交付 PDF。重点检查“无警告但可见遮挡”的情况。
+- PDF 页数、大小、抽检文本、页面边界与报告预期一致；命令已比较
+  `pages_actual=pages_rendered`，人工检查后再记录
+  `pages_expected=pages_actual=pages_rendered=pages_checked`，并给出
+  `occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0` 的逐页证据；
 - 验证失败（PDF 缺失/空白/乱码）→ 回到 Step 5/6 修复重编。
 
 ### Step 8. 总结（结构化输出）
@@ -390,7 +448,7 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
   入口:   <关键入口/依赖链/后续 agent 可从何处继续>
   状态:   <确证/推断/未验证与未决问题>
   交接:   <推荐的下游技能及其依据>
-  产物:   docs/analy_<slug>_<YYYYMMDD>.pdf (N 页, X KB)
+  产物:   docs/analy_<slug>_<YYYYMMDD>.pdf (N 页, X KB, Overfull=0, Float_too_large=0, occlusion=0)
   源码:   docs/analy_<slug>_<YYYYMMDD>.tex
   结论:   <核心结论摘要>
   局限:   <未覆盖项/证据不足处，无则省略>
@@ -410,13 +468,17 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 | 非 git 仓库 | `git rev-parse --is-inside-work-tree` 校验失败时报告；仍可按普通目录分析并注明 |
 | 主题含糊 | **一次性列出候选**（全仓库概览 / 指定主题）提问确认，不逐次追问 |
 | 覆盖表未闭合 | 聚焦前先补全"未分类"文件状态（精读/浏览/仅索引），不带着死角进主题分析 |
-| 后续 agent 入口不完整 | 补齐任务/范围、结构/入口、证据/状态和交接动作四组字段；缺证据明确标注"未验证" |
+| 后续 agent 入口不完整 | 补齐任务/范围、结构/入口、证据/状态和交接动作四组字段；缺证据明确标注“未验证” |
+| 视觉交接字段缺失 | 回到证据清单，为公式/表格/代码/流程补齐视觉类型、宽高占用、拆分边界和版式风险，不让 report 猜测 |
+| TikZ 节点/标签相互遮挡 | 把节点、路径标签、独立标签和箭头分别计入包围盒；用 `above/below/left/right` 加显式安全间距，缩短或拆分标签，重新渲染核对，不以零 `Overfull` 作为通过依据 |
 | 三视角证据不足 | 相应节如实呈现证据与推断级别，不强行填充；缺证据处标注 `未验证` 并列入局限 |
 | 无 LaTeX 工具链 | 报告缺项；提供安装建议（`apt install texlive-xetex texlive-lang-chinese` 等），不静默跳过 |
 | 缺 ctex/宏包 | 尝试安装；不可行则改用纯英文模板/替代方案并注明 |
 | 缺 tcolorbox/titlesec | 尝试安装；不可行则退化——框用 `\textcolor`+粗体/斜体替代，标题不着色，其余模板不变并注明 |
 | Overfull > 0 | 按 `references/latex-template.md` 第 4 节定位（缩减代码片段行数/表格列文本/公式换行）修复重编直至为 0 |
 | "Float too large" 警告 | 表格/图片溢出页面：表格改 xltabular（table 环境不可跨页），图片限宽高（`width=0.9\textwidth,height=0.6\textheight,keepaspectratio`），修复重编直至警告为 0 |
+| 警告为 0 但 PDF 仍遮挡/截断 | 用临时 `\overfullrule=5pt` 编译定位盒体，再逐页渲染；检查 TikZ 实际边界、`columns` 列宽+列间距、彩色框内边距和页脚保留区，按语义拆分或收窄局部对象 |
+| `Underfull` 较多但无硬溢出 | 区分可接受的 `\raggedright`/短行与可见的大空白或断裂对齐；只修复影响阅读的页面，不用全局拉伸掩盖结构问题 |
 | 主题无匹配证据 | 明确报告"未找到相关依据"，并附仓库结构概览供用户改题 |
 | LaTeX 转义错误 | 正文特殊字符转义；代码/路径走 `\detokenize`/`\lstinputlisting` |
 | 编译失败 | 依据终端错误定位行号并重编（循环尝试直至成功），失败原因在终端摘要中说明 |
@@ -437,6 +499,7 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 - 代码片段用 `\lstinputlisting` 直引仓库原文件，保证 PDF 与仓库逐字节一致；
 - 多资料分析重联系轻罗列：每份资料必须有角色定位与关系说明，报告含"联系与层次"呈现；
 - 代码解析必做对象映射：先想"这段代码在描述什么对象/物理图像"，再讲"怎么实现"；
+- 交给 `report` 的密集证据必须带视觉类型、宽高占用、拆分边界和风险；“编译成功/无警告”不替代逐页渲染检查；
 - 报告用色规范统一（accent/evidence/reference/conclusion/codebg 五色 + struct/relation/idea/
   warn/hl 场景色），不引入额外颜色；新增颜色须同步更新 references 模板色板表；
 - 交付前 `grep -c Overfull` 与 `grep -c "Float too large"` 均必须为 0

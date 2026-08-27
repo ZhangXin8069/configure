@@ -3,7 +3,8 @@ name: report
 description: |
   当用户要求制作面向学者、导师、同行或课题组的科研工作汇报、阶段性研究进展汇报、周报/月报幻灯片，
   或把科研代码、物理模型、实验数据、算法结果整理成高质量横板 PDF、Beamer 或 PPT 时使用；
-  用户只说“给导师汇报”“给同行展示”“组会 PPT”“研究进展 slides”等，也应触发本技能。
+  用户只说“给导师汇报”“给同行展示”“组会 PPT”“研究进展 slides”等，也应触发本技能；已有
+  TeX/PDF 出现内容重叠、截断、列边界或页脚侵入等展示问题，需要调试/优化时同样触发。
 metadata:
   openclaw:
     emoji: 📽️
@@ -23,7 +24,8 @@ metadata:
 建模或 pure 的逐符号深挖；材料缺口必须显式标为“未验证”，不能用排版掩盖证据不足。
 
 这里的“完美展示”以四项可验收标准定义：受众能独立理解，主张能追溯到证据，视觉能突出判断，PDF 无溢出/遮挡；
-不以增加页数、装饰或缩小字号代替内容质量。
+不以增加页数、装饰或缩小字号代替内容质量。页面布局在写 LaTeX 前先形成可复查的“版式账本”：每页主视觉、
+宽高预算、不可拆单元、拆页边界和高风险对象均有记录。
 
 ## 核心原则
 
@@ -33,7 +35,7 @@ metadata:
 4. **完整叙事单元**：一张页应同时包含结论、关键证据和含义。内容放不下时按语义边界拆页并重复必要上下文，不能把同一表格、公式推导或流程节点任意截断。
 5. **证据分级**：实测、由实测推出的判断、尚未验证的假设必须显式区分；数据、代码行为和结论均保留可追溯来源，不用漂亮的假数据填空。
 6. **适度密度**：优先删掉装饰、重复背景和无决策价值的细节，再调整布局；正文保持可投影阅读，不能用极小字号掩盖结构失控。
-7. **编译即验收**：16:9、页边安全区、图表尺寸和分页通过实际编译与 PDF 检查确认；`Overfull` 或 `Float too large` 非零时，不得宣称交付。
+7. **编译即验收**：16:9、页边安全区、图表尺寸和分页通过实际编译与 PDF 检查确认；`Overfull` 或 `Float too large` 非零时，不得宣称交付；警告为零仍需逐页渲染检查，因为 TikZ 外框、彩色框内距和列间侵入不一定触发 TeX 警告。
 8. **结论落到行动并可复用**：结尾给出已完成、未解决风险、下一阶段可验收产物、时间节点和需要导师拍板/提供的资源，使缺席本次汇报的后续学者也能据此理解状态，避免以口号收尾。
 
 ## Git 检查
@@ -44,7 +46,8 @@ metadata:
 ## 工作流的统一 LaTeX 表达
 
 凡是算法、伪代码、公式推导、编程思路、数据处理或验证过程等具有顺序、迭代或分支关系的内容，
-在汇报稿中统一用下列单列 `table[htbp]` 结构作为主视觉；流程图只补充跨模块关系。每行只写一个动作或
+统一采用“单列行”的内容形状；`analy`/`pure` 的文章报告可用 `table[htbp]`，Beamer 汇报稿必须在
+`frame` 内直接放置 `tabular`/`tabularx`，不得用浮动 `table`/`figure`；流程图只补充跨模块关系。每行只写一个动作或
 推导转移，`\quad`/`\quad\quad` 表示层级。算法按“输入→初始化→循环→分支/更新→收敛→输出”组织，
 公式推导在每行写出等式或箭头并标注定义、对称性、近似、量纲或边界条件，编程思路按
 “输入→状态/数据结构→核心处理→校验/错误分支→输出”组织。长流程按语义拆为多张固定 frame，不能用
@@ -101,12 +104,16 @@ metadata:
 
 按用户限定范围优先读取 `analy` 整体参考、`pure` 细节参考和 `test` 实测结果，再补查相关文档、代码、实验输出、图表和日志；不为凑页数扫描无关目录。建立内部清单：
 
-| ID | 要表达的主张 | 证据/来源 | 状态 | 适合的视觉 |
-|---|---|---|---|---|
-| E1 | 一个可检验的结论 | 文件:行号、命令或结果文件 | 确证/推断/未验证 | 图/表/公式/流程 |
+| ID | 要表达的主张 | 证据/来源 | 状态 | 适合的视觉 | 占用/拆分 |
+|---|---|---|---|---|---|
+| E1 | 一个可检验的结论 | 文件:行号、命令或结果文件 | 确证/推断/未验证 | 图/表/公式/流程 | 宽度、高度、拆分点 |
 
 每个数字记录原始值、单位、计算方式、基线和来源；派生量注明公式。代码片段引用原文件的实测行号，
 不要手抄后把转写当作证据。结果图必须能回答“比较了什么、基线是什么、误差/不确定度是什么”。
+若输入来自 `analy`/`pure`，优先消费其 `content_payload`；缺少时为每个密集对象补齐统一字段
+`content_id | claim_id | evidence_ids | visual_type | width_budget | height_budget | min_font_pt |
+item_count | split_allowed | split_boundary | risks | mitigation`，不让页面布局依赖猜测。
+其中 `risks` 必须明确区分节点外框、路径标签、独立标签、箭头、彩色框内距、列间距和页脚安全区。
 
 ### Step 3. 先做逐页结构，再写 LaTeX
 
@@ -115,8 +122,8 @@ metadata:
 1. 标题页：题目、阶段、汇报人；
 2. 结论先行：已完成、关键证据、当前判断、受众需判断或导师需决策事项；
 3. 问题与验收标准：研究问题/假设、输入、成功判据；
-4. 总体流程：输入 → 方法/算法 → 验证 → 输出，用统一工作流表格；跨模块关系再用流程图或框图补充；
-5. 核心方法：用统一工作流表格承载算法、伪代码、物理模型或公式链；
+4. 总体流程：输入 → 方法/算法 → 验证 → 输出，用 frame 内直接放置的单列工作流表格；跨模块关系再用流程图或框图补充；
+5. 核心方法：用 frame 内直接放置的单列工作流表格承载算法、伪代码、物理模型或公式链；
 6. 实验/计算设置：数据、参数、设备、基线和可复现条件，用表格；
 7. 关键结果：图表或结果表，标题写出结论；
 8. 验证、误差与未解决问题：对照、消融、边界情形、风险；
@@ -124,14 +131,16 @@ metadata:
 10. 下一步与请求：任务、产物、截止时间、阻塞项和需要受众判断/导师拍板的选项；
 11. 附录：只放回答追问所需的推导、完整参数、额外结果或代码证据。
 
-把每页预先写成“结论标题 / 主视觉 / 证据来源 / 一句含义 / 演讲补充”。删除不能服务于主问题、证据、
-风险或下一步的页；不添加无意义目录页、泛泛背景页、装饰性大图或重复总结页。
+把每页预先写成 `frame_manifest`：
+`frame_id | claim_id | 主视觉 | evidence_ids | width_budget | height_budget | min_font_pt |
+split_allowed | expected_page | risks`，并同时写“结论标题 / 一句含义 / 演讲补充”。删除不能服务于主问题、
+证据、风险或下一步的页；不添加无意义目录页、泛泛背景页、装饰性大图或重复总结页。
 
 ### Step 4. 为主张选择视觉表达
 
 主体页（标题页和纯行动页除外）至少约 80% 使用一个主视觉，按场景选择：
 
-- **流程/工作流**：优先使用“工作流的统一 LaTeX 表达”中的单列 `table[htbp]`，逐行标明输入、处理、判断、更新、停止条件和输出；TikZ 只补充跨模块关系；
+- **流程/工作流**：优先使用“工作流的统一 LaTeX 表达”中的单列行，在 Beamer `frame` 内直接放置 `tabular`/`tabularx`，逐行标明输入、处理、判断、更新、停止条件和输出；TikZ 只补充跨模块关系；
 - **算法/伪代码**：使用同一单列表格写输入—初始化—循环/分支—停止条件—输出，并把关键状态和判据写进对应行；
 - **模块/物理结构**：框图、层级图、代码符号—物理对象映射表；
 - **比较/配置/误差**：`booktabs` + `tabularx` 表格，列只保留影响判断的字段；
@@ -141,12 +150,23 @@ metadata:
 图形必须表达关系或证据，不能只是把文字换成彩色框。图、表、公式下方用一行 `来源：...` 或 `数据：...`，
 需要追溯时写 `文件:行号`；无来源的示意图明确标注“示意”。
 
+版式账本是实现前的硬闸门，不是编译后的补记：
+
+- `columns` 的宽度预算按 `\sum_i w_i+(n-1)\columnsep\le0.96\linewidth` 计算，不能只看百分比之和；
+- 每页高度预算要单独扣除 frametitle、来源行、footline 安全区和盒体内距；不以 `\vfill` 把超载推到页底；
+- TikZ 要按节点外框、箭头和文字标签的实际包围盒估算，最右/最下对象必须留安全边距；彩色框在列内优先使用
+  `wd\le0.98\linewidth` 或不显式指定宽度；表格文本列使用 `\raggedright\arraybackslash`；
+- TikZ 的 `\node`、路径上的 `node{...}` 标签、独立文字标签和箭头都是独立包围盒；标签优先写成
+  `node[above=<安全间距>,labelstyle]{...}`/`node[below=<安全间距>,labelstyle]{...}`，或用独立节点的
+  `above/below/left/right` 定位，禁止把标签坐标压进节点外框或箭头端点；长标签必须设 `text width` 并换行；
+- 主体正文/表格/主视觉不得用 `\tiny` 逃避布局；每页记录 `min_font_pt`，`\tiny` 只可出现在不承担主信息的图内标签，且仍须目测可读。
+
 ### Step 5. 生成横板 LaTeX/PDF
 
 1. 完整读取 `references/latex-template.md`；按模板使用 `ctexbeamer`/`beamer` 的 `aspectratio=169`，不改成 portrait 文档。
 2. 输出 `docs/report_<slug>_<YYYYMMDD>.tex` 和同名 `.pdf`；同日同主题已有文件时追加 `_2`、`_3`，不覆盖旧产物。
-3. 使用标准 LaTeX 图表：工作流采用上面的 `table[htbp]` 单列结构，模块关系使用 TikZ 框图，比较使用 `tabularx`，定量关系使用 `amsmath` 公式；`pgfplots` 只有在 `kpsewhich pgfplots.sty` 检查通过后才启用，否则使用 TikZ 或已有矢量图。
-4. 每页用 `frame` 固定布局，不使用 `allowframebreaks`；工作流 `table[htbp]`、长表、长公式和长流程按语义拆成独立页，页标题标明“1/2、2/2”，不截断一行表格或一段推导。
+3. 使用标准 LaTeX 图表：工作流采用上面的单列行结构（Beamer 内不使用浮动 `table`），模块关系使用 TikZ 框图，比较使用 `tabularx`，定量关系使用 `amsmath` 公式；`pgfplots` 只有在 `kpsewhich pgfplots.sty` 检查通过后才启用，否则使用 TikZ 或已有矢量图。
+4. 每页用 `frame` 固定布局，不使用 `allowframebreaks`；工作流单列 `tabular`/`tabularx`、长表、长公式和长流程按语义拆成独立页，页标题标明“1/2、2/2”，不截断一行表格或一段推导。
 5. 代码证据用 `\lstinputlisting[firstline=...,lastline=...]` 直引，单段建议不超过 12 行；路径和来源使用 `\url`/`\nolinkurl` 或 `\detokenize`，正文特殊字符正确转义。
 
 ### Step 6. 编译、查溢出并目测 PDF
@@ -161,31 +181,59 @@ kpsewhich booktabs.sty
 kpsewhich tabularx.sty
 ```
 
-在 `docs/` 中将两次编译输出放在内存变量，不创建技能过程日志：
+在 `docs/` 中将两次编译输出放在内存变量；构建文件和渲染图放临时目录，不创建技能过程日志：
 
 ```bash
+tex_name="report_<slug>_<YYYYMMDD>.tex"
+pdf_stem="${tex_name%.tex}"
+build_dir=$(mktemp -d)
+render_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir" "$render_dir"' EXIT
 compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
-  "report_<slug>_<YYYYMMDD>.tex" 2>&1 && \
+  -output-directory "$build_dir" "$tex_name" 2>&1 && \
   xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
-  "report_<slug>_<YYYYMMDD>.tex" 2>&1)" || {
+  -output-directory "$build_dir" "$tex_name" 2>&1)" || {
   printf '%s\n' "$compile_output"
   exit 1
 }
-printf '%s\n' "$compile_output"
-printf '%s\n' "$compile_output" | grep -c 'Overfull' || true
-printf '%s\n' "$compile_output" | grep -c 'Float too large' || true
+pdf_file="$build_dir/$pdf_stem.pdf"
+test -s "$pdf_file"
+pages_actual=$(pdfinfo "$pdf_file" | awk '$1 == "Pages:" {print $2}')
+overfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Overfull' || true)
+float_count=$(printf '%s\n' "$compile_output" | grep -c 'Float too large' || true)
+underfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Underfull' || true)
+overfull_hbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\hbox' || true)
+overfull_vbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\vbox' || true)
+printf 'Overfull=%s Float_too_large=%s overfull_hbox=%s overfull_vbox=%s Underfull=%s\n' \
+  "$overfull_count" "$float_count" "$overfull_hbox" "$overfull_vbox" "$underfull_count"
+test "$overfull_count" -eq 0
+test "$float_count" -eq 0
+test "$overfull_hbox" -eq 0
+test "$overfull_vbox" -eq 0
+pdfinfo "$pdf_file" | rg 'Pages|Page size|File size'
+pdftoppm -png -r 100 "$pdf_file" "$render_dir/page" >/dev/null
+rendered_pages=$(rg --files "$render_dir" | rg -c '/page-[0-9]+\.png$' || true)
+printf 'Rendered_pages=%s\n' "$rendered_pages"
+printf 'pages_actual=%s pages_rendered=%s\n' "$pages_actual" "$rendered_pages"
+test "$pages_actual" -eq "$rendered_pages"
+# 全部渲染页经人工检查通过后，才写入 docs/ 的最终 PDF
+cp "$pdf_file" "$pdf_stem.pdf"
 ```
 
-`Overfull` 和 `Float too large` 必须均为 0；`Underfull` 过多时也要检查是否影响投影阅读。用
-`pdfinfo` 检查页数和文件大小，用 `pdftotext` 抽查标题/结论/下一步；可用 `pdftoppm` 将首、中、尾页
-渲染到 `mktemp -d` 后目测页边、字号、图例、公式和页间逻辑，检查后清理临时目录。
+`Overfull` 和 `Float too large` 必须均为 0；`Underfull` 只作诊断量，需判断它是否形成可见大空白或错位。
+将 `frame_manifest` 的 `expected_page` 与 `pdfinfo` 的实际页数比较，并确认
+`pages_expected=pages_actual=rendered_pages=pages_checked`；未逐页看完不能把 `pages_checked` 记为通过。
+逐页检查页边安全区、列间、TikZ 节点/箭头、彩色框、公式、表格、代码和页脚，发现可疑页时在临时诊断
+编译中加入 `\overfullrule=5pt` 定位盒体；同时记录 `occlusion_pairs=0`、`clipped_objects=0`、
+`outside_safe_area=0`，三项只能在目测证据支持时填写为零。
 
 ### Step 7. 交付前闸门
 
 - **内容**：主问题、阶段目标、关键方法、实测证据、当前结论、风险、下一步和受众请求均有归宿；没有无来源数字和空泛口号。
 - **表达**：结论写在标题或首句；主体页以流程图、算法图、框图、表格、公式或图表为主，文字是辅助解释；图表标题能独立传达判断。
 - **完整性**：一张页内叙事闭合，缺席本次汇报的学者也能理解上下文；长内容只在语义边界拆页；附录与主体之间有明确引用关系。
-- **版式**：横向 16:9；正文不低于模板规定的可读字号；所有图表受宽高限制；没有 `Overfull`、`Float too large`、截断节点或页脚遮挡。
+- **版式**：横向 16:9；`frame_manifest` 的页数与实际页数一致；正文不低于模板规定的可读字号；所有图表受宽高限制；
+  `Overfull`、`Float too large`、`occlusion_pairs`、`clipped_objects` 和 `outside_safe_area` 均为 0；没有截断节点或页脚遮挡。
 - **真实性**：逐项核对证据清单、数字单位、基线、代码行号和“确证/推断/未验证”标识；不把示意图当实测结果。
 - **文件**：PDF 非空，页数合理，`pdftotext` 可提取主要文字，`.tex` 与 `.pdf` 同名；有 Git 改动时 `git diff --check` 通过。
 
@@ -200,6 +248,11 @@ printf '%s\n' "$compile_output" | grep -c 'Float too large' || true
 | 表格过宽/过高 | 缩短单元格为关键词，移出解释性长句，改用 `tabularx` 或按列/主题拆页；不把关键字段挤到不可读。 |
 | 流程图或算法图拥挤 | 减少非关键节点、把细节下沉到附录，保留输入/状态/判定/输出；必要时拆为“总览→关键步骤”两页。 |
 | 公式溢出或推导过长 | 用 `aligned` 分行、另页给符号表和推导依据；不横向压缩公式，不删掉单位/极限校验。 |
+| 编译无警告但出现遮挡/截断 | 用临时 `\overfullrule=5pt` 编译和逐页渲染定位；检查 TikZ 实际包围盒、列宽+`\columnsep`、彩色框内距、公式/代码盒及来源/页脚保留区，按语义拆分或收窄局部对象。 |
+| TikZ 节点/标签相互遮挡 | 分别检查节点、路径标签、独立标签和箭头的包围盒；标签改用 `above/below/left/right` 加显式安全间距，长文字设 `text width` 换行，并以渲染结果复核 |
+| `Underfull` 较多 | 区分 `\raggedright` 下可接受的短行与可见大空白/错位；只修复影响投影阅读的页面。 |
+| `columns` 宽度超预算 | 计算 `\sum_i w_i+(n-1)\columnsep`；超出 `0.96\linewidth` 即回退重排，不能等 PDF 裁切后再猜。 |
+| 页数或渲染检查不闭合 | 停止交付，补齐 `expected/actual/rendered/checked` 四项；只抽查首中尾页不能替代全页检查。 |
 | 缺少 LaTeX 宏包 | 先用 `kpsewhich` 定位缺项；可替换时使用模板允许的标准方案，否则如实报告无法生成 PDF，不静默改成竖版。 |
 | 编译失败或溢出警告 | 依据 `file-line-error` 定位；一次只改一个布局/转义假设，重新编译并记录新证据，直到通过或明确阻塞原因。 |
 | 结果页缺基线或单位 | 暂停结论性措辞，补齐基线、单位、误差/样本数和来源；无法补齐则改为局限页。 |
@@ -210,7 +263,8 @@ printf '%s\n' "$compile_output" | grep -c 'Float too large' || true
 - 流程图、算法图、表格、公式和框图优先承载信息，但不为满足形式强行添加不适用的图表。
 - 主体页禁止自动分页；相对完整的模块必须作为完整 frame 交付，分页只能发生在明确的语义边界。
 - 不修改用户源代码、不删除已有产物、不改变系统配置；不自动提交、推送或发布。
-- 不把编译成功等同于版式成功：必须同时有警告计数、PDF 内容抽查和必要的渲染目测证据。
+- 不把编译成功或零警告等同于版式成功：必须同时有警告计数、`frame_manifest` 页数核对、全页渲染和
+  `occlusion_pairs/clipped_objects/outside_safe_area` 目测证据。
 
 ## 总结格式
 
@@ -220,7 +274,7 @@ printf '%s\n' "$compile_output" | grep -c 'Float too large' || true
    受众:   <学者/导师/同行/课题组；时长；主体页数>
    产物:   docs/report_<slug>_<YYYYMMDD>.tex / .pdf
    内容:   <主问题、关键证据、结论、风险、下一步/请求>
-   版式:   16:9；Overfull=0；Float too large=0；<页数>
-   验证:   <编译、PDF 文本抽查、渲染目测、git diff --check>
+   版式:   16:9；pages_expected=...=pages_checked；Overfull=0；Float too large=0；occlusion_pairs=0；clipped_objects=0；outside_safe_area=0
+   验证:   <两遍编译、PDF 文本抽查、全页渲染目测、git diff --check>
    局限:   <未验证数据或未完成项；无则省略>
 ```

@@ -8,15 +8,41 @@
 
 ```bash
 cd docs
-# 将两次编译的终端输出保存在内存变量中检查，不创建或读取技能过程记录文件
-compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex" 2>&1 &&
-  xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex" 2>&1)" || {
+# 将构建文件与渲染图放在临时目录；终端输出只保存在内存中
+tex_name="pure_<slug>_<YYYYMMDD>.tex"
+pdf_stem="${tex_name%.tex}"
+build_dir=$(mktemp -d)
+render_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir" "$render_dir"' EXIT
+compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
+  -output-directory "$build_dir" "$tex_name" 2>&1 &&
+  xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
+  -output-directory "$build_dir" "$tex_name" 2>&1)" || {
   printf '%s\n' "$compile_output"
   exit 1
 }
 printf '%s\n' "$compile_output"
-printf '%s\n' "$compile_output" | grep -c "Overfull"
-printf '%s\n' "$compile_output" | grep -c "Float too large"
+pdf_file="$build_dir/$pdf_stem.pdf"
+test -s "$pdf_file"
+overfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Overfull' || true)
+float_count=$(printf '%s\n' "$compile_output" | grep -c 'Float too large' || true)
+overfull_hbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\hbox' || true)
+overfull_vbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\vbox' || true)
+underfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Underfull' || true)
+printf 'Overfull=%s Float_too_large=%s overfull_hbox=%s overfull_vbox=%s underfull=%s\n' \
+  "$overfull_count" "$float_count" "$overfull_hbox" "$overfull_vbox" "$underfull_count"
+test "$overfull_count" -eq 0
+test "$float_count" -eq 0
+test "$overfull_hbox" -eq 0
+test "$overfull_vbox" -eq 0
+pdfinfo "$pdf_file" | rg 'Pages|Page size|File size'
+pages_actual=$(pdfinfo "$pdf_file" | awk '$1 == "Pages:" {print $2}')
+pdftoppm -png -r 100 "$pdf_file" "$render_dir/page" >/dev/null
+rendered_pages=$(rg --files "$render_dir" | rg -c '/page-[0-9]+\.png$' || true)
+printf 'pages_actual=%s pages_rendered=%s\n' "$pages_actual" "$rendered_pages"
+test "$pages_actual" -eq "$rendered_pages"
+# 全部页面人工检查通过后执行：记录 pages_expected=pages_actual=pages_rendered=pages_checked，再复制最终 PDF
+cp "$pdf_file" "$pdf_stem.pdf"
 ```
 
 ## 1. 模板骨架（复制即用）
@@ -287,9 +313,15 @@ F1 & \texttt{<基准数据表或命令输出>} & 头部开销等实测对比；�
 | X 列内行内公式 | 数学模式断点少，超长行内公式会溢出（实测 6.6pt）——**表格 X 列避免超长行内公式**；长公式移入正文 `equation` 编号，表内只放短符号或引用编号 | Overfull 计数 |
 | 长路径 token | `\texttt{\detokenize{...}}` 无断点，超列宽即溢出（实测 97pt）——**路径 token 用 `\texttt{\nolinkurl{...}}`**（可在 `.:/_` 后断行，实测 X 列内无溢出）且**只能放 X 列**：l 列不换行，34 字符等宽 token 放 l 列实测溢出 10pt 量级；中文/短路径可用 `\detokenize` | Overfull 计数 |
 | 无空格畸形超长行 | 单个 token 超 120 字符且无空格时 listings 断行失效（实测：178 字符行溢出无法用参数消除）——**该行从引用范围剔除并在正文注明**（"第 N 行为 M 字符无空格赋值行，超出 listings 安全断行能力，略去；全文见 文件:N"），报告附注如实声明 | Overfull 计数 |
+| 页面高度/盒体内距 | 图片同时限制宽度和高度；彩色框使用 `breakable`；长公式、长代码和长表按语义拆分，页脚/页边保留安全区 | `overfull_vbox` + 逐页渲染 |
+| 警告为 0 但出现遮挡/截断 | 逐页渲染检查公式、表格、代码框、彩色框、页边和页脚；可疑页用临时 `\overfullrule=5pt` 定位，再拆分或收窄局部对象 | `occlusion_pairs/clipped_objects/outside_safe_area` 手工计数 |
+| TikZ 节点/标签碰撞 | `\node`、路径 `node{...}`、独立标签和箭头分别计入包围盒；标签用 `above/below/left/right=<安全间距>`，长文本设 `text width`/`align` | 全页渲染，记录 `occlusion_pairs` |
 
-编译后从内存中的终端输出统计 `Overfull` 与 `Float too large`：
-**两个计数都为 0 才可交付**；出现警告时依据终端中的 `file-line-error` 行号定位修复
+编译后从内存中的终端输出同时统计 `Overfull`、`Float too large`、`overfull_hbox`、`overfull_vbox` 和 `Underfull`：
+**硬警告计数都为 0 才可交付**；`Underfull` 仅作诊断量，需判断是否造成可见大空白或错位。
+同时必须核对 `pages_actual=pages_rendered=pages_checked`，并记录
+`occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0`；三项只能在全页渲染证据支持时填写为零。
+出现警告时依据终端中的 `file-line-error` 行号定位修复
 （Overfull 优先缩减代码片段行数/表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），
 修复后重编直至为 0。
 
