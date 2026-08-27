@@ -16,7 +16,7 @@
 | `_vim/` | `~/.vim/` | 完整 vim 运行时（plugged 插件、colors、UltiSnips、spell） |
 | `_oh-my-zsh/` | `~/.oh-my-zsh/` | 完整 oh-my-zsh 安装（含 custom 插件/主题） |
 
-仅参考不部署：`_docker/`（Docker 开发环境指南）、`_snsc/`（NSC 集群共享配置）、`_claude_code/`（指向 claude_code-v20260706 的符号链接兼容目录）、`_mac/`（macOS 更新开关脚本）、`_gitignore`（符号链接→仓库根 `.gitignore`，通用忽略模板：16 编号分节，含 C++/Java/PHP 等语言分节与「全局规则→树级放行→运行时例外」三层护栏）。
+仅参考不部署：`_docker/`（Docker 开发环境指南）、`_snsc/`（NSC 集群共享配置）、`_clash/`（Clash 代理环境安装包与 `setup.sh` 检查入口）、`_claude_code/`（指向 claude_code-v20260706 的符号链接兼容目录）、`_mac/`（macOS 更新开关脚本）、`_gitignore`（符号链接→仓库根 `.gitignore`，通用忽略模板：16 编号分节，含 C++/Java/PHP 等语言分节与「全局规则→树级放行→运行时例外」三层护栏）。
 
 ### 版本化环境配置（`{name}-v{YYYYMMDD}/`）
 
