@@ -2,7 +2,8 @@
 name: up
 description: |
   当用户要求升级、更新、优化或整理 agent 配置，或要扩展/修补 skills、tools、hooks、plugins，
-  引入 GitHub、Gitee、GitLab 等外部最佳实践、按 star 热榜检索候选，或要求 up 技能自我进化时使用。
+  维护插件推荐清单、提供或校验一键安装脚本，引入 GitHub、Gitee、GitLab 等外部最佳实践、
+  按 star 热榜检索候选，或要求 up 技能自我进化时使用。
 metadata:
   openclaw:
     emoji: ⬆️
@@ -61,6 +62,8 @@ metadata:
 - 用户要求外部调研或热榜："引入 GitHub/Gitee/GitLab skill"、"参考社区最佳实践"、
   "按 star 排名"、"搜热门 agent skill"、"查代码托管平台"。
 - 用户要求检查/修补行为："skill 没触发"、"配置过时"、"工具或 hook 有问题"、"插件兼容性"。
+- 用户要求插件推荐或一键安装脚本："添加更多推荐"、"提供安装脚本"、"一键安装插件"；
+  按原生 manifest、marketplace 入口、许可证和权限风险核对后再登记。
 - 用户要求 up 自身进化："让 up 自我改进"、"吸收本次失败经验"、"up 自我进化"。
 - 与其他技能配合：优化单个 skill 自身 → `skill-creator`；技能触发/行为异常 → `debug`；
   纯性能问题 → `optim`；升级后查看改动 → `diff`；需要反复迭代至最佳 → `all`；
@@ -218,6 +221,31 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
    或新建目标树所需的真实入口/清单；技能新增还要更新 `skills/AGENTS.md` 技能表登记；
 4. **debug**：修复发现的格式、完整性、逻辑、权限或加载问题；不以“换平台”掩盖根因；
 5. **借鉴内容注明出处**（网站 + 仓库/技能名 + URL），不照搬不署名。
+
+### Step 5.3 插件推荐与一键安装流程（目标包含 plugins 推荐/安装器时启用）
+
+当用户要求“添加更多插件推荐”“提供一键安装脚本”或维护 `plugins/README.md` 时，按以下边界
+执行；推荐清单和安装器是两个产物，前者不能隐式触发后者：
+
+1. **核对候选**：从多源热榜和明确的官方/上游仓库发现候选，逐项读取实际
+   `.codex-plugin/plugin.json`、marketplace manifest、许可证、安装说明和近期兼容性；区分
+   “原生 Codex marketplace 插件”“可转换的 Agent Skills 集合”和“仅 MCP/其他 harness 工具”，
+   不因 star 高就把后两类写成原生插件。
+2. **写推荐条目**：每项记录网站、仓库/插件名、URL、版本或 ref、许可证、实际能力、适用场景、
+   与本库的重叠/权限风险和可复现安装入口；无法确认 manifest、许可证或安装命令时列入暂不纳入，
+   写明证据和原因。官方、社区和相邻工具分组，避免把不同信任等级混成一张榜单。
+3. **设计安装器**：只调用目标 harness 已验证的安装接口（Codex 当前为
+   `codex plugin marketplace add` + `codex plugin add`）；提供默认有限 profile、按名安装、
+   `--dry-run`、可选 Git ref 和 `--help`/`--list`。安装器不得在仓库加载时自启，不复制第三方源码，
+   不创建个人 marketplace，不删除已有插件，不隐式安装 npm/系统依赖，不自动信任 hooks；带 hooks、
+   MCP 或大规模重叠技能的项目只能显式选择，并在输出中警告。
+4. **保持幂等与可审查**：重复运行先复用已配置 marketplace，安装后用 CLI 的 JSON 查询验证注册；
+   多目标安装逐项报告并继续处理，最后以非零退出码汇总失败项。对上游使用 `main` 时支持 ref 覆盖，
+   文档同时给出 tag/commit 固定方式。`wshobson/agents` 等需要额外生成器或 npm 工具的项目，
+   不得伪装成通用原生安装路径，可保留人工安装说明。
+5. **同步说明**：更新 `plugins/README.md` 与 `plugins/AGENTS.md`，写清脚本不会被本库自动调用；若
+   安装器改变了 Codex 配置入口，再核对相关 `skills` 的调用说明和安全边界。实际安装只有在用户明确
+   要求执行时进行；本任务只提供脚本时不替用户写入 `CODEX_HOME`。
 
 ### Step 5.4 up 的自我进化（目标包含 up 时启用）
 
