@@ -7,6 +7,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - `analy/references/analysis-framework.md`：具体工作主题的代码/物理 15 步分析框架。
 - `analy/references/report-guide.md`：分析报告主线、色彩、防溢出、交付检查与示例。
 - `tag/references/tag-operations.md`：Git 标签创建、查询、删除、改写与区间操作的详细命令。
+- `up/references/awesome-opencode.md`：opencode 生态精选索引（官方/插件/主题/agent/资源），供 up 差距分析与候选发现使用。
 
 ## 技能执行公共契约（低 token 版）
 
@@ -113,7 +114,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `auto` | 前缀式包装不重复实现（细节以目标技能为权威）；一次性预授权分级（L1/L2/自定义）实现 0 交互；0 交互 ≠ 0 报告；停滞保护（连续 N 轮无进展换方向）；中断报告含恢复方式 | 无人值守长任务；权限预授权模式可推广到任何自动流程 |
 | `go-on` | 多源汇聚（输入清单/Git 改动/opencode 会话交叉验证）；无缝优先（opencode 原生 -c/-s/--fork/run -c 会话继续，消息历史与任务跟踪状态（TODO）天然继承）；孤儿进程先判定进程类；信息补查循环 3 轮上限防空转 | 任何"接着干"场景；会话中断恢复；新终端续接任务 |
 | `dispatch` | 并行派发纪律（2+ 独立任务拆域、同消息派发=并行）；代理指令四要素（问题域/目标/约束/预期输出，不传会话历史）；整合验证不豁免（冲突检查+全量验证+抽查） | 多独立任务的并行提速；派发子代理时的指令构造与整合纪律 |
-| `up` | 四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜；API→网页重试降级；差距分析；插件推荐与一键安装器（manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
+| `up` | 四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜 + awesome-opencode 生态清单；API→网页重试降级；差距分析；插件推荐与一键安装器（按 harness 分支 Codex/opencode，manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
 
 ## 技能
 
@@ -132,7 +133,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范|
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；生成类任务首轮复用 make，单步任务转对应技能|
-| `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（manifest、marketplace、profile、dry-run、幂等验证）→up 自身单轮证据约束进化→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名与 URL |
+| `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名与 URL |
 | `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论|
 | `review` | 代码审查：早审查常审查、子代理审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；接收审查"先验证后实现"（不表演性同意、技术性反驳附证据）；吸收 superpowers requesting/receiving-code-review|
 | `dispatch` | 并行子代理派发：2+ 个独立子任务拆域并行（无共享状态/无顺序依赖/互不改同文件），同消息派发=并行，代理指令四要素（问题域/目标/约束/预期输出，不传会话历史），返回后整合验证（冲突检查+全量验证+抽查）；吸收 obra/superpowers dispatching-parallel-agents|

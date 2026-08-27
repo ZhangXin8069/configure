@@ -150,6 +150,7 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 | 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 |
 | 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` |
 | 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc`，保留其原生 star 字段；用于补充开源生态样本 |
+| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 |
 | 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 |
 | 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 |
 | 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 |
@@ -234,8 +235,11 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 2. **写推荐条目**：每项记录网站、仓库/插件名、URL、版本或 ref、许可证、实际能力、适用场景、
    与本库的重叠/权限风险和可复现安装入口；无法确认 manifest、许可证或安装命令时列入暂不纳入，
    写明证据和原因。官方、社区和相邻工具分组，避免把不同信任等级混成一张榜单。
-3. **设计安装器**：只调用目标 harness 已验证的安装接口（Codex 当前为
-   `codex plugin marketplace add` + `codex plugin add`）；提供默认有限 profile、按名安装、
+3. **设计安装器**：只调用目标 harness 已验证的安装接口——Codex 当前为
+   `codex plugin marketplace add` + `codex plugin add`；opencode 为
+   `opencode plugin <npm模块>`，并把模块写入 `opencode.json` 的 `plugin` 数组
+   （无 marketplace 命令，安装器设计不能照搬 Codex；参考本技能
+   `references/awesome-opencode.md` 对接点 1）。提供默认有限 profile、按名安装、
    `--dry-run`、可选 Git ref 和 `--help`/`--list`。安装器不得在仓库加载时自启，不复制第三方源码，
    不创建个人 marketplace，不删除已有插件，不隐式安装 npm/系统依赖，不自动信任 hooks；带 hooks、
    MCP 或大规模重叠技能的项目只能显式选择，并在输出中警告。
