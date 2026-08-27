@@ -8,12 +8,15 @@
 
 ```bash
 cd docs
-xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex"
-xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex"
-# 溢出检查：Overfull（行宽溢出）与 Float too large（图表溢出页面）计数均为 0 才交付
-# （>0 按第 4 节定位修复后重编）
-grep -c "Overfull" "analy_<slug>_<YYYYMMDD>.log"
-grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
+# 将两次编译的终端输出保存在内存变量中检查，不创建或读取技能过程记录文件
+compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex" 2>&1 &&
+  xelatex -interaction=nonstopmode -halt-on-error -file-line-error "analy_<slug>_<YYYYMMDD>.tex" 2>&1)" || {
+  printf '%s\n' "$compile_output"
+  exit 1
+}
+printf '%s\n' "$compile_output"
+printf '%s\n' "$compile_output" | grep -c "Overfull"
+printf '%s\n' "$compile_output" | grep -c "Float too large"
 ```
 
 ## 1. 模板骨架（复制即用）
@@ -184,15 +187,15 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 % A4 整体框架: 模块/文件组织、主流程（层级表或依赖链）
 % A5 关键细节: 关键函数/算法/数据结构、易错点（\lstinputlisting 直引片段）
 % A6 任务如何正确执行: 步骤/命令（\textcolor{evidence}{\texttt{\detokenize{...}}}）
-% A7 实际执行情况: 实测命令与输出（记录于日志的实测结果）
+% A7 实际执行情况: 实测命令与终端输出
 % A8 实际输出情况: 实测产物清单与关键数值
-% A9 结果分析: 结合生成的图表（\includegraphics 限宽高）、日志与其他文件逐项解读
+% A9 结果分析: 结合生成的图表（\includegraphics 限宽高）、终端输出与其他文件逐项解读
 % A10 综合分析: 与仓库整体联系、对象映射、深层原因
 % A11 结尾总结: 结论框（conclbox）收束
 % A12 结尾评价: 优缺点、可改进处
 % A13 补充说明: 假设/局限/未覆盖项（warnbox）
 % A14 参考源: 本步全部证据汇总（见第 9 节参考源清单）
-% A15 附录与附件（如有）: 原始日志/配置/数据引用
+% A15 附录与附件（如有）: 原始输出/配置/数据引用
 
 % ---- B 物理工作框架（被分析对象为物理推导/理论/计算/实验）----
 \subsection{工作全流程重现（B 物理工作框架）}
@@ -202,9 +205,9 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 % B4 整体推理框架: 推导/论证主线（推理链 A→B→C）
 % B5 推导关键细节: 关键步骤、近似、边界条件（公式 \label/\eqref 编号）
 % B6 任务如何正确执行: 推导/计算/实验的正确步骤
-% B7 实际执行情况: 实测过程与记录
+% B7 实际执行情况: 实测过程与终端输出
 % B8 实际输出情况: 实测公式/数据结果
-% B9 结果分析: 结合图表/日志/文件解读（含量纲检查与极限校验）
+% B9 结果分析: 结合图表/终端输出/文件解读（含量纲检查与极限校验）
 % B10 综合分析: 与物理图像/模型联系、自洽性
 % B11 结尾总结: 结论框收束
 % B12 结尾评价: 理论价值与局限
@@ -227,7 +230,7 @@ grep -c "Float too large" "analy_<slug>_<YYYYMMDD>.log"
 编号 & 图表文件/数据来源 & 详尽介绍（生成方式/含义/解读/关联） \\
 \midrule
 \endhead
-F1 & \texttt{\nolinkurl{.optim.<TS>.log:基准表}} & 头部开销 1000次对比等，来源：\texttt{\nolinkurl{.optim.<TS>.log}} 实测；生成：bash 计时循环；含义：旧1.93s→新0.010s/188倍；解读见第5节A9；关联：证明主导项优化有效 \\
+F1 & \texttt{<基准数据表或命令输出>} & 头部开销等实测对比；来源与生成方式在正文说明；解读见第5节A9；关联：支撑主导项结论 \\
 \bottomrule
 \caption{本次大任务图表清单（穷尽，数据来源：实测）}
 \end{xltabular}
@@ -237,22 +240,7 @@ F1 & \texttt{\nolinkurl{.optim.<TS>.log:基准表}} & 头部开销 1000次对比
 \caption{<图表标题>（来源与生成方式详述）}
 \end{figure}
 
-% ================= 8 本次大任务日志关键内容汇编（必须穷尽，日志清单闭合） =================
-\section{本次大任务日志关键内容汇编}
-% 本次大任务产生的全部日志关键内容必须在此集中清单并逐项详介；每项含日志路径、用途、关键条目摘录、详尽解读、与结论关联；原始片段用 \lstinputlisting 直引
-\begin{xltabular}{\textwidth}{llX}
-\toprule
-编号 & 日志文件 & 详尽介绍（用途/关键条目/解读/关联） \\
-\midrule
-\endhead
-L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键：头部188倍等；解读见第5节A9；关联：支撑结论 \\
-\bottomrule
-\caption{本次大任务日志清单（穷尽，原始片段见下方）}
-\end{xltabular}
-% 逐日志关键片段（详尽介绍置于结果/综合分析合理位置，本节集中原始片段）
-\lstinputlisting[firstline=1,lastline=40]{/绝对/路径/.optim.<TS>.log}
-
-% ================= 9 参考源清单 =================
+% ================= 8 参考源清单 =================
 \section{参考源清单}
 % xltabular 跨页防溢出; X 列放"内容/作用"文本列
 \begin{xltabular}{\textwidth}{llX}
@@ -265,7 +253,7 @@ L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键
 \bottomrule
 \end{xltabular}
 
-% ================= 10 结论与局限 =================
+% ================= 9 结论与局限 =================
 \section{结论与局限}
 \begin{conclbox}
 <核心结论汇总: 结构-关系-思路三视角各一句 + 主题结论>
@@ -324,21 +312,21 @@ L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键
 | 长路径 token | `\texttt{\detokenize{...}}` 无断点，超列宽即溢出（实测 97pt）——**路径 token 用 `\texttt{\nolinkurl{...}}`**（可在 `.:/_` 后断行，实测 X 列内无溢出）且**长 token（>20 字符）只能放 X 列**：l 列不换行，34 字符等宽 token 放 l 列实测溢出 10pt 量级；短路径可用 `\detokenize` | Overfull 计数 |
 | 无空格畸形超长行 | 单个 token 超 120 字符且无空格时 listings 断行失效（实测：178 字符行溢出无法用参数消除）——**该行从引用范围剔除并在正文注明**（"第 N 行为 M 字符无空格赋值行，超出 listings 安全断行能力，略去；全文见 文件:N"），报告附注如实声明 | Overfull 计数 |
 
-编译后必须运行 `grep -c "Overfull" <file>.log` 与 `grep -c "Float too large" <file>.log`：
-**两个计数都为 0 才可交付**（Overfull=行宽溢出，Float too large=图表溢出页面，分开定位）；
->0 时按 `.log` 中 `file-line-error` 行号定位修复（Overfull 优先缩减代码片段行数/
-表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），修复后重编直至为 0。
+编译后从内存中的终端输出统计 `Overfull` 与 `Float too large`：
+**两个计数都为 0 才可交付**；出现警告时依据终端中的 `file-line-error` 行号定位修复
+（Overfull 优先缩减代码片段行数/表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），
+修复后重编直至为 0。
 
 ## 5. 内容丰富度要求（逻辑通顺 + 内容充实）
 
 1. **一条主线**：摘要（点题）→ 概览（背景）→ 主体结构（骨架）→ 各部分关系（织网）→
-   项目思路（灵魂）→ 主题分析（深入）→ 关键片段（证据）→ 本次大任务图表详览（穷尽）→ 本次大任务日志汇编（穷尽）→ 参考源清单 → 结论（收束）；
+   项目思路（灵魂）→ 主题分析（深入）→ 关键片段（证据）→ 本次大任务图表详览（穷尽）→ 参考源清单 → 结论（收束）；
    每节主题句先行、节末小结并自然引出下节；
 2. **三视角必齐**：结构/关系/思路三节任何报告都不可缺（核心目的）；
 3. **具体工作必走 15 步框架**：主题为"一项具体工作"时，主题分析节按
    「分析思路框架」A（代码）/B（物理）15 步编号小节完整组织，每步至少
-   **一段分析 + 一个证据（文件:行号/图表/日志）**，该节篇幅占正文一半以上；
-   第 9 步（结果分析）必须实际查看生成的图表、日志与其他文件后撰写；
+   **一段分析 + 一个证据（文件:行号/图表/终端输出）**，该节篇幅占正文一半以上；
+   第 9 步（结果分析）必须实际查看生成的图表、终端输出与其他文件后撰写；
 4. **每层都要有**：整体→部分→细节 逐层展开，不跳跃；
 5. **表格密度**：统计表、层级表、关系表、映射表、参考源表齐全；每表 caption + 数据来源；
 6. **语句过渡**：节间用过渡句衔接（"上一节回答了结构，这一节回答关系"），避免各节孤立；

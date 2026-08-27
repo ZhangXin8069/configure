@@ -8,12 +8,15 @@
 
 ```bash
 cd docs
-xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex"
-xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex"
-# 溢出检查：Overfull（行宽溢出）与 Float too large（图表溢出页面）计数均为 0 才交付
-# （>0 按第 4 节定位修复后重编）
-grep -c "Overfull" "pure_<slug>_<YYYYMMDD>.log"
-grep -c "Float too large" "pure_<slug>_<YYYYMMDD>.log"
+# 将两次编译的终端输出保存在内存变量中检查，不创建或读取技能过程记录文件
+compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex" 2>&1 &&
+  xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex" 2>&1)" || {
+  printf '%s\n' "$compile_output"
+  exit 1
+}
+printf '%s\n' "$compile_output"
+printf '%s\n' "$compile_output" | grep -c "Overfull"
+printf '%s\n' "$compile_output" | grep -c "Float too large"
 ```
 
 ## 1. 模板骨架（复制即用）
@@ -139,7 +142,7 @@ C2 & <部分名> & 排除 & <排除理由> \\
 
 \subsection{<核心部分 1>}
 % —— 纯代码框架（15 步全流程重现: 目的与准备 → 输入/输出 → 整体框架 → 关键细节 →
-%    正确执行 → 实际执行 → 实际输出 → 结果分析(图表/日志) → 综合分析 →
+%    正确执行 → 实际执行 → 实际输出 → 结果分析(图表/终端输出) → 综合分析 →
 %    总结/评价/补充 → 参考源/附录；每步附参考源，缺证据标注未验证）——
 % 算法原理(输入/输出/步骤) → 复杂度分析(时间/空间) → 正确性论证(不变量/边界) →
 % 独特竞争力(与朴素实现/通用库的差异与优势量化)
@@ -149,7 +152,7 @@ C2 & <部分名> & 排除 & <排除理由> \\
 
 % —— 纯物理框架（15 步全流程重现: 目的与准备 → 输入(公理/定理/假设/模型) →
 %    输出(公式/定理/预言/判断) → 整体推理框架 → 推导关键细节 → 正确执行 →
-%    实际执行 → 实际输出 → 结果分析(图表/日志) → 综合分析 → 总结/评价/补充 →
+%    实际执行 → 实际输出 → 结果分析(图表/终端输出) → 综合分析 → 总结/评价/补充 →
 %    参考源/附录）——
 % 物理图像(一句话图像+直观理解) → 模型设定(自由度/参数/几何/边界条件) →
 % 公式推导链(方程编号 \label{eq:xxx}，每步注明依据: 定义/对称性/近似/量纲) →
@@ -207,7 +210,7 @@ C2 & <部分名> & 排除 & <排除理由> \\
 编号 & 图表文件/数据来源 & 详尽介绍（生成方式/含义/解读/关联） \\
 \midrule
 \endhead
-F1 & \texttt{\nolinkurl{.optim.<TS>.log:基准表}} & 头部开销 1000次对比，来源：\texttt{\nolinkurl{.optim.<TS>.log}} 实测；生成：bash 计时循环；含义：旧1.93s→新0.010s/188倍；解读见第2节A9；关联：证明核心竞争力 \\
+F1 & \texttt{<基准数据表或命令输出>} & 头部开销等实测对比；来源与生成方式在正文说明；解读见第2节A9；关联：支撑核心竞争力结论 \\
 \bottomrule
 \caption{本次大任务图表清单（穷尽，数据来源：实测）}
 \end{xltabular}
@@ -216,21 +219,7 @@ F1 & \texttt{\nolinkurl{.optim.<TS>.log:基准表}} & 头部开销 1000次对比
 \caption{<图表标题>（来源与生成方式详述）}
 \end{figure}
 
-% ================= 6 本次大任务日志关键内容汇编（必须穷尽，日志清单闭合） =================
-\section{本次大任务日志关键内容汇编}
-% 本次大任务产生的全部日志关键内容必须在此集中清单并逐项详介；每项含日志路径、用途、关键条目摘录、详尽解读、与核心结论关联；原始片段用 \lstinputlisting 直引
-\begin{xltabular}{\textwidth}{llX}
-\toprule
-编号 & 日志文件 & 详尽介绍（用途/关键条目/解读/关联） \\
-\midrule
-\endhead
-L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键：头部188倍等；解读见第2节A9；关联：支撑竞争力结论 \\
-\bottomrule
-\caption{本次大任务日志清单（穷尽，原始片段见下方）}
-\end{xltabular}
-\lstinputlisting[firstline=1,lastline=40]{/绝对/路径/.optim.<TS>.log}
-
-% ================= 7 参考源清单 =================
+% ================= 6 参考源清单 =================
 \section{参考源清单}
 \begin{xltabular}{\textwidth}{llX}
 \toprule
@@ -241,7 +230,7 @@ L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键
 \bottomrule
 \end{xltabular}
 
-% ================= 8 结论 =================
+% ================= 7 结论 =================
 \section{结论}
 \begin{conclbox}
 <穷尽剖析结论: 核心部分总数(N 深挖/M 浅析/K 排除) + 最强竞争力总结>
@@ -299,21 +288,21 @@ L1 & \texttt{\nolinkurl{.optim.<TS>.log}} & 优化基准与复测全量；关键
 | 长路径 token | `\texttt{\detokenize{...}}` 无断点，超列宽即溢出（实测 97pt）——**路径 token 用 `\texttt{\nolinkurl{...}}`**（可在 `.:/_` 后断行，实测 X 列内无溢出）且**只能放 X 列**：l 列不换行，34 字符等宽 token 放 l 列实测溢出 10pt 量级；中文/短路径可用 `\detokenize` | Overfull 计数 |
 | 无空格畸形超长行 | 单个 token 超 120 字符且无空格时 listings 断行失效（实测：178 字符行溢出无法用参数消除）——**该行从引用范围剔除并在正文注明**（"第 N 行为 M 字符无空格赋值行，超出 listings 安全断行能力，略去；全文见 文件:N"），报告附注如实声明 | Overfull 计数 |
 
-编译后必须运行 `grep -c "Overfull" <file>.log` 与 `grep -c "Float too large" <file>.log`：
-**两个计数都为 0 才可交付**（Overfull=行宽溢出，Float too large=图表溢出页面，分开定位）；
->0 时按 `.log` 中 `file-line-error` 行号定位修复（Overfull 优先缩减代码片段行数/
-表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），修复后重编直至为 0。
+编译后从内存中的终端输出统计 `Overfull` 与 `Float too large`：
+**两个计数都为 0 才可交付**；出现警告时依据终端中的 `file-line-error` 行号定位修复
+（Overfull 优先缩减代码片段行数/表格列文本/公式换行；Float too large 优先检查表格跨页与图片宽高），
+修复后重编直至为 0。
 
 ## 5. 内容丰富度要求（逻辑通顺 + 内容充实）
 
 1. **一条主线**：摘要（点题+性质判定）→ 项目定位与核心部分清单（穷尽枚举）→
    核心部分深度剖析（逐部分）→ 独特性评估（竞争力）→ 关键片段与公式（证据）→
-   本次大任务图表详览（穷尽）→ 本次大任务日志汇编（穷尽）→ 参考源清单 → 结论（收束）；每节主题句先行、节末小结并自然引出下节；
+   本次大任务图表详览（穷尽）→ 参考源清单 → 结论（收束）；每节主题句先行、节末小结并自然引出下节；
 2. **穷尽性可见**：核心部分总清单三态（深挖/浅析/排除）必须填满，报告结尾重述
    "N 深挖 / M 浅析 / K 排除"，证明穷尽而非挑选；
 3. **深挖部分必走 15 步框架**：每个"深挖"部分按 A（代码）/B（物理）15 步全流程重现
    （目的与准备/输入/输出/整体框架/关键细节/正确执行/实际执行/实际输出/
-   结果分析（结合图表、日志、其他文件）/综合分析/总结/评价/补充/参考源/附录），
+   结果分析（结合图表、终端输出、其他文件）/综合分析/总结/评价/补充/参考源/附录），
    每步至少一段分析 + 一个证据，缺证据步骤标注 `未验证` 不跳过编号；
 4. **每层都要有**：每部分剖析遵循 原理→证据→独特点 三层，不跳跃；
 5. **表格密度**：核心部分清单表、映射表、独特性评估表、参考源表齐全；
