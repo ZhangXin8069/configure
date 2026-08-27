@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Codex HPC/snsc 入口：复用 ccodex.sh 的 prompt/skill 清单与驱动实现，默认使用 -m（GPT-5.6-Luna max）。
+# Codex HPC/snsc 入口：复用 ccodex.sh 的 prompt、agent 配置目录/skill 清单与驱动实现，默认使用 -m（GPT-5.6-Luna max）。
 
 _SRC=${BASH_SOURCE[0]:-${0}}
 case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac

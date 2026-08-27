@@ -40,10 +40,10 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 - `.bat`/`.ps1` 为 Windows 对应版，**不**被别名生成器扫描（只扫 `.sh`）
 - `oopencode-prompt.txt` 为 op 系列（`oopencode.sh`/`oopencode.bat`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}`/`${LIST_FILE}` 占位符，运行时替换）：`oopencode.sh` 经 bash 参数展开替换、`oopencode.bat` 经 PowerShell 替换；**修改 prompt 只改此文件**，勿在脚本内再内嵌
 - **op 系列驱动模式**（三脚本一致）：`-file/--file PATH` 指定指令文件，`-time/--time DUR` 指定「继续」间隔（默认 30s；支持 `30`/`30s`/`5m`/`2h`）。给出任一即进入无人值守驱动：headless `run --agent build --auto` 链——先发 prompt 并等其回合完成，从 `.agent` 日志提取 `session.id=`，再将文件内容作为第一条指令发送，之后每间隔发送「继续」，直至 Ctrl+C 或连续 3 次失败终止；仅给模型旗标时保持原 TUI 交互。驱动期间后台 `tail -F` 实时监视 `.agent` 日志，将工具调用/权限评估/错误以 `[HH:MM:SS] [LEVEL]` 紧凑行输出到终端（`opencode run` 的文本与 json 事件均在回合完成时批量到达，唯一实时流是 DEBUG 日志）。示例：`op -o -file /root/PyQCU/logs/v20260824.txt --time 30s`
-- `ccodex-prompt.txt` 为 co 系列（`ccodex.sh`/`ccodex.bat`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}` 占位符，运行时替换）；启动时仅在 prompt 后追加全局与当前工作区的 `SKILL.md` 路径清单；Unix 经 bash 参数展开替换，Windows 经 PowerShell 替换；**修改 Codex prompt 只改此文件**，勿在脚本内再内嵌
-- co 启动器不自动注入 `AGENTS.md` 或 `.codex` 其他上下文；只列出全局 `${HOME}/configure/skills` 与当前工作区约定 skill 目录中的 `SKILL.md` 路径，选中技能后再按需读取正文
+- `ccodex-prompt.txt` 为 co 系列（`ccodex.sh`/`ccodex.bat`）的 **prompt 单一来源**（保留 `${HOME}`/`${_PWD}` 占位符，运行时替换）；启动时在 prompt 后追加全局 agent 配置目录清单，以及全局与当前工作区的 `SKILL.md` 路径清单；Unix 经 bash 参数展开替换，Windows 经 PowerShell 替换；**修改 Codex prompt 只改此文件**，勿在脚本内再内嵌
+- co 启动器不自动注入 `AGENTS.md` 或 `.codex` 其他上下文；默认通过 `--add-dir` 开放已存在的 `${HOME}/configure/{skills,tools,hooks,plugins}` 目录，并列出这些目录与当前工作区约定 skill 目录中的 `SKILL.md` 路径，选中技能或配置后再按需读取正文；`exec resume` 复用首次会话的目录上下文
 - **co 系列驱动模式**（Unix/Windows 语义一致）：仅 `-time/--time DUR` 指定「继续」间隔（默认 30s；支持 `30`/`30s`/`5m`/`2h`）。给出后进入无人值守驱动：先用 `codex exec --json` 发送固定 prompt 与 skill 清单，从 `thread.started.thread_id` 提取会话 ID，再用 `codex exec resume` 周期发送「继续」，直至 Ctrl+C 或连续 3 次失败终止；仅给模型旗标时保持 Codex TUI。驱动期间 Unix 后台 `tail -F` 监视 JSONL，筛出工具调用/权限评估/错误/最终消息；`approval_policy`、`sandbox_mode`、`model_reasoning_effort` 通过 `--config` 注入，以兼容 `exec resume`。示例：`co -m -time 30s`
-- `ccodex-snsc.sh` 是 co 系列的 HPC/snsc 薄入口，默认使用 `-m`（`gpt-5.6-luna`/`max`）；不硬编码二进制路径，优先读取 `CODEX_BIN`，否则使用 PATH 中的 `codex`；继承同一 prompt 与 skill 清单注入规则，不创建用户输入清单
+- `ccodex-snsc.sh` 是 co 系列的 HPC/snsc 薄入口，默认使用 `-m`（`gpt-5.6-luna`/`max`）；不硬编码二进制路径，优先读取 `CODEX_BIN`，否则使用 PATH 中的 `codex`；继承同一 prompt、agent 配置目录访问与 skill 清单注入规则，不创建用户输入清单
 - `cctag` 二进制与 `claude_code-skill4git-tag.md` 已删除，git 标签管理技能移至 `../skills/tag/`
 - `.agent.*.log`（opencode/Codex 运行日志）与 op 系列 `.agent.*.list`（用户输入清单）为运行产物，不入库；co 系列不创建用户输入清单
 - 新增脚本后 `chmod +x <script>` 并在新 shell（或 `source ~/.zshrc`）中直接按名调用；校验语法 `bash -n <script>`

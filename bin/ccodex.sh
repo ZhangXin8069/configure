@@ -47,8 +47,27 @@ PROMPT="${PROMPT//\$\{HOME\}/${HOME:-}}"
 PROMPT="${PROMPT//\$\{_PWD\}/${_PWD}}"
 unset PROMPT_FILE
 
-# 初始注入严格限定为：固定 prompt、全局 skill 清单、当前工作区 skill 清单。
-# 这里只列出 SKILL.md 路径，不读取 skill 内容；模型选中技能后再按需读取。
+# 初始注入包含固定 prompt、全局 agent 配置目录清单以及全局/工作区 skill 清单。
+# 这里只列出路径，不读取配置内容；模型需要时再按需读取。
+_configure_agent_root="${HOME:-}/configure"
+_agent_config_dirs=(
+    "${_configure_agent_root}/skills"
+    "${_configure_agent_root}/tools"
+    "${_configure_agent_root}/hooks"
+    "${_configure_agent_root}/plugins"
+)
+_append_agent_config_dirs() {
+    local _title="$1" _agent_dir
+    shift
+    PROMPT+=$'\n\n### '"${_title}"$' ###\n'
+    for _agent_dir in "$@"; do
+        if [[ -d "${_agent_dir}" ]]; then
+            PROMPT+="${_agent_dir}"$'\n'
+        else
+            PROMPT+="（未找到 ${_agent_dir}）"$'\n'
+        fi
+    done
+}
 declare -A _SEEN_SKILL_PATHS=()
 _append_skill_list() {
     local _title="$1" _root _skill_path _found=0 _discovered=0
@@ -90,9 +109,12 @@ if [[ "${_workspace_root}" != "${_PWD}" ]]; then
         "${_workspace_root}/.codex/skills"
     )
 fi
+_append_agent_config_dirs "全局 Agent 配置目录（按需读取）" "${_agent_config_dirs[@]}"
+_configure_skills="${_agent_config_dirs[0]}"
 _append_skill_list "全局技能（${_configure_skills}）" "${_configure_skills}"
 _append_skill_list "当前工作目录技能（${_PWD}）" "${_workspace_skill_roots[@]}"
 unset -f _append_skill_list
+unset -f _append_agent_config_dirs
 unset _SEEN_SKILL_PATHS _configure_skills _git_root _workspace_root _workspace_skill_roots
 
 # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
@@ -186,10 +208,20 @@ CODEX_COMMON_ARGS=(
     --config "approval_policy=\"${CODEX_APPROVAL_POLICY}\""
     --config "sandbox_mode=\"${CODEX_SANDBOX_MODE}\""
 )
+CODEX_AGENT_DIR_ARGS=()
+for _agent_dir in "${_agent_config_dirs[@]}"; do
+    [[ -d "${_agent_dir}" ]] || continue
+    CODEX_AGENT_DIR_ARGS+=(--add-dir "${_agent_dir}")
+done
+CODEX_INITIAL_ARGS=(
+    "${CODEX_COMMON_ARGS[@]}"
+    "${CODEX_AGENT_DIR_ARGS[@]}"
+)
 
 echo "============================================================"
 echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
 echo "  log: ${LOG_FILE}"
+echo "  agent config: ${_configure_agent_root}/{skills,tools,hooks,plugins}"
 if [[ "${CODEX_LAUNCHER_VARIANT:-main}" == snsc ]]; then
     echo "  launcher: snsc/HPC"
 fi
@@ -280,14 +312,14 @@ trap '_cleanup' EXIT
 
 if (( ! DRIVE_MODE )); then
     # 普通模式：保持 Codex TUI；只给模型旗标时不进入 exec 链。
-    "${_CODEX_BIN}" "${CODEX_COMMON_ARGS[@]}" -- "${PROMPT}" 2>"${LOG_FILE}"
+    "${_CODEX_BIN}" "${CODEX_INITIAL_ARGS[@]}" -- "${PROMPT}" 2>"${LOG_FILE}"
     _run_rc=$?
 else
     # ---- 驱动模式：headless codex exec → exec resume 链式驱动 ----
     # 回合1 prompt → thread.started → 每 N 秒发送固定的「继续」。
     _live_log
     echo "---- drive: prompt round start $(date "+%F-%T") ----"
-    if "${_CODEX_BIN}" exec "${CODEX_COMMON_ARGS[@]}" --json -- "${PROMPT}" >>"${LOG_FILE}" 2>&1; then
+    if "${_CODEX_BIN}" exec "${CODEX_INITIAL_ARGS[@]}" --json -- "${PROMPT}" >>"${LOG_FILE}" 2>&1; then
         _drv_rc=0
     else
         _drv_rc=$?
