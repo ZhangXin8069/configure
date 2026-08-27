@@ -3,7 +3,8 @@ name: pure
 description: |
   当用户输入 `{~pure 主题}` 或 `{$用户输入}`，或要求穷尽/深挖项目核心、核心算法与竞争力、物理
   图像、公式推导、代码与物理对应、精剖，或要为后续 agent 建立核心细节参考时使用；目标是把
-  项目最有价值的部分挖到底时，即使未明说“pure”也使用。
+  项目最有价值的部分挖到底时，即使未明说“pure”也使用；核心细节在展示稿中出现公式、代码、表格
+  或流程遮挡/截断时也使用。
 metadata:
   openclaw:
     emoji: 🎯
@@ -22,7 +23,8 @@ metadata:
 本技能与 `analy` 形式相同（同样的证据驱动、`文件:行号` 参考源、`\lstinputlisting` 直引、
 LaTeX 报告输出与五色+场景色色彩体系）但**定位互补**。本技能是分析链的**细节参考层**：优先
 消费 `analy` 产出的整体地图，在不重复全库罗列的前提下，把后续 agent 需要的核心算法、物理对象、
-公式推导、代码符号和验证边界解析到可直接定位、复核和继续执行的粒度。
+公式推导、代码符号和验证边界解析到可直接定位、复核和继续执行的粒度；对每个可能进入 `report`
+的密集对象同时给出视觉占用、拆分边界和版式风险，使细节不会在展示层重新堆叠成遮挡。
 
 | 技能 | 回答的问题 | 报告骨架 |
 |---|---|---|
@@ -34,7 +36,8 @@ analy 织网（整体参考），pure 掘井（细节参考）。二者按流水
 
 **输入接口**：开始剖析前优先查找用户提供的或当前 `docs/` 下最新的 `analy_*` 参考产物，继承其任务定义、
 范围、依赖链和证据入口，并对关键路径重新核实；找不到时仍可独立执行，但必须在终端摘要和报告中标注
-“未取得 analy 整体参考”，不得假装已完成整体交接。
+“未取得 analy 整体参考”，不得假装已完成整体交接。输出给 `report` 时，除细节索引外必须同步交付
+“证据—视觉”记录：对象、主张、来源、视觉类型、宽高等级、合法拆分点和风险。
 
 ## 何时使用 / 何时不用
 
@@ -85,14 +88,15 @@ analy 织网（整体参考），pure 掘井（细节参考）。二者按流水
    （代码→物理、物理→代码），映射表列尽全部关键符号，无孤儿符号。
 6. **证据驱动，参考源可追溯**：每个结论附 `文件:行号`；代码片段用
    `\lstinputlisting[firstline,lastline]` 直引仓库原文件，不做转写；公式对照
-   原文献/源码推导核验后写入，不凭记忆转写。
+   原文献/源码推导核验后写入，不凭记忆转写；每个拟展示的密集对象还要登记内容边界和版式风险。
 7. **深挖 why**：每个核心部分至少回答三层——是什么（对象/定义）→ 怎么工作
    （机制/流程）→ **为什么这样设计**（动机/权衡/对比备选方案）；只讲是什么不算深挖。
 8. **诚实原则**：找不到独特竞争力时如实报告"未发现显著独特部分"并给出依据；
    未验证/推断的结论显式分级标注（确证/推断/未验证），不虚报创新性。
 9. **只读分析与产出穷尽性**：分析阶段不改动源文件；唯一写操作是 `docs/` 下的
    `.tex` 源文件与编译产物 `.pdf`。大任务中产生的全部图表与终端实测输出须列清单并逐项解读，
-   说明来源、含义、结论关联与局限，确保结果分析、综合分析和附录无遗漏。
+   说明来源、含义、结论关联与局限，确保结果分析、综合分析和附录无遗漏；交给 `report` 的细节包
+   还必须闭合视觉占用与拆页信息。
 
 ## 工作流的统一 LaTeX 表达
 
@@ -231,11 +235,14 @@ wc -l $(find . -name "*.sh" -not -path "./.git/*") 2>/dev/null | tail -1
 
 ```bash
 # 代码向：定位核心函数/算法
-grep -rn "def \|function \|核心函数名" <文件>
+target_file="path/to/file"
+grep -rn "def \|function \|核心函数名" "$target_file"
 # 物理向：定位公式与图像描述
-grep -rn "哈密顿量\|作用量\|相关函数\|关键物理量" <文档>
+target_doc="path/to/document"
+grep -rn "哈密顿量\|作用量\|相关函数\|关键物理量" "$target_doc"
 # 交叉向：定位代码符号与物理对象的对应
-grep -rn "plaquette\|hopping\|wilson\|关键符号" <代码> <文档>
+code_path="path/to/code"
+grep -rn "plaquette\|hopping\|wilson\|关键符号" "$code_path" "$target_doc"
 ```
 
 1. **纯代码框架**（每部分必答；核心算法须按 15 步全流程重现，禁止只讲原理平铺）：
@@ -273,7 +280,14 @@ grep -rn "plaquette\|hopping\|wilson\|关键符号" <代码> <文档>
 
 4. **证据必须真实存在**：引用前用 read/grep 核实行号与实际内容；
 5. **公式核验**：从推导写出公式后对照原文献/源码重新核对一遍（不凭记忆）；
-6. 主题在仓库中无依据时：记录"未找到相关证据"，报告阶段如实说明。
+6. **视觉交接记录**：对每个进入 `report` 的公式、代码片段、表格、图或流程记录以下最小字段：
+   `对象/主张 | 来源 | 视觉类型 | 宽度位置 | 高度等级 | 不可拆单元/拆分点 | 风险与缓解`；
+   高度等级按短/中/高估计，代码附行数、公式附行数、表格附行数、流程附节点数；TikZ 风险细分为节点外框、
+   路径标签、独立标签和箭头包围盒，不以 `Overfull=0` 推断不存在遮挡。
+   将其整理为与 `analy` 一致的 `content_payload`：
+   `content_id | claim_id | evidence_ids | visual_type | width_budget | height_budget | min_font_pt |
+   item_count | split_allowed | split_boundary | risks | mitigation`；公式/表格/代码/流程分别填公式行、表格行、代码行/片段行数或节点数。
+7. 主题在仓库中无依据时：记录"未找到相关证据"，报告阶段如实说明。
 
 ### Step 6. 生成 LaTeX 源文件
 
@@ -294,36 +308,69 @@ grep -rn "plaquette\|hopping\|wilson\|关键符号" <代码> <文档>
   纯物理报告保证公式密度（推导链带编号）；每个"深挖"部分按 15 步全流程重现
   （目的/输入/输出/框架/细节/正确执行/实际执行/实际输出/结果分析/综合分析/
   总结/评价/补充/参考源/附录），缺证据步骤标注 `未验证` 不跳过编号；
-- **防溢出**：`grep -c Overfull` 与 `grep -c "Float too large"` 交付前均为 0——
-  长表一律 xltabular 跨页（table 环境不可跨页）、图片限宽高
-  （`width=0.9\textwidth,height=0.6\textheight,keepaspectratio`），
-  全部规则与模板第 4 节一致。
+- **防溢出与视觉交接**：`grep -c Overfull` 与 `grep -c "Float too large"` 交付前均为 0——
+   长表一律 xltabular 跨页（table 环境不可跨页）、图片限宽高
+   （`width=0.9\textwidth,height=0.6\textheight,keepaspectratio`），
+   全部规则与模板第 4 节一致；公式/代码/表格/流程必须附视觉类型、宽高等级、拆分边界和风险记录，
+   无警告也要逐页渲染检查遮挡、截断和页面外框；TikZ 标签优先用 `above/below/left/right` 加显式安全间距，
+   不能压入节点或箭头端点。
 
 ### Step 7. 编译 PDF 到 docs/
 
 ```bash
 cd docs
-# 下面命令在内存中检查两次编译的终端输出；均无溢出警告才交付
-```
-
-将两次编译的终端输出保存在内存变量中检查，不创建或读取技能过程记录文件：
-
-```bash
-compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex" 2>&1 &&
-  xelatex -interaction=nonstopmode -halt-on-error -file-line-error "pure_<slug>_<YYYYMMDD>.tex" 2>&1)" || {
+# 在临时目录编译两遍；终端输出在内存中检查，不污染 docs/
+tex_name="pure_<slug>_<YYYYMMDD>.tex"
+pdf_stem="${tex_name%.tex}"
+build_dir=$(mktemp -d)
+render_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir" "$render_dir"' EXIT
+compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
+  -output-directory "$build_dir" "$tex_name" 2>&1 &&
+  xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
+  -output-directory "$build_dir" "$tex_name" 2>&1)" || {
   printf '%s\n' "$compile_output"
   exit 1
 }
-printf '%s\n' "$compile_output"
-printf '%s\n' "$compile_output" | grep -c "Overfull"
-printf '%s\n' "$compile_output" | grep -c "Float too large"
+pdf_file="$build_dir/$pdf_stem.pdf"
+test -s "$pdf_file"
+overfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Overfull' || true)
+float_count=$(printf '%s\n' "$compile_output" | grep -c 'Float too large' || true)
+overfull_hbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\hbox' || true)
+overfull_vbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\vbox' || true)
+underfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Underfull' || true)
+printf 'Overfull=%s Float_too_large=%s overfull_hbox=%s overfull_vbox=%s underfull=%s\n' \
+  "$overfull_count" "$float_count" "$overfull_hbox" "$overfull_vbox" "$underfull_count"
+test "$overfull_count" -eq 0
+test "$float_count" -eq 0
+test "$overfull_hbox" -eq 0
+test "$overfull_vbox" -eq 0
+pdfinfo "$pdf_file" | rg 'Pages|Page size|File size'
+pages_actual=$(pdfinfo "$pdf_file" | awk '$1 == "Pages:" {print $2}')
+pdftoppm -png -r 100 "$pdf_file" "$render_dir/page" >/dev/null
+rendered_pages=$(rg --files "$render_dir" | rg -c '/page-[0-9]+\.png$' || true)
+printf 'pages_actual=%s pages_rendered=%s\n' "$pages_actual" "$rendered_pages"
+test "$pages_actual" -eq "$rendered_pages"
+# 全部页面人工检查通过后执行：记录 pages_expected=pages_actual=pages_rendered=pages_checked，再复制最终 PDF
+cp "$pdf_file" "$pdf_stem.pdf"
 ```
+
+编译警告为零后仍要执行页面级检查：用 `pdftoppm` 将 PDF 全部页面渲染到 `mktemp -d`，逐页检查公式盒、
+代码框、表格列、TikZ 外框、彩色框内距和页脚是否相互侵入；对可疑页在临时诊断编译中加入
+`\overfullrule=5pt` 定位盒体。诊断标记不进入最终 PDF，渲染目录检查后清理。
 
 - 编译错误：依据终端编译输出中的 `file-line-error` 行号定位（宏错误/转义错误/缺宏包），修复后重编；
 - Overfull > 0：按模板第 4 节定位（缩减代码片段行数/表格列文本/公式换行），修复后重编
   直至为 0（循环尝试）；
 - "Float too large" > 0：表格改 xltabular 跨页、图片限宽高（`width=0.9\textwidth,
   height=0.6\textheight,keepaspectratio`），修复后重编直至为 0；
+- 编译警告为 0 但出现遮挡/截断：用临时 `\overfullrule=5pt` 诊断编译和逐页渲染，检查公式盒、
+   代码盒、TikZ 实际边界、表格列宽、彩色框内距及页脚保留区；按语义拆分或收窄局部对象，不能用
+   整页缩放掩盖；
+- TikZ 节点/标签相互遮挡：把 `\node`、路径 `node{...}`、独立标签和箭头分别作为包围盒检查；为标签设置
+  `above/below/left/right=<安全间距>`，缩短或拆分文字后重新渲染，不能只看编译警告；
+- `Underfull` 较多：先判断是否只是 `\raggedright` 下的可接受短行；若形成可见大空白、错位或层级断裂，
+  收紧表格列定义或改写单元格，不把所有警告机械归零；
 - 缺宏包（如 `ctex`）：先尝试 `tlmgr`/发行版包管理器安装；无法安装则改写模板避开该宏包。
 
 ### Step 8. 验证产物
@@ -333,7 +380,9 @@ ls -lh docs/pure_<slug>_<YYYYMMDD>.pdf        # 存在且非空
 pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题/结论/清单出现）
 ```
 
-- PDF 页数、大小、抽检文本与报告预期一致；
+- PDF 页数、大小、抽检文本与报告预期一致；记录
+  `pages_expected=pages_actual=pages_rendered=pages_checked`，并给出
+  `occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0` 的逐页证据；
 - 验证失败（PDF 缺失/空白/乱码）→ 回到 Step 6/7 修复重编。
 
 ### Step 9. 总结（结构化输出）
@@ -346,7 +395,7 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
    证据:   <参考源 N 处，其中代码片段 M 处（lstinputlisting 直引）>
    输入:   <analy 整体参考是否取得；继承的范围/入口与本次核实结果>
    索引:   <C1/C2/... 对应的文件/函数/公式/物理对象与验证状态>
-   产物:   docs/pure_<slug>_<YYYYMMDD>.pdf (N 页, X KB, Overfull=0, Float=0)
+   产物:   docs/pure_<slug>_<YYYYMMDD>.pdf (N 页, X KB, Overfull=0, Float=0, occlusion=0)
    源码:   docs/pure_<slug>_<YYYYMMDD>.tex
    结论:   <最强竞争力总结>
    局限:   <排除项理由/未验证项，无则省略>
@@ -390,7 +439,8 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 - [ ] 报告结构遵循模板主线；场景色语义统一（algo/phys/map/warn/hl），无额外颜色
 - [ ] 结论分级标注（确证/推断/未验证）；无依据结论已如实标注
 - [ ] PDF 编译成功；`grep -c Overfull` 为 0 且 `grep -c "Float too large"` 为 0；
-      `pdftotext` 抽检标题/结论/清单出现
+      `pdftotext` 抽检标题/结论/清单出现；全部页面已渲染并检查边界、遮挡与截断
+- [ ] 交给 `report` 的每个密集对象都有“证据—视觉”记录：视觉类型、宽度位置、高度等级、拆分边界、风险与缓解
 - [ ] 总结输出覆盖：主题/性质/清单三态/证据/产物/结论/局限
 
 ## 示例
@@ -428,6 +478,8 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 | 公式无法核验 | 明确标注"推导未核验"，不写入报告正文作为确证结论 |
 | Overfull > 0 | 按模板第 4 节定位（缩减片段行数/表格列/公式换行）修复重编直至为 0 |
 | "Float too large" 警告 | 图表溢出页面：长表改 xltabular 跨页（table 环境不可跨页），图片限宽高（`width=0.9\textwidth,height=0.6\textheight,keepaspectratio`），修复重编直至为 0 |
+| 编译警告为 0 但出现遮挡/截断 | 用临时 `\overfullrule=5pt` 诊断编译和逐页渲染，检查公式盒、代码盒、TikZ 实际边界、表格列宽、彩色框内距及页脚保留区；按语义拆分或收窄局部对象，不能用整页缩放掩盖 |
+| `Underfull` 较多 | 区分 `\raggedright` 下的可接受短行与可见大空白/错位；只修复影响阅读的页面，并调整列定义或单元格 |
 | LaTeX 转义错误 | 正文特殊字符转义；代码/路径走 `\detokenize`/`\lstinputlisting` |
 | 编译失败 | 依据终端编译输出定位行号修复重编（循环尝试直至成功），失败原因在终端摘要中说明 |
 | 路径含空格/中文 | `\lstinputlisting` 用绝对路径引号包裹；PDF 文件名用拼音 slug 规避 |
@@ -443,5 +495,6 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 - 物理图像先行：先讲清"这是什么对象/图像"，再讲"怎么推导/怎么实现"；
 - 报告用色规范统一（accent/evidence/reference/conclusion/codebg + algo/phys/map/warn/hl），
   不引入额外颜色；新增颜色须同步更新 references 模板色板表；
+- 交付给 `report` 的密集公式、代码、表格和流程必须保留视觉占用与拆分信息；“编译成功/无警告”不替代逐页渲染检查；
 - 交付前 `grep -c Overfull` 与 `grep -c "Float too large"` 均必须为 0
   （长表 xltabular 跨页、图片限宽高，模板防溢出规则见 references/latex-template.md）；

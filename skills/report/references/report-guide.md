@@ -56,12 +56,19 @@
 建议每页在草稿阶段使用以下记录格式：
 
 ```text
-S<n> 结论标题：<一句可判断的话>
+frame_id=S<n>  结论标题：<一句可判断的话>
 主视觉：<流程图/算法图/表格/公式/图表/框图>
 证据：<E<n>，文件:行号/命令/结果文件>
-含义：<对项目判断的影响>
-下一页接口：<需要解释的前提或要做的行动>
+布局：width_budget=<行内/单列/整页>；height_budget=<短/中/高>；min_font_pt=<实测/模板值>
+完整性：split_allowed=<是/否>；split_boundary=<语义边界>；expected_page=<页号>
+风险：<长公式/路径/URL/表格列/TikZ 外框/彩色框/页脚>；缓解：<局部处理>
+含义：<对项目判断的影响>；下一页接口：<需要解释的前提或要做的行动>
 ```
+
+`analy`/`pure` 交付的密集对象沿用 `content_payload` 字段：
+`content_id | claim_id | evidence_ids | visual_type | width_budget | height_budget | min_font_pt |
+item_count | split_allowed | split_boundary | risks | mitigation`；`item_count` 填公式行、表格行、代码行或 TikZ 节点数，
+TikZ 的 `risks` 必须把节点外框、路径标签、独立标签和箭头分别列出。
 
 ## 3. 视觉表达决策表
 
@@ -117,7 +124,25 @@ S<n> 结论标题：<一句可判断的话>
 
 ## 4. 信息密度与拆页规则
 
-下面是排版预算，不是用来替代编译检查的硬编码；实际以投影可读性和 PDF 警告为准：
+下面的内容预算服务于 `frame_manifest`，不是凭感觉填页；它不能替代编译和逐页渲染检查：
+
+### 4.1 版式账本硬闸门
+
+- `columns` 必须记录实际宽度：`\sum_i w_i+(n-1)\columnsep\le0.96\linewidth`；百分比之和小于 1
+  不代表加入列间距后安全。
+- 高度预算必须扣除 frametitle、正文上/下留白、来源行、footline 安全区和盒体内距；`\vfill` 不能作为
+  解决超载的手段。超载按“删装饰/重复 → 细节下沉 → 语义拆页 → 局部间距”处理。
+- TikZ 预算覆盖节点外框、箭头、标签和 `text width` 的实际包围盒；最右、最下对象须留安全边距。
+  `\node`、路径上的 `node{...}` 标签、独立文字标签和箭头均视为独立包围盒；标签优先使用
+  `above/below/left/right=<安全间距>`，长文本设置 `text width`/`align`，不能压入节点或箭头端点；
+  表格文本列统一使用 `>{\raggedright\arraybackslash}`，长路径不得放不可换行的固定列。
+- 主体正文、表格和主视觉不得以 `\tiny` 降密度；记录 `min_font_pt`，`\tiny` 仅可用于不承担主信息的
+  图内标签且仍须通过投影可读性检查。
+- 交付检查结果必须同时给出：`pages_expected / pages_actual / pages_rendered / pages_checked`、
+  `overfull_hbox / overfull_vbox / underfull`、`occlusion_pairs / clipped_objects / outside_safe_area`。
+  警告为零不是遮挡为零的替代品。
+
+### 4.2 内容密度建议
 
 | 元素 | 主体页建议上限 | 超出时的动作 |
 |---|---:|---|
@@ -174,5 +199,7 @@ S<n> 结论标题：<一句可判断的话>
 - [ ] 所有数字有单位、基线和来源；确证/推断/未验证没有混用。
 - [ ] 方法页保留输入、关键状态、判定/停止条件和输出验证；结果页保留误差或局限。
 - [ ] 长表、长公式和长流程按语义拆页，未使用主体 `allowframebreaks`。
+- [ ] `frame_manifest` 的预期页数、实际页数、渲染页数和人工检查页数一致；布局预算覆盖列间距、来源和页脚安全区。
+- [ ] `occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0` 均有逐页渲染证据；必要时用 `\overfullrule=5pt` 诊断。
 - [ ] 下一步有日期/产物/验收标准，受众请求写成可选择的决策题。
 - [ ] PDF 编译与渲染检查通过，主体页没有溢出、遮挡或不可读的字号。

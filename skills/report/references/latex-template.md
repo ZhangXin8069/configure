@@ -19,31 +19,51 @@ kpsewhich tabularx.sty
 kpsewhich pgfplots.sty
 ```
 
-在 `docs/` 执行两遍编译并从内存中的输出检查警告：
+在 `docs/` 使用临时构建目录执行两遍编译，并在最终复制 PDF 前从内存中的输出检查警告：
 
 ```bash
+tex_name="report_<slug>_<YYYYMMDD>.tex"
+pdf_stem="${tex_name%.tex}"
+build_dir=$(mktemp -d)
+render_dir=$(mktemp -d)
+trap 'rm -rf "$build_dir" "$render_dir"' EXIT
 compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
-  "report_<slug>_<YYYYMMDD>.tex" 2>&1 && \
+  -output-directory "$build_dir" "$tex_name" 2>&1 && \
   xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
-  "report_<slug>_<YYYYMMDD>.tex" 2>&1)" || {
+  -output-directory "$build_dir" "$tex_name" 2>&1)" || {
   printf '%s\n' "$compile_output"
   exit 1
 }
-printf '%s\n' "$compile_output"
+pdf_file="$build_dir/$pdf_stem.pdf"
+test -s "$pdf_file"
+pages_actual=$(pdfinfo "$pdf_file" | awk '$1 == "Pages:" {print $2}')
 overfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Overfull' || true)
 float_count=$(printf '%s\n' "$compile_output" | grep -c 'Float too large' || true)
-printf 'Overfull=%s\nFloat too large=%s\n' "$overfull_count" "$float_count"
+underfull_count=$(printf '%s\n' "$compile_output" | grep -c 'Underfull' || true)
+overfull_hbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\hbox' || true)
+overfull_vbox=$(printf '%s\n' "$compile_output" | grep -c 'Overfull \\vbox' || true)
+printf 'Overfull=%s Float_too_large=%s overfull_hbox=%s overfull_vbox=%s Underfull=%s\n' \
+  "$overfull_count" "$float_count" "$overfull_hbox" "$overfull_vbox" "$underfull_count"
 test "$overfull_count" -eq 0
 test "$float_count" -eq 0
+test "$overfull_hbox" -eq 0
+test "$overfull_vbox" -eq 0
+pdfinfo "$pdf_file" | rg 'Pages|Page size|File size'
+pdftoppm -png -r 100 "$pdf_file" "$render_dir/page" >/dev/null
+rendered_pages=$(rg --files "$render_dir" | rg -c '/page-[0-9]+\.png$' || true)
+printf 'Rendered_pages=%s\n' "$rendered_pages"
+printf 'pages_actual=%s pages_rendered=%s\n' "$pages_actual" "$rendered_pages"
+test "$pages_actual" -eq "$rendered_pages"
+# 全部渲染页人工检查通过后才写入 docs/：
+cp "$pdf_file" "$pdf_stem.pdf"
 ```
 
-若 `pdftoppm` 可用，渲染少量页面做投影检查：
+逐页检查全部渲染页，而不是只看首、中、尾页：
 
 ```bash
-render_dir=$(mktemp -d)
-trap 'rm -rf "$render_dir"' EXIT
-pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/null
-# 检查首页、中间页、结尾页；检查结束后由 trap 清理
+# 记录并核对：pages_expected=pages_actual=pages_rendered=pages_checked
+# 发现可疑盒体时，在临时诊断编译中加入 \overfullrule=5pt，再检查对应页。
+# 交付记录还必须给出：occlusion_pairs=0、clipped_objects=0、outside_safe_area=0。
 ```
 
 ## 1. 可复制的模板骨架
@@ -121,7 +141,8 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
   decision/.style={draw=warning,fill=warning!10,diamond,aspect=2,align=center,
     inner sep=1.5pt,font=\small},
   arrow/.style={-{Latex[length=2mm]},draw=primary,semithick},
-  relation/.style={-{Latex[length=1.7mm]},draw=muted,thin,dashed}
+  relation/.style={-{Latex[length=1.7mm]},draw=muted,thin,dashed},
+  labelstyle/.style={font=\scriptsize,inner sep=1.5pt,fill=white,text=muted}
 }
 
 % ===== 代码片段：短、直引、可断行 =====
@@ -180,8 +201,8 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
     \node[flow,right=of check] (output) {输出\\指标与结论};
     \draw[arrow] (input) -- (method);
     \draw[arrow] (method) -- (check);
-    \draw[arrow] (check) -- node[above,font=\scriptsize]{通过} (output);
-    \draw[relation] (check.south) |- ++(0,-0.55) -| node[below,font=\scriptsize]{不通过：定位误差}
+    \draw[arrow] (check) -- node[above=1.5pt,labelstyle]{通过} (output);
+    \draw[relation] (check.south) |- ++(0,-0.55) -| node[below=1.5pt,labelstyle]{不通过：定位误差}
       (method.south);
   \end{tikzpicture}
   \vfill
@@ -202,8 +223,8 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
         \draw[arrow] (a) -- (b);
         \draw[arrow] (b) -- (c);
         \draw[arrow] (c) -- (d);
-        \draw[arrow] (d) -- node[right,font=\scriptsize]{是} (e);
-        \draw[relation] (d.west) |- ++(-0.6,0) |- node[left,font=\scriptsize]{否：继续迭代} (c.west);
+        \draw[arrow] (d) -- node[right=1.5pt,labelstyle]{是} (e);
+        \draw[relation] (d.west) |- ++(-0.6,0) |- node[left=1.5pt,labelstyle]{否：继续迭代} (c.west);
       \end{tikzpicture}
     \end{column}
     \begin{column}{0.38\textwidth}
@@ -278,7 +299,8 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
 
 - `aspectratio=169` 是横板硬约束；不使用 `a4paper`、`ctexart` 或 `geometry` 把页面改成报告页。
 - 正文使用模板默认字号或 `\small`；`\scriptsize` 只用于来源、代码编号和不承担主信息的脚注；主体不使用 `\tiny`。
-- 左右文本安全边距为约 `0.55 cm`；列宽总和不超过 `0.96\textwidth`，列间距预留在预算中。
+- 左右文本安全边距为约 `0.55 cm`；每个 `columns` 记录并满足
+  `\sum_i w_i+(n-1)\columnsep\le0.96\linewidth`，不能只看列宽百分比之和。
 - 标题尽量一行，最长不超过两行；标题超过两行先压缩措辞，而不是减小标题字号。
 
 ### 2.2 图、表、公式和代码
@@ -289,12 +311,26 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
 - 表格优先 `tabularx` + `X` 列 + `booktabs`；移出长句、缩短字段，超出安全高度就按语义拆页，不整体缩放到不可读。
 - 长公式用 `align`/`aligned` 分行；公式行内不要放未经定义的长路径、长文本或大段说明。
 - 代码证据用 `\lstinputlisting[firstline=...,lastline=...]` 直引，主体每段建议不超过 12 行；代码之外的路径用 `\nolinkurl` 或 `\detokenize`。
+- 表格文本列统一使用 `>{\raggedright\arraybackslash}`；列内彩色框优先使用 `wd\le0.98\linewidth` 或省略显式宽度，避免边框/内距侵入列间。
+- TikZ 的预算覆盖节点外框、箭头和标签的实际包围盒；最右、最下对象必须留安全边距，不能只按坐标线长度判断。
+- TikZ 中 `\node`、路径 `node{...}`、独立文字标签和箭头都占用独立包围盒；标签优先使用
+  `above/below/left/right=<安全间距>`，长标签设置 `text width` 与 `align`，不得把文字压入节点外框或箭头端点。
 
 ### 2.3 分页与完整性
 
 - 主体页禁止 `allowframebreaks`；Beamer 的自动拆页会破坏“结论—证据—含义”闭环。
 - 不在表格行、公式等号链、流程箭头或伪代码循环中间断页。若必须多页，按完整语义分组，页标题明确 `(1/2)`、`(2/2)` 并重复列头/符号定义。
 - 内容超载时按“删装饰 → 删重复 → 细节下沉附录 → 语义拆页 → 微调间距”顺序处理；不以缩小字体和删除来源为第一方案。
+- 每个 frame 在生成前登记 `frame_id、claim_id、visual_type、width_budget、height_budget、min_font_pt、
+  split_allowed、expected_page、risks`；高度预算须扣除标题、来源、页脚安全区和盒体内距，不能用 `\vfill` 隐藏超载。
+
+### 2.4 遮挡诊断
+
+`Overfull=0` 只证明 TeX 没有报告超出行宽/页面的盒体，不证明对象彼此没有遮挡。交付前全页渲染并逐页
+记录 `occlusion_pairs、clipped_objects、outside_safe_area`；发现异常时在临时副本中打开 `\overfullrule=5pt`
+定位盒体，再按语义拆页或收窄局部对象。`\tiny` 不得承担主体信息，只能用于不承担主信息的图内标签，且仍须
+通过投影可读性检查。路径标签不能只依赖坐标猜测：应使用带显式安全间距的 `above/below/left/right`，
+并把节点、标签和箭头逐一检查为独立对象。
 
 ## 3. 来源、颜色和文本约定
 
@@ -306,9 +342,10 @@ pdftoppm -png -r 100 "report_<slug>_<YYYYMMDD>.pdf" "$render_dir/page" >/dev/nul
 ## 4. 编译后验收清单
 
 - [ ] `xelatex` 两遍退出码为 0，交叉引用无未定义警告。
-- [ ] 编译输出中 `Overfull` 次数为 0，`Float too large` 次数为 0；严重 `Underfull` 已人工处理。
+- [ ] 编译输出中 `Overfull` 次数为 0，`Float too large` 次数为 0；`overfull_hbox` 与 `overfull_vbox` 均为 0，严重 `Underfull` 已人工处理。
 - [ ] PDF 存在且非空；`pdfinfo` 页数与逐页 map 一致，主体页数没有因自动分页悄悄增加。
+- [ ] `pages_expected=pages_actual=pages_rendered=pages_checked`；`occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0` 均有逐页渲染证据。
 - [ ] `pdftotext` 能抽出标题、关键结论、下一步和来源；中文没有明显乱码。
-- [ ] 首页、中间页、结果页、结尾页渲染后检查边界、图例、表格、公式、箭头和页脚是否遮挡。
+- [ ] 全部页面渲染后检查边界、图例、表格、公式、箭头、彩色框和页脚是否遮挡；首页/中间页/结尾页只是最低限度抽查。
 - [ ] 所有主张均可回到证据清单；没有 `TODO`、`TBD`、`<待填>` 等占位符留在交付 PDF 中。
 - [ ] 主体页中视觉表达占主导；无目录、背景、装饰或重复页等无决策价值内容。
