@@ -76,6 +76,17 @@ _append_agent_config_dirs() {
     done
 }
 
+# 数组元素包含判断（bash 3.2 无关联数组，用线性查找）
+_contains() {
+    local _target="$1"
+    shift
+    local _item
+    for _item in "$@"; do
+        [[ "${_item}" == "${_target}" ]] && return 0
+    done
+    return 1
+}
+
 # 全局/工作区 SKILL.md 路径清单注入（co/cl 共用）：只列路径；去重
 _append_skill_list() {
     local _title="$1" _root _skill_path _found=0 _discovered=0
@@ -86,9 +97,9 @@ _append_skill_list() {
         while IFS= read -r _skill_path; do
             [[ -n "${_skill_path}" ]] || continue
             _discovered=1
-            if [[ -z "${_SEEN_SKILL_PATHS[${_skill_path}]+x}" ]]; then
+            if ! _contains "${_skill_path}" "${_SEEN_SKILL_PATHS[@]}"; then
                 PROMPT+="${_skill_path}"$'\n'
-                _SEEN_SKILL_PATHS["${_skill_path}"]=1
+                _SEEN_SKILL_PATHS+=("${_skill_path}")
                 _found=1
             fi
         done < <(find "${_root}" -type f -name SKILL.md -print 2>/dev/null | sort)
@@ -129,8 +140,7 @@ run_claude() {
     _load_prompt
     # 与 co 相同的注入：全局 agent 配置目录 + skill 清单
     local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
-    local -a _agent_config_dirs _workspace_skill_roots
-    local -A _SEEN_SKILL_PATHS=()
+    local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
     _agent_config_dirs=(
         "${_configure_agent_root}/skills"
         "${_configure_agent_root}/tools"
@@ -598,8 +608,7 @@ run_codex() {
     # 初始注入包含固定 prompt、全局 agent 配置目录清单以及全局/工作区 skill 清单。
     # 这里只列出路径，不读取配置内容；模型需要时再按需读取。
     local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
-    local -a _agent_config_dirs _workspace_skill_roots
-    local -A _SEEN_SKILL_PATHS=()
+    local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
     _agent_config_dirs=(
         "${_configure_agent_root}/skills"
         "${_configure_agent_root}/tools"
