@@ -426,3 +426,4 @@ _minted*/
 .debug.*
 .optim.*
 .tag.*
+*.pdfcheck.*
