@@ -55,7 +55,7 @@ emit_aliases() {
     esac
   fi
   for line in "${lines[@]}"; do
-    [[ "$line" =~ ^alias[[:space:]]+([A-Za-z_][A-Za-z0-9_]*)= ]] && printf '%s\n' "$line"
+    [[ "$line" =~ ^alias[[:space:]]+([A-Za-z_][A-Za-z0-9_-]*)= ]] && printf '%s\n' "$line"
   done
 }
 
@@ -77,6 +77,6 @@ if [[ -n "$ALIASES_OUT" ]]; then
 fi
 
 VAR_COUNT=$(grep -c '^export ' "$OUT" || true)
-ALIAS_COUNT=$(grep -c '^alias [A-Za-z_][A-Za-z0-9_]*=' "$OUT" || true)
+ALIAS_COUNT=$(grep -c '^alias [A-Za-z_][A-Za-z0-9_-]*=' "$OUT" || true)
 echo "已写入 $OUT，共 $VAR_COUNT 个变量、$ALIAS_COUNT 个别名"
 echo "恢复方法： source $OUT"
