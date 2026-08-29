@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# 统一 agent 启动器：cl/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
+# 统一 agent 启动器：cl/cls/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
 #   cl  → Claude Code（TUI：--permission-mode auto；驱动：claude -p → --resume 链）
+#   cls → Claude Code HPC/snsc 入口
 #   op  → OpenCode（build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
 #   ops → OpenCode HPC/snsc 入口（默认 OPENCODE_BIN 指向 vscode-server 内部署路径）
@@ -125,7 +126,7 @@ _cleanup() {
 trap '_cleanup' EXIT
 
 # =====================================================================
-# Claude Code 分支（cl）：TUI 或 -p/--resume 驱动链；模型旗标与 op/co 一致
+# Claude Code 分支（cl/cls）：TUI 或 -p/--resume 驱动链；模型旗标与 op/co 一致
 # =====================================================================
 run_claude() {
     local _CLAUDE_BIN="${CLAUDE_BIN:-}"
@@ -856,12 +857,13 @@ PY
 # ---- 分发（cpupower.sh 模式：按 $_NAME 分发）----
 case "${_NAME}" in
     cl)   _AGENT=claude;   _SNSC=0;;
+    cls)  _AGENT=claude;   _SNSC=1;;
     op)   _AGENT=opencode; _SNSC=0;;
     co)   _AGENT=codex;    _SNSC=0;;
     ops)  _AGENT=opencode; _SNSC=1;;
     cos)  _AGENT=codex;    _SNSC=1;;
     *)
-        echo "Usage: ln -s agent.sh {cl|op|co|ops|cos}"
+        echo "Usage: ln -s agent.sh {cl|cls|op|co|ops|cos}"
         exit 1;;
 esac
 
