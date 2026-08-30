@@ -4,9 +4,10 @@
 
 ## 0. 历史 follow 链自检与修正
 
-`tag-chain.sh` 默认检查全部历史标签。排序以唯一 `init` 标签为根，后续按附注标签对象的
-tagger 时间升序排列；它不按编号排序，也不把 commit 时间当作标签创建时间。自检同时验证
-标签类型、peeled commit、祖先关系和可选远端对象。
+`tag-chain.sh` 默认检查全部历史标签。排序以唯一 `init` 标签为根，先按 peeled commit 的
+反向拓扑顺序排列，再对同一目标 commit 按 tagger 时间升序排列；它不按编号排序，也不把
+commit 时间当作标签创建时间。分支目标或同一目标的 tagger 时间并列时只报告并阻断自动修正。
+自检同时验证标签类型、peeled commit、祖先关系和可选远端对象。
 
 ```bash
 CHECKER="${TAG_CHAIN_CHECKER:-skills/tag/tag-chain.sh}"
@@ -16,7 +17,7 @@ bash "$CHECKER" --repair --dry-run --remote origin
 
 正常创建仍使用 `git tag -a`；历史修正使用 `git mktag` 保留原 tagger 元数据。自动修正边界：仅替换可解析的首个 `follow <旧标签>,` 前缀，或给非空正文补上缺失的
 `follow <期望标签>, ` 前缀，保留消息正文、原 tagger 元数据和 peeled commit。以下情形只报告不改写：
-根标签缺失或不唯一、tagger 时间并列、轻量标签、
+根标签缺失或不唯一、同一目标的 tagger 时间并列、轻量标签、
 签名标签、目标提交不是前一标签目标的祖先、远端对象已漂移。
 
 本地应用与远端应用是两个明确闸门：
@@ -37,7 +38,7 @@ bash "$CHECKER" --repair --apply --remote origin --confirm-remote-rewrite
 标签类型只有 `stab`、`dev`、`bug`、`test`，四类计数器独立。显式完整名称必须匹配：
 
 ```text
-^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$
+^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$
 ```
 
 显式名称直接使用；泛化子版本请求计算指定主版本的下一个 `_M`（从 1 开始）：
@@ -59,7 +60,7 @@ NEW_TAG="${TYPE}${MAJOR}_${NEXT_MINOR}"
 ```bash
 TYPE="stab"
 LAST_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname |
-    grep -E "^${TYPE}[0-9]+(_[0-9]+)?$" | head -1)
+    grep -E "^${TYPE}[0-9]+(_[0-9]+)*$" | head -1)
 if [ -z "$LAST_TAG" ]; then
     NEW_NUM=0
 else
@@ -77,7 +78,7 @@ NEW_TAG="${TYPE}${NEW_NUM}"
 
 ```bash
 BASELINE=$(git tag -l --sort=-v:refname |
-    grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$' | head -1)
+    grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' | head -1)
 if [ -z "$BASELINE" ]; then
     BASELINE=$(git rev-list --max-parents=0 HEAD)
 fi
@@ -118,7 +119,7 @@ git push origin "$NEW_TAG"
 ```bash
 git tag -l --sort=-v:refname \
   --format='%(refname:short) | %(taggerdate:short) | %(subject)' |
-  grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)? \|'
+  grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)* \|'
 TYPE="dev"
 git tag -l "${TYPE}[0-9]*" --sort=-v:refname \
   --format='%(refname:short) | %(taggerdate:short) | %(subject)'
@@ -136,7 +137,7 @@ git tag -l 'test[0-9]*' | wc -l
 git tag -l --format='%(subject)%0a%(body)' "$TAG_NAME"
 git tag -l --format='Type: %(refname:short)%0aAuthor: %(taggername) <%(taggeremail)>%0aDate: %(taggerdate:iso)%0aMessage: %(subject)' "$TAG_NAME"
 PREV_TAG=$(git tag -l --sort=-v:refname |
-  grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$' |
+  grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' |
   grep -A1 "^$TAG_NAME$" | tail -1)
 if [ -n "$PREV_TAG" ]; then
     git log "${PREV_TAG}..${TAG_NAME}" --oneline --no-merges
