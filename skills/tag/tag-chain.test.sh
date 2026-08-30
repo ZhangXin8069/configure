@@ -62,17 +62,34 @@ make_tag dev0 '2024-01-02T00:00:01Z' 'follow stab0, 1. dev; [test].' "$dev_commi
 
 commit_file stable '2024-01-03T00:00:00Z'
 stable_commit=$(git -C "$repo" rev-parse HEAD)
-make_tag stab1 '2024-01-03T00:00:01Z' 'follow stab0, 1. stable; [test].' "$stable_commit"
+make_tag stab1 '2024-01-01T00:00:01Z' 'follow stab0, 1. stable; [test].' "$stable_commit"
 
 commit_file bug '2024-01-04T00:00:00Z'
 bug_commit=$(git -C "$repo" rev-parse HEAD)
 make_tag bug0 '2024-01-04T00:00:01Z' 'NVIDIA CUDA 默认线程块性能调优与显存回归; [test].' "$bug_commit"
+
+commit_file multi '2024-01-05T00:00:00Z'
+multi_commit=$(git -C "$repo" rev-parse HEAD)
+make_tag test10_5 '2024-01-05T00:00:01Z' 'follow bug0, 1. multi; [test].' "$multi_commit"
+
+commit_file multi-sub '2024-01-06T00:00:00Z'
+multi_sub_commit=$(git -C "$repo" rev-parse HEAD)
+make_tag test10_5_1 '2024-01-06T00:00:01Z' 'follow test10_5, 1. multi-sub; [test].' "$multi_sub_commit"
+
+commit_file multi-sub-sub '2024-01-07T00:00:00Z'
+multi_sub_sub_commit=$(git -C "$repo" rev-parse HEAD)
+make_tag test10_5_1_1 '2024-01-07T00:00:01Z' 'follow test10_5_1, 1. multi-sub-sub; [test].' "$multi_sub_sub_commit"
+
+commit_file multi-next '2024-01-08T00:00:00Z'
+multi_next_commit=$(git -C "$repo" rev-parse HEAD)
+make_tag test10_6 '2024-01-08T00:00:01Z' 'follow test10_5_1_1, 1. multi-next; [test].' "$multi_next_commit"
 
 if output=$(bash "$checker" --check --repo "$repo" 2>&1); then
     fail '错误链检查意外通过'
 fi
 assert_contains "$output" '[FIX] stab1: follow stab0 -> follow dev0'
 assert_contains "$output" '[FIX] bug0: 缺少 follow 前缀 -> 补 follow stab1'
+assert_contains "$output" '[FIX] test10_6: follow test10_5_1_1 -> follow test10_5'
 
 old_stable_object=$(git -C "$repo" rev-parse refs/tags/stab1)
 if output=$(bash "$checker" --repair --dry-run --repo "$repo" 2>&1); then
@@ -87,8 +104,11 @@ subject=$(git -C "$repo" for-each-ref --format='%(contents:subject)' refs/tags/s
 [ "$subject" = 'follow dev0, 1. stable; [test].' ] || fail "stab1 消息错误: $subject"
 subject=$(git -C "$repo" for-each-ref --format='%(contents:subject)' refs/tags/bug0)
 [ "$subject" = 'follow stab1, NVIDIA CUDA 默认线程块性能调优与显存回归; [test].' ] || fail "bug0 消息错误: $subject"
+[ "$(git -C "$repo" for-each-ref --format='%(contents:subject)' refs/tags/test10_5_1_1)" = \
+    'follow test10_5_1, 1. multi-sub-sub; [test].' ] || fail '多级标签消息错误'
 [ "$(git -C "$repo" rev-parse 'stab1^{}')" = "$stable_commit" ] || fail 'stab1 peeled commit 被改变'
 [ "$(git -C "$repo" rev-parse 'bug0^{}')" = "$bug_commit" ] || fail 'bug0 peeled commit 被改变'
+[ "$(git -C "$repo" rev-parse 'test10_5_1_1^{}')" = "$multi_sub_sub_commit" ] || fail '多级标签 peeled commit 被改变'
 [ "$(git -C "$repo" for-each-ref --format='%(creatordate:unix)' refs/tags/stab0)" = \
     "$root_tag_date" ] || fail '根标签 tagger 日期未保留'
 
@@ -111,5 +131,33 @@ remote_subject=$(git -C "$repo" for-each-ref --format='%(contents:subject)' refs
 [ "$remote_subject" = 'follow bug0, 1. remote; [test].' ] || fail "dev1 本地消息错误: $remote_subject"
 [ "$(git -C "$repo" rev-parse 'dev1^{}')" = "$remote_commit" ] || fail 'dev1 peeled commit 被改变'
 bash "$checker" --check --repo "$repo" --remote origin >/dev/null || fail '远端修正后的检查失败'
+
+tie_repo="$test_root/tie-repo"
+git init -q "$tie_repo" || fail '初始化并列时间测试仓库失败'
+git -C "$tie_repo" config user.name 'Tag Chain Tie Test'
+git -C "$tie_repo" config user.email 'tag-chain-tie@example.invalid'
+printf '%s\n' tie >> "$tie_repo/history.txt"
+git -C "$tie_repo" add history.txt || fail '并列时间测试暂存失败'
+GIT_AUTHOR_DATE='2024-02-01T00:00:00Z' GIT_COMMITTER_DATE='2024-02-01T00:00:00Z' \
+    git -C "$tie_repo" commit -q -m tie || fail '并列时间测试提交失败'
+tie_root_commit=$(git -C "$tie_repo" rev-parse HEAD)
+GIT_COMMITTER_DATE='2024-02-01T00:00:01Z' git -C "$tie_repo" tag -a stab0 "$tie_root_commit" \
+    -m 'stab0 init, 1. init; [test].' || fail '并列时间根标签失败'
+
+printf '%s\n' child >> "$tie_repo/history.txt"
+git -C "$tie_repo" add history.txt || fail '并列时间测试子提交暂存失败'
+GIT_AUTHOR_DATE='2024-02-02T00:00:00Z' GIT_COMMITTER_DATE='2024-02-02T00:00:00Z' \
+    git -C "$tie_repo" commit -q -m child || fail '并列时间测试子提交失败'
+tie_child_commit=$(git -C "$tie_repo" rev-parse HEAD)
+GIT_COMMITTER_DATE='2024-02-02T00:00:01Z' git -C "$tie_repo" tag -a dev0 "$tie_child_commit" \
+    -m 'follow stab0, 1. first; [test].' || fail '并列时间 dev 标签失败'
+GIT_COMMITTER_DATE='2024-02-02T00:00:01Z' git -C "$tie_repo" tag -a test0 "$tie_child_commit" \
+    -m 'follow dev0, 1. second; [test].' || fail '并列时间 test 标签失败'
+tie_refs_before=$(git -C "$tie_repo" show-ref --tags)
+if output=$(bash "$checker" --repair --apply --repo "$tie_repo" 2>&1); then
+    fail '并列 tagger 时间意外允许自动修正'
+fi
+assert_contains "$output" 'tagger 时间并列'
+[ "$(git -C "$tie_repo" show-ref --tags)" = "$tie_refs_before" ] || fail '并列时间场景改写了本地标签'
 
 printf 'PASS: tag-chain 自检、dry-run、本地修正和远端 lease 重写测试通过。\n'
