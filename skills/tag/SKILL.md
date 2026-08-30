@@ -33,9 +33,10 @@ metadata:
 ## 历史链自检与自动修正
 
 `tag-chain.sh` 检查所有历史 `stab/dev/bug/test` 标签，而不是只检查最新标签。它把唯一的
-`<tag> init,` 注释作为根，再按附注标签对象的 `tagger` 时间升序排列后核对 `follow` 前缀；
-这样可发现跨类型漏链、同一旧标签被重复引用和历史标签中的回指错误。它同时核对附注类型、
-peeled commit 的祖先关系，以及指定远端的标签对象和目标提交。
+`<tag> init,` 注释作为根，先按 peeled commit 的反向拓扑顺序排列，再对同一目标 commit 按
+tagger 时间升序排列后核对 `follow` 前缀；这样可发现跨类型漏链、同一旧标签被重复引用和历史
+标签中的回指错误。分支目标或同一目标的 tagger 时间并列时只报告并阻断自动改写。它同时核对
+附注类型、peeled commit 的祖先关系，以及指定远端的标签对象和目标提交。
 
 ```bash
 # 在仓库根执行；若项目没有本地副本，可把 CHECKER 指向本 configure 技能副本
@@ -54,7 +55,7 @@ bash "$CHECKER" --repair --apply --remote origin --confirm-remote-rewrite
 
 正常创建仍使用 `git tag -a`；历史修正使用 `git mktag` 保留原 tagger 元数据。自动修正只替换可解析的首个 `follow <旧标签>,` 前缀，或给非空正文补上缺失的
 `follow <期望标签>, ` 前缀，并保留原 tagger、消息正文和 peeled commit。缺少唯一根、tagger
-时间并列、轻量标签、签名标签或提交祖先关系断裂时只报告并停止，
+同一目标的 tagger 时间并列、轻量标签、签名标签、分支目标或提交祖先关系断裂时只报告并停止，
 不猜测排序、不移动标签目标。默认 `--check` 覆盖全部历史标签；`--root TAG` 可在历史缺少
 `init` 或存在多个 `init` 时显式指定根。
 
@@ -130,7 +131,7 @@ test0, test1, test2, ... testN, testN_1, ...            (测试标记)
 
 所有计数器从 0 开始独立递增。每类第一个标签用 `<type>0`。
 
-**完整文法**：`^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$` —— 如 `stab15`、`stab15_1`、`dev3_2`。
+**完整文法**：`^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$` —— 如 `stab15`、`stab15_1`、`dev3_2_1`。
 
 ## 子版本标签（`<type><N>_<M>`）
 
@@ -192,7 +193,7 @@ follow stab8, 1. 重构lib目录结构，统一版本化配置模式; 2. 新增c
 **Case A — 显式完整标签名**：用户精确指定标签名（如 "打 stab15_1 标签"）。原样使用：
 
 ```bash
-NEW_TAG="stab15_1"   # 用户指定，必须匹配 ^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$
+NEW_TAG="stab15_1"   # 用户指定，必须匹配 ^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$
 if git rev-parse -q --verify "refs/tags/${NEW_TAG}" >/dev/null; then
     echo "Tag ${NEW_TAG} already exists — offer to amend it or use the next number"
 fi
@@ -216,7 +217,7 @@ NEW_TAG="${TYPE}${MAJOR}_${NEXT_MINOR}"
 
 ```bash
 TYPE="stab"   # 或 dev、bug、test——由上一步确定
-LAST_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)?$" | head -1)
+LAST_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)*$" | head -1)
 if [ -z "$LAST_TAG" ]; then
     NEW_NUM=0
 else
@@ -235,7 +236,7 @@ NEW_TAG="${TYPE}${NEW_NUM}"
 ```bash
 # 基线 = 任意类型的最新标签（含子版本标签；版本排序将其排在父标签之上，
 # 所以 stab15_1 优先于 stab15 被选中）
-BASELINE=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$' | head -1)
+BASELINE=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' | head -1)
 # 无标签时用第一个提交
 if [ -z "$BASELINE" ]; then
     BASELINE=$(git rev-list --max-parents=0 HEAD)
@@ -320,7 +321,7 @@ git push origin "$NEW_TAG"
 
 ```bash
 # 列出全部标签（四类全部，含子版本）
-git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)? \|'
+git tag -l --sort=-v:refname --format='%(refname:short) | %(taggername) | %(taggerdate:short) | %(subject)' | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)* \|'
 
 # 按类型过滤（如仅 stab 标签）——子版本包含在内
 TYPE="dev"
@@ -349,7 +350,7 @@ git tag -l --format='%(subject)%0a%(body)' "$TAG_NAME"
 git tag -l --format='Type: %(refname:short)%0aAuthor: %(taggername) <%(taggeremail)>%0aDate: %(taggerdate:iso)%0aMessage: %(subject)' "$TAG_NAME"
 
 # 显示该标签与其前驱之间的提交（任意类型，含子版本）
-PREV_TAG=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)?$' | grep -A1 "^$TAG_NAME$" | tail -1)
+PREV_TAG=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' | grep -A1 "^$TAG_NAME$" | tail -1)
 if [ -n "$PREV_TAG" ]; then
     git log ${PREV_TAG}..${TAG_NAME} --oneline --no-merges
 fi
@@ -394,7 +395,7 @@ TARGET_TAG="dev2"   # 来自用户输入
 
 # 或改写某类型的最新标签
 TYPE="stab"   # 来自用户输入或自动推断
-TARGET_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)?$" | head -1)
+TARGET_TAG=$(git tag -l "${TYPE}[0-9]*" --sort=-v:refname | grep -E "^${TYPE}[0-9]+(_[0-9]+)*$" | head -1)
 ```
 
 #### Step 5.2 — 显示当前标签内容
