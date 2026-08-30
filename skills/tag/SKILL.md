@@ -1,8 +1,6 @@
 ---
 name: tag
-description: |
-  当用户要求创建、应用、列出、查看、搜索、删除或修改 Git tag，或提及 stab/dev/bug/test 标记、
-  子版本标签、版本标记、快照、补丁或 amend tag 时使用。
+description: Use when a user asks to create, apply, list, inspect, search, delete, amend, or rewrite Git tags, especially stab/dev/bug/test tags, subversions, snapshots, patches, or remote annotations.
 metadata:
   openclaw:
     emoji: 🏷️
@@ -32,21 +30,53 @@ metadata:
    直至成功或用户终止；失败与重试在终端摘要中说明。
 7. **破坏性操作预警**：改写/删除已推送标签会重写他人历史，先警告再执行。
 
-## 默认执行流程（~diff → ~init → ~tag）
+## 历史链自检与自动修正
+
+`tag-chain.sh` 检查所有历史 `stab/dev/bug/test` 标签，而不是只检查最新标签。它把唯一的
+`<tag> init,` 注释作为根，再按附注标签对象的 `tagger` 时间升序排列后核对 `follow` 前缀；
+这样可发现跨类型漏链、同一旧标签被重复引用和历史标签中的回指错误。它同时核对附注类型、
+peeled commit 的祖先关系，以及指定远端的标签对象和目标提交。
+
+```bash
+# 在仓库根执行；若项目没有本地副本，可把 CHECKER 指向本 configure 技能副本
+CHECKER="${TAG_CHAIN_CHECKER:-skills/tag/tag-chain.sh}"
+bash "$CHECKER" --check --remote origin
+
+# 只生成全历史修正清单；退出码为 1 表示仍有待处理项
+bash "$CHECKER" --repair --dry-run --remote origin
+
+# 仅修正本地标签注释，不改变任何 peeled commit
+bash "$CHECKER" --repair --apply
+
+# 明确授权后才改写已推送标签；远端对象漂移或服务器不支持原子推送时拒绝执行
+bash "$CHECKER" --repair --apply --remote origin --confirm-remote-rewrite
+```
+
+正常创建仍使用 `git tag -a`；历史修正使用 `git mktag` 保留原 tagger 元数据。自动修正只替换可解析的首个 `follow <旧标签>,` 前缀，或给非空正文补上缺失的
+`follow <期望标签>, ` 前缀，并保留原 tagger、消息正文和 peeled commit。缺少唯一根、tagger
+时间并列、轻量标签、签名标签或提交祖先关系断裂时只报告并停止，
+不猜测排序、不移动标签目标。默认 `--check` 覆盖全部历史标签；`--root TAG` 可在历史缺少
+`init` 或存在多个 `init` 时显式指定根。
+
+## 默认执行流程（~diff → 历史自检 → ~init → ~tag）
 
 每次 tag 会话**默认**按编排流程执行，首轮直接采用，无需用户逐项确认：
 
 1. **~diff**：调用 diff 技能查看基线以来的改动（`git diff <基线>..HEAD --stat` 概览 + 详情），
    为变更清单构建提供证据；其结果直接复用为原版 Step 1.2，不重复执行；
-2. **~init**：调用 init 技能同步 AGENTS.md（仓库约定文档与配置同步最新）并归档散落的
+2. **历史自检**：执行 `tag-chain.sh --check`；若发现可安全修正的 follow 错误，先生成
+   `--repair --dry-run` 清单，按用户授权应用修正后再继续；不可推导的历史歧义停止自动修正；
+3. **~init**：调用 init 技能同步 AGENTS.md（仓库约定文档与配置同步最新）并归档散落的
    agent 初始化文件（CLAUDE.md/CODEX.md/.claude 等 → `.X.<时间戳>.bak`），保证打标前仓库状态整洁；
-3. **~tag（原版）**：执行本技能 Step 1.1–1.6 原版打标操作（类型推断 → 变更清单 →
+4. **~tag（原版）**：执行本技能 Step 1.1–1.6 原版打标操作（类型推断 → 变更清单 →
    按授权同步 → 创建注释标签 → 验证），或用户指定的查看/删除/改写/区间打标操作。
 
 **边界情形**：
 
 - 用户明确指定仅打标/仅查看/仅删除（如"直接打 tag"）→ 跳过 ~diff 与 ~init，直接执行原版操作；
 - 只读操作（列出/查看/删除/改写标签）默认也先 ~diff 了解现状；~init 在无初始化需求时可跳过；
+- 历史自检发现可修正错误 → 先 dry-run，确认目标对象和消息，再按授权应用；
+- 历史自检发现歧义或目标提交断裂 → 不自动改写，列出标签和证据，转人工判断；
 - ~diff/~init 执行失败 → 按 debug 技能定位修复后继续，或向用户报告后由用户决定。
 
 ## 四类标签
@@ -86,7 +116,8 @@ metadata:
 
 无法确定时**一次性列出全部候选**提问："Which tag type? [stab/dev/bug/test]"（含全部歧义点，不逐次追问）
 - 与其他技能配合：**默认流程**先 diff（查看改动）→ init（AGENTS.md 同步/归档）→ 原版打标操作；
-  技能行为异常 → debug；批量生成类打标 → make 编排
+  技能行为异常 → debug；批量生成类打标 → make 编排；历史自检/自动修正由本技能的
+  `tag-chain.sh` 负责，远程对象冲突转人工判断
 
 ## 标签命名约定
 
