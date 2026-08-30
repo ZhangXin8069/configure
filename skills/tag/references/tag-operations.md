@@ -2,6 +2,34 @@
 
 本文件承载 `tag/SKILL.md` 的详细命令。执行前先读取对应小节，并把命令中的变量替换为已核实的实际值。
 
+## 0. 历史 follow 链自检与修正
+
+`tag-chain.sh` 默认检查全部历史标签。排序以唯一 `init` 标签为根，后续按附注标签对象的
+tagger 时间升序排列；它不按编号排序，也不把 commit 时间当作标签创建时间。自检同时验证
+标签类型、peeled commit、祖先关系和可选远端对象。
+
+```bash
+CHECKER="${TAG_CHAIN_CHECKER:-skills/tag/tag-chain.sh}"
+bash "$CHECKER" --check --remote origin
+bash "$CHECKER" --repair --dry-run --remote origin
+```
+
+正常创建仍使用 `git tag -a`；历史修正使用 `git mktag` 保留原 tagger 元数据。自动修正边界：仅替换可解析的首个 `follow <旧标签>,` 前缀，或给非空正文补上缺失的
+`follow <期望标签>, ` 前缀，保留消息正文、原 tagger 元数据和 peeled commit。以下情形只报告不改写：
+根标签缺失或不唯一、tagger 时间并列、轻量标签、
+签名标签、目标提交不是前一标签目标的祖先、远端对象已漂移。
+
+本地应用与远端应用是两个明确闸门：
+
+```bash
+bash "$CHECKER" --repair --apply
+bash "$CHECKER" --repair --apply --remote origin --confirm-remote-rewrite
+```
+
+第二条命令会使用 `--force-with-lease` 和 `--atomic` 改写远端已有标签，必须在用户明确授权
+后执行；远端更新失败时不更新本地 refs，最终会重新执行 `--check` 回读验证。`--repair` 或
+`--dry-run` 不写入本地和远端。
+
 ## 1. 创建标签
 
 ### 1.1 确定类型与编号
