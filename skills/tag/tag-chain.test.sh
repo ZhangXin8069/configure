@@ -128,7 +128,7 @@ git -C "$repo" push -q origin --tags
 bash "$checker" --repair --apply --repo "$repo" --remote origin \
     --confirm-remote-rewrite >/dev/null || fail '远端修正失败'
 remote_subject=$(git -C "$repo" for-each-ref --format='%(contents:subject)' refs/tags/dev1)
-[ "$remote_subject" = 'follow bug0, 1. remote; [test].' ] || fail "dev1 本地消息错误: $remote_subject"
+[ "$remote_subject" = 'follow test10_6, 1. remote; [test].' ] || fail "dev1 本地消息错误: $remote_subject"
 [ "$(git -C "$repo" rev-parse 'dev1^{}')" = "$remote_commit" ] || fail 'dev1 peeled commit 被改变'
 bash "$checker" --check --repo "$repo" --remote origin >/dev/null || fail '远端修正后的检查失败'
 
