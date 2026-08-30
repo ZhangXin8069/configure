@@ -25,6 +25,13 @@ assert_contains() {
     esac
 }
 
+assert_not_contains() {
+    case "$1" in
+        *"$2"*) fail "输出不应包含: $2" ;;
+        *) ;;
+    esac
+}
+
 repo="$test_root/repo"
 remote="$test_root/remote.git"
 git init -q "$repo" || fail '初始化测试仓库失败'
@@ -89,7 +96,7 @@ if output=$(bash "$checker" --check --repo "$repo" 2>&1); then
 fi
 assert_contains "$output" '[FIX] stab1: follow stab0 -> follow dev0'
 assert_contains "$output" '[FIX] bug0: 缺少 follow 前缀 -> 补 follow stab1'
-assert_contains "$output" '[FIX] test10_6: follow test10_5_1_1 -> follow test10_5'
+assert_not_contains "$output" '[FIX] test10_6:'
 
 old_stable_object=$(git -C "$repo" rev-parse refs/tags/stab1)
 if output=$(bash "$checker" --repair --dry-run --repo "$repo" 2>&1); then
@@ -125,12 +132,49 @@ git -C "$repo" remote add origin "$remote"
 git -C "$repo" push -q --set-upstream origin HEAD
 git -C "$repo" push -q origin --tags
 
-bash "$checker" --repair --apply --repo "$repo" --remote origin \
-    --confirm-remote-rewrite >/dev/null || fail '远端修正失败'
+if ! output=$(bash "$checker" --repair --apply --repo "$repo" --remote origin \
+    --confirm-remote-rewrite 2>&1); then
+    fail "远端修正失败: $output"
+fi
 remote_subject=$(git -C "$repo" for-each-ref --format='%(contents:subject)' refs/tags/dev1)
 [ "$remote_subject" = 'follow test10_6, 1. remote; [test].' ] || fail "dev1 本地消息错误: $remote_subject"
 [ "$(git -C "$repo" rev-parse 'dev1^{}')" = "$remote_commit" ] || fail 'dev1 peeled commit 被改变'
 bash "$checker" --check --repo "$repo" --remote origin >/dev/null || fail '远端修正后的检查失败'
+
+branch_repo="$test_root/branch-repo"
+git init -q "$branch_repo" || fail '初始化分支目标测试仓库失败'
+git -C "$branch_repo" config user.name 'Tag Chain Branch Test'
+git -C "$branch_repo" config user.email 'tag-chain-branch@example.invalid'
+printf '%s\n' root >> "$branch_repo/history.txt"
+git -C "$branch_repo" add history.txt || fail '分支根提交暂存失败'
+GIT_AUTHOR_DATE='2024-03-01T00:00:00Z' GIT_COMMITTER_DATE='2024-03-01T00:00:00Z' \
+    git -C "$branch_repo" commit -q -m root || fail '分支根提交失败'
+branch_root_commit=$(git -C "$branch_repo" rev-parse HEAD)
+GIT_COMMITTER_DATE='2024-03-01T00:00:01Z' git -C "$branch_repo" tag -a stab0 "$branch_root_commit" \
+    -m 'stab0 init, 1. init; [test].' || fail '分支根标签失败'
+
+printf '%s\n' main >> "$branch_repo/history.txt"
+git -C "$branch_repo" add history.txt || fail '主线提交暂存失败'
+GIT_AUTHOR_DATE='2024-03-02T00:00:00Z' GIT_COMMITTER_DATE='2024-03-02T00:00:00Z' \
+    git -C "$branch_repo" commit -q -m main || fail '主线提交失败'
+branch_main_commit=$(git -C "$branch_repo" rev-parse HEAD)
+GIT_COMMITTER_DATE='2024-03-02T00:00:01Z' git -C "$branch_repo" tag -a dev0 "$branch_main_commit" \
+    -m 'follow stab0, 1. main; [test].' || fail '主线标签失败'
+
+git -C "$branch_repo" checkout -q -b side "$branch_root_commit" || fail '创建分支失败'
+printf '%s\n' side >> "$branch_repo/history.txt"
+git -C "$branch_repo" add history.txt || fail '侧线提交暂存失败'
+GIT_AUTHOR_DATE='2024-03-03T00:00:00Z' GIT_COMMITTER_DATE='2024-03-03T00:00:00Z' \
+    git -C "$branch_repo" commit -q -m side || fail '侧线提交失败'
+branch_side_commit=$(git -C "$branch_repo" rev-parse HEAD)
+GIT_COMMITTER_DATE='2024-03-03T00:00:01Z' git -C "$branch_repo" tag -a test0 "$branch_side_commit" \
+    -m 'follow stab0, 1. side; [test].' || fail '侧线标签失败'
+branch_refs_before=$(git -C "$branch_repo" show-ref --tags)
+if output=$(bash "$checker" --repair --apply --repo "$branch_repo" 2>&1); then
+    fail '分支目标意外允许自动修正'
+fi
+assert_contains "$output" '不是'
+[ "$(git -C "$branch_repo" show-ref --tags)" = "$branch_refs_before" ] || fail '分支目标场景改写了本地标签'
 
 tie_repo="$test_root/tie-repo"
 git init -q "$tie_repo" || fail '初始化并列时间测试仓库失败'
