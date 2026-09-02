@@ -18,10 +18,20 @@ metadata:
 
 
 对当前 git 仓库中的**核心部分**进行只读穷尽剖析，解析用户输入（`{$用户输入}`，即剖析主题），
-产出 PDF 报告到**当前工作目录的 `docs/` 文件夹**。
+普通模式产出 PDF 报告到**当前工作目录的 `docs/` 文件夹**。
 
-本技能与 `analy` 形式相同（同样的证据驱动、`文件:行号` 参考源、`\lstinputlisting` 直引、
-LaTeX 报告输出与五色+场景色色彩体系）但**定位互补**。本技能是分析链的**细节参考层**：优先
+### fast_context 分支
+
+收到 `fast_context.active=true` 且其 `effective_format=Markdown` 时，进入本技能的轻量 Markdown 分支；
+`format_default` 仅是 fast 的默认元数据，不参与分支判断：
+默认交付 `docs/pure_<主题slug>_<YYYYMMDD>.md`，保留核心清单、公式、代码—物理映射、`文件:行号` 和验证边界，
+执行 Markdown 结构、公式分隔符、链接和证据可追溯性检查；不执行下方普通模式的 LaTeX 源文件生成、PDF 编译和 PDF
+版式验收步骤。用户明确指定 PDF/LaTeX/幻灯片时，按用户约束返回普通 LaTeX/PDF 分支。该分支选择是 fast 对本技能默认
+交付载体的明确覆盖。
+
+普通 LaTeX 模式与 `analy` 形式相同（同样的证据驱动、`文件:行号` 参考源、`\lstinputlisting` 直引、
+LaTeX 报告输出与五色+场景色色彩体系）但**定位互补**；Markdown 模式使用 fenced code block 和 Markdown
+表格承载同一证据。 本技能是分析链的**细节参考层**：优先
 消费 `analy` 产出的整体地图，在不重复全库罗列的前提下，把后续 agent 需要的核心算法、物理对象、
 公式推导、代码符号和验证边界解析到可直接定位、复核和继续执行的粒度；对每个可能进入 `report`
 的密集对象同时给出视觉占用、拆分边界和版式风险，使细节不会在展示层重新堆叠成遮挡。
@@ -93,12 +103,12 @@ analy 织网（整体参考），pure 掘井（细节参考）。二者按流水
    （机制/流程）→ **为什么这样设计**（动机/权衡/对比备选方案）；只讲是什么不算深挖。
 8. **诚实原则**：找不到独特竞争力时如实报告"未发现显著独特部分"并给出依据；
    未验证/推断的结论显式分级标注（确证/推断/未验证），不虚报创新性。
-9. **只读分析与产出穷尽性**：分析阶段不改动源文件；唯一写操作是 `docs/` 下的
-   `.tex` 源文件与编译产物 `.pdf`。大任务中产生的全部图表与终端实测输出须列清单并逐项解读，
+9. **只读分析与产出穷尽性**：分析阶段不改动源文件；普通模式唯一写操作是 `docs/` 下的
+   `.tex` 源文件与编译产物 `.pdf`，fast Markdown 分支只写对应 `.md` 交付物。大任务中产生的全部图表与终端实测输出须列清单并逐项解读，
    说明来源、含义、结论关联与局限，确保结果分析、综合分析和附录无遗漏；交给 `report` 的细节包
    还必须闭合视觉占用与拆页信息。
 
-## 工作流的统一 LaTeX 表达
+## 工作流的统一 LaTeX 表达（普通模式）
 
 凡是算法、伪代码、公式推导、编程思路、数据处理或验证过程等具有顺序、迭代或分支关系的内容，
 在生成报告中统一用下列单列 `table[htbp]` 结构承载；它是工作流的主表达，流程图只补充跨模块关系。
@@ -144,6 +154,7 @@ analy 织网（整体参考），pure 掘井（细节参考）。二者按流水
 ## 输出命名约定
 
 - 输出目录：**当前工作目录（被分析仓库根）下的 `docs/`**；不存在则创建
+- fast Markdown 文件名：`pure_<主题slug>_<YYYYMMDD>.md`
 - PDF 文件名：`pure_<主题slug>_<YYYYMMDD>.pdf`（slug 用拼音/英文短词，不用中文字符；
   如 `pure_algos_20260815.pdf`）
 - `.tex` 源文件同目录同名：`pure_<主题slug>_<YYYYMMDD>.tex`
@@ -170,7 +181,86 @@ analy 织网（整体参考），pure 掘井（细节参考）。二者按流水
 2. 主题不明确或项目性质无法判定时**向用户提问**（所有问题一次全部列出，用户一次回答）；
 3. 在终端摘要中说明任务定义。
 
-### Step 2. 环境准备
+### Markdown 工作流（仅 `fast_context.effective_format=Markdown`）
+
+完成 Step 1 后，若 `fast_context.active=true` 且 `effective_format=Markdown`，只执行 M1–M6，
+随后结束本技能；不得继续执行下方普通模式的 Step 2–Step 9。Markdown 分支仍要求核心候选三态闭环、
+项目性质判定、逐部分证据和可供 `report` 消费的交接信息，只合并重复的排版准备。
+
+#### M1. 最小环境与输入接口
+
+执行 `git rev-parse --is-inside-work-tree`（失败时在产物中注明非 git 目录），确认/创建 `docs/`，
+查找并核实最新 `analy_*` 参考（没有则明确写“未取得 analy 整体参考”），并回显
+`fast_context.active`、`global_rounds_max`、`optimization_gain_stop`、`quality_ratio_min`、
+`format_override` 和 `effective_format`。此分支不检查或调用 LaTeX 工具链，不读取
+`references/latex-template.md`。
+
+#### M2. 核心候选与性质判定
+
+合并一次目录/类型/入口调查，穷尽列出算法、物理对象或代码—物理映射候选，逐项标为
+**深挖/浅析/排除**并记录理由；按实测代码、公式和映射占比判定纯代码向、纯物理向或交叉向。
+清单必须无“未处理”，且每个候选都有来源或“未找到相关证据”说明。
+
+#### M3. 合并深挖与证据记录
+
+对每个“深挖”候选保留以下最小闭环：
+
+- 纯代码向：目的、输入/输出、算法机制、复杂度、正确性不变量/边界和独特性对照；
+- 纯物理向：物理图像、模型与边界、逐步公式推导、量纲/极限/退化校验；
+- 交叉向：代码符号 ↔ 物理对象双向映射、逐符号实现依据和边界。
+
+每项保留实际执行/输出、结果含义、局限、真实 `文件:行号` 和确证/推断/未验证状态；公式先对照原文献或
+源码核验，代码原文以带语言标记的 fenced code block 展示，不把手抄片段当作证据。全部图表与终端实测输出
+仍逐项列清来源、生成方式、含义和结论关联。
+
+#### M4. 写入 Markdown 交付物
+
+写入 `docs/pure_<slug>_<YYYYMMDD>.md`（同名时追加 `_2`、`_3`，不覆盖已有产物），至少按以下顺序组织：
+
+1. **任务、范围与性质**：任务定义、analy 输入状态、范围和性质判定依据；
+2. **核心候选清单**：C1/C2/...、深挖/浅析/排除及计数闭合；
+3. **逐部分深挖**：按 M3 对应代码、物理或交叉框架展开，附公式/代码/映射和来源；
+4. **独特性与综合分析**：与整体参考的联系、对照、优点、局限和未决问题；
+5. **证据索引与 report 交接**：C 编号、`文件:行号`、验证状态、可继续动作，以及
+   `content_id | claim_id | evidence_ids | visual_type | width_budget | height_budget | min_font_pt |
+   item_count | split_allowed | split_boundary | risks | mitigation`；
+6. **结论与下一步**：区分确证/推断/未验证，列出补证或复测动作。
+
+行内公式使用 `$...$`，独立公式使用 `$$...$$`；表格使用 Markdown 表格，链接使用可点击相对路径，
+代码围栏注明原文件与行号。
+
+#### M5. Markdown 验证
+
+```bash
+md_file="docs/pure_<slug>_<YYYYMMDD>.md"
+test -s "$md_file"
+rg -n '^# |^## (任务、范围与性质|核心候选清单|逐部分深挖|独特性与综合分析|证据索引|结论)' "$md_file"
+fence_count=$(awk '/^```/{n++} END{print n+0}' "$md_file")
+test $((fence_count % 2)) -eq 0
+rg -n '[^[:space:]]+:[0-9]+(-[0-9]+)?' "$md_file"
+```
+
+另行检查候选三态计数闭合、公式分隔符成对、链接可解析、每个深挖结论有来源和状态、每个交接对象字段齐全；
+不填写 PDF 页数、`Overfull`、`Float too large` 或逐页渲染指标。
+
+#### M6. Markdown 总结
+
+```text
+✓ pure Markdown 剖析完成
+   fast:   active=true；global_rounds_max=<...>；optimization_gain_stop=<...>；quality_ratio_min=<...>；effective_format=Markdown
+   主题:   <解析出的任务定义>
+   性质:   <纯代码向/纯物理向/交叉向；判定依据>
+   清单:   <核心部分 N 个：深挖 A / 浅析 B / 排除 C；三态闭合>
+   证据:   <文件:行号、公式/代码/映射与确证/推断/未验证状态>
+   输入:   <analy 整体参考是否取得；继承范围/入口与本次核实结果>
+   交接:   <content_payload 与推荐下游技能>
+   产物:   docs/pure_<slug>_<YYYYMMDD>.md
+   验证:   <Markdown 结构、围栏、公式、链接、来源和交接字段结果>
+   结论:   <最强竞争力总结>
+   局限:   <排除项理由/未验证项；无则省略>
+```
+
+### Step 2. 环境准备（普通 LaTeX/PDF 模式；`effective_format != Markdown`）
 
 ```bash
 # 1) 确认 git 仓库（在仓库根执行本技能）
@@ -289,7 +379,7 @@ grep -rn "plaquette\|hopping\|wilson\|关键符号" "$code_path" "$target_doc"
    item_count | split_allowed | split_boundary | risks | mitigation`；公式/表格/代码/流程分别填公式行、表格行、代码行/片段行数或节点数。
 7. 主题在仓库中无依据时：记录"未找到相关证据"，报告阶段如实说明。
 
-### Step 6. 生成 LaTeX 源文件
+### Step 6. 生成 LaTeX 源文件（普通模式；`effective_format != Markdown`）
 
 生成 `docs/pure_<slug>_<YYYYMMDD>.tex`，**必须遵循 `references/latex-template.md`**（唯一权威模板）：
 
@@ -315,7 +405,7 @@ grep -rn "plaquette\|hopping\|wilson\|关键符号" "$code_path" "$target_doc"
    无警告也要逐页渲染检查遮挡、截断和页面外框；TikZ 标签优先用 `above/below/left/right` 加显式安全间距，
    不能压入节点或箭头端点。
 
-### Step 7. 编译 PDF 到 docs/
+### Step 7. 编译 PDF 到 docs/（普通模式；`effective_format != Markdown`）
 
 ```bash
 cd docs
@@ -373,7 +463,7 @@ cp "$pdf_file" "$pdf_stem.pdf"
   收紧表格列定义或改写单元格，不把所有警告机械归零；
 - 缺宏包（如 `ctex`）：先尝试 `tlmgr`/发行版包管理器安装；无法安装则改写模板避开该宏包。
 
-### Step 8. 验证产物
+### Step 8. 验证普通模式产物（`effective_format != Markdown`）
 
 ```bash
 ls -lh docs/pure_<slug>_<YYYYMMDD>.pdf        # 存在且非空
@@ -385,7 +475,7 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
   `occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0` 的逐页证据；
 - 验证失败（PDF 缺失/空白/乱码）→ 回到 Step 6/7 修复重编。
 
-### Step 9. 总结（结构化输出）
+### Step 9. 总结（普通模式结构化输出）
 
 ```text
 ✓ 剖析完成
@@ -402,11 +492,12 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 
 ```
 
-## 报告模板与生成要点
+## 报告模板与生成要点（普通模式）
 
-报告 `.tex` **必须遵循 `references/latex-template.md`**（同目录下，唯一权威模板）。
+普通模式报告 `.tex` **必须遵循 `references/latex-template.md`**（同目录下，唯一权威模板）。
 本技能与 `analy` 模板**形式完全一致**（documentclass/宏包序/防溢出/严谨规范），
 仅场景色板（`algo`/`phys`/`map`/`warn`/`hl`）与报告骨架按 pure 定位调整。
+fast Markdown 模式不读取该模板，按 M4 的 Markdown 骨架交付并按 M5 验证。
 
 **生成要点**（模板细节以 references 文件为准）：
 
@@ -438,8 +529,10 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 - [ ] 代码片段全部用 `\lstinputlisting` 直引（无手抄转写）；公式对照原文献/源码核验过
 - [ ] 报告结构遵循模板主线；场景色语义统一（algo/phys/map/warn/hl），无额外颜色
 - [ ] 结论分级标注（确证/推断/未验证）；无依据结论已如实标注
-- [ ] PDF 编译成功；`grep -c Overfull` 为 0 且 `grep -c "Float too large"` 为 0；
+- [ ] 普通模式 PDF 编译成功；`grep -c Overfull` 为 0 且 `grep -c "Float too large"` 为 0；
       `pdftotext` 抽检标题/结论/清单出现；全部页面已渲染并检查边界、遮挡与截断
+- [ ] fast Markdown 模式通过 M5：必需章节、候选三态、公式/代码围栏、链接、来源行号和交接字段均闭合；
+      不把未执行的 PDF/版式检查写成通过
 - [ ] 交给 `report` 的每个密集对象都有“证据—视觉”记录：视觉类型、宽度位置、高度等级、拆分边界、风险与缓解
 - [ ] 总结输出覆盖：主题/性质/清单三态/证据/产物/结论/局限
 
@@ -468,11 +561,14 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 
 | 场景 | 处理 |
 |---|---|
+| `effective_format` 缺失或不是明确值 | fast 上下文缺少有效格式时不猜测；补齐 `format_override/effective_format` 后再路由，无法补齐则标注“未验证”并停止格式相关交付 |
+| Markdown 分支缺少候选/必需章节/来源 | 回到 M2–M4，补齐三态清单、性质判定、深挖闭环、`文件:行号` 和状态；不以文件生成成功代替内容闭环 |
+| Markdown 围栏/公式/链接/交接字段校验失败 | 定位未闭合的 fenced code、`$...$`/`$$...$$`、失效链接或缺失字段并修复；通过 M5 后才交付，不执行 PDF 版式替代检查 |
 | 非 git 仓库 | `git rev-parse --is-inside-work-tree` 校验失败时报告；仍可按普通目录分析并注明 |
 | 主题含糊 | **一次性列出候选**（自动判定/指定算法/指定物理模块）提问确认，不逐次追问 |
 | 性质无法判定 | 列出实测占比数据向用户确认归类，不凭感觉归类 |
 | 缺少 analy 整体参考 | 标注“未取得 analy 整体参考”，补齐最小上下文并降低整体性结论强度，不伪造继承关系 |
-| 无 LaTeX 工具链 | 报告缺项；提供安装建议（`apt install texlive-xetex texlive-lang-chinese` 等），不静默跳过 |
+| 普通模式无 LaTeX 工具链 | 报告缺项；提供安装建议（`apt install texlive-xetex texlive-lang-chinese` 等），不静默跳过 |
 | 缺 ctex/宏包 | 尝试安装；不可行则改用纯英文模板/替代方案并注明 |
 | 无独特竞争力候选 | 如实报告"未发现显著独特部分"，附候选清单与排除理由供用户改题 |
 | 公式无法核验 | 明确标注"推导未核验"，不写入报告正文作为确证结论 |
@@ -489,7 +585,7 @@ pdftotext docs/pure_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本（标题
 
 ## 注意事项
 
-- 剖析过程对源文件只读；docs/ 下的 `.tex` 与 `.pdf` 是本技能产物，按公共 Git 契约检查，不自动提交或推送；
+- 剖析过程对源文件只读；普通模式的 docs/ 下 `.tex`/`.pdf` 与 fast 模式的 `.md` 是本技能产物，按公共 Git 契约检查，不自动提交或推送；
 - 穷尽是核心：候选清单三态必须填满并重述计数，只剖析而不证明穷尽会漏掉核心部分；
 - 公式不可凭记忆转写：从推导写出后对照原文献/源码核验，量纲检查 + 极限校验双保险；
 - 物理图像先行：先讲清"这是什么对象/图像"，再讲"怎么推导/怎么实现"；
