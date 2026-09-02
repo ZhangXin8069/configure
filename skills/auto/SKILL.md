@@ -15,6 +15,14 @@ metadata:
 
 遵循当前目录 `AGENTS.md`「技能执行公共契约」；仅按需读取技能正文与 reference。
 
+收到 fast_context.active=true 时，fast 是外层修饰。对 auto 的可覆盖默认字段，使用 fast_context 中的
+global_rounds_max 与 optimization_gain_stop（默认分别为 3 与 <25%），并将同一上下文原样传给目标技能；
+用户明确的 fast 例外优先。fast 不改变 auto 的授权边界。
+auto 进入工作流后必须把有效字段写入阶段摘要：`fast_context.active=true`、`global_rounds_max`、
+`optimization_gain_stop`、`quality_ratio_min` 与 `effective_format`；用户显式例外已经在 fast_context 中解析，不再由 auto 重新解释普通默认值。
+fast 激活时不得把普通模式的“无限轮数”或 `<5%` 回退为有效配置；每次轮数守卫和收益判断
+都直接读取 `global_rounds_max` 与 `optimization_gain_stop`。
+
 
 以 `~auto-<目标技能> <任务>` 为前缀包装任意技能为**无人值守模式**：唯一的一次用户交互
 发生在启动时（权限+配置一次性预授权），此后严格 0 交互，自动循环调用目标技能及其
@@ -32,10 +40,12 @@ metadata:
    目标技能流程中的"需确认/需询问"步骤一律按预授权配置自动决定
    （L1 直接执行；L2 跳过并在终端摘要说明；自定义按配置项执行）。
    **0 交互 ≠ 0 报告**：每轮简报、停滞报告、中断报告、最终汇总照常输出。
-4. **自动循环直至收敛**：复用 all 的收敛判据（①通过标准全部达成 ②收益 <5%
-   ③连续两轮无实质变化 ④用户终止），每轮留证据（`$ 命令` + 退出码 + 实测输出），
+4. **自动循环直至收敛**：普通模式复用 all 的收敛判据（①通过标准全部达成 ②收益 <5%
+   ③连续两轮无实质变化 ④用户终止）；fast 生效时收益判据使用 `fast_context.optimization_gain_stop`，
+   每轮留证据（`$ 命令` + 退出码 + 实测输出），
    收敛后自动进入收尾，不空转。
-5. **无限循环与停滞保护并存**：默认无轮数上限（除非启动配置 max_rounds）；
+5. **无限循环与停滞保护并存**：普通模式默认无轮数上限（除非启动配置 max_rounds）；
+   fast 生效时轮数上限使用 `fast_context.global_rounds_max`，不允许恢复为无限；
    停滞保护防空转——连续 N 轮（默认 3）无实质进展时自动**换方向**（先 debug 后 optim，
    一轮一动作）；三个不同方向均无进展时输出停滞报告并继续尝试新方向，
    除非配置 stop_on_stall=true（默认 true，避免无限空转烧资源）。
@@ -94,9 +104,9 @@ task   = 前缀后的完整任务描述
 
 [2] 关键配置:
   工作目录: <当前目录/指定目录>
-  收敛判据: 继承目标技能（通过标准全达成 + 收益<5% + 连续2轮无实质变化）
+  收敛判据: 普通模式为通过标准全达成 + 收益<5% + 连续2轮无实质变化；fast 激活时收益阈值读取 `fast_context.optimization_gain_stop`
   停滞阈值: 连续 <3> 轮无实质进展即换方向; 方向穷尽后 stop_on_stall=<true>
-  轮数上限: <无限/指定 N>
+  轮数上限: <普通模式无限/指定 N；fast 激活时读取 `fast_context.global_rounds_max`>
   收尾动作: diff(必做) / init(按需) / tag(按需)
   中断指令: Ctrl+C 或输入 ~stop/中断/停止
 
@@ -124,9 +134,14 @@ task   = 前缀后的完整任务描述
 
 目标技能自身有循环（all）时以之为准；无循环（单技能）且任务未收敛时按如下循环：
 
+若 `fast_context.active=true`，本步骤及目标技能循环的有效轮数只读取 `fast_context.global_rounds_max`，
+有效收益阈值只读取 `fast_context.optimization_gain_stop`；本文其余“无限”或 `<5%` 表述仅适用于 fast 未激活的普通模式。
+每轮摘要回显 `fast_context.global_rounds_max`、`fast_context.optimization_gain_stop` 和实际轮次。
+
 1. 每轮开始：检查中断信号（用户新指令/Ctrl+C/`~stop`）→ 有则进入 Step 5 中断收尾；
 2. 执行 → 验证 → 记录（`$ 命令` + 退出码 + 实测输出）；
-3. 收敛检查（判据：通过标准全达成 / 收益<5% / 连续 2 轮无实质变化）→ 满足则进入 Step 4；
+3. 收敛检查（判据：通过标准全达成 / 普通模式收益<5%、fast 激活时收益低于
+   `fast_context.optimization_gain_stop` / 连续 2 轮无实质变化）→ 满足则进入 Step 4；
 4. 未收敛：评估本轮主导问题（失败→debug 轮；性能→optim 轮；修复与优化分轮）；
    连续 N 轮（停滞阈值，默认 3）无实质进展 → 换方向（先 debug 后 optim）；
    三个不同方向均无进展且 stop_on_stall=true → 输出停滞报告并停止循环进入 Step 4
@@ -158,6 +173,7 @@ task   = 前缀后的完整任务描述
 ✓ auto 执行完成/中断
    目标:   <target> / <task>
    授权:   <级别 L1/L2/自定义 + 关键配置摘要>
+   fast:   <active=true/false；global_rounds_max；optimization_gain_stop；quality_ratio_min；effective_format>
    收敛:   <判据达成明细 / 中断原因 / 停滞报告摘要>
    轮数:   <N 轮（第 N 轮: <结论>; ...）>
    改动:   <文件清单与关键改动>

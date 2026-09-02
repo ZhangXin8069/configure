@@ -18,10 +18,18 @@ metadata:
 
 
 对当前 git 仓库中的**全部文档与代码**进行只读分析，解析用户输入（`{$用户输入}`，即分析主题/问题），
-以证据驱动的方式产出分析结论，**每个结论附参考源（`文件:行号`）**，最后用 LaTeX 生成 PDF 文档，
+以证据驱动的方式产出分析结论，**每个结论附参考源（`文件:行号`）**；普通模式最后用 LaTeX 生成 PDF 文档，
 输出到**当前工作目录的 `docs/` 文件夹**。本技能是分析链的**整体参考层**：产物必须让没有本次会话
 上下文的后续 agent 能快速理解仓库边界、入口、依赖、工作流、证据位置与未决问题，再决定调用
 `pure`、`debug`、`test` 或其他技能。
+
+### fast_context 分支
+
+收到 `fast_context.active=true` 且其 `effective_format=Markdown` 时，进入本技能的轻量 Markdown 分支；
+`format_default` 仅是 fast 的默认元数据，不参与分支判断：
+默认交付 `docs/analy_<主题slug>_<YYYYMMDD>.md`，执行 Markdown 结构、公式分隔符、链接、证据行号和内容完整性检查；
+不执行下方普通模式的 LaTeX 源文件生成、PDF 编译和 PDF 版式验收步骤。用户明确指定 PDF/LaTeX/幻灯片时，
+按用户约束返回普通 LaTeX/PDF 分支。该分支选择是 fast 对本技能默认交付载体的明确覆盖。
 
 **核心目的（三视角，任何报告必齐）**：① **主体结构**——仓库如何分层组织（入口/核心/工具/
 配置/文档/参考）；② **各部分关系**——各部分之间如何联系（引用/依赖/包含/生成/演进）；
@@ -39,8 +47,8 @@ metadata:
 
 ## 核心原则
 
-1. **只读分析**：分析阶段不修改源代码、不暂存；唯一写操作是向 `docs/` 输出 `.tex` 与 `.pdf`，
-   产物在收尾按公共契约处理。
+1. **只读分析**：分析阶段不修改源代码、不暂存；普通模式唯一写操作是向 `docs/` 输出 `.tex` 与 `.pdf`，
+   fast Markdown 分支只写对应 `.md` 交付物；产物在收尾按公共契约处理。
 2. **解析用户输入**：把 `{$用户输入}` 解析为分析主题——提取问题焦点、限定范围与期望输出；
    输入为明确主题时直接执行；输入含糊时**先提问**（所有问题一次全部列出，用户一次回答），不臆断主题。
 3. **全库饱和调查**：先建立仓库全景，再按主题收敛；全景不只是索引——每个文件都要有归宿
@@ -55,10 +63,10 @@ metadata:
    每句结论可归入 **确证**（直接证据）/ **推断**（由证据推出）/ **未验证**（显式标注）三级，不写无凭口吻。
 6. **证据驱动，参考源可追溯**：每个分析结论必须对应真实存在的内容，附 `文件:行号` 参考源；
    代码片段**用 `\lstinputlisting[firstline,lastline]` 直接引用仓库原文件**，不做转写、不手抄，
-   保证 PDF 中片段与仓库实际内容逐字节一致；统计数字实测，量纲与边界情形校验；收尾形成可检索的
+   保证普通 PDF 中片段与仓库实际内容逐字节一致；Markdown 分支同样保留原文证据与行号；统计数字实测，量纲与边界情形校验；收尾形成可检索的
    证据索引，方便后续 agent 定位原文；对拟进入图表/公式/代码视觉的证据同步记录内容边界和版式风险。
    主题在仓库中找不到证据时明确报告"未找到相关依据"，绝不编造文件路径、代码或数据。
-7. **编译闭环与防溢出**：生成 `.tex` → 编译 → 验证 PDF 产物存在且内容正确；
+7. **编译闭环与防溢出**：普通模式生成 `.tex` → 编译 → 验证 PDF 产物存在且内容正确；fast Markdown 分支改做 Markdown 结构与证据闭环检查；
    交付前从编译终端输出确认 `Overfull` 与 `Float too large` 均为 **0**
    （行宽溢出/图表溢出页面两类；长代码/长表/长词/公式/图片均按模板防溢出规则处理，
    见 `references/latex-template.md`）；再逐页渲染检查边界、框体、列间和页脚是否可见遮挡，
@@ -77,7 +85,7 @@ metadata:
    解析代码时先识别代码所描述的对象（物理图像/业务实体/系统组件），建立
    "代码符号 ↔ 对象概念"映射，用对象语言解释代码行为与动机，再落到实现细节；大任务中产生的全部图表与运行输出须列清单并逐项解读，说明来源、含义、结论关联与局限，确保结果分析、综合分析和附录无遗漏。
 
-## 工作流的统一 LaTeX 表达
+## 工作流的统一 LaTeX 表达（普通模式）
 
 凡是算法、伪代码、公式推导、编程思路、数据处理或验证过程等具有顺序、迭代或分支关系的内容，
 在生成报告中统一用下列单列 `table[htbp]` 结构承载；它是工作流的主表达，流程图只补充跨模块关系。
@@ -157,6 +165,7 @@ metadata:
 ## 输出命名约定
 
 - 输出目录：**当前工作目录（被分析仓库根）下的 `docs/`**；不存在则创建
+- fast Markdown 文件名：`analy_<主题slug>_<YYYYMMDD>.md`
 - PDF 文件名：`analy_<主题slug>_<YYYYMMDD>.pdf`（slug 用拼音/英文短词，不用中文字符；
   如 `analy_env_20260813.pdf`）
 - `.tex` 源文件同目录同名：`analy_<主题slug>_<YYYYMMDD>.tex`
@@ -171,7 +180,73 @@ metadata:
 2. 主题不明确时**向用户提问**（所有问题一次全部列出，用户一次回答），不擅自定义；
 3. 在终端摘要中说明任务定义。
 
-### Step 2. 环境准备
+### Markdown 工作流（仅 `fast_context.effective_format=Markdown`）
+
+完成 Step 1 后，若 `fast_context.active=true` 且 `effective_format=Markdown`，只执行 M1–M5，
+随后结束本技能；不得继续执行下方普通模式的 Step 2–Step 8。Markdown 分支仍保持全库覆盖、三视角、
+证据行号和后续 agent 交接，只合并重复的遍历与排版准备。
+
+#### M1. 最小环境准备
+
+执行 `git rev-parse --is-inside-work-tree`（失败时在产物中注明非 git 目录），确认/创建 `docs/`，
+并回显 `fast_context.active`、`global_rounds_max`、`optimization_gain_stop`、`quality_ratio_min`、
+`format_override` 和 `effective_format`。此分支不检查或调用 LaTeX 工具链，不读取
+`references/latex-template.md`。
+
+#### M2. 合并只读调查与主题取证
+
+用一次覆盖登记表合并目录、文件类型、近期 Git 历史和入口引用链的交叉结果；每个文件标为
+**精读/浏览/仅索引**，表格必须闭合。围绕主题收集三视角证据：主体结构、各部分关系、项目思路，
+并记录真实的 `文件:行号`、命令输出、参考资料命中和确证/推断/未验证状态。代码证据在 Markdown 中使用
+带语言标记的 fenced code block，并注明原文件路径与行号；不得把手抄片段当作来源。
+
+#### M3. 写入 Markdown 交付物
+
+写入 `docs/analy_<slug>_<YYYYMMDD>.md`（同名时追加 `_2`、`_3`，不覆盖已有产物），至少按以下顺序组织：
+
+1. **任务与范围**：任务定义、覆盖/未覆盖范围、参考知识库状态；
+2. **主体结构**：分层职责与关键入口；
+3. **各部分关系**：依赖/引用/包含/生成链与版本演进；
+4. **项目思路**：设计动机、权衡、演进脉络和典型工作流；
+5. **主题分析**：围绕用户问题的证据化结论；
+6. **证据索引与交接**：`文件:行号`、状态、下游动作，以及每个密集对象的
+   `content_id | claim_id | evidence_ids | visual_type | width_budget | height_budget | min_font_pt |
+   item_count | split_allowed | split_boundary | risks | mitigation`；
+7. **结论、局限与下一步**：区分确证/推断/未验证，不把未执行的 PDF 检查写成通过。
+
+行内公式使用 `$...$`，独立公式使用 `$$...$$`；表格使用 Markdown 表格，链接使用可点击相对路径，
+代码围栏必须保留原文语义和来源行号。
+
+#### M4. Markdown 验证
+
+```bash
+md_file="docs/analy_<slug>_<YYYYMMDD>.md"
+test -s "$md_file"
+rg -n '^# |^## (任务与范围|主体结构|各部分关系|项目思路|主题分析|证据索引|结论)' "$md_file"
+fence_count=$(awk '/^```/{n++} END{print n+0}' "$md_file")
+test $((fence_count % 2)) -eq 0
+rg -n '[^[:space:]]+:[0-9]+(-[0-9]+)?' "$md_file"
+```
+
+另行检查 Markdown 链接可解析、公式分隔符成对、覆盖表闭合、每个关键主张都有来源和状态；不运行
+`xelatex`、`pdflatex`、`pdfinfo` 或 `pdftoppm`，因此总结中不填写 PDF 页数、溢出或逐页渲染指标。
+
+#### M5. Markdown 总结
+
+```text
+✓ analy Markdown 分析完成
+  fast:   active=true；global_rounds_max=<...>；optimization_gain_stop=<...>；quality_ratio_min=<...>；effective_format=Markdown
+  主题:   <解析出的任务定义>
+  覆盖:   <目录/文件范围、精读/浏览/仅索引计数；是否闭合>
+  证据:   <文件:行号、命令、参考背景及确证/推断/未验证状态>
+  入口:   <关键入口、依赖链、后续 agent 可从何处继续>
+  交接:   <content_payload 与推荐下游技能>
+  产物:   docs/analy_<slug>_<YYYYMMDD>.md
+  验证:   <Markdown 结构、围栏、公式、链接、来源可追溯性结果>
+  局限:   <未覆盖项/证据不足处；无则省略>
+```
+
+### Step 2. 环境准备（普通 LaTeX/PDF 模式；`effective_format != Markdown`）
 
 ```bash
 # 1) 确认 git 仓库（在仓库根执行本技能）
@@ -323,7 +398,7 @@ for f in books/*.pdf; do pdftotext "$f" - 2>/dev/null | grep -ni "主题关键�
 item_count | split_allowed | split_boundary | risks | mitigation`。其中 `item_count` 按对象记录公式行、表格行、代码行或 TikZ 节点数，
 `width_budget` 必须说明行内/单列/整页及列间距约束，`risks` 要单列节点外框、路径标签、独立标签和箭头风险。
 
-### Step 5. 生成 LaTeX 源文件
+### Step 5. 生成 LaTeX 源文件（普通模式；`effective_format != Markdown`）
 
 生成 `docs/analy_<slug>_<YYYYMMDD>.tex`，**必须遵循 `references/latex-template.md`**
 （本技能目录下，唯一权威模板——形式规范/色板/防溢出/严谨规范全部以该文件为准）：
@@ -372,7 +447,7 @@ item_count | split_allowed | split_boundary | risks | mitigation`。其中 `item
     类型列标注"参考"，便于区分仓库证据与参考背景。
 12. **图表与运行输出穷尽详览（大任务必备）**：每次大任务产生的全部图表与关键运行输出必须逐项落位——结果分析（A9/B9）中逐图逐项解读、综合分析中关联、附录中原始清单与 `\lstinputlisting` 片段；每项含来源、生成方式、数据含义、详尽解读与结论关联，配 `文件:行号` 参考源；以清单闭合为交付前提，缺一即返工。
 
-### Step 6. 编译 PDF 到 docs/
+### Step 6. 编译 PDF 到 docs/（普通模式；`effective_format != Markdown`）
 
 ```bash
 cd docs
@@ -421,7 +496,7 @@ cp "$pdf_file" "$pdf_stem.pdf"
   图片限宽高（`width=0.9\textwidth,height=0.6\textheight,keepaspectratio`），修复后重编直至为 0；
 - 编译失败重试**循环进行**，每次失败原因在终端摘要中说明。
 
-### Step 7. 验证产物
+### Step 7. 验证普通模式产物（`effective_format != Markdown`）
 
 ```bash
 ls -lh docs/analy_<slug>_<YYYYMMDD>.pdf        # 存在且非空
@@ -437,7 +512,7 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
   `occlusion_pairs=0`、`clipped_objects=0`、`outside_safe_area=0` 的逐页证据；
 - 验证失败（PDF 缺失/空白/乱码）→ 回到 Step 5/6 修复重编。
 
-### Step 8. 总结（结构化输出）
+### Step 8. 总结（普通模式结构化输出）
 
 ```text
 ✓ 分析完成
@@ -455,9 +530,9 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 
 ```
 
-## 报告模板、示例与交付检查
+## 报告模板、示例与交付检查（普通模式）
 
-生成 `.tex` 前先完整读取 `references/latex-template.md` 与 `references/report-guide.md`；前者是
+普通模式生成 `.tex` 前先完整读取 `references/latex-template.md` 与 `references/report-guide.md`；前者是
 唯一权威 LaTeX 模板，后者包含报告主线、色彩语义、防溢出规则、交付检查清单和典型示例。
 参考文件采用渐进披露，不能只凭本节摘要跳过命名、证据、编译和 PDF 检查要求。
 
@@ -465,6 +540,9 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 
 | 场景 | 处理 |
 |---|---|
+| `effective_format` 缺失或不是明确值 | fast 上下文缺少有效格式时不猜测；补齐 `format_override/effective_format` 后再路由，无法补齐则标注“未验证”并停止格式相关交付 |
+| Markdown 分支缺少必需章节/来源 | 回到 M3，补齐三视角、证据索引、`文件:行号` 和确证/推断/未验证状态；不以文件生成成功代替内容闭环 |
+| Markdown 围栏/公式/链接校验失败 | 定位未闭合的 fenced code、`$...$`/`$$...$$` 或失效链接并修复；通过 M4 后才交付，不执行 PDF 版式替代检查 |
 | 非 git 仓库 | `git rev-parse --is-inside-work-tree` 校验失败时报告；仍可按普通目录分析并注明 |
 | 主题含糊 | **一次性列出候选**（全仓库概览 / 指定主题）提问确认，不逐次追问 |
 | 覆盖表未闭合 | 聚焦前先补全"未分类"文件状态（精读/浏览/仅索引），不带着死角进主题分析 |
@@ -472,7 +550,7 @@ pdftotext docs/analy_<slug>_<YYYYMMDD>.pdf - | head -50   # 抽查文本内容�
 | 视觉交接字段缺失 | 回到证据清单，为公式/表格/代码/流程补齐视觉类型、宽高占用、拆分边界和版式风险，不让 report 猜测 |
 | TikZ 节点/标签相互遮挡 | 把节点、路径标签、独立标签和箭头分别计入包围盒；用 `above/below/left/right` 加显式安全间距，缩短或拆分标签，重新渲染核对，不以零 `Overfull` 作为通过依据 |
 | 三视角证据不足 | 相应节如实呈现证据与推断级别，不强行填充；缺证据处标注 `未验证` 并列入局限 |
-| 无 LaTeX 工具链 | 报告缺项；提供安装建议（`apt install texlive-xetex texlive-lang-chinese` 等），不静默跳过 |
+| 普通模式无 LaTeX 工具链 | 报告缺项；提供安装建议（`apt install texlive-xetex texlive-lang-chinese` 等），不静默跳过 |
 | 缺 ctex/宏包 | 尝试安装；不可行则改用纯英文模板/替代方案并注明 |
 | 缺 tcolorbox/titlesec | 尝试安装；不可行则退化——框用 `\textcolor`+粗体/斜体替代，标题不着色，其余模板不变并注明 |
 | Overfull > 0 | 按 `references/latex-template.md` 第 4 节定位（缩减代码片段行数/表格列文本/公式换行）修复重编直至为 0 |
