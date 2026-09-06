@@ -42,6 +42,9 @@ bash install-recommended.sh --ref v2.1.0 ecc
 marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list --json` 验证插件注册。
 不同 CLI/账户可能将官方 marketplace 显示为 `openai-curated` 或 `openai-api-curated`，安装器会从
 `codex plugin list --available --json` 读取实际名称，不硬编码当前环境的别名。
+社区 marketplace 必须通过 `--ref <tag-or-commit>` 或 `CODEX_PLUGIN_REF` 提供固定 Git ref；未提供时
+安装器拒绝执行，以免默认跟踪浮动分支。官方 marketplace 的 ref 可选，dry-run 即使本机没有
+`codex` 也会打印完整的 `codex plugin marketplace add openai/plugins` 注册命令。
 带 hooks、MCP 或大量技能的插件不会被自动信任；重启 Codex 后可用 `/plugins` 检查启用状态。
 
 ## 推荐项目

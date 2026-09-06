@@ -3,7 +3,7 @@ set -Eeuo pipefail
 
 # 只调用 Codex 的 marketplace 命令；不复制第三方源码、不安装 npm 依赖、不删除插件。
 DEFAULT_PROFILE="recommended"
-REF="${CODEX_PLUGIN_REF:-main}"
+REF="${CODEX_PLUGIN_REF:-}"
 DRY_RUN=false
 PROFILE=""
 REQUESTED=()
@@ -15,7 +15,7 @@ usage() {
 默认安装 recommended profile。也可以选择 profile 或逐个指定插件：
   --profile NAME       core、recommended、gpu-research、bioinformatics、
                        engineering、orchestration、all
-  --ref REF            marketplace Git ref；默认读取 CODEX_PLUGIN_REF 或 main
+  --ref REF            marketplace Git ref；社区插件必须提供 tag 或 commit
   --dry-run            只打印命令，不写入 Codex 配置
   --list               列出可安装的推荐项
   -h, --help           显示帮助
@@ -31,7 +31,7 @@ usage() {
   - 需要 Codex CLI 的 `codex plugin marketplace` 和 `codex plugin add` 子命令。
   - 官方插件优先复用当前已配置的官方 marketplace；没有时注册 openai/plugins。
   - 重复注册和重复安装由 Codex 处理；脚本不会自动信任 hooks。
-  - CODEX_PLUGIN_REF 可用于将社区 marketplace 固定到 tag 或 commit。
+  - 社区插件必须用 --ref 或 CODEX_PLUGIN_REF 固定到 tag 或 commit；官方 marketplace 可省略。
 EOF
 }
 
@@ -110,50 +110,76 @@ json_has_marketplace() {
   local marketplace="$1"
   local json="$2"
   if command -v jq >/dev/null 2>&1; then
+    if ! printf '%s' "$json" | jq -e 'type == "object" and (.marketplaces | type == "array")' >/dev/null 2>&1; then
+      return 2
+    fi
     printf '%s' "$json" | jq -e --arg name "$marketplace" \
-      'any((.marketplaces // [])[]; .name == $name)' >/dev/null 2>&1
-    return
+      'any(.marketplaces[]; .name == $name)' >/dev/null 2>&1
+    return $?
   fi
   printf '%s' "$json" | python3 -c 'import json, sys
 name = sys.argv[1]
 try:
     data = json.load(sys.stdin)
 except Exception:
-    raise SystemExit(1)
+    raise SystemExit(2)
+if not isinstance(data, dict) or not isinstance(data.get("marketplaces"), list):
+    raise SystemExit(2)
 raise SystemExit(0 if any(item.get("name") == name for item in data.get("marketplaces", [])) else 1)' "$marketplace" 2>/dev/null
 }
 
 configured_marketplace_for_plugin() {
   local plugin="$1"
   local json
-  json="$(codex plugin list --available --json 2>/dev/null || true)"
-  [[ -n "$json" ]] || return 0
+  local status
+  set +e
+  json="$(codex plugin list --available --json 2>/dev/null)"
+  status=$?
+  set -e
+  ((status == 0)) || return 2
+  [[ -n "$json" ]] || return 2
 
   if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$json" | jq -r --arg name "$plugin" \
-      '((.installed // []) + (.available // []))[]
+    if ! printf '%s' "$json" | jq -e \
+      'type == "object" and (.installed | type == "array") and (.available | type == "array")' \
+      >/dev/null 2>&1; then
+      return 2
+    fi
+    if printf '%s' "$json" | jq -er --arg name "$plugin" \
+      '((.installed + .available)[]
        | select(.name == $name and ((.marketplaceName // "") | startswith("openai")))
-       | .marketplaceName' 2>/dev/null | sed -n '1p'
-    return 0
+       | .marketplaceName)' 2>/dev/null | sed -n '1p'; then
+      return 0
+    fi
+    return 1
   fi
   printf '%s' "$json" | python3 -c 'import json, sys
 name = sys.argv[1]
 try:
     data = json.load(sys.stdin)
 except Exception:
-    raise SystemExit(0)
+    raise SystemExit(2)
+if not isinstance(data, dict) or not isinstance(data.get("installed"), list) or not isinstance(data.get("available"), list):
+    raise SystemExit(2)
 for item in (data.get("installed", []) + data.get("available", [])):
     marketplace = item.get("marketplaceName", "")
     if item.get("name") == name and marketplace.startswith("openai"):
         print(marketplace)
-        break' "$plugin" 2>/dev/null
+        raise SystemExit(0)
+raise SystemExit(1)' "$plugin" 2>/dev/null
 }
 
 marketplace_is_configured() {
   local marketplace="$1"
   local json
-  json="$(codex plugin marketplace list --json 2>/dev/null || true)"
-  [[ -n "$json" ]] && json_has_marketplace "$marketplace" "$json"
+  local status
+  set +e
+  json="$(codex plugin marketplace list --json 2>/dev/null)"
+  status=$?
+  set -e
+  ((status == 0)) || return 2
+  [[ -n "$json" ]] || return 2
+  json_has_marketplace "$marketplace" "$json"
 }
 
 plugin_is_installed() {
@@ -179,19 +205,35 @@ raise SystemExit(0 if any(item.get("name") == name and item.get("installed") is 
 ensure_community_marketplace() {
   local source="$1"
   local marketplace="$2"
+  local status
+  [[ -n "$REF" ]] || {
+    printf '错误：社区插件必须显式指定固定 Git ref（使用 --ref 或 CODEX_PLUGIN_REF）。\n' >&2
+    return 1
+  }
   if [[ "$DRY_RUN" == true ]]; then
     run_cmd codex plugin marketplace add "$source" --ref "$REF"
-  elif marketplace_is_configured "$marketplace"; then
-    printf '已复用 marketplace：%s\n' "$marketplace"
   else
-    run_cmd codex plugin marketplace add "$source" --ref "$REF"
+    set +e
+    marketplace_is_configured "$marketplace"
+    status=$?
+    set -e
+    case "$status" in
+      0) printf '已复用 marketplace：%s\n' "$marketplace" ;;
+      1) run_cmd codex plugin marketplace add "$source" --ref "$REF" ;;
+      *)
+        printf '错误：marketplace 查询失败，已停止安装：%s\n' "$marketplace" >&2
+        return 1
+        ;;
+    esac
   fi
 }
 
 official_marketplace_for() {
   local plugin="$1"
   local marketplace
-  if [[ "$DRY_RUN" == true ]] && ! command -v codex >/dev/null 2>&1; then
+  if [[ "$DRY_RUN" == true ]]; then
+    run_cmd codex plugin marketplace add openai/plugins \
+      ${REF:+--ref "$REF"} --sparse .agents/plugins --sparse plugins >&2
     printf '%s\n' openai-curated
     return 0
   fi
@@ -199,14 +241,23 @@ official_marketplace_for() {
     printf '%s\n' openai-curated
     return 0
   fi
+  set +e
   marketplace="$(configured_marketplace_for_plugin "$plugin")"
-  if [[ -n "$marketplace" ]]; then
-    printf '%s\n' "$marketplace"
-    return 0
-  fi
-  run_cmd codex plugin marketplace add openai/plugins --ref "$REF" \
-    --sparse .agents/plugins --sparse plugins >&2 || return 1
-  printf '%s\n' openai-curated
+  local status=$?
+  set -e
+  case "$status" in
+    0) ;;
+    1)
+      run_cmd codex plugin marketplace add openai/plugins \
+        ${REF:+--ref "$REF"} --sparse .agents/plugins --sparse plugins >&2 || return 1
+      marketplace=openai-curated
+      ;;
+    *)
+      printf '错误：marketplace 查询失败，已停止安装：%s\n' "$plugin" >&2
+      return 1
+      ;;
+  esac
+  printf '%s\n' "$marketplace"
 }
 
 install_one() {
@@ -222,6 +273,9 @@ install_one() {
     superpowers|ecc|agent-skills|compound-engineering)
       printf '提示：%s 与本库或彼此存在技能职责重叠，安装后请确认触发优先级。\n' "$key" ;;
   esac
+  if [[ "$key" == life-science-research ]]; then
+    printf '提示：%s 使用前必须确认官方 marketplace 当前许可证和账号可用性。\n' "$key"
+  fi
   if [[ "$key" == ecc || "$key" == babysitter ]]; then
     printf '提示：%s 含 hooks/MCP 或运行时集成；安装后需单独审查并信任相关 hooks。\n' "$key"
   fi
