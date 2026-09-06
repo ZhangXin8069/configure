@@ -13,7 +13,13 @@ tools/configure-check.sh
 tools/configure-check.sh --root /path/to/configure
 ```
 
-退出码为 `0` 表示没有发现问题，`1` 表示发现结构或语法问题，`2` 表示命令行参数错误。工具不执行 hook、plugin 或安装命令；存在插件 manifest 时使用 Python 3 的标准库解析 JSON。
+退出码为 `0` 表示没有发现问题，`1` 表示发现结构或语法问题，`2` 表示命令行参数错误。工具不执行 hook、plugin 或安装命令；存在插件 manifest 时使用 Python 3 的标准库解析 JSON，并使用系统临时目录保存 NUL 路径清单后自动清理。
+
+回归测试：
+
+```bash
+bash tools/configure-check.test.sh
+```
 
 ## 上游推荐
 

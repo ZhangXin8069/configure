@@ -12,6 +12,27 @@ SKILL_COUNT=0
 TOOL_SCRIPT_COUNT=0
 HOOK_SCRIPT_COUNT=0
 PLUGIN_MANIFEST_COUNT=0
+TEMP_FILE=
+declare -a TEMP_FILES=()
+
+cleanup_temp_files() {
+    local file
+    for file in "${TEMP_FILES[@]}"; do
+        rm -f -- "$file"
+    done
+}
+trap cleanup_temp_files EXIT
+
+new_temp_file() {
+    TEMP_FILE=$(mktemp "${TMPDIR:-/tmp}/configure-check.XXXXXX")
+    TEMP_FILES+=("$TEMP_FILE")
+}
+
+collect_find_output() {
+    local output=$1
+    shift
+    find "$@" -print0 | sort -z > "$output"
+}
 
 usage() {
     cat <<'EOF'
@@ -85,45 +106,51 @@ for rel in skills tools hooks plugins; do
 done
 
 if [[ -d "$ROOT/skills" ]]; then
-    while IFS= read -r -d '' skill_dir; do
-        SKILL_COUNT=$((SKILL_COUNT + 1))
-        skill_name="${skill_dir##*/}"
-        skill_file="$skill_dir/SKILL.md"
-        skill_agents="$skill_dir/AGENTS.md"
+    new_temp_file
+    skill_list=$TEMP_FILE
+    if ! collect_find_output "$skill_list" "$ROOT/skills" -mindepth 1 -maxdepth 1 -type d; then
+        fail 'skills/ 文件枚举失败'
+    else
+        while IFS= read -r -d '' skill_dir; do
+            SKILL_COUNT=$((SKILL_COUNT + 1))
+            skill_name="${skill_dir##*/}"
+            skill_file="$skill_dir/SKILL.md"
+            skill_agents="$skill_dir/AGENTS.md"
 
-        if [[ ! -f "$skill_file" ]]; then
-            fail "技能 $skill_name 缺少 SKILL.md"
-            continue
-        fi
-        if [[ ! -f "$skill_agents" ]]; then
-            fail "技能 $skill_name 缺少 AGENTS.md"
-        fi
+            if [[ ! -f "$skill_file" ]]; then
+                fail "技能 $skill_name 缺少 SKILL.md"
+                continue
+            fi
+            if [[ ! -f "$skill_agents" ]]; then
+                fail "技能 $skill_name 缺少 AGENTS.md"
+            fi
 
-        first_line="$(sed -n '1p' "$skill_file")"
-        frontmatter_end="$(awk 'NR > 1 && $0 == "---" { print NR; exit }' "$skill_file")"
-        if [[ "$first_line" != "---" || -z "$frontmatter_end" ]]; then
-            fail "技能 $skill_name 的 frontmatter 不完整"
-        else
-            frontmatter="$(sed -n "1,${frontmatter_end}p" "$skill_file")"
-            if ! grep -Fqx "name: $skill_name" <<< "$frontmatter"; then
-                fail "技能 $skill_name 的 frontmatter name 与目录不一致"
+            first_line="$(sed -n '1p' "$skill_file")"
+            frontmatter_end="$(awk 'NR > 1 && $0 == "---" { print NR; exit }' "$skill_file")"
+            if [[ "$first_line" != "---" || -z "$frontmatter_end" ]]; then
+                fail "技能 $skill_name 的 frontmatter 不完整"
+            else
+                frontmatter="$(sed -n "1,${frontmatter_end}p" "$skill_file")"
+                if ! grep -Fqx "name: $skill_name" <<< "$frontmatter"; then
+                    fail "技能 $skill_name 的 frontmatter name 与目录不一致"
+                fi
+                if ! grep -Eq '^description:[[:space:]]*' <<< "$frontmatter"; then
+                    fail "技能 $skill_name 缺少 description"
+                fi
+                if ! grep -Eq '^metadata:[[:space:]]*$' <<< "$frontmatter" ||
+                    ! grep -Eq '^  openclaw:[[:space:]]*$' <<< "$frontmatter"; then
+                    fail "技能 $skill_name 缺少 metadata.openclaw"
+                fi
             fi
-            if ! grep -Eq '^description:[[:space:]]*' <<< "$frontmatter"; then
-                fail "技能 $skill_name 缺少 description"
-            fi
-            if ! grep -Eq '^metadata:[[:space:]]*$' <<< "$frontmatter" ||
-                ! grep -Eq '^  openclaw:[[:space:]]*$' <<< "$frontmatter"; then
-                fail "技能 $skill_name 缺少 metadata.openclaw"
-            fi
-        fi
 
-        for heading in '执行前置' '核心原则' '触发时机' '工作流程' '错误处理' '注意事项'; do
-            if ! grep -Fq "## $heading" "$skill_file"; then
-                fail "技能 $skill_name 缺少章节：$heading"
-            fi
-        done
-    done < <(find "$ROOT/skills" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
-    pass "技能目录检查完成：$SKILL_COUNT 个"
+            for heading in '执行前置' '核心原则' '触发时机' '工作流程' '错误处理' '注意事项'; do
+                if ! grep -Fq "## $heading" "$skill_file"; then
+                    fail "技能 $skill_name 缺少章节：$heading"
+                fi
+            done
+        done < "$skill_list"
+        pass "技能目录检查完成：$SKILL_COUNT 个"
+    fi
 fi
 
 check_shell_tree() {
@@ -133,39 +160,47 @@ check_shell_tree() {
     local first_line
 
     [[ -d "$ROOT/$tree" ]] || return 0
-    while IFS= read -r -d '' script_path; do
-        script_count=$((script_count + 1))
-        if [[ ! -x "$script_path" ]]; then
-            fail "$tree 脚本不可执行：${script_path#"$ROOT/"}"
-        fi
-        if ! IFS= read -r first_line < "$script_path" || [[ "$first_line" != '#!'* ]]; then
-            fail "$tree 脚本缺少 shebang：${script_path#"$ROOT/"}"
-        fi
-        if ! bash -n "$script_path"; then
-            fail "$tree 脚本语法错误：${script_path#"$ROOT/"}"
-        fi
-    done < <(
-        find "$ROOT/$tree" -type f \( -name '*.sh' -o -name 'pre-commit' -o -name 'pre-push' \) -print0 |
-            sort -z
-    )
-
-    if [[ "$tree" == tools ]]; then
-        TOOL_SCRIPT_COUNT=$script_count
+    new_temp_file
+    script_list=$TEMP_FILE
+    if ! collect_find_output "$script_list" "$ROOT/$tree" -type f \( -name '*.sh' -o -name 'pre-commit' -o -name 'pre-push' \); then
+        fail "$tree 文件枚举失败"
     else
-        HOOK_SCRIPT_COUNT=$script_count
+        while IFS= read -r -d '' script_path; do
+            script_count=$((script_count + 1))
+            if [[ ! -x "$script_path" ]]; then
+                fail "$tree 脚本不可执行：${script_path#"$ROOT/"}"
+            fi
+            if ! IFS= read -r first_line < "$script_path" || [[ "$first_line" != '#!'* ]]; then
+                fail "$tree 脚本缺少 shebang：${script_path#"$ROOT/"}"
+            fi
+            if ! bash -n "$script_path"; then
+                fail "$tree 脚本语法错误：${script_path#"$ROOT/"}"
+            fi
+        done < "$script_list"
+
+        if [[ "$tree" == tools ]]; then
+            TOOL_SCRIPT_COUNT=$script_count
+        else
+            HOOK_SCRIPT_COUNT=$script_count
+        fi
+        pass "$tree 脚本检查完成：$script_count 个"
     fi
-    pass "$tree 脚本检查完成：$script_count 个"
 }
 
 check_shell_tree tools
 check_shell_tree hooks
 
 if [[ -d "$ROOT/plugins" ]]; then
-    while IFS= read -r -d '' manifest; do
-        PLUGIN_MANIFEST_COUNT=$((PLUGIN_MANIFEST_COUNT + 1))
-        plugin_root="$(dirname -- "$(dirname -- "$manifest")")"
-        plugin_name="$(basename -- "$plugin_root")"
-        if ! python3 - "$manifest" "$plugin_name" "$plugin_root" <<'PY'
+    new_temp_file
+    manifest_list=$TEMP_FILE
+    if ! collect_find_output "$manifest_list" "$ROOT/plugins" -type f -path '*/.codex-plugin/plugin.json'; then
+        fail 'plugins/ 文件枚举失败'
+    else
+        while IFS= read -r -d '' manifest; do
+            PLUGIN_MANIFEST_COUNT=$((PLUGIN_MANIFEST_COUNT + 1))
+            plugin_root="$(dirname -- "$(dirname -- "$manifest")")"
+            plugin_name="$(basename -- "$plugin_root")"
+            if ! python3 - "$manifest" "$plugin_name" "$plugin_root" <<'PY'
 import json
 import pathlib
 import sys
@@ -173,6 +208,11 @@ import sys
 manifest_path = pathlib.Path(sys.argv[1])
 expected_name = sys.argv[2]
 plugin_root = pathlib.Path(sys.argv[3])
+try:
+    plugin_root = plugin_root.resolve(strict=True)
+except (OSError, RuntimeError) as exc:
+    print(f"插件根目录无法解析: {plugin_root}: {exc}")
+    raise SystemExit(1)
 
 try:
     data = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -201,22 +241,30 @@ if isinstance(data, dict):
             candidate = pathlib.PurePosixPath(relative)
             if candidate.is_absolute() or ".." in candidate.parts:
                 errors.append(f"{key} 含越界路径: {relative!r}")
-            elif not (plugin_root / pathlib.Path(relative)).exists():
-                errors.append(f"{key} 引用不存在: {relative!r}")
+                continue
+            resolved = plugin_root / pathlib.Path(relative)
+            try:
+                resolved = resolved.resolve(strict=True)
+            except (OSError, RuntimeError):
+                errors.append(f"{key} 引用不存在或无法解析: {relative!r}")
+                continue
+            if resolved != plugin_root and plugin_root not in resolved.parents:
+                errors.append(f"{key} 含越界路径: {relative!r}")
 
 if errors:
     for error in errors:
         print(f"manifest {manifest_path}: {error}")
     raise SystemExit(1)
 PY
-        then
-            fail "插件 manifest 检查失败：${manifest#"$ROOT/"}"
+            then
+                fail "插件 manifest 检查失败：${manifest#"$ROOT/"}"
+            fi
+        done < "$manifest_list"
+        if ((PLUGIN_MANIFEST_COUNT == 0)); then
+            warn 'plugins/ 当前没有可直接加载的 .codex-plugin/plugin.json；推荐索引不会被当作插件加载'
+        else
+            pass "插件 manifest 检查完成：$PLUGIN_MANIFEST_COUNT 个"
         fi
-    done < <(find "$ROOT/plugins" -type f -path '*/.codex-plugin/plugin.json' -print0 | sort -z)
-    if ((PLUGIN_MANIFEST_COUNT == 0)); then
-        warn 'plugins/ 当前没有可直接加载的 .codex-plugin/plugin.json；推荐索引不会被当作插件加载'
-    else
-        pass "插件 manifest 检查完成：$PLUGIN_MANIFEST_COUNT 个"
     fi
 fi
 

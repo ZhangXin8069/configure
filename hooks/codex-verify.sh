@@ -102,6 +102,34 @@ if ! diff_output=$(git diff --check -- "${paths[@]}" 2>&1); then
     failures=$((failures + 1))
 fi
 
+validate_untracked_whitespace() {
+    local path=$1
+    local index_status
+    local diff_status=0
+    local output
+
+    [[ -f "$path" ]] || return
+
+    if git ls-files --error-unmatch -- "$path" >/dev/null 2>&1; then
+        return
+    fi
+    index_status=$?
+    if (( index_status > 1 )); then
+        printf '✗ %s：无法判断文件是否受 Git 跟踪\n' "$path" >&2
+        failures=$((failures + 1))
+        return
+    fi
+
+    output=$(git diff --no-index --check -- /dev/null "$path" 2>&1) || diff_status=$?
+    if [[ -n "$output" ]]; then
+        printf '✗ %s：未跟踪文件空白检查失败：\n%s\n' "$path" "$output" >&2
+        failures=$((failures + 1))
+    elif (( diff_status > 1 )); then
+        printf '✗ %s：未跟踪文件空白检查无法完成\n' "$path" >&2
+        failures=$((failures + 1))
+    fi
+}
+
 shell_interpreter() {
     local path=$1
     local first_line=
@@ -155,6 +183,14 @@ validate_shell() {
 }
 
 for path in "${paths[@]}"; do
+    if [[ ! -f "$path" ]]; then
+        printf '✗ 路径不存在或不是普通文件：%s\n' "$path" >&2
+        failures=$((failures + 1))
+        continue
+    fi
+
+    validate_untracked_whitespace "$path"
+
     base=${path##*/}
     case "$base" in
         .agent.*.log|.*.*.log)

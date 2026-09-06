@@ -88,7 +88,7 @@ shell_interpreter() {
             ;;
     esac
 
-    first_line=$(staged_blob_first_line "$path") || return 0
+    first_line=$(staged_blob_first_line "$path") || return 1
     if [[ "$first_line" =~ (^|[[:space:]/])zsh([[:space:]]|$) ]]; then
         printf 'zsh\n'
     elif [[ "$first_line" =~ (^|[[:space:]/])bash([[:space:]]|$) ||
@@ -188,10 +188,13 @@ for path in "${paths[@]}"; do
         validate_skill_manifest "$path"
     fi
 
-    if interpreter=$(shell_interpreter "$path"); then
-        if [[ -n "$interpreter" ]]; then
-            validate_shell "$path" "$interpreter"
-        fi
+    if ! interpreter=$(shell_interpreter "$path"); then
+        printf '✗ %s：无法读取暂存内容\n' "$path" >&2
+        failures=$((failures + 1))
+        continue
+    fi
+    if [[ -n "$interpreter" ]]; then
+        validate_shell "$path" "$interpreter"
     fi
 done
 
