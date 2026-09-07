@@ -41,6 +41,16 @@ assert_contains "$dry_output" 'codex plugin add superpowers --marketplace openai
 printf 'PASS: dry-run 展示完整官方 marketplace 命令\n'
 
 set +e
+default_output=$(PATH="$clean_path" bash "$installer" --dry-run 2>&1)
+default_status=$?
+set -e
+(( default_status == 0 )) || fail "默认 profile 在精简 Bash 环境中意外失败\n输出：\n$default_output"
+assert_contains "$default_output" '目标插件：superpowers nvidia zotero'
+official_marketplace_adds=$(printf '%s\n' "$default_output" | grep -c 'codex plugin marketplace add openai/plugins' || true)
+(( official_marketplace_adds == 1 )) || fail '默认 profile 的 dry-run 不应重复注册官方 marketplace'
+printf 'PASS: 默认 profile 兼容无 mapfile 的 Bash 环境\n'
+
+set +e
 ref_output=$(PATH="$clean_path" bash "$installer" --dry-run ecc 2>&1)
 ref_status=$?
 set -e
@@ -68,7 +78,11 @@ case "$*" in
         exit 1
         ;;
     'plugin list --json')
-        printf '%s\n' '{"installed":[{"name":"ecc","installed":true}]}'
+        printf '%s\n' '{"installed":[{"name":"ecc","installed":true},{"name":"superpowers","installed":true}]}'
+        exit 0
+        ;;
+    'plugin list --available --json')
+        printf '%s\n' '{"installed":[{"name":"ecc","marketplaceName":"ecc","installed":true}],"available":[{"name":"superpowers","marketplaceName":"openai-api-curated","installed":false}]}'
         exit 0
         ;;
     *) exit 0 ;;
@@ -105,3 +119,14 @@ for state in absent configured; do
     assert_contains "$state_calls" 'plugin add ecc --marketplace ecc'
 done
 printf 'PASS: marketplace 合法 JSON 的未匹配/已配置状态正确\n'
+
+: > "$call_log"
+set +e
+official_output=$(CODEX_CALL_LOG="$call_log" PATH="$fake_bin:$clean_path" \
+    bash "$installer" superpowers 2>&1)
+official_status=$?
+set -e
+(( official_status == 0 )) || fail "官方 marketplace 动态发现意外失败\n输出：\n$official_output"
+official_calls=$(< "$call_log")
+assert_contains "$official_calls" 'plugin add superpowers --marketplace openai-api-curated'
+printf 'PASS: 官方 marketplace 名称从 Codex JSON 动态发现\n'

@@ -5,6 +5,7 @@ set -Eeuo pipefail
 DEFAULT_PROFILE="recommended"
 REF="${CODEX_PLUGIN_REF:-}"
 DRY_RUN=false
+OFFICIAL_MARKETPLACE_SHOWN=false
 PROFILE=""
 REQUESTED=()
 
@@ -232,8 +233,11 @@ official_marketplace_for() {
   local plugin="$1"
   local marketplace
   if [[ "$DRY_RUN" == true ]]; then
-    run_cmd codex plugin marketplace add openai/plugins \
-      ${REF:+--ref "$REF"} --sparse .agents/plugins --sparse plugins >&2
+    if [[ "$OFFICIAL_MARKETPLACE_SHOWN" != true ]]; then
+      run_cmd codex plugin marketplace add openai/plugins \
+        ${REF:+--ref "$REF"} --sparse .agents/plugins --sparse plugins >&2
+      OFFICIAL_MARKETPLACE_SHOWN=true
+    fi
     printf '%s\n' openai-curated
     return 0
   fi
@@ -284,7 +288,12 @@ install_one() {
   fi
 
   if [[ "$kind" == official ]]; then
-    marketplace="$(official_marketplace_for "$plugin")"
+    if [[ "$DRY_RUN" == true ]]; then
+      official_marketplace_for "$plugin" >/dev/null || return 1
+      marketplace=openai-curated
+    else
+      marketplace="$(official_marketplace_for "$plugin")"
+    fi
   else
     ensure_community_marketplace "$source" "$marketplace" || return 1
   fi
@@ -363,14 +372,19 @@ main() {
   fi
 
   local -a selected=()
+  local selected_plugin
   if [[ -n "$PROFILE" ]]; then
-    mapfile -t selected < <(profile_plugins "$PROFILE" || true)
+    while IFS= read -r selected_plugin; do
+      selected+=("$selected_plugin")
+    done < <(profile_plugins "$PROFILE" || true)
     ((${#selected[@]} > 0)) || die "未知 profile：$PROFILE"
     warn_profile "$PROFILE"
   elif ((${#REQUESTED[@]} > 0)); then
     selected=("${REQUESTED[@]}")
   else
-    mapfile -t selected < <(profile_plugins "$DEFAULT_PROFILE")
+    while IFS= read -r selected_plugin; do
+      selected+=("$selected_plugin")
+    done < <(profile_plugins "$DEFAULT_PROFILE")
     printf '未指定目标，使用默认 profile：%s\n' "$DEFAULT_PROFILE"
   fi
 

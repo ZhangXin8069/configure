@@ -30,6 +30,62 @@ command -v realpath >/dev/null 2>&1 || {
     exit 2
 }
 
+canonicalize_path() {
+    local candidate=$1
+    local existing=$candidate
+    local component
+    local canonical
+    local -a missing=()
+    local -a missing_tail=()
+
+    if [[ -e "$existing" || -L "$existing" ]]; then
+        realpath "$existing"
+        return
+    fi
+
+    while [[ ! -e "$existing" && ! -L "$existing" ]]; do
+        component=${existing##*/}
+        [[ -n "$component" && "$component" != "." ]] || return 1
+        if ((${#missing[@]} > 0)); then
+            missing=("$component" "${missing[@]}")
+        else
+            missing=("$component")
+        fi
+        existing=${existing%/*}
+        [[ -n "$existing" ]] || existing=/
+    done
+
+    canonical=$(realpath "$existing") || return 1
+    for component in "${missing[@]}"; do
+        case "$component" in
+            ''|.)
+                continue
+                ;;
+            ..)
+                if ((${#missing_tail[@]} > 0)); then
+                    missing_tail=("${missing_tail[@]:0:${#missing_tail[@]}-1}")
+                else
+                    canonical=$(realpath "$canonical/..") || return 1
+                fi
+                ;;
+            *)
+                if ((${#missing_tail[@]} == 0)) &&
+                    [[ -e "$canonical/$component" || -L "$canonical/$component" ]]; then
+                    canonical=$(realpath "$canonical/$component") || return 1
+                else
+                    missing_tail+=("$component")
+                fi
+                ;;
+        esac
+    done
+
+    printf '%s' "$canonical"
+    for component in "${missing_tail[@]}"; do
+        printf '/%s' "$component"
+    done
+    printf '\n'
+}
+
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
     printf 'codex-guard: 当前目录不在 Git 仓库中\n' >&2
     exit 1
@@ -116,7 +172,7 @@ for raw_path in "${paths[@]}"; do
     else
         candidate=$caller_dir/$raw_path
     fi
-    if ! canonical=$(realpath -m -- "$candidate"); then
+    if ! canonical=$(canonicalize_path "$candidate"); then
         printf '✗ 无法规范化路径：%s\n' "$raw_path" >&2
         failures=$((failures + 1))
         continue

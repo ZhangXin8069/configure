@@ -128,16 +128,51 @@ remote_refs="$tmp_dir/remote-refs"
 : > "$target_queries"
 : > "$commit_roots"
 
+kv_set() {
+    local map_name=$1
+    local key=$2
+    local value=${3-}
+    printf '%s\t%s\n' "$key" "$value" >> "$tmp_dir/kv-$map_name"
+}
+
+kv_get() {
+    local map_name=$1
+    local key=$2
+    local file="$tmp_dir/kv-$map_name"
+    [ -f "$file" ] || return 1
+    awk -F "$tab" -v key="$key" '
+        $1 == key {
+            value = $0
+            sub(/^[^\t]*\t/, "", value)
+            found = 1
+        }
+        END {
+            if (found) {
+                print value
+            } else {
+                exit 1
+            }
+        }
+    ' "$file"
+}
+
+kv_value() {
+    kv_get "$@" 2>/dev/null || true
+}
+
+kv_has() {
+    kv_get "$@" >/dev/null 2>&1
+}
+
+for map_name in \
+    tag_object_oid tag_object_type tag_created tag_subject tag_target \
+    tag_target_type tag_payload_file tag_payload_loaded tag_rank \
+    commit_rank ancestor_cache repair_expected_parent repair_kind \
+    seen_parents remote_object_by_tag remote_target_by_tag repair_new_oid; do
+    : > "$tmp_dir/kv-$map_name"
+done
+
 declare -a tag_names=()
-declare -A tag_object_oid=()
-declare -A tag_object_type=()
-declare -A tag_created=()
-declare -A tag_subject=()
-declare -A tag_target=()
-declare -A tag_target_type=()
-declare -A tag_payload_file=()
-declare -A tag_payload_loaded=()
-declare -A tag_rank=()
 
 tag_count=0
 init_count=0
@@ -151,12 +186,12 @@ while IFS="$tab" read -r tag_name object_oid object_type created subject; do
     is_managed_tag "$tag_name" || continue
 
     tag_names+=("$tag_name")
-    tag_object_oid["$tag_name"]=$object_oid
-    tag_object_type["$tag_name"]=$object_type
-    tag_created["$tag_name"]=${created:-0}
-    tag_subject["$tag_name"]=$subject
-    tag_payload_file["$tag_name"]="$tmp_dir/payload-original-$record_index"
-    tag_payload_loaded["$tag_name"]=0
+    kv_set tag_object_oid "$tag_name" "$object_oid"
+    kv_set tag_object_type "$tag_name" "$object_type"
+    kv_set tag_created "$tag_name" "${created:-0}"
+    kv_set tag_subject "$tag_name" "$subject"
+    kv_set tag_payload_file "$tag_name" "$tmp_dir/payload-original-$record_index"
+    kv_set tag_payload_loaded "$tag_name" 0
     printf 'refs/tags/%s^{}\n' "$tag_name" >> "$target_queries"
     record_index=$((record_index + 1))
 
@@ -187,24 +222,24 @@ while IFS=' ' read -r target_oid target_type; do
     [ "$target_index" -lt "$tag_count" ] || break
     tag_name=${tag_names[$target_index]}
     if [ "$target_type" = 'missing' ]; then
-        tag_target["$tag_name"]=''
-        tag_target_type["$tag_name"]='missing'
+        kv_set tag_target "$tag_name" ''
+        kv_set tag_target_type "$tag_name" missing
     else
-        tag_target["$tag_name"]=$target_oid
-        tag_target_type["$tag_name"]=$target_type
+        kv_set tag_target "$tag_name" "$target_oid"
+        kv_set tag_target_type "$tag_name" "$target_type"
     fi
     target_index=$((target_index + 1))
 done < "$target_results"
 while [ "$target_index" -lt "$tag_count" ]; do
     tag_name=${tag_names[$target_index]}
-    tag_target["$tag_name"]=''
-    tag_target_type["$tag_name"]='missing'
+    kv_set tag_target "$tag_name" ''
+    kv_set tag_target_type "$tag_name" missing
     target_index=$((target_index + 1))
 done
 
 if [ -n "$root_override" ]; then
     is_managed_tag "$root_override" || die "根标签名称不符合约定: $root_override"
-    [ -n "${tag_object_oid[$root_override]+present}" ] || die "指定根标签不存在: $root_override"
+    kv_has tag_object_oid "$root_override" || die "指定根标签不存在: $root_override"
     root_name=$root_override
 elif [ "$init_count" -eq 1 ]; then
     root_name=$init_name
@@ -222,20 +257,21 @@ fi
 # With --reverse, parents precede children; incomparable branches remain
 # detectable by the adjacent merge-base checks below.
 for tag_name in "${tag_names[@]}"; do
-    if [ "${tag_target_type[$tag_name]-}" = 'commit' ] && [ -n "${tag_target[$tag_name]-}" ]; then
-        printf '%s\n' "${tag_target[$tag_name]}" >> "$commit_roots"
+    target_type=$(kv_value tag_target_type "$tag_name")
+    target_oid=$(kv_value tag_target "$tag_name")
+    if [ "$target_type" = 'commit' ] && [ -n "$target_oid" ]; then
+        printf '%s\n' "$target_oid" >> "$commit_roots"
     fi
 done
 
-declare -A commit_rank=()
 if [ -s "$commit_roots" ]; then
     git rev-list --topo-order --reverse --stdin < "$commit_roots" > "$commit_order" || \
         die '无法生成标签目标提交的拓扑顺序'
     commit_index=0
     while IFS= read -r commit_oid; do
         [ -n "$commit_oid" ] || continue
-        if [ -z "${commit_rank[$commit_oid]+present}" ]; then
-            commit_rank["$commit_oid"]=$commit_index
+        if ! kv_has commit_rank "$commit_oid"; then
+            kv_set commit_rank "$commit_oid" "$commit_index"
             commit_index=$((commit_index + 1))
         fi
     done < "$commit_order"
@@ -244,15 +280,15 @@ fi
 : > "$order_records"
 for tag_name in "${tag_names[@]}"; do
     [ "$tag_name" = "$root_name" ] && continue
-    target_oid=${tag_target[$tag_name]-}
-    if [ -n "$target_oid" ] && [ -n "${commit_rank[$target_oid]+present}" ]; then
-        tag_rank["$tag_name"]=${commit_rank[$target_oid]}
+    target_oid=$(kv_value tag_target "$tag_name")
+    if [ -n "$target_oid" ] && kv_has commit_rank "$target_oid"; then
+        kv_set tag_rank "$tag_name" "$(kv_value commit_rank "$target_oid")"
     else
         # Keep malformed/non-commit tags deterministic and after valid targets.
-        tag_rank["$tag_name"]=2147483647
+        kv_set tag_rank "$tag_name" 2147483647
     fi
     printf '%s\t%s\t%s\n' \
-        "${tag_rank[$tag_name]}" "${tag_created[$tag_name]:-0}" "$tag_name" >> "$order_records"
+        "$(kv_value tag_rank "$tag_name")" "$(kv_value tag_created "$tag_name")" "$tag_name" >> "$order_records"
 done
 sort -t "$tab" -k1,1n -k2,2n -k3,3 "$order_records" > "$sorted_order" || die '标签拓扑排序失败'
 
@@ -275,43 +311,40 @@ previous_date=''
 previous_name=''
 previous_target=''
 
-declare -A ancestor_cache=()
 is_ancestor() {
     local parent=$1
     local child=$2
     local cache_key="${parent}:${child}"
-    if [ -n "${ancestor_cache[$cache_key]+present}" ]; then
-        [ "${ancestor_cache[$cache_key]}" = 1 ]
+    if kv_has ancestor_cache "$cache_key"; then
+        [ "$(kv_value ancestor_cache "$cache_key")" = 1 ]
         return
     fi
     if git merge-base --is-ancestor "$parent" "$child" >/dev/null 2>&1; then
-        ancestor_cache["$cache_key"]=1
+        kv_set ancestor_cache "$cache_key" 1
         return 0
     fi
-    ancestor_cache["$cache_key"]=0
+    kv_set ancestor_cache "$cache_key" 0
     return 1
 }
 
 declare -a repair_tags=()
-declare -A repair_expected_parent=()
-declare -A repair_kind=()
 queue_repair() {
     local name=$1
     local expected=$2
     local kind=$3
     local payload_file
 
-    if [ "${tag_object_type[$name]-}" != 'tag' ] || \
-        [ "${tag_target_type[$name]-}" != 'commit' ] || \
-        [ -z "${tag_target[$name]-}" ] || [ -z "${tag_subject[$name]-}" ]; then
+    if [ "$(kv_value tag_object_type "$name")" != 'tag' ] || \
+        [ "$(kv_value tag_target_type "$name")" != 'commit' ] || \
+        [ -z "$(kv_value tag_target "$name")" ] || [ -z "$(kv_value tag_subject "$name")" ]; then
         printf '[BLOCK] %s 不是可安全改写的有效附注标签\n' "$name"
         blocking_count=$((blocking_count + 1))
         return
     fi
 
-    payload_file=${tag_payload_file[$name]}
-    if [ "${tag_payload_loaded[$name]-0}" -ne 1 ]; then
-        tag_payload_loaded["$name"]=1
+    payload_file=$(kv_value tag_payload_file "$name")
+    if [ "$(kv_value tag_payload_loaded "$name")" -ne 1 ]; then
+        kv_set tag_payload_loaded "$name" 1
         if ! git cat-file tag "$name" > "$payload_file" 2>/dev/null; then
             : > "$payload_file"
         fi
@@ -324,18 +357,18 @@ queue_repair() {
         blocking_count=$((blocking_count + 1))
     else
         repair_tags+=("$name")
-        repair_expected_parent["$name"]=$expected
-        repair_kind["$name"]=$kind
+        kv_set repair_expected_parent "$name" "$expected"
+        kv_set repair_kind "$name" "$kind"
         repair_count=$((repair_count + 1))
     fi
 }
 
-declare -A seen_parents=()
 for tag_name in "${ordered_tags[@]}"; do
-    object_type=${tag_object_type[$tag_name]-}
-    target_oid=${tag_target[$tag_name]-}
-    target_type=${tag_target_type[$tag_name]-missing}
-    subject=${tag_subject[$tag_name]-}
+    object_type=$(kv_value tag_object_type "$tag_name")
+    target_oid=$(kv_value tag_target "$tag_name")
+    target_type=$(kv_value tag_target_type "$tag_name")
+    target_type=${target_type:-missing}
+    subject=$(kv_value tag_subject "$tag_name")
 
     if [ "$object_type" != 'tag' ]; then
         printf '[BLOCK] %s 不是附注标签（object type=%s）\n' "$tag_name" "$object_type"
@@ -367,9 +400,9 @@ for tag_name in "${ordered_tags[@]}"; do
                 "$previous_name" "$tag_name"
             issue_count=$((issue_count + 1))
             blocking_count=$((blocking_count + 1))
-        elif [ "$previous_target" = "$target_oid" ] && [ "$previous_date" = "${tag_created[$tag_name]}" ]; then
+        elif [ "$previous_target" = "$target_oid" ] && [ "$previous_date" = "$(kv_value tag_created "$tag_name")" ]; then
             printf '[BLOCK] 同一 peeled commit 的 tagger 时间并列: %s 与 %s (%s)\n' \
-                "$previous_name" "$tag_name" "${tag_created[$tag_name]}"
+                "$previous_name" "$tag_name" "$(kv_value tag_created "$tag_name")"
             issue_count=$((issue_count + 1))
             blocking_count=$((blocking_count + 1))
             order_tie=1
@@ -391,16 +424,16 @@ for tag_name in "${ordered_tags[@]}"; do
             queue_repair "$tag_name" "$expected_parent" 'replace'
         fi
 
-        if [ -n "$actual_parent" ] && [ -n "${seen_parents[$actual_parent]+present}" ]; then
+        if [ -n "$actual_parent" ] && kv_has seen_parents "$actual_parent"; then
             printf '[DUPLICATE] %s 重复引用 follow %s（随前缀修正一并消除）\n' "$tag_name" "$actual_parent"
             issue_count=$((issue_count + 1))
         fi
         if [ -n "$actual_parent" ]; then
-            seen_parents["$actual_parent"]=1
+            kv_set seen_parents "$actual_parent" 1
         fi
     fi
 
-    previous_date=${tag_created[$tag_name]}
+    previous_date=$(kv_value tag_created "$tag_name")
     previous_name=$tag_name
     previous_target=$target_oid
 done
@@ -409,8 +442,6 @@ if [ "$order_tie" -eq 1 ]; then
     repair_count=0
 fi
 
-declare -A remote_object_by_tag=()
-declare -A remote_target_by_tag=()
 if [ -n "$remote_name" ]; then
     if ! git ls-remote --tags "$remote_name" > "$remote_refs" 2> "$tmp_dir/remote-error"; then
         printf '[BLOCK] 无法读取远端 %s: %s\n' "$remote_name" "$(sed -n '1p' "$tmp_dir/remote-error")"
@@ -424,17 +455,17 @@ if [ -n "$remote_name" ]; then
             remote_tag=${remote_ref#refs/tags/}
             if [[ "$remote_tag" == *'^{}' ]]; then
                 remote_tag=${remote_tag%'^{}'}
-                remote_target_by_tag["$remote_tag"]=$remote_oid
+                kv_set remote_target_by_tag "$remote_tag" "$remote_oid"
             else
-                remote_object_by_tag["$remote_tag"]=$remote_oid
+                kv_set remote_object_by_tag "$remote_tag" "$remote_oid"
             fi
         done < "$remote_refs"
 
         for tag_name in "${ordered_tags[@]}"; do
-            remote_object=${remote_object_by_tag[$tag_name]-}
-            remote_target=${remote_target_by_tag[$tag_name]-}
-            object_oid=${tag_object_oid[$tag_name]}
-            target_oid=${tag_target[$tag_name]-}
+            remote_object=$(kv_value remote_object_by_tag "$tag_name")
+            remote_target=$(kv_value remote_target_by_tag "$tag_name")
+            object_oid=$(kv_value tag_object_oid "$tag_name")
+            target_oid=$(kv_value tag_target "$tag_name")
             if [ -z "$remote_object" ]; then
                 printf '[REMOTE] %s: 远端缺失\n' "$tag_name"
                 issue_count=$((issue_count + 1))
@@ -485,14 +516,13 @@ if [ -n "$remote_name" ] && [ "$confirm_remote" -ne 1 ]; then
 fi
 
 declare -a prepared_tags=()
-declare -A repair_new_oid=()
 candidate_index=0
 for tag_name in "${repair_tags[@]}"; do
     candidate_index=$((candidate_index + 1))
-    original_payload=${tag_payload_file[$tag_name]}
+    original_payload=$(kv_value tag_payload_file "$tag_name")
     new_payload="$tmp_dir/payload-new-$candidate_index"
-    expected_parent=${repair_expected_parent[$tag_name]}
-    kind=${repair_kind[$tag_name]}
+    expected_parent=$(kv_value repair_expected_parent "$tag_name")
+    kind=$(kv_value repair_kind "$tag_name")
 
     if grep -q '^gpgsig ' "$original_payload"; then
         printf 'STOP: %s 含签名，未应用任何修正。\n' "$tag_name"
@@ -533,23 +563,24 @@ for tag_name in "${repair_tags[@]}"; do
         exit 1
     }
     new_target=$(git rev-parse -q --verify "$new_oid^{}" 2>/dev/null) || new_target=''
-    if [ "$new_target" != "${tag_target[$tag_name]-}" ]; then
+    old_target=$(kv_value tag_target "$tag_name")
+    if [ "$new_target" != "$old_target" ]; then
         printf 'STOP: %s 新附注对象的 peeled commit 改变（%s -> %s）\n' \
-            "$tag_name" "${tag_target[$tag_name]-}" "${new_target:-missing}"
+            "$tag_name" "$old_target" "${new_target:-missing}"
         exit 1
     fi
     printf '[PLAN] %s: object %s -> %s; peeled=%s\n' \
-        "$tag_name" "${tag_object_oid[$tag_name]}" "$new_oid" "${tag_target[$tag_name]}"
+        "$tag_name" "$(kv_value tag_object_oid "$tag_name")" "$new_oid" "$old_target"
     prepared_tags+=("$tag_name")
-    repair_new_oid["$tag_name"]=$new_oid
+    kv_set repair_new_oid "$tag_name" "$new_oid"
 done
 
 if [ -n "$remote_name" ]; then
     push_args=()
     refspecs=()
     for tag_name in "${prepared_tags[@]}"; do
-        push_args+=("--force-with-lease=refs/tags/$tag_name:${tag_object_oid[$tag_name]}")
-        refspecs+=("${repair_new_oid[$tag_name]}:refs/tags/$tag_name")
+        push_args+=("--force-with-lease=refs/tags/$tag_name:$(kv_value tag_object_oid "$tag_name")")
+        refspecs+=("$(kv_value repair_new_oid "$tag_name"):refs/tags/$tag_name")
     done
     # The explicit remote confirmation above is the destructive-operation gate.
     # --atomic prevents a multi-tag repair from leaving a partially rewritten
@@ -566,7 +597,7 @@ updates="$tmp_dir/updates"
 : > "$updates"
 for tag_name in "${prepared_tags[@]}"; do
     printf 'update refs/tags/%s %s %s\n' \
-        "$tag_name" "${repair_new_oid[$tag_name]}" "${tag_object_oid[$tag_name]}" >> "$updates"
+        "$tag_name" "$(kv_value repair_new_oid "$tag_name")" "$(kv_value tag_object_oid "$tag_name")" >> "$updates"
 done
 if ! git update-ref --stdin < "$updates"; then
     printf 'STOP: 远端已更新但本地 refs/tags 更新失败，请按清单手工执行 update-ref。\n'
