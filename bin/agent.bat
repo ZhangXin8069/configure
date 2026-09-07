@@ -11,6 +11,7 @@ rem  Deploy: copy agent.bat as cl.bat / op.bat / co.bat
 rem          (or: mklink /H cl.bat agent.bat  on the same volume)
 rem  Reference: agent.sh (Unix). Prompt read from agent-prompt.txt.
 rem  Usage: {cl|op|co}.bat [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time DUR]
+rem    Codex 默认模型: gpt-5.5 / xhigh（CODEX_DEFAULT_MODEL_FLAG 可覆盖默认旗标）
 rem    --model MODEL    : override model id directly (env *AGENT*_MODEL also works)
 rem    --variant LEVEL  : opencode only - build agent variant (max/xhigh/high/low etc.)
 rem    --reasoning-effort LEVEL : codex only (low/medium/high/xhigh/max/ultra)
@@ -128,9 +129,13 @@ goto parse_args
 
 rem ---- default model flag per agent ----
 if not defined MODEL_FLAG (
-    if "%AGENT%"=="opencode" set "MODEL_FLAG=-f"
-    if "%AGENT%"=="codex" set "MODEL_FLAG=-m"
-    if "%AGENT%"=="claude" set "MODEL_FLAG=-m"
+    if defined CODEX_DEFAULT_MODEL_FLAG (
+        set "MODEL_FLAG=%CODEX_DEFAULT_MODEL_FLAG%"
+    ) else (
+        if "%AGENT%"=="opencode" set "MODEL_FLAG=-f"
+        if "%AGENT%"=="codex" set "MODEL_FLAG=-q"
+        if "%AGENT%"=="claude" set "MODEL_FLAG=-m"
+    )
 )
 
 rem ---- model table per agent ----
@@ -164,12 +169,12 @@ if defined OPENCODE_MODEL set "MODEL_ID=%OPENCODE_MODEL%"
 goto model_done
 
 :model_codex
-set "MODEL_ID=gpt-5.6-luna"
-set "MODEL_NAME=GPT-5.6-Luna"
-set "REASONING_EFFORT=max"
+set "MODEL_ID=gpt-5.5"
+set "MODEL_NAME=GPT-5.5"
+set "REASONING_EFFORT=xhigh"
 if "%MODEL_FLAG%"=="-o" (set "MODEL_ID=gpt-5.6-sol" & set "MODEL_NAME=GPT-5.6-Sol" & set "REASONING_EFFORT=max")
 if "%MODEL_FLAG%"=="-p" (set "MODEL_ID=gpt-5.6-terra" & set "MODEL_NAME=GPT-5.6-Terra" & set "REASONING_EFFORT=high")
-if "%MODEL_FLAG%"=="-q" (set "MODEL_ID=gpt-5.5" & set "MODEL_NAME=GPT-5.5" & set "REASONING_EFFORT=high")
+if "%MODEL_FLAG%"=="-q" (set "MODEL_ID=gpt-5.5" & set "MODEL_NAME=GPT-5.5" & set "REASONING_EFFORT=xhigh")
 if "%MODEL_FLAG%"=="-k" (set "MODEL_ID=gpt-5.4-mini" & set "MODEL_NAME=GPT-5.4-Mini" & set "REASONING_EFFORT=high")
 if "%MODEL_FLAG%"=="-g" (set "MODEL_ID=gpt-5.6-luna" & set "MODEL_NAME=GPT-5.6-Luna" & set "REASONING_EFFORT=high")
 if "%MODEL_FLAG%"=="-f" (set "MODEL_ID=gpt-5.6-sol" & set "MODEL_NAME=GPT-5.6-Sol" & set "REASONING_EFFORT=low")
