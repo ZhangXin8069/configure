@@ -32,7 +32,7 @@ mkdir -p "$repo/skills/demo" "$repo/tools" "$repo/hooks" \
 cat > "$repo/skills/demo/SKILL.md" <<'EOF'
 ---
 name: demo
-description: demo skill
+description: Use when testing configure-check fixtures.
 metadata:
   openclaw:
     emoji: 🔧
@@ -40,6 +40,8 @@ metadata:
 ## 执行前置
 说明
 ## 核心原则
+说明
+## Git 检查
 说明
 ## 触发时机
 说明
@@ -90,3 +92,44 @@ set -e
 assert_contains "$output" '文件枚举失败'
 
 printf 'PASS: 文件枚举失败被报告\n'
+
+strict_repo=$test_root/strict-repo
+mkdir -p "$strict_repo/skills/demo" "$strict_repo/tools" "$strict_repo/hooks" "$strict_repo/plugins"
+cp "$repo/skills/demo/SKILL.md" "$strict_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$strict_repo/skills/demo/AGENTS.md"
+printf '%s\n' '| 技能 | 用途 |' '|---|---|' '| `demo` | 测试 |' > "$strict_repo/skills/AGENTS.md"
+
+set +e
+strict_output=$(bash "$checker" --root "$strict_repo" --strict 2>&1)
+strict_status=$?
+set -e
+(( strict_status != 0 )) || fail '--strict 应将无插件 manifest 警告提升为失败'
+assert_contains "$strict_output" '严格模式'
+printf 'PASS: --strict 将警告提升为失败\n'
+
+mirror_repo=$test_root/mirror-repo
+mkdir -p "$mirror_repo/skills/demo" "$mirror_repo/.opencode/skills/demo" \
+    "$mirror_repo/tools" "$mirror_repo/hooks" "$mirror_repo/plugins"
+cp "$strict_repo/skills/AGENTS.md" "$mirror_repo/skills/AGENTS.md"
+cp "$strict_repo/skills/AGENTS.md" "$mirror_repo/.opencode/skills/AGENTS.md"
+cp "$repo/skills/demo/SKILL.md" "$mirror_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$mirror_repo/skills/demo/AGENTS.md"
+cp "$repo/skills/demo/SKILL.md" "$mirror_repo/.opencode/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$mirror_repo/.opencode/skills/demo/AGENTS.md"
+
+set +e
+mirror_output=$(bash "$checker" --root "$mirror_repo" 2>&1)
+mirror_status=$?
+set -e
+(( mirror_status == 0 )) || fail "一致的 skills 镜像意外失败\n输出：\n$mirror_output"
+assert_contains "$mirror_output" 'skills 与 .opencode/skills 镜像核对完成'
+printf 'PASS: 一致的 skills 镜像通过核对\n'
+
+printf '%s\n' '镜像漂移' >> "$mirror_repo/.opencode/skills/demo/SKILL.md"
+set +e
+mirror_output=$(bash "$checker" --root "$mirror_repo" 2>&1)
+drift_status=$?
+set -e
+(( drift_status != 0 )) || fail 'skills 镜像漂移不应通过检查'
+assert_contains "$mirror_output" '镜像内容不一致'
+printf 'PASS: skills 镜像漂移被拒绝\n'
