@@ -708,6 +708,8 @@ run_codex() {
     local CODEX_PERSONALITY="${CODEX_PERSONALITY:-pragmatic}"
     local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-auto_review}"
     local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-api}"
+    local CODEX_TUI_STATUS_LINE="${CODEX_TUI_STATUS_LINE:-[\"model-with-reasoning\",\"current-dir\",\"hostname\",\"branch-changes\",\"run-state\",\"permissions\",\"approval-mode\",\"context-used\",\"weekly-limit\",\"estimated-thread-cost\",\"thread-id\",\"fast-mode\",\"task-progress\"]}"
+    local CODEX_TUI_STATUS_LINE_USE_COLORS="${CODEX_TUI_STATUS_LINE_USE_COLORS:-true}"
 
     # 构造数组，避免工作目录、模型名和 prompt 中的空格/特殊字符被重新分词。
     local -a CODEX_COMMON_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
@@ -725,6 +727,8 @@ run_codex() {
         --config "model_providers.${CODEX_PROVIDER_ID}.env_key=\"${CODEX_PROVIDER_ENV_KEY}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.wire_api=\"responses\""
         --config "model_providers.${CODEX_PROVIDER_ID}.supports_websockets=true"
+        --config "tui.status_line=${CODEX_TUI_STATUS_LINE}"
+        --config "tui.status_line_use_colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
         --config "model_reasoning_effort=\"${REASONING_EFFORT}\""
         --config "approval_policy=\"${CODEX_APPROVAL_POLICY}\""
         --config "sandbox_mode=\"${CODEX_SANDBOX_MODE}\""
@@ -742,6 +746,7 @@ run_codex() {
     echo "============================================================"
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
     echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER} | personality=${CODEX_PERSONALITY}"
+    echo "  tui: status_line preset | colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
     echo "  log: ${LOG_FILE}"
     echo "  agent config: ${_configure_agent_root}/{skills,tools,hooks,plugins}"
     if (( _SNSC )); then
