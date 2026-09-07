@@ -641,7 +641,7 @@ run_codex() {
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型，覆盖模型旗标；也可用 CODEX_MODEL 环境变量覆盖。
     #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra）。
-    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:--m}"
+    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:--q}"
     local MODEL_OVERRIDE="${CODEX_MODEL:-}"
     local REASONING_OVERRIDE="${CODEX_REASONING_EFFORT:-}"
     local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-danger-full-access}"
@@ -667,7 +667,7 @@ run_codex() {
                 _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
-                echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
+                echo "默认模型: gpt-5.5 xhigh（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -681,13 +681,12 @@ run_codex() {
     unset _ti_raw
     [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
 
-    # 模型选择：这些是当前 Codex CLI 模型目录中的稳定 slug；可用 --model/CODEX_MODEL 覆盖。
-    # -m/-o 侧重深度，-f 侧重速度；其余旗标保留 op 系列的快捷键习惯。
+    # 模型选择：默认 -q GPT-5.5 (xhigh)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
     case "${MODEL_FLAG}" in
         -m) MODEL_ID="${CODEX_MODEL_M:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="max";;
         -o) MODEL_ID="${CODEX_MODEL_O:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="max";;
         -p) MODEL_ID="${CODEX_MODEL_P:-gpt-5.6-terra}"; MODEL_NAME="GPT-5.6-Terra"; REASONING_EFFORT="high";;
-        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-5.5}";       MODEL_NAME="GPT-5.5";       REASONING_EFFORT="high";;
+        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-5.5}";       MODEL_NAME="GPT-5.5";       REASONING_EFFORT="xhigh";;
         -k) MODEL_ID="${CODEX_MODEL_K:-gpt-5.4-mini}";  MODEL_NAME="GPT-5.4-Mini";  REASONING_EFFORT="high";;
         -g) MODEL_ID="${CODEX_MODEL_G:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
         -f) MODEL_ID="${CODEX_MODEL_F:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="low";;
@@ -699,11 +698,37 @@ run_codex() {
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
     fi
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
+    local CODEX_PROVIDER_ID="${CODEX_PROVIDER_ID:-lqcd}"
+    local CODEX_PROVIDER_NAME="${CODEX_PROVIDER_NAME:-lqcd}"
+    local CODEX_PROVIDER_BASE_URL="${CODEX_PROVIDER_BASE_URL:-http://nat200.natappvip.cc/v1}"
+    local CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-LQCD_API_KEY}"
+    local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-1000000}"
+    local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}"
+    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-fast}"
+    local CODEX_PERSONALITY="${CODEX_PERSONALITY:-pragmatic}"
+    local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-auto_review}"
+    local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-api}"
+    local CODEX_TUI_STATUS_LINE="${CODEX_TUI_STATUS_LINE:-[\"model-with-reasoning\",\"current-dir\",\"hostname\",\"branch-changes\",\"run-state\",\"permissions\",\"approval-mode\",\"context-used\",\"weekly-limit\",\"estimated-thread-cost\",\"thread-id\",\"fast-mode\",\"task-progress\"]}"
+    local CODEX_TUI_STATUS_LINE_USE_COLORS="${CODEX_TUI_STATUS_LINE_USE_COLORS:-true}"
 
     # 构造数组，避免工作目录、模型名和 prompt 中的空格/特殊字符被重新分词。
     local -a CODEX_COMMON_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
     CODEX_COMMON_ARGS=(
         --model "${MODEL_ID}"
+        --config "forced_login_method=\"${CODEX_FORCED_LOGIN_METHOD}\""
+        --config "model_provider=\"${CODEX_PROVIDER_ID}\""
+        --config "model_context_window=${CODEX_MODEL_CONTEXT_WINDOW}"
+        --config "model_auto_compact_token_limit=${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT}"
+        --config "personality=\"${CODEX_PERSONALITY}\""
+        --config "approvals_reviewer=\"${CODEX_APPROVALS_REVIEWER}\""
+        --config "service_tier=\"${CODEX_SERVICE_TIER}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.name=\"${CODEX_PROVIDER_NAME}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.base_url=\"${CODEX_PROVIDER_BASE_URL}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.env_key=\"${CODEX_PROVIDER_ENV_KEY}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.wire_api=\"responses\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.supports_websockets=true"
+        --config "tui.status_line=${CODEX_TUI_STATUS_LINE}"
+        --config "tui.status_line_use_colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
         --config "model_reasoning_effort=\"${REASONING_EFFORT}\""
         --config "approval_policy=\"${CODEX_APPROVAL_POLICY}\""
         --config "sandbox_mode=\"${CODEX_SANDBOX_MODE}\""
@@ -720,6 +745,8 @@ run_codex() {
 
     echo "============================================================"
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
+    echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER} | personality=${CODEX_PERSONALITY}"
+    echo "  tui: status_line preset | colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
     echo "  log: ${LOG_FILE}"
     echo "  agent config: ${_configure_agent_root}/{skills,tools,hooks,plugins}"
     if (( _SNSC )); then
