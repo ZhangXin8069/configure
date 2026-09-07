@@ -16,6 +16,7 @@ rem    --model MODEL    : override model id directly (env *AGENT*_MODEL also wor
 rem    --variant LEVEL  : opencode only - build agent variant (max/xhigh/high/low etc.)
 rem    --reasoning-effort LEVEL : codex only (low/medium/high/xhigh/max/ultra)
 rem    --sandbox POLICY / --ask-for-approval POLICY : codex only
+rem    codex default provider: lqcd / api / fast / pragmatic (key via LQCD_API_KEY)
 rem    -file PATH : drive mode (cl/op) - after the prompt round completes, send file
 rem                 content as first instruction, then send "continue" every -time
 rem    -time DUR  : "continue" interval; plain number=seconds; s/m/h suffix ok (default 30s)
@@ -219,6 +220,16 @@ if defined MODEL_OVERRIDE set "MODEL_ID=%MODEL_OVERRIDE%"
 if defined MODEL_OVERRIDE set "MODEL_NAME=%MODEL_OVERRIDE% (override)"
 if defined VARIANT_OVERRIDE set "VARIANT=%VARIANT_OVERRIDE%"
 if defined REASONING_OVERRIDE set "REASONING_EFFORT=%REASONING_OVERRIDE%"
+if not defined CODEX_PROVIDER_ID set "CODEX_PROVIDER_ID=lqcd"
+if not defined CODEX_PROVIDER_NAME set "CODEX_PROVIDER_NAME=lqcd"
+if not defined CODEX_PROVIDER_BASE_URL set "CODEX_PROVIDER_BASE_URL=http://nat200.natappvip.cc/v1"
+if not defined CODEX_PROVIDER_ENV_KEY set "CODEX_PROVIDER_ENV_KEY=LQCD_API_KEY"
+if not defined CODEX_MODEL_CONTEXT_WINDOW set "CODEX_MODEL_CONTEXT_WINDOW=1000000"
+if not defined CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT set "CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT=900000"
+if not defined CODEX_SERVICE_TIER set "CODEX_SERVICE_TIER=fast"
+if not defined CODEX_PERSONALITY set "CODEX_PERSONALITY=pragmatic"
+if not defined CODEX_APPROVALS_REVIEWER set "CODEX_APPROVALS_REVIEWER=auto_review"
+if not defined CODEX_FORCED_LOGIN_METHOD set "CODEX_FORCED_LOGIN_METHOD=api"
 
 rem ---- timestamp & log file ----
 for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd-HH-mm-ss"') do set "_TS=%%i"
@@ -234,6 +245,7 @@ if not exist "%_PATH%agent-prompt.txt" (
 echo ============================================================
 if "%AGENT%"=="opencode" echo   OpenCode: build ^| auto ^| %MODEL_NAME% (%VARIANT%)
 if "%AGENT%"=="codex" echo   Codex: %MODEL_NAME% ^| reasoning=%REASONING_EFFORT%
+if "%AGENT%"=="codex" echo   provider: %CODEX_PROVIDER_ID% ^| tier=%CODEX_SERVICE_TIER% ^| personality=%CODEX_PERSONALITY%
 if "%AGENT%"=="claude" echo   Claude Code: %MODEL_NAME% ^| permission-mode auto
 echo   log: %LOG_FILE%
 if "%AGENT%"=="opencode" echo   user-input list: %LIST_FILE%
@@ -323,7 +335,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -Command ^
   "$workspaceRoot=$env:CODEX_RUN_CWD; try{$gitRoot=((& git -C $workspaceRoot rev-parse --show-toplevel 2>$null | Select-Object -First 1) -as [string]).Trim();if($gitRoot){$workspaceRoot=$gitRoot}}catch{};" ^
   "$globalSkills=Join-Path $homeRoot 'configure\skills'; $workspaceSkills=@((Join-Path $env:CODEX_RUN_CWD 'skills'),(Join-Path $env:CODEX_RUN_CWD '.codex\skills')); if($workspaceRoot -ne $env:CODEX_RUN_CWD){$workspaceSkills += @((Join-Path $workspaceRoot 'skills'),(Join-Path $workspaceRoot '.codex\skills'))};" ^
   "$prompt += Get-SkillSection ('全局技能（'+$globalSkills+'）') @($globalSkills); $prompt += Get-SkillSection ('当前工作目录技能（'+$env:CODEX_RUN_CWD+'）') $workspaceSkills;" ^
-  "$common=@('--model',$env:CODEX_MODEL_ID,'--config',('model_reasoning_effort='+[char]34+$env:CODEX_REASONING+[char]34),'--config',('approval_policy='+[char]34+$env:CODEX_APPROVAL_POLICY+[char]34),'--config',('sandbox_mode='+[char]34+$env:CODEX_SANDBOX_MODE+[char]34)); $initialCommon=@($common); foreach($dir in $agentConfigDirs){if(Test-Path -LiteralPath $dir -PathType Container){$initialCommon+=@('--add-dir',$dir)}};" ^
+  "$common=@('--model',$env:CODEX_MODEL_ID,'--config',('forced_login_method='+[char]34+$env:CODEX_FORCED_LOGIN_METHOD+[char]34),'--config',('model_provider='+[char]34+$env:CODEX_PROVIDER_ID+[char]34),'--config',('model_context_window='+$env:CODEX_MODEL_CONTEXT_WINDOW),'--config',('model_auto_compact_token_limit='+$env:CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT),'--config',('personality='+[char]34+$env:CODEX_PERSONALITY+[char]34),'--config',('approvals_reviewer='+[char]34+$env:CODEX_APPROVALS_REVIEWER+[char]34),'--config',('service_tier='+[char]34+$env:CODEX_SERVICE_TIER+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.name='+[char]34+$env:CODEX_PROVIDER_NAME+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.base_url='+[char]34+$env:CODEX_PROVIDER_BASE_URL+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.env_key='+[char]34+$env:CODEX_PROVIDER_ENV_KEY+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.wire_api='+[char]34+'responses'+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.supports_websockets=true'),'--config',('model_reasoning_effort='+[char]34+$env:CODEX_REASONING+[char]34),'--config',('approval_policy='+[char]34+$env:CODEX_APPROVAL_POLICY+[char]34),'--config',('sandbox_mode='+[char]34+$env:CODEX_SANDBOX_MODE+[char]34)); $initialCommon=@($common); foreach($dir in $agentConfigDirs){if(Test-Path -LiteralPath $dir -PathType Container){$initialCommon+=@('--add-dir',$dir)}};" ^
   "if($env:CODEX_DRIVE_MODE -eq '0'){ $a=@()+'--' + $prompt; & $codex @initialCommon @a 2>>$env:CODEX_LOG_FILE; exit $LASTEXITCODE };" ^
   "$raw=$env:CODEX_DRIVE_TIME; if(!$raw){$sec=30} elseif($raw -match '^(\d+)([smh]?)$'){ $n=[int64]$Matches[1]; if($n -le 0){Write-Host 'ERROR: bad --time value'; exit 64}; switch($Matches[2]){'s'{$sec=$n};'m'{$sec=$n*60};'h'{$sec=$n*3600};default{$sec=$n}} } else {Write-Host ('ERROR: bad --time value: '+$raw); exit 64};" ^
   "$common += @('--json'); $initialCommon += @('--json'); function Invoke-Codex([bool]$resume,[string]$message){ $a=@('exec'); if($resume){$a+=@('resume');$a+=$common}else{$a+=$initialCommon}; if($resume){$a+=@($thread,'--',$message)}else{$a+=@('--',$message)}; & $codex @a 2>>$env:CODEX_LOG_FILE | Tee-Object -FilePath $env:CODEX_LOG_FILE -Append; return $LASTEXITCODE };" ^

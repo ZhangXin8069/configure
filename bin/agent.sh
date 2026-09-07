@@ -698,11 +698,33 @@ run_codex() {
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
     fi
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
+    local CODEX_PROVIDER_ID="${CODEX_PROVIDER_ID:-lqcd}"
+    local CODEX_PROVIDER_NAME="${CODEX_PROVIDER_NAME:-lqcd}"
+    local CODEX_PROVIDER_BASE_URL="${CODEX_PROVIDER_BASE_URL:-http://nat200.natappvip.cc/v1}"
+    local CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-LQCD_API_KEY}"
+    local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-1000000}"
+    local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}"
+    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-fast}"
+    local CODEX_PERSONALITY="${CODEX_PERSONALITY:-pragmatic}"
+    local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-auto_review}"
+    local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-api}"
 
     # 构造数组，避免工作目录、模型名和 prompt 中的空格/特殊字符被重新分词。
     local -a CODEX_COMMON_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
     CODEX_COMMON_ARGS=(
         --model "${MODEL_ID}"
+        --config "forced_login_method=\"${CODEX_FORCED_LOGIN_METHOD}\""
+        --config "model_provider=\"${CODEX_PROVIDER_ID}\""
+        --config "model_context_window=${CODEX_MODEL_CONTEXT_WINDOW}"
+        --config "model_auto_compact_token_limit=${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT}"
+        --config "personality=\"${CODEX_PERSONALITY}\""
+        --config "approvals_reviewer=\"${CODEX_APPROVALS_REVIEWER}\""
+        --config "service_tier=\"${CODEX_SERVICE_TIER}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.name=\"${CODEX_PROVIDER_NAME}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.base_url=\"${CODEX_PROVIDER_BASE_URL}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.env_key=\"${CODEX_PROVIDER_ENV_KEY}\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.wire_api=\"responses\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.supports_websockets=true"
         --config "model_reasoning_effort=\"${REASONING_EFFORT}\""
         --config "approval_policy=\"${CODEX_APPROVAL_POLICY}\""
         --config "sandbox_mode=\"${CODEX_SANDBOX_MODE}\""
@@ -719,6 +741,7 @@ run_codex() {
 
     echo "============================================================"
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
+    echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER} | personality=${CODEX_PERSONALITY}"
     echo "  log: ${LOG_FILE}"
     echo "  agent config: ${_configure_agent_root}/{skills,tools,hooks,plugins}"
     if (( _SNSC )); then
