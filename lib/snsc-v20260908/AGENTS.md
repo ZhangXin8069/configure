@@ -1,4 +1,4 @@
-# AGENTS.md — snsc-v20260825
+# AGENTS.md — snsc-v20260908
 
 SNSC 超算中心（Slurm）环境配置 v2026-08-25（当前最新），单文件 `env.sh`：
 
