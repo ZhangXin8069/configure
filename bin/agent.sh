@@ -641,7 +641,7 @@ run_codex() {
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型，覆盖模型旗标；也可用 CODEX_MODEL 环境变量覆盖。
     #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra）。
-    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:--m}"
+    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:--q}"
     local MODEL_OVERRIDE="${CODEX_MODEL:-}"
     local REASONING_OVERRIDE="${CODEX_REASONING_EFFORT:-}"
     local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-danger-full-access}"
@@ -667,7 +667,7 @@ run_codex() {
                 _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
-                echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
+                echo "默认模型: gpt-5.5 xhigh（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -681,13 +681,12 @@ run_codex() {
     unset _ti_raw
     [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
 
-    # 模型选择：这些是当前 Codex CLI 模型目录中的稳定 slug；可用 --model/CODEX_MODEL 覆盖。
-    # -m/-o 侧重深度，-f 侧重速度；其余旗标保留 op 系列的快捷键习惯。
+    # 模型选择：默认 -q GPT-5.5 (xhigh)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
     case "${MODEL_FLAG}" in
         -m) MODEL_ID="${CODEX_MODEL_M:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="max";;
         -o) MODEL_ID="${CODEX_MODEL_O:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="max";;
         -p) MODEL_ID="${CODEX_MODEL_P:-gpt-5.6-terra}"; MODEL_NAME="GPT-5.6-Terra"; REASONING_EFFORT="high";;
-        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-5.5}";       MODEL_NAME="GPT-5.5";       REASONING_EFFORT="high";;
+        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-5.5}";       MODEL_NAME="GPT-5.5";       REASONING_EFFORT="xhigh";;
         -k) MODEL_ID="${CODEX_MODEL_K:-gpt-5.4-mini}";  MODEL_NAME="GPT-5.4-Mini";  REASONING_EFFORT="high";;
         -g) MODEL_ID="${CODEX_MODEL_G:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
         -f) MODEL_ID="${CODEX_MODEL_F:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="low";;
