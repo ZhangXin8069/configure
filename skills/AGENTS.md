@@ -122,7 +122,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | 技能 | 用途 |
 |---|---|
 | `init` | 仓库/目录初始化：逐目录创建/更新 AGENTS.md，归档各 agent 的 init 文件（CLAUDE.md/CODEX.md/.claude 等 → `.X.<时间戳>.bak`），把 agent 生成内容对应的完整 skill 放到上一级 `skills/`；两阶段执行（先调查后写）、幂等、可重复运行。 |
-| `tag` | Git 标签管理：`stab<N>`/`dev<N>`/`bug<N>`/`test<N>` 四类独立编号 + 子版本（如 `stab15_1`），含创建/列出/查看/删除/改写；打标前全历史 follow 链自检，dry-run 后按提交祖先与对象 lease 安全修正，远程改写需显式确认。 |
+| `tag` | Git 标签管理：`stab<N>`/`dev<N>`/`bug<N>`/`test<N>` 四类独立编号 + 子版本（如 `stab15_1`），含创建/列出/查看/删除/改写；打标前全历史 follow 链自检，dry-run 后按提交祖先与对象 lease 安全修正，远程改写需显式确认；历史链脚本兼容 Bash 3.2。 |
 | `debug` | 调试/排错：先复现后定位、证据驱动、二分收敛、不变量校验，最小修复并验证闭环（含 git bisect、bash -x/-n 排查） |
 | `optim` | 性能/效率优化：先测量后优化、基准驱动、主导项分析（复杂度/调用开销/IO/启动），最小改动、验证闭环，循环迭代至成功 |
 | `diff` | 查看/分析代码改动：先定范围后执行、只读不改、先概览后详情、证据驱动、边界校验（工作区/暂存区/版本间对比，含冲突标记、调试残留、未跟踪/二进制/重命名检查）|
@@ -134,7 +134,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范|
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；生成类任务首轮复用 make，单步任务转对应技能|
-| `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名与 URL |
+| `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化（继承用户时间/资源上限）→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名与 URL |
 | `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论|
 | `review` | 代码审查：早审查常审查、子代理审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；接收审查"先验证后实现"（不表演性同意、技术性反驳附证据）；吸收 superpowers requesting/receiving-code-review|
 | `dispatch` | 并行子代理派发：2+ 个独立子任务拆域并行（无共享状态/无顺序依赖/互不改同文件），同消息派发=并行，代理指令四要素（问题域/目标/约束/预期输出，不传会话历史），返回后整合验证（冲突检查+全量验证+抽查）；吸收 obra/superpowers dispatching-parallel-agents|

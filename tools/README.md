@@ -6,14 +6,15 @@
 
 ### `configure-check.sh`
 
-只读检查当前配置仓库的四棵 agent 配置树（`skills/`、`tools/`、`hooks/`、`plugins/`）：检查技能 frontmatter、技能目录说明，检查 `tools/` 与 `hooks/` 中 Shell 脚本的语法和执行权限，以及已有 Codex 插件 manifest 的基本 JSON/name/version/path 完整性。
+只读检查当前配置仓库的四棵 agent 配置树（`skills/`、`tools/`、`hooks/`、`plugins/`）：检查技能 frontmatter、技能目录说明和技能表登记，检查 `skills/`、`tools/` 与 `hooks/` 中 Shell 脚本的语法和执行权限，以及已有 Codex 插件 manifest 的基本 JSON/name/version/path 完整性。
 
 ```bash
 tools/configure-check.sh
 tools/configure-check.sh --root /path/to/configure
+tools/configure-check.sh --strict
 ```
 
-退出码为 `0` 表示没有发现问题，`1` 表示发现结构或语法问题，`2` 表示命令行参数错误。工具不执行 hook、plugin 或安装命令；存在插件 manifest 时使用 Python 3 的标准库解析 JSON，并使用系统临时目录保存 NUL 路径清单后自动清理。
+退出码为 `0` 表示没有发现问题，`1` 表示发现结构或语法问题，`2` 表示命令行参数错误。`--strict` 将“没有可直接加载插件 manifest”等警告也提升为失败，适合 CI 门禁。工具不执行 hook、plugin 或安装命令；存在插件 manifest 时使用 Python 3 的标准库解析 JSON，并使用系统临时目录保存 NUL 路径清单后自动清理。
 
 回归测试：
 

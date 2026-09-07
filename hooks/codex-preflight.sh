@@ -21,15 +21,25 @@ printf 'repo_root=%s\n' "$repo_root"
 printf 'branch=%s\n' "$branch"
 
 instruction_count=0
-declare -A seen_instructions=()
+declare -a seen_instructions=()
+is_seen_instruction() {
+    local candidate=$1
+    local seen
+    if ((${#seen_instructions[@]} > 0)); then
+        for seen in "${seen_instructions[@]}"; do
+            [[ "$seen" == "$candidate" ]] && return 0
+        done
+    fi
+    return 1
+}
 for instruction in \
     "$repo_root/AGENTS.md" \
     "$repo_root/CODEX.md" \
     "$PWD/AGENTS.md"; do
-    if [[ -n "${seen_instructions[$instruction]+x}" ]]; then
+    if is_seen_instruction "$instruction"; then
         continue
     fi
-    seen_instructions[$instruction]=1
+    seen_instructions+=("$instruction")
     if [[ -f "$instruction" ]]; then
         printf 'instruction=%s\n' "$instruction"
         instruction_count=$((instruction_count + 1))

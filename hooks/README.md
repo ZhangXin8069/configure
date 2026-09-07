@@ -27,7 +27,7 @@ CODEX_HOOK_MESSAGE='任务已完成' hooks/codex-hook.sh notify
 CODEX_HOOK_PAYLOAD='{"message":"任务已完成"}' hooks/codex-hook.sh notify
 ```
 
-`before-edit` 无命令行路径时可从 stdin 接收逐行路径，也可接收含 `path`、`paths`、`file` 或 `files` 字段的 JSON payload。`after-edit` 默认检查当前工作树全部新增/修改文件；仅验证指定文件时使用：
+`before-edit` 无命令行路径时可从 stdin 接收逐行路径，也可接收含 `path`、`paths`、`file` 或 `files` 字段的 JSON payload。路径校验兼容 BSD/macOS 与 GNU `realpath`，对尚不存在的待创建路径会解析已有父目录后再做边界判断。`after-edit` 默认检查当前工作树相对 `HEAD` 的全部新增/修改文件（包含仅暂存的改动）以及未跟踪文件；仅验证指定文件时使用：
 
 ```bash
 hooks/codex-verify.sh --paths hooks/codex-hook.sh skills/all/SKILL.md

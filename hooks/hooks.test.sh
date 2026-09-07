@@ -4,6 +4,8 @@ set -Eeuo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 verify_script=$script_dir/codex-verify.sh
+guard_script=$script_dir/codex-guard.sh
+preflight_script=$script_dir/codex-preflight.sh
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/codex-verify-test.XXXXXX")
 
 cleanup() {
@@ -27,6 +29,16 @@ repo=$test_root/repo
 mkdir -p "$repo"
 git -C "$repo" init -q
 
+set +e
+output=$(cd -- "$repo" && "$preflight_script" 2>&1)
+preflight_status=$?
+set -e
+
+(( preflight_status == 0 )) || fail "session-start 预检失败\n输出：\n$output"
+assert_contains "$output" 'codex-preflight event=session-start'
+assert_contains "$output" 'instruction_count=0'
+printf 'PASS: session-start 预检兼容 Bash 3.2\n'
+
 printf 'trailing whitespace  \n' > "$repo/untracked.txt"
 set +e
 output=$(cd -- "$repo" && "$verify_script" --paths untracked.txt 2>&1)
@@ -39,6 +51,28 @@ assert_contains "$output" 'trailing whitespace'
 printf 'PASS: 未跟踪文件的尾随空白被拒绝\n'
 
 set +e
+output=$(cd -- "$repo" && "$guard_script" -- new/created.sh ../outside.txt 2>&1)
+guard_status=$?
+set -e
+
+(( guard_status != 0 )) || fail '仓库外路径与仓库内新路径的组合不应通过 codex-guard'
+assert_contains "$output" 'before-edit allow: new/created.sh'
+assert_contains "$output" '路径在仓库外'
+printf 'PASS: 不存在的仓库内路径可规范化，仓库外路径被拒绝\n'
+
+outside_dir=$test_root/outside
+mkdir -p "$outside_dir"
+ln -s "$outside_dir" "$repo/escape"
+set +e
+output=$(cd -- "$repo" && "$guard_script" -- escape/created.sh 2>&1)
+symlink_status=$?
+set -e
+
+(( symlink_status != 0 )) || fail '经过仓库内符号链接逃逸的路径不应通过 codex-guard'
+assert_contains "$output" '路径在仓库外'
+printf 'PASS: 符号链接逃逸路径被拒绝\n'
+
+set +e
 output=$(cd -- "$repo" && "$verify_script" --paths missing.sh 2>&1)
 missing_status=$?
 set -e
@@ -47,6 +81,27 @@ set -e
 assert_contains "$output" '路径不存在或不是普通文件'
 
 printf 'PASS: 不存在的显式路径被拒绝\n'
+
+committed_repo=$test_root/committed-repo
+mkdir -p "$committed_repo"
+git -C "$committed_repo" init -q
+git -C "$committed_repo" config user.name 'Hook Test'
+git -C "$committed_repo" config user.email 'hook-test@example.invalid'
+printf '#!/usr/bin/env bash\nprintf "ok\\n"\n' > "$committed_repo/tracked.sh"
+git -C "$committed_repo" add -- tracked.sh
+git -C "$committed_repo" commit -qm initial
+printf '#!/usr/bin/env bash\nif [\n' > "$committed_repo/staged.sh"
+git -C "$committed_repo" add -- staged.sh
+
+set +e
+output=$(cd -- "$committed_repo" && "$verify_script" --changed 2>&1)
+changed_status=$?
+set -e
+
+(( changed_status != 0 )) || fail '仅暂存的 Shell 文件应被 --changed 检查'
+assert_contains "$output" 'staged.sh'
+assert_contains "$output" 'bash -n 失败'
+printf 'PASS: --changed 包含仅暂存的文件\n'
 
 check_script=$script_dir/check.sh
 staged_repo=$test_root/staged-repo

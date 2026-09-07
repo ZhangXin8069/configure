@@ -37,6 +37,63 @@ command -v git >/dev/null 2>&1 || {
     printf 'codex-verify: 未找到 git\n' >&2
     exit 2
 }
+
+canonicalize_path() {
+    local candidate=$1
+    local existing=$candidate
+    local component
+    local canonical
+    local -a missing=()
+    local -a missing_tail=()
+
+    if [[ -e "$existing" || -L "$existing" ]]; then
+        realpath "$existing"
+        return
+    fi
+
+    while [[ ! -e "$existing" && ! -L "$existing" ]]; do
+        component=${existing##*/}
+        [[ -n "$component" && "$component" != "." ]] || return 1
+        if ((${#missing[@]} > 0)); then
+            missing=("$component" "${missing[@]}")
+        else
+            missing=("$component")
+        fi
+        existing=${existing%/*}
+        [[ -n "$existing" ]] || existing=/
+    done
+
+    canonical=$(realpath "$existing") || return 1
+    for component in "${missing[@]}"; do
+        case "$component" in
+            ''|.)
+                continue
+                ;;
+            ..)
+                if ((${#missing_tail[@]} > 0)); then
+                    missing_tail=("${missing_tail[@]:0:${#missing_tail[@]}-1}")
+                else
+                    canonical=$(realpath "$canonical/..") || return 1
+                fi
+                ;;
+            *)
+                if ((${#missing_tail[@]} == 0)) &&
+                    [[ -e "$canonical/$component" || -L "$canonical/$component" ]]; then
+                    canonical=$(realpath "$canonical/$component") || return 1
+                else
+                    missing_tail+=("$component")
+                fi
+                ;;
+        esac
+    done
+
+    printf '%s' "$canonical"
+    for component in "${missing_tail[@]}"; do
+        printf '/%s' "$component"
+    done
+    printf '\n'
+}
+
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
     printf 'codex-verify: 当前目录不在 Git 仓库中\n' >&2
     exit 1
@@ -47,12 +104,21 @@ cd -- "$repo_root"
 
 declare -a paths=()
 if [[ "$mode" == changed ]]; then
+    if git rev-parse --verify HEAD >/dev/null 2>&1; then
+        while IFS= read -r -d '' path; do
+            paths+=("$path")
+        done < <(git diff HEAD --name-only --diff-filter=ACMR -z --)
+    else
+        while IFS= read -r -d '' path; do
+            paths+=("$path")
+        done < <(git diff --name-only --diff-filter=ACMR -z --)
+        while IFS= read -r -d '' path; do
+            paths+=("$path")
+        done < <(git diff --cached --name-only --diff-filter=ACMR -z --)
+    fi
     while IFS= read -r -d '' path; do
         paths+=("$path")
-    done < <(
-        git diff --name-only --diff-filter=ACMR -z --
-        git ls-files --others --exclude-standard -z --
-    )
+    done < <(git ls-files --others --exclude-standard -z --)
 else
     if (( ${#requested_paths[@]} == 0 )); then
         printf 'codex-verify: --paths 至少需要一个路径\n' >&2
@@ -68,7 +134,7 @@ else
         else
             candidate=$caller_dir/$raw_path
         fi
-        canonical=$(realpath -m -- "$candidate") || {
+        canonical=$(canonicalize_path "$candidate") || {
             printf '✗ 无法规范化路径：%s\n' "$raw_path" >&2
             exit 1
         }

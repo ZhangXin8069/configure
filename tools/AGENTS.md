@@ -3,6 +3,7 @@
 本目录保存配置仓库维护工具和上游工具推荐信息。
 
 - `configure-check.sh` 是只读检查入口，必须保持可执行、带 Bash shebang，并通过 `bash -n`。
+- `configure-check.sh --strict` 将警告提升为失败，供需要零警告的 CI 门禁使用；默认模式仍区分警告与错误。
 - 工具不得自动安装依赖、执行 hook/plugin 或修改仓库；第三方项目只记录在 `README.md`。
 - 新增 shell 工具后同步说明用途、参数、退出码和依赖，并做权限、语法和边界参数验证。
 - `configure-check.sh` 的路径枚举失败必须 fail-closed；其临时 NUL 清单仅用于检查过程并在退出时清理。

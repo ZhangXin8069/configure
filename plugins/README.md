@@ -3,7 +3,7 @@
 本目录记录经过初步核对的 Codex 插件项目，并提供用户显式执行的
 [`install-recommended.sh`](./install-recommended.sh) 安装器。仓库加载或 shell 启动时不会自动安装插件；安装器也不复制第三方源码、不创建个人 marketplace，只调用 Codex 的 marketplace 接口。
 
-选型依据是 2026-08-27 的公开仓库内容：先用 GitHub/GitLab/Gitee/Codeberg 热榜发现候选，再核对实际 manifest、许可证、兼容性、安装入口和与本库技能的职责重叠。star 仅用于发现候选，不代表安全或质量批准。
+选型依据是 2026-09-07 的公开仓库内容：先用 GitHub/GitLab/Gitee/Codeberg 热榜发现候选，再核对实际 manifest、许可证、兼容性、安装入口和与本库技能的职责重叠。star 仅用于发现候选，不代表安全或质量批准。
 
 ## 一键安装
 
@@ -58,7 +58,7 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
   [obra/superpowers](https://github.com/obra/superpowers) 提供原生 `.codex-plugin/plugin.json`，
   适合通用工程流程，但与本库 `brainstorm`、`plan`、`debug`、`review`、`test`、`all` 重叠。
 - `nvidia`：Apache-2.0 与 CC-BY-4.0，版本 1.0.4；CUDA、GPU 加速、推理、机器人、物理仿真和
-  Omniverse，适合 HPC/GPU 工作流。详情见其
+  Omniverse，适合 HPC/GPU 工作流；上游技能仓库为 [NVIDIA/skills](https://github.com/NVIDIA/skills)。详情见其
   [manifest](https://github.com/openai/plugins/blob/main/plugins/nvidia/.codex-plugin/plugin.json)。
 - `zotero`：MIT，版本 0.1.2；连接 Zotero 桌面应用，检索个人文献库、导出 BibTeX 和插入引用。
 - `ngs-analysis`：MIT，版本 1.0.3；BCL、FASTQ、DNA/RNA-seq、单细胞和表观组学分析路由与本地
@@ -72,6 +72,7 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 
 - 来源：[GitHub](https://github.com/EveryInc/compound-engineering-plugin)
 - 许可证：MIT；仓库提供原生 `.codex-plugin/plugin.json` 和 `.agents/plugins/marketplace.json`，README 标注包含 33 个技能并支持 Codex CLI。
+- 版本：3.24.0；
 - 适用场景：需要独立的 brainstorm → plan → work → simplify → review → compound 工程闭环时，按需作为外部插件安装。
 - 本库处理：推荐但不 vendoring。它与本库的 `brainstorm`、`plan`、`debug`、`review`、`test`、`optim` 和 `all` 存在明显职责重叠，默认同时加载会增加触发歧义和上下文开销。
 - 安装入口：`codex plugin marketplace add EveryInc/compound-engineering-plugin`，然后
@@ -89,7 +90,7 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 ### affaan-m/ECC
 
 - 来源：[GitHub](https://github.com/affaan-m/ECC)
-- 许可证：MIT；版本 2.2.0，提供原生 `.codex-plugin/plugin.json`、Codex marketplace manifest、技能、MCP 配置和 Codex hooks。
+- 许可证：MIT；版本 2.2.1，提供原生 `.codex-plugin/plugin.json`、Codex marketplace manifest、技能、MCP 配置和 Codex hooks。
 - 适用场景：需要较完整的 TDD、安全审查、代码审查、持续验证和自主开发工作流时按需选择。
 - 安装入口：`codex plugin marketplace add affaan-m/ECC`，然后
   `codex plugin add ecc --marketplace ecc`。
@@ -99,7 +100,7 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 ### addyosmani/agent-skills
 
 - 来源：[GitHub](https://github.com/addyosmani/agent-skills)
-- 许可证：MIT；版本 0.6.7，提供原生 `.codex-plugin/plugin.json` 和 24 个生命周期工程技能，覆盖
+- 许可证：MIT；版本 0.6.9，提供原生 `.codex-plugin/plugin.json` 和生命周期工程技能，覆盖
   spec、plan、build、test、review、ship。
 - 适用场景：希望使用较小、可组合的工程生命周期技能，而不是引入完整运行时或 hooks 时按需选择。
 - 安装入口：`codex plugin marketplace add addyosmani/agent-skills`，然后
@@ -129,18 +130,27 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 
 ## 调研来源
 
-- GitHub 热榜：[agent tools plugins 搜索](https://github.com/search?q=agent+tools+plugins&type=repositories&s=stars&o=desc)；用于发现高关注候选，再逐项核对仓库内容。
-- GitLab 热榜：[Projects API 查询](https://gitlab.com/api/v4/projects?search=agent%20tools%20plugins&order_by=star_count&sort=desc&per_page=10)；本轮仅返回两个 0 star 项目，没有发现适合本库的插件。
-- Gitee：[Gitee 搜索](https://so.gitee.com/?q=agent%20tools%20plugins)；本轮未得到可用的直接候选。
-- Codeberg：[Forgejo repository search API](https://codeberg.org/api/v1/repos/search?q=agent%20tools%20plugins&sort=stars&order=desc&limit=10)；本轮返回空结果。
+本轮统一查询词为 `agent skills`，各平台保留自己的原生 star 字段，不能跨平台直接比较：
+
+| 来源 | 结构化请求与状态 | 本轮结果 | 处理 |
+|---|---|---|---|
+| GitHub | [Repositories API](https://api.github.com/search/repositories?q=agent%20skills&sort=stars&order=desc&per_page=10)，HTTP 200 | 前 10 项中核对了 `obra/superpowers`、`mattpocock/skills`、`affaan-m/ECC`、`anthropics/skills`、`addyosmani/agent-skills` 等；其余为通用项目或工具 | 只吸收已核对的 manifest/实践；`mattpocock/skills` 因无原生 Codex manifest 且职责重叠暂不纳入 |
+| GitLab | [Projects API](https://gitlab.com/api/v4/projects?search=agent%20skills&order_by=star_count&sort=desc&per_page=10)，HTTP 200 | 前 10 项为 5、3、3、2、2、2、1、1、1、1 star；发现 `ska-telescope/ska-ai-skills` 等有 Codex 目录的候选 | 许可证、兼容性和实际能力不足以超过现有推荐，暂不纳入一键 profile |
+| Gitee | [API](https://gitee.com/api/v5/search/repositories?q=agent%20skills&sort=stars_count&order=desc&page=1&per_page=10)，HTTP 200、结构化结果 0；[搜索页](https://so.gitee.com/?q=agent%20skills)，HTTP 200 | 未取得可用的结构化排名 | 如实保留空结果，不虚构候选 |
+| Codeberg | [Forgejo API](https://codeberg.org/api/v1/repos/search?q=agent%20skills&sort=stars&order=desc&limit=10)，HTTP 200、结构化结果 0；[Explore](https://codeberg.org/explore/repos?sort=stars&order=desc)，HTTP 200 | 未取得可用的结构化排名 | 如实保留空结果，不虚构候选 |
+
+GitHub API 首次请求曾收到 HTTP 504，重试第 1 次（30 秒超时）即恢复为 HTTP 200；前述四个平台的结果均为本轮只读获取。网页回退页面可访问但未取得结构化排名，未用于伪造排序。
+
 - 本轮重点核对的原生入口：[openai/plugins marketplace](https://github.com/openai/plugins/tree/main/.agents/plugins)、
   [ECC Codex manifest](https://github.com/affaan-m/ECC/tree/main/.codex-plugin)、
   [Agent Skills Codex manifest](https://github.com/addyosmani/agent-skills/tree/main/.codex-plugin)、
+  [Compound Engineering Codex manifest](https://github.com/EveryInc/compound-engineering-plugin/tree/main/.codex-plugin)、
   [Babysitter Codex manifest](https://github.com/a5c-ai/babysitter-codex/tree/main/.codex-plugin)。
 - 规范与实践：[Agent Skills specification](https://agentskills.io/specification)、[Anthropic skill-creator](https://github.com/anthropics/skills/tree/main/skills/skill-creator)、[obra/superpowers writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)。它们用于核对分级披露、触发描述和验证边界，不直接复制到本目录。
 
 ## 暂不纳入
 
+- [mattpocock/skills](https://github.com/mattpocock/skills)：GitHub 本轮 `agent skills` 热榜前列、MIT；实际仓库含 Agent Skills 集合但未发现原生 `.codex-plugin/plugin.json`，且与本库 `plan`、`test`、`review` 等职责重叠，因此不登记为 Codex marketplace 插件。
 - [openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc)：它是“在 Claude Code 中调用 Codex”的 Claude Code 插件，依赖 Node.js 和 Claude Code；不是本仓库所需的 Codex 原生插件。
 - [anthropics/skills](https://github.com/anthropics/skills)：适合作为技能写作参考来源，但不是本目录要直接加载的插件项目；本库已有自己的技能规范和登记表。
 - [wshobson/agents](https://github.com/wshobson/agents) 的全量安装：它仍是推荐项目，但上游 Codex 路径使用
