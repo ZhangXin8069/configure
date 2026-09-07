@@ -91,6 +91,10 @@ bash "$CHECKER" --repair --apply --remote origin --confirm-remote-rewrite
 
 每类标签有**独立计数器**，从 0 开始。`stab0`、`dev0`、`bug0` 可以同时存在。
 
+## Git 检查
+
+有 Git 且本次产生文件改动时，执行 `git diff --check` 和定向复查；不自动暂存、提交或推送。无 Git 或无本次改动时跳过。
+
 ## 触发时机
 
 用户提出以下请求时调用本技能：

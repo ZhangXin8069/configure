@@ -6,9 +6,11 @@ SCRIPT_PATH="${BASH_SOURCE[0]:-$0}"
 SCRIPT_DIR="$(cd -- "$(dirname -- "$SCRIPT_PATH")" && pwd -P)"
 DEFAULT_ROOT="$(cd -- "$SCRIPT_DIR/.." && pwd -P)"
 ROOT="$DEFAULT_ROOT"
+STRICT=false
 ERRORS=0
 WARNINGS=0
 SKILL_COUNT=0
+SKILL_SCRIPT_COUNT=0
 TOOL_SCRIPT_COUNT=0
 HOOK_SCRIPT_COUNT=0
 PLUGIN_MANIFEST_COUNT=0
@@ -36,10 +38,10 @@ collect_find_output() {
 
 usage() {
     cat <<'EOF'
-用法：configure-check.sh [--root PATH] [--help]
+用法：configure-check.sh [--root PATH] [--strict] [--help]
 
 只读检查 configure 仓库的 skills/tools/hooks/plugins 四棵目录树。
-退出码：0=通过，1=发现问题，2=参数错误。
+退出码：0=通过，1=发现问题（--strict 还会把警告视为问题），2=参数错误。
 EOF
 }
 
@@ -81,6 +83,10 @@ while (($# > 0)); do
             fi
             shift
             ;;
+        --strict)
+            STRICT=true
+            shift
+            ;;
         *)
             printf '未知参数：%s\n' "$1" >&2
             usage >&2
@@ -106,6 +112,9 @@ for rel in skills tools hooks plugins; do
 done
 
 if [[ -d "$ROOT/skills" ]]; then
+    if [[ ! -f "$ROOT/skills/AGENTS.md" ]]; then
+        fail 'skills/ 缺少权威 AGENTS.md 技能表'
+    fi
     new_temp_file
     skill_list=$TEMP_FILE
     if ! collect_find_output "$skill_list" "$ROOT/skills" -mindepth 1 -maxdepth 1 -type d; then
@@ -124,6 +133,13 @@ if [[ -d "$ROOT/skills" ]]; then
             if [[ ! -f "$skill_agents" ]]; then
                 fail "技能 $skill_name 缺少 AGENTS.md"
             fi
+            if [[ ! "$skill_name" =~ ^[a-z0-9]+(-[a-z0-9]+)*$ ]]; then
+                fail "技能 $skill_name 目录名不符合小写连字符约定"
+            fi
+            if [[ -f "$ROOT/skills/AGENTS.md" ]] &&
+                ! grep -Fq "| \`$skill_name\` |" "$ROOT/skills/AGENTS.md"; then
+                fail "技能 $skill_name 未登记到 skills/AGENTS.md 技能表"
+            fi
 
             first_line="$(sed -n '1p' "$skill_file")"
             frontmatter_end="$(awk 'NR > 1 && $0 == "---" { print NR; exit }' "$skill_file")"
@@ -137,19 +153,41 @@ if [[ -d "$ROOT/skills" ]]; then
                 if ! grep -Eq '^description:[[:space:]]*' <<< "$frontmatter"; then
                     fail "技能 $skill_name 缺少 description"
                 fi
+                if ! grep -Eq '当用户|Use when' <<< "$frontmatter"; then
+                    fail "技能 $skill_name 的 description 缺少明确触发条件"
+                fi
                 if ! grep -Eq '^metadata:[[:space:]]*$' <<< "$frontmatter" ||
                     ! grep -Eq '^  openclaw:[[:space:]]*$' <<< "$frontmatter"; then
                     fail "技能 $skill_name 缺少 metadata.openclaw"
                 fi
             fi
 
-            for heading in '执行前置' '核心原则' '触发时机' '工作流程' '错误处理' '注意事项'; do
+            for heading in '执行前置' '核心原则' 'Git 检查' '触发时机' '工作流程' '错误处理' '注意事项'; do
                 if ! grep -Fq "## $heading" "$skill_file"; then
                     fail "技能 $skill_name 缺少章节：$heading"
                 fi
             done
         done < "$skill_list"
         pass "技能目录检查完成：$SKILL_COUNT 个"
+    fi
+fi
+
+if [[ -d "$ROOT/.opencode/skills" && -d "$ROOT/skills" ]]; then
+    new_temp_file
+    mirror_source_list=$TEMP_FILE
+    if ! collect_find_output "$mirror_source_list" "$ROOT/skills" -type f; then
+        fail 'skills 镜像源文件枚举失败'
+    else
+        while IFS= read -r -d '' source_file; do
+            relative=${source_file#"$ROOT/skills/"}
+            mirror_file="$ROOT/.opencode/skills/$relative"
+            if [[ ! -f "$mirror_file" ]]; then
+                fail "skills 镜像缺少文件：$relative"
+            elif ! cmp -s -- "$source_file" "$mirror_file"; then
+                fail "skills 镜像内容不一致：$relative"
+            fi
+        done < "$mirror_source_list"
+        pass 'skills 与 .opencode/skills 镜像核对完成'
     fi
 fi
 
@@ -178,7 +216,9 @@ check_shell_tree() {
             fi
         done < "$script_list"
 
-        if [[ "$tree" == tools ]]; then
+        if [[ "$tree" == skills ]]; then
+            SKILL_SCRIPT_COUNT=$script_count
+        elif [[ "$tree" == tools ]]; then
             TOOL_SCRIPT_COUNT=$script_count
         else
             HOOK_SCRIPT_COUNT=$script_count
@@ -189,6 +229,7 @@ check_shell_tree() {
 
 check_shell_tree tools
 check_shell_tree hooks
+check_shell_tree skills
 
 if [[ -d "$ROOT/plugins" ]]; then
     new_temp_file
@@ -268,10 +309,14 @@ PY
     fi
 fi
 
-printf '摘要：skills=%d，tools-shell=%d，hooks-shell=%d，plugin-manifests=%d，warnings=%d，errors=%d\n' \
-    "$SKILL_COUNT" "$TOOL_SCRIPT_COUNT" "$HOOK_SCRIPT_COUNT" "$PLUGIN_MANIFEST_COUNT" "$WARNINGS" "$ERRORS"
+printf '摘要：skills=%d，skills-shell=%d，tools-shell=%d，hooks-shell=%d，plugin-manifests=%d，warnings=%d，errors=%d\n' \
+    "$SKILL_COUNT" "$SKILL_SCRIPT_COUNT" "$TOOL_SCRIPT_COUNT" "$HOOK_SCRIPT_COUNT" "$PLUGIN_MANIFEST_COUNT" "$WARNINGS" "$ERRORS"
 
 if ((ERRORS > 0)); then
+    exit 1
+fi
+if [[ "$STRICT" == true ]] && ((WARNINGS > 0)); then
+    printf '严格模式：%d 个警告按错误处理\n' "$WARNINGS" >&2
     exit 1
 fi
 exit 0
