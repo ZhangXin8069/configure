@@ -40,6 +40,51 @@ assert_contains "$output" 'codex-preflight event=session-start'
 assert_contains "$output" 'instruction_count=0'
 printf 'PASS: session-start 预检兼容 Bash 3.2\n'
 
+mkdir -p "$repo/nested"
+printf '%s\n' '# root instructions' > "$repo/AGENTS.md"
+printf '%s\n' '# nested instructions' > "$repo/nested/AGENTS.md"
+printf '%s\n' '# codex instructions' > "$repo/CODEX.md"
+set +e
+output=$(cd -- "$repo/nested" && "$preflight_script" 2>&1)
+hierarchical_status=$?
+set -e
+
+(( hierarchical_status == 0 )) || fail "层级说明文件预检失败\n输出：\n$output"
+assert_contains "$output" 'instruction[1]='
+assert_contains "$output" 'nested/AGENTS.md'
+assert_contains "$output" 'instruction[2]='
+assert_contains "$output" 'repo/AGENTS.md'
+assert_contains "$output" 'instruction[3]='
+assert_contains "$output" 'repo/CODEX.md'
+assert_contains "$output" 'instruction_count=3'
+printf 'PASS: session-start 按近到远发现全部层级说明文件\n'
+
+hook_data="$test_root/hook-data"
+set +e
+json_output=$(cd -- "$repo" && CODEX_HOOK_DATA_DIR="$hook_data" \
+    CODEX_HOOK_RUN_ID=hook-run CODEX_HOOK_SESSION_ID=session-hook \
+    CODEX_HOOK_TURN_ID=3 "$hook_script" --json session-start 2>&1)
+json_status=$?
+set -e
+
+(( json_status == 0 )) || fail "JSON hook 失败\n输出：\n$json_output"
+if ! printf '%s\n' "$json_output" | jq -e '
+    .schema_version == "1" and
+    .event == "session-start" and
+    .run_id == "hook-run" and
+    .session_id == "session-hook" and
+    .turn_id == "3" and
+    .status == "ok"
+' >/dev/null; then
+    fail "JSON hook envelope 无效：$json_output"
+fi
+event_file="$hook_data/events.jsonl"
+[[ -s "$event_file" ]] || fail 'JSON hook 没有写入持久事件文件'
+if ! jq -e '.event == "session-start"' "$event_file" >/dev/null; then
+    fail '持久事件文件不是合法 JSONL'
+fi
+printf 'PASS: JSON hook envelope 与持久事件日志\n'
+
 printf 'trailing whitespace  \n' > "$repo/untracked.txt"
 set +e
 output=$(cd -- "$repo" && "$verify_script" --paths untracked.txt 2>&1)
@@ -91,6 +136,15 @@ git -C "$committed_repo" config user.email 'hook-test@example.invalid'
 printf '#!/usr/bin/env bash\nprintf "ok\\n"\n' > "$committed_repo/tracked.sh"
 git -C "$committed_repo" add -- tracked.sh
 git -C "$committed_repo" commit -qm initial
+mkdir -p "$committed_repo/data/runs"
+set +e
+runtime_guard_output=$(cd -- "$committed_repo" && "$guard_script" -- data/runs/session 2>&1)
+runtime_guard_status=$?
+set -e
+(( runtime_guard_status != 0 )) || fail 'agent runtime 数据路径不应通过 codex-guard'
+assert_contains "$runtime_guard_output" 'agent 运行时数据'
+printf 'PASS: agent runtime 数据路径被保护\n'
+
 printf '#!/usr/bin/env bash\nif [\n' > "$committed_repo/staged.sh"
 git -C "$committed_repo" add -- staged.sh
 
