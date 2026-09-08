@@ -4,8 +4,8 @@ case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.
 if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-command=$@
-echo "#!/bin/bash 
+cat > .ssub.sh <<'EOF'
+#!/bin/bash
 #SBATCH --job-name=ssub
 #SBATCH --partition=gpu-debug
 #SBATCH --nodes=1
@@ -22,8 +22,9 @@ echo "#!/bin/bash
 #SBATCH --mail-user=zhangxin8069@qq.com
 # #SBATCH --gres=gpu:2
 #SBATCH --gres=gpu:1
-source ${HOME}/env.sh
-" >.ssub.sh
-echo ${command} >>.ssub.sh
+source "${HOME}/env.sh"
+EOF
+printf '%q ' "$@" >> .ssub.sh
+printf '\n' >> .ssub.sh
 sbatch ./.ssub.sh
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
