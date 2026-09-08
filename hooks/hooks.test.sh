@@ -3,6 +3,7 @@
 set -Eeuo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+hook_script=$script_dir/codex-hook.sh
 verify_script=$script_dir/codex-verify.sh
 guard_script=$script_dir/codex-guard.sh
 preflight_script=$script_dir/codex-preflight.sh
@@ -102,6 +103,43 @@ set -e
 assert_contains "$output" 'staged.sh'
 assert_contains "$output" 'bash -n 失败'
 printf 'PASS: --changed 包含仅暂存的文件\n'
+
+printf '#!/usr/bin/env bash\necho tracked\n' > "$committed_repo/tracked.sh"
+printf 'summary scratch\n' > "$committed_repo/untracked.txt"
+
+baseline_status=$(cd -- "$committed_repo" && git status --short --untracked-files=normal)
+
+set +e
+output=$(cd -- "$committed_repo" && "$hook_script" session-summary 2>&1)
+summary_status=$?
+set -e
+
+(( summary_status == 0 )) || fail "session-summary 不应失败\n输出：\n$output"
+assert_contains "$output" 'codex-summary event=session-summary'
+assert_contains "$output" "repo_root=$committed_repo"
+assert_contains "$output" 'worktree_status=dirty'
+assert_contains "$output" 'staged_count=1'
+assert_contains "$output" 'unstaged_count=1'
+assert_contains "$output" 'untracked_count=1'
+assert_contains "$output" 'last_commit='
+assert_contains "$output" 'tracked.sh'
+assert_contains "$output" 'staged.sh'
+assert_contains "$output" 'untracked.txt'
+
+after_status=$(cd -- "$committed_repo" && git status --short --untracked-files=normal)
+[[ "$after_status" == "$baseline_status" ]] || fail 'session-summary 不应修改工作树'
+
+set +e
+output=$(cd -- "$committed_repo" && "$hook_script" handoff 2>&1)
+handoff_status=$?
+set -e
+
+(( handoff_status == 0 )) || fail "handoff 别名不应失败\n输出：\n$output"
+assert_contains "$output" 'codex-summary event=session-summary'
+after_alias_status=$(cd -- "$committed_repo" && git status --short --untracked-files=normal)
+[[ "$after_alias_status" == "$baseline_status" ]] || fail 'handoff 不应修改工作树'
+
+printf 'PASS: session-summary/handoff 输出只读摘要\n'
 
 check_script=$script_dir/check.sh
 staged_repo=$test_root/staged-repo

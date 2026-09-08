@@ -66,7 +66,7 @@ alias egrep='grep -E --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.t
 alias fgrep='grep -F --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 alias grep='grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 # @GIT_ALIASES@
-source ${_PATH}/lib/_git_aliases.sh
+source "${_PATH}/lib/_git_aliases.sh"
 # ls 系（修正原 --color=tty 非法选项为 --color=auto; 两 shell 通用）
 alias ls='ls --color=auto'
 alias l='ls -lah'

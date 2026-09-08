@@ -14,7 +14,8 @@ usage() {
 用法：install-recommended.sh [选项] [插件名 ...]
 
 默认安装 recommended profile。也可以选择 profile 或逐个指定插件：
-  --profile NAME       core、recommended、gpu-research、bioinformatics、
+  --profile NAME       core、recommended、research-workbench、workspace、
+                       app-dev、gpu-research、bioinformatics、
                        engineering、orchestration、all
   --ref REF            marketplace Git ref；社区插件必须提供 tag 或 commit
   --dry-run            只打印命令，不写入 Codex 配置
@@ -24,6 +25,8 @@ usage() {
 示例：
   ./install-recommended.sh
   ./install-recommended.sh --profile gpu-research
+  ./install-recommended.sh --profile research-workbench
+  ./install-recommended.sh --profile app-dev
   ./install-recommended.sh ecc agent-skills
   ./install-recommended.sh --ref v2.1.0 ecc
   ./install-recommended.sh --profile all --dry-run
@@ -59,6 +62,17 @@ plugin_spec() {
     superpowers)             printf '%s\n' 'official|openai/plugins|openai-curated|superpowers' ;;
     nvidia)                  printf '%s\n' 'official|openai/plugins|openai-curated|nvidia' ;;
     zotero)                  printf '%s\n' 'official|openai/plugins|openai-curated|zotero' ;;
+    notion)                  printf '%s\n' 'official|openai/plugins|openai-curated|notion' ;;
+    google-drive)            printf '%s\n' 'official|openai/plugins|openai-curated|google-drive' ;;
+    airtable)                printf '%s\n' 'official|openai/plugins|openai-curated|airtable' ;;
+    hugging-face)            printf '%s\n' 'official|openai/plugins|openai-curated|hugging-face' ;;
+    build-web-data-visualization) printf '%s\n' 'official|openai/plugins|openai-curated|build-web-data-visualization' ;;
+    figma)                   printf '%s\n' 'official|openai/plugins|openai-curated|figma' ;;
+    build-web-apps)          printf '%s\n' 'official|openai/plugins|openai-curated|build-web-apps' ;;
+    build-ios-apps)          printf '%s\n' 'official|openai/plugins|openai-curated|build-ios-apps' ;;
+    build-macos-apps)        printf '%s\n' 'official|openai/plugins|openai-curated|build-macos-apps' ;;
+    expo)                    printf '%s\n' 'official|openai/plugins|openai-curated|expo' ;;
+    netlify)                 printf '%s\n' 'official|openai/plugins|openai-curated|netlify' ;;
     ngs-analysis)            printf '%s\n' 'official|openai/plugins|openai-curated|ngs-analysis' ;;
     life-science-research)   printf '%s\n' 'official|openai/plugins|openai-curated|life-science-research' ;;
     ecc)                     printf '%s\n' 'community|affaan-m/ECC|ecc|ecc' ;;
@@ -73,11 +87,14 @@ profile_plugins() {
   case "$1" in
     core)             printf '%s\n' superpowers ;;
     recommended)      printf '%s\n' superpowers nvidia zotero ;;
+    research-workbench) printf '%s\n' nvidia zotero hugging-face notion google-drive build-web-data-visualization ;;
+    workspace)        printf '%s\n' notion google-drive airtable ;;
+    app-dev)          printf '%s\n' figma build-web-apps build-ios-apps build-macos-apps expo netlify ;;
     gpu-research)     printf '%s\n' nvidia zotero ;;
     bioinformatics)   printf '%s\n' life-science-research ngs-analysis ;;
     engineering)      printf '%s\n' ecc agent-skills compound-engineering ;;
     orchestration)    printf '%s\n' babysitter ;;
-    all)              printf '%s\n' superpowers nvidia zotero life-science-research ngs-analysis ecc agent-skills compound-engineering babysitter ;;
+    all)              printf '%s\n' superpowers nvidia zotero notion google-drive airtable hugging-face build-web-data-visualization figma build-web-apps build-ios-apps build-macos-apps expo netlify life-science-research ngs-analysis ecc agent-skills compound-engineering babysitter ;;
     *) return 1 ;;
   esac
 }
@@ -88,6 +105,17 @@ print_catalog() {
   superpowers             官方：规划、TDD、调试与交付流程
   nvidia                  官方：CUDA、GPU、推理、机器人与仿真
   zotero                  官方：Zotero 文献检索、BibTeX 与引用
+  notion                  官方：会议记录、知识库和项目笔记
+  google-drive            官方：文档、表格、幻灯片和文件检索
+  airtable                官方：结构化看板、表格和跟踪
+  hugging-face            官方：模型、数据集和 Spaces
+  build-web-data-visualization 官方：报告、PDF、图表和幻灯片自动化
+  figma                   官方：设计资源和代码联动
+  build-web-apps          官方：前端与全栈 Web 构建
+  build-ios-apps          官方：iOS/SwiftUI 构建
+  build-macos-apps        官方：macOS/SwiftUI 构建
+  expo                    官方：React Native / Expo
+  netlify                 官方：Web 部署和发布
   ngs-analysis            官方：NGS/FASTQ/BCL 及测序分析路由
   life-science-research   官方：生命科学检索与证据综合
   ecc                     社区：TDD、安全、审查与自主开发工作流
@@ -95,8 +123,17 @@ print_catalog() {
   compound-engineering    社区：brainstorm → plan → build → review → compound
   babysitter              社区：事件溯源的复杂流程编排与人工审批
 
-profile：core、recommended、gpu-research、bioinformatics、engineering、
-orchestration、all。
+profile：
+  core                  最小通用工程核
+  recommended           默认平衡包：工程、GPU 与文献
+  research-workbench    物理/ML 研究、文献、模型、图表和报告
+  workspace             日常协作、知识库、文件和台账
+  app-dev               前端、移动端、设计联动和发布
+  gpu-research          仅 GPU/HPC + 文献
+  bioinformatics        生命科学与测序分析
+  engineering           外部工程工作流；重复能力较多
+  orchestration         事件溯源、审批和长流程编排
+  all                   安装器登记的全部项目
 EOF
 }
 
@@ -280,6 +317,10 @@ install_one() {
   if [[ "$key" == life-science-research ]]; then
     printf '提示：%s 使用前必须确认官方 marketplace 当前许可证和账号可用性。\n' "$key"
   fi
+  case "$key" in
+    notion|google-drive|airtable|hugging-face|figma|netlify)
+      printf '提示：%s 可能需要在首次使用时完成外部账号授权或连接；本脚本不会代为登录。\n' "$key" ;;
+  esac
   if [[ "$key" == ecc || "$key" == babysitter ]]; then
     printf '提示：%s 含 hooks/MCP 或运行时集成；安装后需单独审查并信任相关 hooks。\n' "$key"
   fi
@@ -320,10 +361,37 @@ require_codex() {
 
 warn_profile() {
   case "$1" in
-    all|engineering)
+    all|engineering|research-workbench|app-dev)
       printf '提示：该 profile 含多个大体量或职责重叠插件；建议先用 --dry-run 复核。\n' ;;
+    workspace)
+      printf '提示：workspace 会连接外部文档/账号；首次使用通常要完成 OAuth 或服务授权。\n' ;;
     bioinformatics)
       printf '提示：生命科学插件的许可证和可用性以官方 marketplace 当前条目为准。\n' ;;
+  esac
+}
+
+profile_note() {
+  case "$1" in
+    core)
+      printf '组合定位：最小通用工程核。\n' ;;
+    recommended)
+      printf '组合定位：默认平衡包，兼顾工程、GPU 与文献。\n' ;;
+    research-workbench)
+      printf '组合定位：物理/ML 研究、文献、模型、图表和报告。\n' ;;
+    workspace)
+      printf '组合定位：日常协作、知识库、文件和结构化台账。\n' ;;
+    app-dev)
+      printf '组合定位：前端、移动端、设计联动和部署发布。\n' ;;
+    gpu-research)
+      printf '组合定位：最小 GPU/HPC + 文献包。\n' ;;
+    bioinformatics)
+      printf '组合定位：生命科学与测序分析。\n' ;;
+    engineering)
+      printf '组合定位：外部工程工作流，包含较重的社区插件。\n' ;;
+    orchestration)
+      printf '组合定位：长流程、审批和事件溯源。\n' ;;
+    all)
+      printf '组合定位：全部登记项，风险最高。\n' ;;
   esac
 }
 
@@ -379,6 +447,7 @@ main() {
     done < <(profile_plugins "$PROFILE" || true)
     ((${#selected[@]} > 0)) || die "未知 profile：$PROFILE"
     warn_profile "$PROFILE"
+    profile_note "$PROFILE"
   elif ((${#REQUESTED[@]} > 0)); then
     selected=("${REQUESTED[@]}")
   else

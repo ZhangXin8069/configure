@@ -28,7 +28,7 @@ plugins=(
   zsh-autosuggestions
 )
 
-source $ZSH/oh-my-zsh.sh
+source "$ZSH/oh-my-zsh.sh"
 
 # ---- 编辑器: 远程会话 vim, 本地优先 mvim(有则用), 其余 vim ----
 if [[ -n $SSH_CONNECTION ]]; then

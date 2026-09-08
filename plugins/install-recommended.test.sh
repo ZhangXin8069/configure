@@ -51,6 +51,48 @@ official_marketplace_adds=$(printf '%s\n' "$default_output" | grep -c 'codex plu
 printf 'PASS: 默认 profile 兼容无 mapfile 的 Bash 环境\n'
 
 set +e
+research_output=$(PATH="$clean_path" bash "$installer" --profile research-workbench --dry-run 2>&1)
+research_status=$?
+set -e
+(( research_status == 0 )) || fail "research-workbench profile 在精简 Bash 环境中意外失败\n输出：\n$research_output"
+assert_contains "$research_output" '组合定位：物理/ML 研究、文献、模型、图表和报告。'
+assert_contains "$research_output" '目标插件：nvidia zotero hugging-face notion google-drive build-web-data-visualization'
+assert_contains "$research_output" '提示：hugging-face 可能需要在首次使用时完成外部账号授权或连接；本脚本不会代为登录。'
+printf 'PASS: research-workbench profile 的 dry-run 与提示信息覆盖\n'
+
+set +e
+workspace_output=$(PATH="$clean_path" bash "$installer" --profile workspace --dry-run 2>&1)
+workspace_status=$?
+set -e
+(( workspace_status == 0 )) || fail "workspace profile 在精简 Bash 环境中意外失败\n输出：\n$workspace_output"
+assert_contains "$workspace_output" '提示：workspace 会连接外部文档/账号；首次使用通常要完成 OAuth 或服务授权。'
+assert_contains "$workspace_output" '组合定位：日常协作、知识库、文件和结构化台账。'
+assert_contains "$workspace_output" '目标插件：notion google-drive airtable'
+assert_contains "$workspace_output" '提示：notion 可能需要在首次使用时完成外部账号授权或连接；本脚本不会代为登录。'
+printf 'PASS: workspace profile 的 dry-run 与候选提示覆盖\n'
+
+set +e
+appdev_output=$(PATH="$clean_path" bash "$installer" --profile app-dev --dry-run 2>&1)
+appdev_status=$?
+set -e
+(( appdev_status == 0 )) || fail "app-dev profile 在精简 Bash 环境中意外失败\n输出：\n$appdev_output"
+assert_contains "$appdev_output" '该 profile 含多个大体量或职责重叠插件；建议先用 --dry-run 复核。'
+assert_contains "$appdev_output" '组合定位：前端、移动端、设计联动和部署发布。'
+assert_contains "$appdev_output" '目标插件：figma build-web-apps build-ios-apps build-macos-apps expo netlify'
+assert_contains "$appdev_output" '提示：figma 可能需要在首次使用时完成外部账号授权或连接；本脚本不会代为登录。'
+printf 'PASS: app-dev profile 的 dry-run 与候选提示覆盖\n'
+
+set +e
+all_output=$(PATH="$clean_path" bash "$installer" --ref v2.2.0 --profile all --dry-run 2>&1)
+all_status=$?
+set -e
+(( all_status == 0 )) || fail "all profile 在精简 Bash 环境中意外失败\n输出：\n$all_output"
+assert_contains "$all_output" 'Git ref：v2.2.0'
+assert_contains "$all_output" '组合定位：全部登记项，风险最高。'
+assert_contains "$all_output" 'build-web-data-visualization figma build-web-apps build-ios-apps build-macos-apps expo netlify'
+printf 'PASS: all profile 包含新增官方候选\n'
+
+set +e
 ref_output=$(PATH="$clean_path" bash "$installer" --dry-run ecc 2>&1)
 ref_status=$?
 set -e

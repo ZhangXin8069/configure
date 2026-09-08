@@ -14,6 +14,7 @@ usage() {
 
 事件：
   session-start       会话开始只读预检
+  session-summary     会话结束/交接只读摘要（兼容 handoff）
   before-edit         校验待编辑路径位于仓库内且不触及 .git/日志
   after-edit          校验当前工作树改动
   stop                停止前执行当前工作树验证
@@ -38,6 +39,9 @@ case "$event" in
         ;;
     session-start|start|preflight)
         exec "$hook_dir/codex-preflight.sh" "$@"
+        ;;
+    session-summary|handoff)
+        exec "$hook_dir/codex-summary.sh" "$@"
         ;;
     before-edit|pre-edit|before-tool)
         exec "$hook_dir/codex-guard.sh" "$@"
