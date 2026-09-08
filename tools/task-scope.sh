@@ -48,7 +48,7 @@ contains_any() {
 add_skill() {
     local skill=$1
     local existing
-    for existing in "${SKILL_CHAIN[@]}"; do
+    for existing in "${SKILL_CHAIN[@]-}"; do
         [[ "$existing" == "$skill" ]] && return 0
     done
     SKILL_CHAIN+=("$skill")
@@ -57,7 +57,7 @@ add_skill() {
 add_reason() {
     local reason=$1
     local existing
-    for existing in "${REASON_BITS[@]}"; do
+    for existing in "${REASON_BITS[@]-}"; do
         [[ "$existing" == "$reason" ]] && return 0
     done
     REASON_BITS+=("$reason")
@@ -83,7 +83,7 @@ join_by_comma() {
         if [[ -z "$result" ]]; then
             result="$item"
         else
-            result="$result、$item"
+            result="${result}、$item"
         fi
     done
     printf '%s' "$result"

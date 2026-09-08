@@ -108,6 +108,7 @@ printf '#!/usr/bin/env bash\necho tracked\n' > "$committed_repo/tracked.sh"
 printf 'summary scratch\n' > "$committed_repo/untracked.txt"
 
 baseline_status=$(cd -- "$committed_repo" && git status --short --untracked-files=normal)
+committed_repo_realpath=$(cd -- "$committed_repo" && pwd -P)
 
 set +e
 output=$(cd -- "$committed_repo" && "$hook_script" session-summary 2>&1)
@@ -116,7 +117,7 @@ set -e
 
 (( summary_status == 0 )) || fail "session-summary 不应失败\n输出：\n$output"
 assert_contains "$output" 'codex-summary event=session-summary'
-assert_contains "$output" "repo_root=$committed_repo"
+assert_contains "$output" "repo_root=$committed_repo_realpath"
 assert_contains "$output" 'worktree_status=dirty'
 assert_contains "$output" 'staged_count=1'
 assert_contains "$output" 'unstaged_count=1'

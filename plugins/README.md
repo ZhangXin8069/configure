@@ -43,6 +43,17 @@ bash install-recommended.sh ecc agent-skills
 bash install-recommended.sh --ref v2.1.0 ecc
 ```
 
+安装前可只读检查当前 Codex 状态，不会调用安装命令：
+
+```bash
+bash install-recommended.sh --status --profile recommended
+bash install-recommended.sh --audit superpowers nvidia
+```
+
+状态会区分“已安装”“可用但未安装”“marketplace 已配置但未列出”“marketplace 未配置”和“状态未知”；
+查询失败或 JSON 无法解析时返回非零，并保持 fail-closed。社区来源默认接受固定 tag 或 commit；需要只接受
+提交哈希时使用 `--ref-policy commit --ref <40-or-64-hex-sha>`，浮动分支会被拒绝。
+
 `recommended` 仍然是最小平衡包；`research-workbench` 偏物理/ML 和报告，`workspace` 偏日常协作，`app-dev` 偏工程交付和端侧应用。需要更细的组合时，直接按插件名指定更透明。
 
 安装器要求 Codex CLI 支持 `codex plugin marketplace` 与 `codex plugin add`，并要求已有

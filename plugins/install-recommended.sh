@@ -5,6 +5,8 @@ set -Eeuo pipefail
 DEFAULT_PROFILE="recommended"
 REF="${CODEX_PLUGIN_REF:-}"
 DRY_RUN=false
+STATUS_ONLY=false
+REF_POLICY=default
 OFFICIAL_MARKETPLACE_SHOWN=false
 PROFILE=""
 REQUESTED=()
@@ -18,7 +20,9 @@ usage() {
                        app-dev、gpu-research、bioinformatics、
                        engineering、orchestration、all
   --ref REF            marketplace Git ref；社区插件必须提供 tag 或 commit
+  --ref-policy POLICY  社区来源策略：default 或 commit（仅接受 40/64 位提交哈希）
   --dry-run            只打印命令，不写入 Codex 配置
+  --status, --audit    只读查询插件和 marketplace 状态，不安装或修改配置
   --list               列出可安装的推荐项
   -h, --help           显示帮助
 
@@ -29,6 +33,8 @@ usage() {
   ./install-recommended.sh --profile app-dev
   ./install-recommended.sh ecc agent-skills
   ./install-recommended.sh --ref v2.1.0 ecc
+  ./install-recommended.sh --ref-policy commit --ref 0123456789abcdef0123456789abcdef01234567 ecc
+  ./install-recommended.sh --status --profile recommended
   ./install-recommended.sh --profile all --dry-run
 
 说明：
@@ -36,6 +42,7 @@ usage() {
   - 官方插件优先复用当前已配置的官方 marketplace；没有时注册 openai/plugins。
   - 重复注册和重复安装由 Codex 处理；脚本不会自动信任 hooks。
   - 社区插件必须用 --ref 或 CODEX_PLUGIN_REF 固定到 tag 或 commit；官方 marketplace 可省略。
+  - --status/--audit 只查询 Codex JSON 状态；未知状态返回非零，不调用 add 命令。
 EOF
 }
 
@@ -248,6 +255,12 @@ ensure_community_marketplace() {
     printf '错误：社区插件必须显式指定固定 Git ref（使用 --ref 或 CODEX_PLUGIN_REF）。\n' >&2
     return 1
   }
+  if [[ "$REF_POLICY" == commit ]] &&
+    { [[ ! "$REF" =~ ^[0-9a-fA-F]+$ ]] ||
+      ((${#REF} != 40 && ${#REF} != 64)); }; then
+    printf '错误：--ref-policy commit 要求 40 或 64 位十六进制提交哈希。\n' >&2
+    return 1
+  fi
   if [[ "$DRY_RUN" == true ]]; then
     run_cmd codex plugin marketplace add "$source" --ref "$REF"
   else
@@ -263,6 +276,199 @@ ensure_community_marketplace() {
         return 1
         ;;
     esac
+  fi
+}
+
+require_codex_status() {
+  command -v codex >/dev/null 2>&1 || die '找不到 codex，请先安装 Codex CLI。'
+  codex plugin marketplace --help >/dev/null 2>&1 || \
+    die '当前 Codex 不支持 plugin marketplace；请升级到支持 marketplace 的 CLI。'
+  codex plugin list --help >/dev/null 2>&1 || \
+    die '当前 Codex 不支持 plugin list；请升级到支持插件查询的 CLI。'
+  require_json_parser
+}
+
+status_json_state() {
+  local kind="$1"
+  local json="$2"
+  local name="$3"
+  local marketplace_kind="${4:-}"
+
+  [[ -n "$json" ]] || return 2
+  if command -v jq >/dev/null 2>&1; then
+    case "$kind" in
+      installed)
+        printf '%s' "$json" | jq -e \
+          --arg name "$name" \
+          'type == "object" and (.installed | type == "array") and
+           any(.installed[]; .name == $name and .installed == true)' \
+          >/dev/null 2>&1
+        return
+        ;;
+      available)
+        printf '%s' "$json" | jq -e \
+          --arg name "$name" \
+          'type == "object" and (.available | type == "array") and
+           any(.available[]; .name == $name)' \
+          >/dev/null 2>&1
+        return
+        ;;
+      marketplace)
+        if [[ "$marketplace_kind" == official ]]; then
+          printf '%s' "$json" | jq -e \
+            'type == "object" and (.marketplaces | type == "array") and
+             any(.marketplaces[]; (.name // "") | startswith("openai"))' \
+            >/dev/null 2>&1
+        else
+          printf '%s' "$json" | jq -e \
+            --arg name "$name" \
+            'type == "object" and (.marketplaces | type == "array") and
+             any(.marketplaces[]; .name == $name)' \
+            >/dev/null 2>&1
+        fi
+        return
+        ;;
+    esac
+    return 2
+  fi
+
+  printf '%s' "$json" | python3 -c '
+import json
+import sys
+
+kind, name, marketplace_kind = sys.argv[1:]
+try:
+    data = json.load(sys.stdin)
+except Exception:
+    raise SystemExit(2)
+
+if not isinstance(data, dict):
+    raise SystemExit(2)
+if kind == "installed":
+    rows = data.get("installed")
+    if not isinstance(rows, list):
+        raise SystemExit(2)
+    raise SystemExit(0 if any(item.get("name") == name and item.get("installed") is True for item in rows if isinstance(item, dict)) else 1)
+if kind == "available":
+    rows = data.get("available")
+    if not isinstance(rows, list):
+        raise SystemExit(2)
+    raise SystemExit(0 if any(item.get("name") == name for item in rows if isinstance(item, dict)) else 1)
+if kind == "marketplace":
+    rows = data.get("marketplaces")
+    if not isinstance(rows, list):
+        raise SystemExit(2)
+    if marketplace_kind == "official":
+        matched = any(str(item.get("name", "")).startswith("openai") for item in rows if isinstance(item, dict))
+    else:
+        matched = any(item.get("name") == name for item in rows if isinstance(item, dict))
+    raise SystemExit(0 if matched else 1)
+raise SystemExit(2)
+' "$kind" "$name" "$marketplace_kind" 2>/dev/null
+}
+
+load_status_json() {
+  STATUS_INSTALLED_JSON=
+  STATUS_INSTALLED_RC=2
+  STATUS_AVAILABLE_JSON=
+  STATUS_AVAILABLE_RC=2
+  STATUS_MARKETPLACES_JSON=
+  STATUS_MARKETPLACES_RC=2
+
+  set +e
+  STATUS_INSTALLED_JSON="$(codex plugin list --json 2>/dev/null)"
+  STATUS_INSTALLED_RC=$?
+  STATUS_AVAILABLE_JSON="$(codex plugin list --available --json 2>/dev/null)"
+  STATUS_AVAILABLE_RC=$?
+  STATUS_MARKETPLACES_JSON="$(codex plugin marketplace list --json 2>/dev/null)"
+  STATUS_MARKETPLACES_RC=$?
+  set -e
+}
+
+plugin_status() {
+  local key="$1"
+  local spec kind source marketplace plugin
+  local state
+  spec="$(plugin_spec "$key")" || return 2
+  IFS='|' read -r kind source marketplace plugin <<<"$spec"
+
+  if ((STATUS_INSTALLED_RC != 0)); then
+    printf '状态未知（无法读取已安装插件）'
+    return 1
+  fi
+  if status_json_state installed "$STATUS_INSTALLED_JSON" "$plugin"; then
+    state=0
+  else
+    state=$?
+  fi
+  if ((state == 0)); then
+    printf '已安装'
+    return 0
+  fi
+  ((state == 1)) || {
+    printf '状态未知（已安装列表 JSON 无效）'
+    return 1
+  }
+
+  if ((STATUS_AVAILABLE_RC != 0)); then
+    printf '状态未知（无法读取可用插件）'
+    return 1
+  fi
+  if status_json_state available "$STATUS_AVAILABLE_JSON" "$plugin"; then
+    state=0
+  else
+    state=$?
+  fi
+  if ((state == 0)); then
+    printf '可用但未安装'
+    return 0
+  fi
+  ((state == 1)) || {
+    printf '状态未知（可用列表 JSON 无效）'
+    return 1
+  }
+
+  if ((STATUS_MARKETPLACES_RC != 0)); then
+    printf '状态未知（无法读取 marketplace）'
+    return 1
+  fi
+  if status_json_state marketplace "$STATUS_MARKETPLACES_JSON" "$marketplace" "$kind"; then
+    state=0
+  else
+    state=$?
+  fi
+  if ((state == 0)); then
+    printf 'marketplace 已配置但未列出'
+    return 0
+  fi
+  ((state == 1)) || {
+    printf '状态未知（marketplace JSON 无效）'
+    return 1
+  }
+  printf 'marketplace 未配置'
+  return 0
+}
+
+status_selected() {
+  local key status status_code
+  local -a unknown=()
+  load_status_json
+  printf '状态查询：只读，不会调用 marketplace add 或 plugin add\n'
+  for key in "$@"; do
+    set +e
+    status="$(plugin_status "$key")"
+    status_code=$?
+    set -e
+    if ((status_code == 0)); then
+      printf '%-28s %s\n' "$key" "$status"
+    else
+      printf '%-28s %s\n' "$key" "$status" >&2
+      unknown+=("$key")
+    fi
+  done
+  if ((${#unknown[@]} > 0)); then
+    printf '状态未知目标：%s\n' "${unknown[*]}" >&2
+    return 1
   fi
 }
 
@@ -409,6 +615,18 @@ main() {
         REF="$2"
         shift 2
         ;;
+      --ref-policy)
+        (($# >= 2)) || die '--ref-policy 需要 default 或 commit。'
+        case "$2" in
+          default|commit) REF_POLICY="$2" ;;
+          *) die '--ref-policy 只能是 default 或 commit。' ;;
+        esac
+        shift 2
+        ;;
+      --status|--audit)
+        STATUS_ONLY=true
+        shift
+        ;;
       --dry-run)
         DRY_RUN=true
         shift
@@ -438,6 +656,7 @@ main() {
   if [[ -n "$PROFILE" && ${#REQUESTED[@]} -gt 0 ]]; then
     die '不能同时指定 profile 和插件名。'
   fi
+  [[ "$STATUS_ONLY" != true || "$DRY_RUN" != true ]] || die '--status/--audit 不能与 --dry-run 同时使用。'
 
   local -a selected=()
   local selected_plugin
@@ -457,9 +676,16 @@ main() {
     printf '未指定目标，使用默认 profile：%s\n' "$DEFAULT_PROFILE"
   fi
 
-  [[ "$DRY_RUN" == true ]] || require_codex
   printf '目标插件：%s\n' "${selected[*]}"
   printf 'Git ref：%s\n' "$REF"
+  printf '来源策略：%s\n' "$REF_POLICY"
+  if [[ "$STATUS_ONLY" == true ]]; then
+    require_codex_status
+    status_selected "${selected[@]}"
+    return
+  fi
+
+  [[ "$DRY_RUN" == true ]] || require_codex
   [[ "$DRY_RUN" == true ]] && printf '模式：dry-run（不会写入 Codex 配置）\n'
 
   local -a failed=()

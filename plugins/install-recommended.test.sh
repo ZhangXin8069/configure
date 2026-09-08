@@ -107,8 +107,16 @@ cat > "$fake_bin/codex" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$*" >> "$CODEX_CALL_LOG"
 case "$*" in
-    'plugin marketplace --help'|'plugin add --help') exit 0 ;;
+    'plugin marketplace --help'|'plugin add --help'|'plugin list --help') exit 0 ;;
     'plugin marketplace list --json')
+        if [[ "${FAKE_STATUS_STATE:-failure}" == status ]]; then
+            printf '%s\n' '{"marketplaces":[{"name":"openai-api-curated"},{"name":"ecc"}]}'
+            exit 0
+        fi
+        if [[ "${FAKE_STATUS_STATE:-failure}" == unconfigured ]]; then
+            printf '%s\n' '{"marketplaces":[{"name":"ecc"}]}'
+            exit 0
+        fi
         if [[ "${FAKE_MARKETPLACE_STATE:-failure}" == absent ]]; then
             printf '%s\n' '{"marketplaces":[]}'
             exit 0
@@ -120,10 +128,18 @@ case "$*" in
         exit 1
         ;;
     'plugin list --json')
+        if [[ "${FAKE_STATUS_STATE:-failure}" == status ]]; then
+            printf '%s\n' '{"installed":[{"name":"superpowers","installed":true},{"name":"ecc","installed":true}]}'
+            exit 0
+        fi
         printf '%s\n' '{"installed":[{"name":"ecc","installed":true},{"name":"superpowers","installed":true}]}'
         exit 0
         ;;
     'plugin list --available --json')
+        if [[ "${FAKE_STATUS_STATE:-failure}" == status ]]; then
+            printf '%s\n' '{"installed":[{"name":"superpowers","marketplaceName":"openai-api-curated","installed":true},{"name":"ecc","marketplaceName":"ecc","installed":true}],"available":[{"name":"nvidia","marketplaceName":"openai-api-curated","installed":false}]}'
+            exit 0
+        fi
         printf '%s\n' '{"installed":[{"name":"ecc","marketplaceName":"ecc","installed":true}],"available":[{"name":"superpowers","marketplaceName":"openai-api-curated","installed":false}]}'
         exit 0
         ;;
@@ -172,3 +188,46 @@ set -e
 official_calls=$(< "$call_log")
 assert_contains "$official_calls" 'plugin add superpowers --marketplace openai-api-curated'
 printf 'PASS: 官方 marketplace 名称从 Codex JSON 动态发现\n'
+
+: > "$call_log"
+set +e
+status_output=$(FAKE_STATUS_STATE=status CODEX_CALL_LOG="$call_log" PATH="$fake_bin:$clean_path" \
+    bash "$installer" --status superpowers nvidia ecc 2>&1)
+status_rc=$?
+set -e
+(( status_rc == 0 )) || fail "status 查询不应失败\n输出：\n$status_output"
+assert_contains "$status_output" 'superpowers'
+assert_contains "$status_output" 'nvidia'
+assert_contains "$status_output" '可用但未安装'
+assert_contains "$status_output" 'ecc'
+status_calls=$(< "$call_log")
+assert_not_contains "$status_calls" 'plugin add'
+assert_not_contains "$status_calls" 'marketplace add'
+printf 'PASS: status 只读查询已安装/可用状态且不调用安装命令\n'
+
+: > "$call_log"
+set +e
+unconfigured_output=$(FAKE_STATUS_STATE=unconfigured CODEX_CALL_LOG="$call_log" PATH="$fake_bin:$clean_path" \
+    bash "$installer" --audit zotero 2>&1)
+unconfigured_rc=$?
+set -e
+(( unconfigured_rc == 0 )) || fail "未配置 marketplace 的 status 不应失败\n输出：\n$unconfigured_output"
+assert_contains "$unconfigured_output" 'zotero'
+assert_contains "$unconfigured_output" 'marketplace 未配置'
+printf 'PASS: audit 别名报告 marketplace 未配置\n'
+
+set +e
+commit_reject_output=$(PATH="$clean_path" bash "$installer" --dry-run --ref-policy commit --ref main ecc 2>&1)
+commit_reject_rc=$?
+set -e
+(( commit_reject_rc != 0 )) || fail 'commit 策略不应接受浮动 ref'
+assert_contains "$commit_reject_output" '--ref-policy commit 要求 40 或 64 位十六进制提交哈希'
+
+commit_ref=0123456789abcdef0123456789abcdef01234567
+set +e
+commit_accept_output=$(PATH="$clean_path" bash "$installer" --dry-run --ref-policy commit --ref "$commit_ref" ecc 2>&1)
+commit_accept_rc=$?
+set -e
+(( commit_accept_rc == 0 )) || fail "commit 策略应接受 40 位提交哈希\n输出：\n$commit_accept_output"
+assert_contains "$commit_accept_output" "marketplace add affaan-m/ECC --ref $commit_ref"
+printf 'PASS: commit ref 策略拒绝浮动分支并接受提交哈希\n'
