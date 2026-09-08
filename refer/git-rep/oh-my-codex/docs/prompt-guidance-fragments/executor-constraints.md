@@ -1,0 +1,4 @@
+- Use outcome-first, quality-focused execution: identify the target result, constraints, success criteria, validation path, and stop condition.
+- Keep the implementation plan and progress updates concise; name the first concrete action before tool-heavy work.
+- Treat newer user instructions as local overrides for the active task while preserving unrelated acceptance criteria.
+- Continue inspecting and editing until the task is grounded and verified; do not claim completion without evidence.

@@ -1,0 +1,3546 @@
+import { describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { existsSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { tmpdir } from 'node:os';
+
+import { completeRalplanSession, executeStateOperation } from '../operations.js';
+import { subagentTrackingPath } from '../../subagents/tracker.js';
+import { startMode, updateModeState } from '../../modes/base.js';
+import {
+  __setWritableStateScopeTestHooksForTests,
+  getBaseStateDir,
+  type WritableCommitSite,
+  WRITABLE_STATE_SCOPE_ERRORS,
+} from '../../mcp/state-paths.js';
+import {
+  __resetSessionPointerTransactionDependenciesForTests,
+  __setSessionPointerTransactionDependenciesForTests,
+} from '../../hooks/session.js';
+
+
+async function withAmbientTmuxEnv<T>(env: NodeJS.ProcessEnv, run: () => Promise<T>): Promise<T> {
+  const previousTmux = process.env.TMUX;
+  const previousTmuxPane = process.env.TMUX_PANE;
+  const previousPath = process.env.PATH;
+
+  if (typeof env.TMUX === 'string') process.env.TMUX = env.TMUX;
+  else delete process.env.TMUX;
+  if (typeof env.TMUX_PANE === 'string') process.env.TMUX_PANE = env.TMUX_PANE;
+  else delete process.env.TMUX_PANE;
+  if (typeof env.PATH === 'string') process.env.PATH = env.PATH;
+  else if ('PATH' in env) delete process.env.PATH;
+
+  try {
+    return await run();
+  } finally {
+    if (typeof previousTmux === 'string') process.env.TMUX = previousTmux;
+    else delete process.env.TMUX;
+    if (typeof previousTmuxPane === 'string') process.env.TMUX_PANE = previousTmuxPane;
+    else delete process.env.TMUX_PANE;
+    if (typeof previousPath === 'string') process.env.PATH = previousPath;
+    else delete process.env.PATH;
+  }
+}
+
+async function withOmxRootEnv<T>(root: string, run: () => Promise<T>): Promise<T> {
+  const previousOmxRoot = process.env.OMX_ROOT;
+  const previousOmxStateRoot = process.env.OMX_STATE_ROOT;
+  const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+  process.env.OMX_ROOT = root;
+  delete process.env.OMX_STATE_ROOT;
+  delete process.env.OMX_TEAM_STATE_ROOT;
+  try {
+    return await run();
+  } finally {
+    if (typeof previousOmxRoot === 'string') process.env.OMX_ROOT = previousOmxRoot;
+    else delete process.env.OMX_ROOT;
+    if (typeof previousOmxStateRoot === 'string') process.env.OMX_STATE_ROOT = previousOmxStateRoot;
+    else delete process.env.OMX_STATE_ROOT;
+    if (typeof previousTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = previousTeamStateRoot;
+    else delete process.env.OMX_TEAM_STATE_ROOT;
+  }
+}
+async function withStateRootEnv<T>(env: Partial<Record<'OMX_ROOT' | 'OMX_STATE_ROOT' | 'OMX_TEAM_STATE_ROOT', string>>, run: () => Promise<T>): Promise<T> {
+  const previousOmxRoot = process.env.OMX_ROOT;
+  const previousOmxStateRoot = process.env.OMX_STATE_ROOT;
+  const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+  if (typeof env.OMX_ROOT === 'string') process.env.OMX_ROOT = env.OMX_ROOT;
+  else delete process.env.OMX_ROOT;
+  if (typeof env.OMX_STATE_ROOT === 'string') process.env.OMX_STATE_ROOT = env.OMX_STATE_ROOT;
+  else delete process.env.OMX_STATE_ROOT;
+  if (typeof env.OMX_TEAM_STATE_ROOT === 'string') process.env.OMX_TEAM_STATE_ROOT = env.OMX_TEAM_STATE_ROOT;
+  else delete process.env.OMX_TEAM_STATE_ROOT;
+  try {
+    return await run();
+  } finally {
+    if (typeof previousOmxRoot === 'string') process.env.OMX_ROOT = previousOmxRoot;
+    else delete process.env.OMX_ROOT;
+    if (typeof previousOmxStateRoot === 'string') process.env.OMX_STATE_ROOT = previousOmxStateRoot;
+    else delete process.env.OMX_STATE_ROOT;
+    if (typeof previousTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = previousTeamStateRoot;
+    else delete process.env.OMX_TEAM_STATE_ROOT;
+  }
+}
+
+function responsePayload<T extends Record<string, unknown>>(response: { payload: unknown; isError?: boolean }): T {
+  assert.equal(response.isError, undefined);
+  assert.ok(response.payload && typeof response.payload === 'object' && !Array.isArray(response.payload));
+  return response.payload as T;
+}
+
+function validExecutionContract(stride: 'task' | 'deliverable' | 'milestone'): Record<string, unknown> {
+  const perStride = {
+    task: {
+      allow_task_shrink: true,
+      acceptance_coverage_scope: 'task',
+      shrink_policy: 'allowed',
+      completion_unit: 'One focused task',
+      stop_condition: 'Stop after that task is implemented and verified',
+    },
+    deliverable: {
+      allow_task_shrink: false,
+      acceptance_coverage_scope: 'deliverable',
+      shrink_policy: 'ask_before_shrink',
+      completion_unit: 'The named deliverable',
+      stop_condition: 'Stop after the deliverable is complete and verified',
+    },
+    milestone: {
+      allow_task_shrink: false,
+      acceptance_coverage_scope: 'milestone',
+      shrink_policy: 'deny_unless_blocked',
+      completion_unit: 'The approved milestone',
+      stop_condition: 'Stop after the milestone is complete unless blocked',
+    },
+  } as const;
+
+  return {
+    version: 1,
+    execution_stride: stride,
+    source: 'deep-interview',
+    selected_by: 'user',
+    ...perStride[stride],
+  };
+}
+
+async function writeNativeSubagentTracking(cwd: string, sessionId: string): Promise<void> {
+  const trackingPath = subagentTrackingPath(cwd);
+  const architectCompletedAt = '2026-05-28T00:00:00.000Z';
+  const criticStartedAt = '2026-05-28T00:01:00.000Z';
+  const criticCompletedAt = '2026-05-28T00:02:00.000Z';
+  await mkdir(dirname(trackingPath), { recursive: true });
+  await writeFile(trackingPath, JSON.stringify({
+    schemaVersion: 1,
+    sessions: {
+      [sessionId]: {
+        session_id: sessionId,
+        leader_thread_id: 'thread-leader',
+        updated_at: criticCompletedAt,
+        threads: {
+          'thread-leader': { thread_id: 'thread-leader', kind: 'leader', first_seen_at: architectCompletedAt, last_seen_at: architectCompletedAt, turn_count: 1 },
+          'thread-architect': { thread_id: 'thread-architect', kind: 'subagent', first_seen_at: architectCompletedAt, last_seen_at: architectCompletedAt, completed_at: architectCompletedAt, turn_count: 1, mode: 'architect' },
+          'thread-critic': { thread_id: 'thread-critic', kind: 'subagent', first_seen_at: criticStartedAt, last_seen_at: criticCompletedAt, completed_at: criticCompletedAt, turn_count: 1, mode: 'critic' },
+        },
+      },
+    },
+  }, null, 2));
+}
+
+function ralplanConsensusGate(
+  sessionId: string,
+  provenanceKind: 'native_subagent' | 'codex_exec',
+  threadOverrides: { architect?: string; critic?: string } = {},
+): Record<string, unknown> {
+  const architectThread = threadOverrides.architect ?? (provenanceKind === 'native_subagent' ? 'thread-architect' : 'exec-architect');
+  const criticThread = threadOverrides.critic ?? (provenanceKind === 'native_subagent' ? 'thread-critic' : 'exec-critic');
+  return {
+    required: true,
+    complete: true,
+    sequence: ['architect-review', 'critic-review'],
+    planning_artifacts_are_not_consensus: true,
+    required_review_roles: ['architect', 'critic'],
+    ralplan_architect_review: {
+      agent_role: 'architect',
+      verdict: 'approve',
+      sequence_index: 1,
+      provenance_kind: provenanceKind,
+      session_id: sessionId,
+      thread_id: architectThread,
+      artifact_path: '.omx/artifacts/architect.md',
+      tracker_path: '.omx/state/subagent-tracking.json',
+    },
+    ralplan_critic_review: {
+      agent_role: 'critic',
+      verdict: 'approve',
+      sequence_index: 2,
+      provenance_kind: provenanceKind,
+      session_id: sessionId,
+      thread_id: criticThread,
+      artifact_path: '.omx/artifacts/critic.md',
+      tracker_path: '.omx/state/subagent-tracking.json',
+    },
+  };
+}
+
+async function writeNativeRalplanConsensusGate(
+  cwd: string,
+  sessionId: string,
+  threadOverrides: { architect?: string; critic?: string } = {},
+): Promise<Record<string, unknown>> {
+  await writeNativeSubagentTracking(cwd, sessionId);
+  return ralplanConsensusGate(sessionId, 'native_subagent', threadOverrides);
+}
+
+async function createFakeTmuxBin(wd: string): Promise<string> {
+  const fakeBin = join(wd, 'bin');
+  await mkdir(fakeBin, { recursive: true });
+  const tmuxPath = join(fakeBin, 'tmux');
+  await writeFile(
+    tmuxPath,
+    `#!/usr/bin/env bash
+set -eu
+cmd="\${1:-}"
+shift || true
+if [[ "$cmd" == "display-message" ]]; then
+  target=""
+  format=""
+  while (($#)); do
+    case "$1" in
+      -p) shift ;;
+      -t) target="$2"; shift 2 ;;
+      *) format="$1"; shift ;;
+    esac
+  done
+  if [[ -z "$target" && "$format" == "#{pane_id}" ]]; then
+    echo "%777"
+    exit 0
+  fi
+  if [[ -z "$target" && "$format" == "#S" ]]; then
+    echo "maintainer-default"
+    exit 0
+  fi
+  if [[ "$target" == "%777" && "$format" == "#{pane_id}" ]]; then
+    echo "%777"
+    exit 0
+  fi
+  if [[ "$target" == "%777" && "$format" == "#S" ]]; then
+    echo "maintainer-default"
+    exit 0
+  fi
+fi
+if [[ "$cmd" == "list-sessions" ]]; then
+  echo "maintainer-default"
+  exit 0
+fi
+exit 1
+`,
+  );
+  await chmod(tmuxPath, 0o755);
+  return fakeBin;
+}
+
+describe('state operations directory initialization', () => {
+  it('keeps state_list_active side-effect-free without setup', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-test-'));
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      const tmuxHookConfig = join(wd, '.omx', 'tmux-hook.json');
+      assert.equal(existsSync(stateDir), false);
+      assert.equal(existsSync(tmuxHookConfig), false);
+
+      const response = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+
+      assert.equal(existsSync(stateDir), false);
+      assert.equal(existsSync(tmuxHookConfig), false);
+      assert.deepEqual(response.payload, { active_modes: [] });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps state_get_status side-effect-free when session_id is provided', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-status-readonly-'));
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      const sessionDir = join(stateDir, 'sessions', 'sess1');
+      const tmuxHookConfig = join(wd, '.omx', 'tmux-hook.json');
+      assert.equal(existsSync(sessionDir), false);
+      assert.equal(existsSync(tmuxHookConfig), false);
+
+      const response = await executeStateOperation('state_get_status', {
+        workingDirectory: wd,
+        session_id: 'sess1',
+      });
+
+      assert.equal(existsSync(stateDir), false);
+      assert.equal(existsSync(sessionDir), false);
+      assert.equal(existsSync(tmuxHookConfig), false);
+      assert.deepEqual(response.payload, { statuses: {} });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('writes and clears session state under OMX_TEAM_STATE_ROOT without creating cwd .omx', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'omx-state-ops-team-root-'));
+    try {
+      const wd = join(root, 'workspace');
+      const teamStateRoot = join(root, 'team-state');
+      await mkdir(wd, { recursive: true });
+
+      await withStateRootEnv({ OMX_TEAM_STATE_ROOT: teamStateRoot }, async () => {
+        const writeResponse = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: 'sess-team-write',
+          mode: 'autoresearch',
+          active: true,
+          current_phase: 'running',
+        });
+        const writePayload = responsePayload<{ path: string }>(writeResponse);
+        assert.equal(writePayload.path, join(teamStateRoot, 'sessions', 'sess-team-write', 'autoresearch-state.json'));
+        assert.equal(existsSync(writePayload.path), true);
+        assert.equal(existsSync(join(teamStateRoot, 'sessions', 'sess-team-write', 'skill-active-state.json')), true);
+        assert.equal(existsSync(join(wd, '.omx')), false);
+
+        const clearResponse = await executeStateOperation('state_clear', {
+          workingDirectory: wd,
+          session_id: 'sess-team-write',
+          mode: 'autoresearch',
+        });
+        const clearPayload = responsePayload<{ path: string }>(clearResponse);
+        assert.equal(clearPayload.path, writePayload.path);
+        assert.equal(existsSync(writePayload.path), false);
+        assert.equal(existsSync(join(teamStateRoot, 'sessions', 'sess-team-write', 'skill-active-state.json')), true);
+        assert.equal(existsSync(join(wd, '.omx')), false);
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('writes and clears session state under OMX_ROOT when cwd is filesystem root', async () => {
+    const boxRoot = await mkdtemp(join(tmpdir(), 'omx-state-ops-omx-root-'));
+    try {
+      await withStateRootEnv({ OMX_ROOT: boxRoot }, async () => {
+        const writeResponse = await executeStateOperation('state_write', {
+          workingDirectory: '/',
+          session_id: 'sess-omx-root',
+          mode: 'autoresearch',
+          active: true,
+          current_phase: 'running',
+        });
+        const writePayload = responsePayload<{ path: string }>(writeResponse);
+        const expectedPath = join(boxRoot, '.omx', 'state', 'sessions', 'sess-omx-root', 'autoresearch-state.json');
+        assert.equal(writePayload.path, expectedPath);
+        assert.equal(existsSync(expectedPath), true);
+
+        const clearResponse = await executeStateOperation('state_clear', {
+          workingDirectory: '/',
+          session_id: 'sess-omx-root',
+          mode: 'autoresearch',
+        });
+        const clearPayload = responsePayload<{ path: string }>(clearResponse);
+        assert.equal(clearPayload.path, expectedPath);
+        assert.equal(existsSync(expectedPath), false);
+
+        const workspace = join(boxRoot, 'workspace');
+        await mkdir(workspace, { recursive: true });
+        const workspaceResponse = await executeStateOperation('state_write', {
+          workingDirectory: workspace,
+          session_id: 'sess-omx-root-workspace',
+          mode: 'autoresearch',
+          active: true,
+          current_phase: 'running',
+        });
+        const workspacePayload = responsePayload<{ path: string }>(workspaceResponse);
+        assert.equal(
+          workspacePayload.path,
+          join(boxRoot, '.omx', 'state', 'sessions', 'sess-omx-root-workspace', 'autoresearch-state.json'),
+        );
+        assert.equal(existsSync(join(workspace, '.omx')), false);
+      });
+    } finally {
+      await rm(boxRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('writes and clears session state under OMX_STATE_ROOT when cwd is filesystem root', async () => {
+    const stateRoot = await mkdtemp(join(tmpdir(), 'omx-state-ops-state-root-'));
+    try {
+      await withStateRootEnv({ OMX_STATE_ROOT: stateRoot }, async () => {
+        const writeResponse = await executeStateOperation('state_write', {
+          workingDirectory: '/',
+          session_id: 'sess-state-root',
+          mode: 'autoresearch',
+          active: true,
+          current_phase: 'running',
+        });
+        const writePayload = responsePayload<{ path: string }>(writeResponse);
+        const expectedPath = join(stateRoot, '.omx', 'state', 'sessions', 'sess-state-root', 'autoresearch-state.json');
+        assert.equal(writePayload.path, expectedPath);
+        assert.equal(existsSync(expectedPath), true);
+
+        const clearResponse = await executeStateOperation('state_clear', {
+          workingDirectory: '/',
+          session_id: 'sess-state-root',
+          mode: 'autoresearch',
+        });
+        const clearPayload = responsePayload<{ path: string }>(clearResponse);
+        assert.equal(clearPayload.path, expectedPath);
+        assert.equal(existsSync(expectedPath), false);
+
+        const workspace = join(stateRoot, 'workspace');
+        await mkdir(workspace, { recursive: true });
+        const workspaceResponse = await executeStateOperation('state_write', {
+          workingDirectory: workspace,
+          session_id: 'sess-state-root-workspace',
+          mode: 'autoresearch',
+          active: true,
+          current_phase: 'running',
+        });
+        const workspacePayload = responsePayload<{ path: string }>(workspaceResponse);
+        assert.equal(
+          workspacePayload.path,
+          join(stateRoot, '.omx', 'state', 'sessions', 'sess-state-root-workspace', 'autoresearch-state.json'),
+        );
+        assert.equal(existsSync(join(workspace, '.omx')), false);
+      });
+    } finally {
+      await rm(stateRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('surfaces active ultragoal artifacts in list-active without mode state files', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-ultragoal-artifact-'));
+    try {
+      await mkdir(join(wd, '.omx', 'ultragoal'), { recursive: true });
+      await writeFile(
+        join(wd, '.omx', 'ultragoal', 'goals.json'),
+        JSON.stringify({
+          activeGoalId: 'G001',
+          goals: [{
+            id: 'G001',
+            title: 'Fix duplicate HUD panes',
+            objective: 'Keep one HUD renderer per leader.',
+            status: 'in_progress',
+          }],
+        }, null, 2),
+      );
+
+      const activeResponse = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+      assert.deepEqual(activeResponse.payload, { active_modes: ['ultragoal'] });
+
+      const statusResponse = await executeStateOperation('state_get_status', {
+        workingDirectory: wd,
+        mode: 'ultragoal',
+      });
+      const statuses = (statusResponse.payload as {
+        statuses?: Record<string, { active?: boolean; phase?: string; path?: string; source?: string }>;
+      }).statuses || {};
+      assert.equal(statuses.ultragoal?.active, true);
+      assert.equal(statuses.ultragoal?.phase, 'in_progress');
+      assert.equal(statuses.ultragoal?.path, join(wd, '.omx', 'ultragoal', 'goals.json'));
+      assert.equal(statuses.ultragoal?.source, 'ultragoal-artifacts');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('reports reconciled task-scoped aggregate ultragoal artifacts as inactive in get-status', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-ultragoal-reconciled-'));
+    try {
+      await mkdir(join(wd, '.omx', 'ultragoal'), { recursive: true });
+      await writeFile(
+        join(wd, '.omx', 'ultragoal', 'goals.json'),
+        JSON.stringify({
+          aggregateCompletion: {
+            status: 'complete',
+            completedAt: '2026-06-01T12:00:00.000Z',
+            evidence: 'task-scoped Codex aggregate completed and active microgoal row was reconciled',
+          },
+          activeGoalId: 'G002',
+          goals: [{
+            id: 'G001',
+            title: 'Fix duplicate HUD panes',
+            objective: 'Keep one HUD renderer per leader.',
+            status: 'complete',
+            completedAt: '2026-06-01T12:00:00.000Z',
+          }, {
+            id: 'G002',
+            title: 'Still marked running',
+            objective: 'Progress-only row left running by the old aggregate path.',
+            status: 'in_progress',
+          }, {
+            id: 'G003',
+            title: 'Still marked pending',
+            objective: 'Progress-only row left pending by the old aggregate path.',
+            status: 'pending',
+          }],
+        }, null, 2),
+      );
+
+      const activeResponse = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+      assert.deepEqual(activeResponse.payload, { active_modes: [] });
+
+      const statusResponse = await executeStateOperation('state_get_status', {
+        workingDirectory: wd,
+        mode: 'ultragoal',
+      });
+      const statuses = (statusResponse.payload as {
+        statuses?: Record<string, { active?: boolean; phase?: string; path?: string; source?: string; data?: { activeGoal?: unknown; inProgress?: number; pending?: number; complete?: number } }>;
+      }).statuses || {};
+      assert.equal(statuses.ultragoal?.active, false);
+      assert.equal(statuses.ultragoal?.phase, 'complete');
+      assert.equal(statuses.ultragoal?.path, join(wd, '.omx', 'ultragoal', 'goals.json'));
+      assert.equal(statuses.ultragoal?.source, 'ultragoal-artifacts');
+      assert.equal(statuses.ultragoal?.data?.activeGoal, undefined);
+      assert.equal(statuses.ultragoal?.data?.complete, 1);
+      assert.equal(statuses.ultragoal?.data?.inProgress, 1);
+      assert.equal(statuses.ultragoal?.data?.pending, 1);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers active ultragoal artifacts over stale inactive mode state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-ultragoal-stale-state-'));
+    try {
+      await mkdir(join(wd, '.omx', 'state'), { recursive: true });
+      await mkdir(join(wd, '.omx', 'ultragoal'), { recursive: true });
+      await writeFile(
+        join(wd, '.omx', 'state', 'ultragoal-state.json'),
+        JSON.stringify({ active: false, current_phase: 'cleared' }, null, 2),
+      );
+      await writeFile(
+        join(wd, '.omx', 'ultragoal', 'goals.json'),
+        JSON.stringify({
+          activeGoalId: 'G001',
+          goals: [{
+            id: 'G001',
+            title: 'Fix duplicate HUD panes',
+            objective: 'Keep one HUD renderer per leader.',
+            status: 'in_progress',
+          }],
+        }, null, 2),
+      );
+
+      const activeResponse = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+      assert.deepEqual(activeResponse.payload, { active_modes: ['ultragoal'] });
+
+      const statusResponse = await executeStateOperation('state_get_status', {
+        workingDirectory: wd,
+        mode: 'ultragoal',
+      });
+      const statuses = (statusResponse.payload as {
+        statuses?: Record<string, { active?: boolean; phase?: string; source?: string }>;
+      }).statuses || {};
+      assert.equal(statuses.ultragoal?.active, true);
+      assert.equal(statuses.ultragoal?.phase, 'in_progress');
+      assert.equal(statuses.ultragoal?.source, 'ultragoal-artifacts');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('does not treat root fallback as active for explicit session list-active decisions', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-active-scope-'));
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(
+        join(stateDir, 'ralph-state.json'),
+        JSON.stringify({
+          active: true,
+          mode: 'ralph',
+          current_phase: 'executing',
+        }, null, 2),
+      );
+
+      const activeResponse = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+        session_id: 'missing-session',
+      });
+
+      assert.deepEqual(activeResponse.payload, { active_modes: [] });
+
+      const readResponse = await executeStateOperation('state_read', {
+        workingDirectory: wd,
+        session_id: 'missing-session',
+        mode: 'ralph',
+      });
+      assert.equal((readResponse.payload as { active?: unknown }).active, true);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps missing state_read side-effect-free without setup', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-readonly-missing-'));
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      const tmuxHookConfig = join(wd, '.omx', 'tmux-hook.json');
+      assert.equal(existsSync(stateDir), false);
+      assert.equal(existsSync(tmuxHookConfig), false);
+
+      const response = await executeStateOperation('state_read', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+      });
+
+      assert.equal(existsSync(stateDir), false);
+      assert.equal(existsSync(tmuxHookConfig), false);
+      assert.deepEqual(response.payload, { exists: false, mode: 'deep-interview' });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('bootstraps tmux-hook from the current tmux pane for mutating state operations', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-live-'));
+    try {
+      const tmuxHookConfig = join(wd, '.omx', 'tmux-hook.json');
+      const fakeBin = await createFakeTmuxBin(wd);
+
+      await withAmbientTmuxEnv(
+        {
+          TMUX: '/tmp/maintainer-default,123,0',
+          TMUX_PANE: '%777',
+          PATH: `${fakeBin}:${process.env.PATH || ''}`,
+        },
+        async () => {
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            mode: 'deep-interview',
+            active: true,
+            current_phase: 'deep-interview',
+          });
+          assert.equal(response.isError, undefined);
+          assert.equal((response.payload as { success?: boolean }).success, true);
+        },
+      );
+
+      const tmuxConfig = JSON.parse(await readFile(tmuxHookConfig, 'utf-8')) as {
+        target?: { type?: string; value?: string };
+      };
+      assert.deepEqual(tmuxConfig.target, { type: 'pane', value: '%777' });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('writes and reads deep-interview state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-readwrite-'));
+    try {
+      const writeResponse = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+        active: true,
+        current_phase: 'deep-interview',
+        state: {
+          current_focus: 'intent',
+          threshold: 0.2,
+        },
+      });
+
+      assert.equal(writeResponse.isError, undefined);
+      assert.deepEqual(writeResponse.payload, {
+        success: true,
+        mode: 'deep-interview',
+        path: join(wd, '.omx', 'state', 'deep-interview-state.json'),
+      });
+
+      const readResponse = await executeStateOperation('state_read', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+      });
+
+      assert.equal(readResponse.isError, undefined);
+      const readBody = readResponse.payload as Record<string, unknown>;
+      assert.equal(readBody.active, true);
+      assert.equal(readBody.current_phase, 'deep-interview');
+      assert.equal(readBody.current_focus, 'intent');
+      assert.equal(readBody.threshold, 0.2);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('normalizes terminal deep-interview snapshots by releasing stale locks', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-di-terminal-normalize-'));
+    try {
+      const completedAt = '2026-07-09T00:00:00.000Z';
+      const writeResponse = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+        active: false,
+        current_phase: 'cancelled',
+        completed_at: completedAt,
+        input_lock: {
+          active: true,
+          owner: 'question-round',
+        },
+        approval_lock: {
+          status: 'pending',
+          reviewer: 'user',
+        },
+        question_enforcement: {
+          obligation_id: 'obligation-stale',
+          source: 'omx-question',
+          status: 'pending',
+          lifecycle_outcome: 'askuserQuestion',
+          requested_at: '2026-07-08T23:59:00.000Z',
+        },
+      });
+
+      assert.equal(writeResponse.isError, undefined);
+
+      const readResponse = await executeStateOperation('state_read', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+      });
+      const readBody = readResponse.payload as Record<string, unknown>;
+      const inputLock = readBody.input_lock as Record<string, unknown>;
+      const approvalLock = readBody.approval_lock as Record<string, unknown>;
+      const questionEnforcement = readBody.question_enforcement as Record<string, unknown>;
+
+      assert.equal(readBody.active, false);
+      assert.equal(readBody.current_phase, 'cancelled');
+      assert.equal(readBody.completed_at, completedAt);
+      assert.equal(readBody.run_outcome, 'cancelled');
+      assert.equal(inputLock.active, false);
+      assert.equal(inputLock.status, 'released');
+      assert.equal(inputLock.released_at, completedAt);
+      assert.equal(approvalLock.active, false);
+      assert.equal(approvalLock.status, 'released');
+      assert.equal(inputLock.release_reason, 'terminal_state_normalization');
+      assert.equal(questionEnforcement.status, 'cleared');
+      assert.equal(questionEnforcement.clear_reason, 'abort');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('writes and reads autoresearch state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autoresearch-'));
+    try {
+      const writeResponse = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        mode: 'autoresearch',
+        active: true,
+        current_phase: 'running',
+      });
+
+      assert.equal(writeResponse.isError, undefined);
+      assert.deepEqual(writeResponse.payload, {
+        success: true,
+        mode: 'autoresearch',
+        path: join(wd, '.omx', 'state', 'autoresearch-state.json'),
+      });
+
+      const readResponse = await executeStateOperation('state_read', {
+        workingDirectory: wd,
+        mode: 'autoresearch',
+      });
+
+      assert.equal(readResponse.isError, undefined);
+      const readBody = readResponse.payload as Record<string, unknown>;
+      assert.equal(readBody.active, true);
+      assert.equal(readBody.current_phase, 'running');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('lists active modes from the explicit session scope without leaking a sibling Ralph session', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-foreign-ralph-scope-'));
+    try {
+      const currentSessionDir = join(wd, '.omx', 'state', 'sessions', 'sess-current');
+      const foreignSessionDir = join(wd, '.omx', 'state', 'sessions', 'sess-foreign');
+      await mkdir(currentSessionDir, { recursive: true });
+      await mkdir(foreignSessionDir, { recursive: true });
+      await writeFile(
+        join(foreignSessionDir, 'ralph-state.json'),
+        JSON.stringify({ active: true, current_phase: 'executing' }, null, 2),
+      );
+
+      const response = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+        session_id: 'sess-current',
+      });
+
+      assert.deepEqual(response.payload, { active_modes: [] });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('isolates same workflow state across explicit session ids when starting and clearing one session', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-same-workflow-isolation-'));
+    try {
+      const writeA = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: 'sess-a',
+        mode: 'ralph',
+        active: true,
+        iteration: 1,
+        max_iterations: 5,
+        current_phase: 'executing',
+        state: { task_slug: 'session-a-task' },
+      });
+      assert.equal(writeA.isError, undefined);
+
+      const sessionAStatePath = join(wd, '.omx', 'state', 'sessions', 'sess-a', 'ralph-state.json');
+      const sessionACanonicalPath = join(wd, '.omx', 'state', 'sessions', 'sess-a', 'skill-active-state.json');
+      const sessionAStateBefore = JSON.parse(await readFile(sessionAStatePath, 'utf-8')) as Record<string, unknown>;
+      const sessionACanonicalBefore = JSON.parse(await readFile(sessionACanonicalPath, 'utf-8')) as Record<string, unknown>;
+
+      const writeB = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: 'sess-b',
+        mode: 'ralph',
+        active: true,
+        iteration: 1,
+        max_iterations: 5,
+        current_phase: 'executing',
+        state: { task_slug: 'session-b-task' },
+      });
+      assert.equal(writeB.isError, undefined);
+
+      assert.deepEqual(JSON.parse(await readFile(sessionAStatePath, 'utf-8')), sessionAStateBefore);
+      assert.deepEqual(JSON.parse(await readFile(sessionACanonicalPath, 'utf-8')), sessionACanonicalBefore);
+
+      await executeStateOperation('state_clear', {
+        workingDirectory: wd,
+        session_id: 'sess-b',
+        mode: 'ralph',
+      });
+
+      const activeA = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+        session_id: 'sess-a',
+      });
+      assert.deepEqual(activeA.payload, { active_modes: ['ralph'] });
+
+      const activeB = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+        session_id: 'sess-b',
+      });
+      assert.deepEqual(activeB.payload, { active_modes: [] });
+
+      assert.deepEqual(JSON.parse(await readFile(sessionAStatePath, 'utf-8')), sessionAStateBefore);
+      assert.deepEqual(JSON.parse(await readFile(sessionACanonicalPath, 'utf-8')), sessionACanonicalBefore);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('serializes concurrent state_write calls per mode file and preserves merged fields', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-concurrency-'));
+    try {
+      const writes = Array.from({ length: 16 }, (_, i) =>
+        executeStateOperation('state_write', {
+          workingDirectory: wd,
+          mode: 'team',
+          state: { [`k${i}`]: i },
+        }),
+      );
+
+      const responses = await Promise.all(writes);
+      for (const response of responses) {
+        assert.equal(response.isError, undefined);
+      }
+
+      const filePath = join(wd, '.omx', 'state', 'team-state.json');
+      const state = JSON.parse(await readFile(filePath, 'utf-8')) as Record<string, unknown>;
+      for (let i = 0; i < 16; i++) {
+        assert.equal(state[`k${i}`], i);
+      }
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('serializes concurrent Autopilot read-modify-write updates without losing fields', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-concurrency-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd, 'sess-autopilot-concurrency');
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      await writeFile(
+        join(sessionDir, 'autopilot-state.json'),
+        JSON.stringify({
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'deep-interview',
+          session_id: sessionId,
+          workingDirectory: wd,
+          started_at: '2026-08-19T00:00:00.000Z',
+        }),
+      );
+
+      const [first, second] = await Promise.all([
+        executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          state: { current_phase: 'code-review', thread_id: 'thread-a' },
+        }),
+        executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          state: { current_phase: 'code-review', turn_id: 'turn-b' },
+        }),
+      ]);
+      assert.equal(first.isError, undefined);
+      assert.equal(second.isError, undefined);
+
+      const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+      assert.equal(state.current_phase, 'code-review');
+      assert.equal(state.thread_id, 'thread-a');
+      assert.equal(state.turn_id, 'turn-b');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('does not report a legacy root mode active after clearing the current session scope', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-clear-root-fallback-'));
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      const sessionId = 'sess-clear';
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: sessionId, cwd: wd, state_root: stateDir }, null, 2));
+      await writeFile(
+        join(stateDir, 'deep-interview-state.json'),
+        JSON.stringify({ active: true, mode: 'deep-interview', current_phase: 'legacy-root' }, null, 2),
+      );
+      await writeFile(
+        join(sessionDir, 'deep-interview-state.json'),
+        JSON.stringify({ active: true, mode: 'deep-interview', current_phase: 'session-active' }, null, 2),
+      );
+
+      await executeStateOperation('state_clear', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+      });
+
+      assert.equal(existsSync(join(sessionDir, 'deep-interview-state.json')), true);
+      assert.equal(existsSync(join(stateDir, 'deep-interview-state.json')), true);
+
+      const sessionState = JSON.parse(
+        await readFile(join(sessionDir, 'deep-interview-state.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      assert.equal(sessionState.active, false);
+      assert.equal(sessionState.current_phase, 'cleared');
+
+      const activeResponse = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+      assert.deepEqual(activeResponse.payload, { active_modes: [] });
+
+      const statusResponse = await executeStateOperation('state_get_status', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+      });
+      const statuses = (statusResponse.payload as {
+        statuses?: Record<string, { active?: boolean; phase?: string }>;
+      }).statuses || {};
+      assert.equal(statuses['deep-interview']?.active, false);
+      assert.equal(statuses['deep-interview']?.phase, 'cleared');
+
+      const readResponse = await executeStateOperation('state_read', {
+        workingDirectory: wd,
+        mode: 'deep-interview',
+      });
+      const readBody = readResponse.payload as Record<string, unknown>;
+      assert.equal(readBody.active, false);
+      assert.equal(readBody.current_phase, 'cleared');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('all_sessions clear removes session-only canonical workflow state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-all-sessions-session-only-'));
+    try {
+      const sessionDir = join(wd, '.omx', 'state', 'sessions', 'sess-only');
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'ralph-state.json'),
+        JSON.stringify({ active: true, mode: 'ralph', current_phase: 'executing' }, null, 2),
+      );
+      await writeFile(
+        join(sessionDir, 'skill-active-state.json'),
+        JSON.stringify({
+          version: 1,
+          active: true,
+          skill: 'ralph',
+          session_id: 'sess-only',
+          active_skills: [{ skill: 'ralph', phase: 'executing', active: true, session_id: 'sess-only' }],
+        }, null, 2),
+      );
+
+      const cleared = await executeStateOperation('state_clear', {
+        workingDirectory: wd,
+        mode: 'ralph',
+        all_sessions: true,
+      });
+      assert.equal(cleared.isError, undefined);
+
+      assert.equal(existsSync(join(sessionDir, 'ralph-state.json')), false);
+      assert.equal(existsSync(join(sessionDir, 'skill-active-state.json')), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('excludes derived run-state.json from active mode enumeration while preserving genuine mode state files', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-derived-run-state-'));
+    try {
+      const sessionId = 'sess-derived-run-state';
+      const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(join(wd, '.omx', 'state', 'session.json'), JSON.stringify({ session_id: sessionId }, null, 2));
+      await writeFile(join(sessionDir, 'run-state.json'), JSON.stringify({ active: true, mode: 'derived' }, null, 2));
+      await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({ active: true, current_phase: 'executing' }, null, 2));
+
+      const response = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+        session_id: sessionId,
+      });
+
+      assert.deepEqual(response.payload, { active_modes: ['autopilot'] });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('does not list a mode active when terminal canonical visibility contradicts an active detail state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-terminal-canonical-wins-'));
+    try {
+      const sessionId = 'sess-terminal-visible';
+      const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(join(wd, '.omx', 'state', 'session.json'), JSON.stringify({ session_id: sessionId }, null, 2));
+      await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+        active: true,
+        current_phase: 'deep-interview',
+      }, null, 2));
+      await writeFile(join(sessionDir, 'skill-active-state.json'), JSON.stringify({
+        version: 1,
+        active: false,
+        skill: 'autopilot',
+        phase: 'complete',
+        completed_at: '2026-06-09T00:00:00.000Z',
+        session_id: sessionId,
+        active_skills: [{ skill: 'autopilot', phase: 'deep-interview', active: true, session_id: sessionId }],
+      }, null, 2));
+
+      const response = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+        session_id: sessionId,
+      });
+
+      assert.deepEqual(response.payload, { active_modes: [] });
+      const detailState = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+      assert.equal(detailState.active, true);
+      assert.equal(detailState.current_phase, 'deep-interview');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the implicit current session canonical state when filtering list-active', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-terminal-canonical-implicit-'));
+    try {
+      const sessionId = 'sess-terminal-implicit';
+      const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(join(wd, '.omx', 'state', 'session.json'), JSON.stringify({ session_id: sessionId, cwd: wd, state_root: join(wd, '.omx', 'state') }, null, 2));
+      await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+        active: true,
+        current_phase: 'deep-interview',
+      }, null, 2));
+      await writeFile(join(sessionDir, 'skill-active-state.json'), JSON.stringify({
+        version: 1,
+        active: false,
+        skill: 'autopilot',
+        phase: 'complete',
+        completed_at: '2026-06-09T00:00:00.000Z',
+        session_id: sessionId,
+        active_skills: [{ skill: 'autopilot', phase: 'deep-interview', active: true, session_id: sessionId }],
+      }, null, 2));
+
+      const response = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+
+      assert.deepEqual(response.payload, { active_modes: [] });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('syncs canonical skill-active state for tracked mode writes and clears', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-canonical-'));
+    try {
+      await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: 'sess-sync',
+        mode: 'autoresearch',
+        active: true,
+        current_phase: 'running',
+      });
+
+      const canonicalPath = join(wd, '.omx', 'state', 'sessions', 'sess-sync', 'skill-active-state.json');
+      const canonical = JSON.parse(await readFile(canonicalPath, 'utf-8')) as {
+        active_skills?: Array<{
+          skill: string;
+          phase?: string;
+          session_id?: string;
+          activated_at?: string;
+          updated_at?: string;
+        }>;
+      };
+      assert.deepEqual(canonical.active_skills, [{
+        skill: 'autoresearch',
+        phase: 'running',
+        active: true,
+        activated_at: canonical.active_skills?.[0]?.activated_at,
+        updated_at: canonical.active_skills?.[0]?.updated_at,
+        session_id: 'sess-sync',
+      }]);
+
+      await executeStateOperation('state_clear', {
+        workingDirectory: wd,
+        session_id: 'sess-sync',
+        mode: 'autoresearch',
+      });
+
+      const cleared = JSON.parse(await readFile(canonicalPath, 'utf-8')) as {
+        active: boolean;
+        active_skills?: unknown[];
+      };
+      assert.equal(cleared.active, false);
+      assert.deepEqual(cleared.active_skills, []);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+
+  it('allows ralplan unsupported native non-clean recovery without tracker-backed consensus', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-ralplan-unsupported-recovery-'));
+    try {
+      const sessionId = 'sess-ralplan-unsupported-recovery';
+      const stateDir = join(wd, '.omx', 'state');
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: sessionId, cwd: wd }, null, 2));
+      await writeFile(join(sessionDir, 'ralplan-state.json'), JSON.stringify({
+        mode: 'ralplan',
+        active: true,
+        current_phase: 'planning',
+        session_id: sessionId,
+      }, null, 2));
+
+      const response = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: sessionId,
+        mode: 'ralplan',
+        active: false,
+        current_phase: 'blocked',
+        native_subagent_support: {
+          status: 'unsupported',
+          reason: 'multi_agent_v1_unavailable',
+          source: 'post_tool_failure',
+        },
+      });
+
+      assert.equal(response.isError, undefined);
+      const state = JSON.parse(await readFile(join(sessionDir, 'ralplan-state.json'), 'utf-8')) as Record<string, unknown>;
+      assert.equal(state.active, false);
+      assert.equal(state.current_phase, 'blocked');
+      assert.equal(state.ralplan_consensus_gate, undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+
+
+
+
+
+
+
+
+  it('activates deep-interview when terminal Team detail outranks foreign legacy mirrors', async () => {
+    await withStateRootEnv({}, async () => {
+      const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-stale-team-transition-'));
+      try {
+        const stateDir = join(wd, '.omx', 'state');
+        await mkdir(stateDir, { recursive: true });
+        const teamState = { active: false, mode: 'team', current_phase: 'cancelled', run_outcome: 'continue' };
+        const foreignSkillState = {
+          version: 1,
+          active: true,
+          skill: 'team',
+          phase: 'team-exec',
+          current_phase: 'cancelled',
+          session_id: 'foreign-team-session',
+          active_skills: [{ skill: 'team', phase: 'team-exec', active: true }],
+        };
+        const runState = { version: 1, mode: 'team', active: true, outcome: 'continue', current_phase: 'team-exec' };
+        await writeFile(join(stateDir, 'team-state.json'), JSON.stringify(teamState, null, 2));
+        await writeFile(join(stateDir, 'skill-active-state.json'), JSON.stringify(foreignSkillState, null, 2));
+        await writeFile(join(stateDir, 'run-state.json'), JSON.stringify(runState, null, 2));
+
+        const beforeList = await executeStateOperation('state_list_active', { workingDirectory: wd });
+        const beforeTeam = await executeStateOperation('state_read', { workingDirectory: wd, mode: 'team' });
+        assert.deepEqual(beforeList.payload, { active_modes: [] });
+        assert.deepEqual(beforeTeam.payload, teamState);
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          mode: 'deep-interview',
+          active: true,
+          current_phase: 'deep-interview',
+          state: { interview_id: 'fixture', profile: 'quick', type: 'brownfield' },
+        });
+
+        const payload = responsePayload<{ success: boolean; path: string }>(response);
+        assert.equal(payload.success, true);
+        assert.equal(payload.path, join(stateDir, 'deep-interview-state.json'));
+        assert.deepEqual(JSON.parse(await readFile(join(stateDir, 'team-state.json'), 'utf-8')), teamState);
+        assert.deepEqual(JSON.parse(await readFile(join(stateDir, 'run-state.json'), 'utf-8')), runState);
+        assert.equal(existsSync(join(stateDir, 'sessions', 'foreign-team-session', 'deep-interview-state.json')), false);
+
+        assert.deepEqual(
+          JSON.parse(await readFile(join(stateDir, 'skill-active-state.json'), 'utf-8')),
+          foreignSkillState,
+        );
+        const afterList = await executeStateOperation('state_list_active', { workingDirectory: wd });
+        assert.deepEqual(afterList.payload, { active_modes: ['deep-interview'] });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+  });
+  it('fails closed without mutating root state when ralplan terminalization sees a foreign session pointer', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-ralplan-stale-session-'));
+    try {
+      const staleSessionId = 'sess-ralplan-stale';
+      const consensusGate = await writeNativeRalplanConsensusGate(wd, staleSessionId);
+      const stateDir = join(wd, '.omx', 'state');
+      const sessionDir = join(stateDir, 'sessions', staleSessionId);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: staleSessionId,
+        cwd: join(wd, 'different-project'),
+      }, null, 2));
+      await writeFile(join(stateDir, 'ralplan-state.json'), JSON.stringify({
+        mode: 'ralplan',
+        active: true,
+        current_phase: 'planning',
+        session_id: staleSessionId,
+      }, null, 2));
+      await writeFile(join(stateDir, 'skill-active-state.json'), JSON.stringify({
+        version: 1,
+        active: true,
+        skill: 'ralplan',
+        phase: 'planning',
+        session_id: staleSessionId,
+        active_skills: [
+          {
+            skill: 'ralplan',
+            phase: 'planning',
+            active: true,
+          },
+          {
+            skill: 'ralplan',
+            phase: 'planning',
+            active: true,
+            session_id: staleSessionId,
+          },
+        ],
+      }, null, 2));
+
+      const response = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        mode: 'ralplan',
+        active: false,
+        current_phase: 'complete',
+        status: 'complete',
+        terminal_reason: 'consensus approved bounded no-op',
+        state: {
+          session_id: staleSessionId,
+          ralplan_consensus_gate: consensusGate,
+        },
+      });
+
+      assert.equal(response.isError, true);
+      assert.deepEqual(response.payload, { error: WRITABLE_STATE_SCOPE_ERRORS.unusableSession });
+      const rootRalplan = JSON.parse(await readFile(join(stateDir, 'ralplan-state.json'), 'utf-8')) as Record<string, unknown>;
+      assert.equal(rootRalplan.active, true);
+      assert.equal(rootRalplan.current_phase, 'planning');
+      assert.equal(rootRalplan.session_id, staleSessionId);
+      const rootSkill = JSON.parse(await readFile(join(stateDir, 'skill-active-state.json'), 'utf-8')) as Record<string, unknown>;
+      assert.equal(rootSkill.active, true);
+      assert.equal(rootSkill.phase, 'planning');
+      assert.equal(Array.isArray(rootSkill.active_skills), true);
+      assert.equal(existsSync(join(sessionDir, 'ralplan-state.json')), false);
+      assert.equal(existsSync(join(sessionDir, 'skill-active-state.json')), false);
+
+      const listed = await executeStateOperation('state_list_active', {
+        workingDirectory: wd,
+      });
+      assert.deepEqual(listed.payload, { active_modes: ['ralplan'] });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('reconciles a stale-dead selected pointer with an explicit exact-current OMX_SESSION_ID (issue #3272)', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-stale-dead-repro-'));
+    const previousEnv = process.env.OMX_SESSION_ID;
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      await mkdir(stateDir, { recursive: true });
+      // Repro of comment 5069023665: the selected pointer names a session whose
+      // PID is dead; the exact current session is bound through OMX_SESSION_ID.
+      const pointerBody = JSON.stringify({ session_id: 'sess-stale-dead', cwd: wd, pid: 8388607 });
+      await writeFile(join(stateDir, 'session.json'), pointerBody);
+      process.env.OMX_SESSION_ID = 'sess-current';
+
+      const response = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        mode: 'ultragoal',
+        active: true,
+        current_phase: 'reviewing',
+        state: { goal_id: 'G001' },
+      });
+
+      const payload = responsePayload<{ success: boolean; path: string }>(response);
+      assert.equal(payload.success, true);
+      assert.equal(payload.path, join(stateDir, 'sessions', 'sess-current', 'ultragoal-state.json'));
+      assert.equal(existsSync(payload.path), true);
+      // The selected pointer is never rewritten by a scope-resolution read path.
+      assert.equal(await readFile(join(stateDir, 'session.json'), 'utf-8'), pointerBody);
+    } finally {
+      if (typeof previousEnv === 'string') process.env.OMX_SESSION_ID = previousEnv;
+      else delete process.env.OMX_SESSION_ID;
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+  it('does not reject planning writes from stale detail-only execution state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-stale-detail-rollback-'));
+    try {
+      const sessionId = 'sess-stale-detail';
+      const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'ralph-state.json'),
+        JSON.stringify({
+          active: true,
+          current_phase: 'executing',
+        }, null, 2),
+      );
+
+      const written = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: sessionId,
+        mode: 'ralplan',
+        active: true,
+        current_phase: 'planning',
+      });
+
+      assert.equal(written.isError, undefined);
+      assert.equal(existsSync(join(sessionDir, 'ralplan-state.json')), true);
+      const canonical = JSON.parse(
+        await readFile(join(sessionDir, 'skill-active-state.json'), 'utf-8'),
+      ) as { active_skills?: Array<{ skill: string }> };
+      assert.deepEqual(canonical.active_skills?.map((entry) => entry.skill), ['ralplan']);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+  it('lets canonical ralplan authority override stale detail-only Autopilot state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-canonical-ralplan-stale-autopilot-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-canonical-ralplan-stale-autopilot';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'skill-active-state.json'),
+          JSON.stringify({
+            active: true,
+            skill: 'ralplan',
+            phase: 'planning',
+            session_id: sessionId,
+            active_skills: [{ skill: 'ralplan', phase: 'planning', active: true, session_id: sessionId }],
+          }, null, 2),
+        );
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            workingDirectory: wd,
+            session_id: sessionId,
+          }, null, 2),
+        );
+
+        const written = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'ralplan',
+          active: true,
+          current_phase: 'critic-review',
+        });
+
+        assert.equal(written.isError, undefined);
+        assert.equal(existsSync(join(sessionDir, 'ralplan-state.json')), true);
+
+        const canonical = JSON.parse(
+          await readFile(join(sessionDir, 'skill-active-state.json'), 'utf-8'),
+        ) as { active_skills?: Array<{ skill: string }> };
+        assert.deepEqual(canonical.active_skills?.map((entry) => entry.skill), ['ralplan']);
+
+        const autopilotState = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(autopilotState.active, true);
+        assert.equal(autopilotState.auto_completed_reason, undefined);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Autopilot itself to enter the supervised ralplan child phase', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-child-phase-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-child-phase';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'autopilot-child.md'), '# Requirements\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            workingDirectory: wd,
+            state: {
+              deep_interview_gate: {
+                status: 'complete',
+                rationale: 'Requirements clarified and ready for consensus planning.',
+              },
+              handoff_artifacts: {
+                deep_interview: {
+                  spec_path: '.omx/specs/autopilot-child.md',
+                },
+              },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.active, true);
+        assert.equal(state.mode, 'autopilot');
+        assert.equal(state.current_phase, 'ralplan');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('permits Autopilot deep-interview completion with a ralplan advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-di-complete-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-di-complete-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            workingDirectory: wd,
+            state: {
+              deep_interview_gate: { status: 'required' },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ralplan');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'complete');
+        assert.equal(state.active, false);
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+
+
+  it('ignores stale standalone deep-interview question state for Autopilot supervisor handoff', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ignore-standalone-di-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ignore-standalone-di';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'autopilot-owned.md'), '# Requirements\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'deep-interview-state.json'),
+          JSON.stringify({
+            active: false,
+            mode: 'deep-interview',
+            current_phase: 'completed',
+            question_enforcement: {
+              obligation_id: 'stale-obligation',
+              source: 'omx-question',
+              status: 'pending',
+              lifecycle_outcome: 'askuserQuestion',
+              requested_at: '2026-05-28T00:00:00.000Z',
+            },
+          }, null, 2),
+        );
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            state: {
+              deep_interview_gate: {
+                status: 'complete',
+                rationale: 'Autopilot-owned gate is complete.',
+              },
+              handoff_artifacts: {
+                deep_interview: { spec_path: '.omx/specs/autopilot-owned.md' },
+              },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ralplan');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('allows Autopilot handoff when next state satisfies a previously pending question', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-next-question-satisfied-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-next-question-satisfied';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'answered-question.md'), '# Requirements\n');
+        const questionId = 'question-next-satisfied';
+        await mkdir(join(sessionDir, 'questions'), { recursive: true });
+        await writeFile(
+          join(sessionDir, 'questions', `${questionId}.json`),
+          JSON.stringify({
+            kind: 'omx.question/v1',
+            question_id: questionId,
+            session_id: sessionId,
+            source: 'deep-interview',
+            status: 'answered',
+            answer: 'lowercase ascii slug',
+            answers: [{ question_id: 'q-1', index: 0, answer: 'lowercase ascii slug' }],
+          }, null, 2),
+        );
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            state: {
+              deep_interview_question: {
+                obligation_id: 'obligation-next-satisfied',
+                source: 'omx-question',
+                status: 'waiting_for_user',
+                requested_at: '2026-05-28T00:00:00.000Z',
+              },
+              deep_interview_gate: { status: 'required' },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+          state: {
+            deep_interview_question: {
+              obligation_id: 'obligation-next-satisfied',
+              source: 'omx-question',
+              status: 'satisfied',
+              requested_at: '2026-05-28T00:00:00.000Z',
+              question_id: questionId,
+              satisfied_at: '2026-05-28T00:01:00.000Z',
+            },
+            deep_interview_gate: {
+              status: 'complete',
+              rationale: 'The answered question resolves the CLI output policy.',
+            },
+            handoff_artifacts: {
+              deep_interview: { spec_path: '.omx/specs/answered-question.md' },
+            },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ralplan');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Autopilot deep-interview to ralplan handoff with required valid execution contract strides', async () => {
+    for (const stride of ['task', 'deliverable', 'milestone'] as const) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-execution-contract-${stride}-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-execution-contract-${stride}`;
+          const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+          await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+          await writeFile(join(wd, '.omx', 'specs', `${stride}-stride.md`), '# Requirements\n');
+          await mkdir(sessionDir, { recursive: true });
+          await writeFile(
+            join(sessionDir, 'autopilot-state.json'),
+            JSON.stringify({
+              active: true,
+              mode: 'autopilot',
+              current_phase: 'deep-interview',
+            }, null, 2),
+          );
+
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            session_id: sessionId,
+            mode: 'autopilot',
+            active: true,
+            current_phase: 'ralplan',
+            state: {
+              deep_interview_gate: {
+                status: 'complete',
+                rationale: `The ${stride} stride is explicitly contracted for planning.`,
+              },
+              handoff_artifacts: {
+                deep_interview: {
+                  spec_path: `.omx/specs/${stride}-stride.md`,
+                  execution_contract_required: true,
+                  execution_contract: validExecutionContract(stride),
+                },
+              },
+            },
+          });
+
+          assert.equal(response.isError, undefined);
+          const state = JSON.parse(
+            await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+          ) as Record<string, unknown>;
+          assert.equal(state.current_phase, 'ralplan');
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('allows partial Autopilot ralplan handoff writes when a required execution contract is already persisted', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-execution-contract-partial-write-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-execution-contract-partial-write';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'persisted-milestone.md'), '# Requirements\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            state: {
+              deep_interview_gate: {
+                status: 'complete',
+                rationale: 'The persisted interview artifact already defines the milestone contract.',
+              },
+              handoff_artifacts: {
+                deep_interview: {
+                  spec_path: '.omx/specs/persisted-milestone.md',
+                  execution_contract_required: true,
+                  execution_contract: validExecutionContract('milestone'),
+                },
+              },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ralplan');
+        assert.deepEqual(
+          ((state.state as Record<string, unknown>).handoff_artifacts as Record<string, unknown>).deep_interview,
+          {
+            spec_path: '.omx/specs/persisted-milestone.md',
+            execution_contract_required: true,
+            execution_contract: validExecutionContract('milestone'),
+          },
+        );
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('preserves Autopilot legacy behavior when execution contract is absent or not required', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-execution-contract-not-required-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-execution-contract-not-required';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'legacy-behavior.md'), '# Requirements\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+          state: {
+            deep_interview_gate: {
+              status: 'complete',
+              rationale: 'No execution contract was required for this legacy handoff.',
+            },
+            handoff_artifacts: {
+              deep_interview: {
+                spec_path: '.omx/specs/legacy-behavior.md',
+                execution_contract_required: false,
+                execution_contract: {
+                  version: 1,
+                  execution_stride: 'phase',
+                },
+              },
+            },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ralplan');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('honors all documented execution contract required marker locations and runtime aliases', async () => {
+    const aliasContract = {
+      version: 1,
+      executionStride: 'deliverable',
+      source: 'deep-interview',
+      selected_by: 'user',
+      allowTaskShrink: false,
+      completionUnit: 'The named deliverable',
+      stopCondition: 'Stop after the deliverable is complete and verified',
+      acceptanceCoverageScope: 'deliverable',
+      shrinkPolicy: 'ask_before_shrink',
+    };
+
+    for (const [caseName, topLevelPatch, nestedPatch, handoffPatch] of [
+      ['gate', {}, { deep_interview_gate: { execution_contract_required: true } }, {}],
+      ['top-level', { execution_contract_required: true }, {}, {}],
+      ['nested-state', {}, { execution_contract_required: true }, {}],
+      ['handoff', {}, {}, { execution_contract_required: true }],
+      ['handoff-camel', {}, {}, { executionContractRequired: true }],
+    ] as const) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-execution-contract-marker-${caseName}-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-execution-contract-marker-${caseName}`;
+          const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+          await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+          await writeFile(join(wd, '.omx', 'specs', `${caseName}-required.md`), '# Requirements\n');
+          await mkdir(sessionDir, { recursive: true });
+          await writeFile(
+            join(sessionDir, 'autopilot-state.json'),
+            JSON.stringify({
+              active: true,
+              mode: 'autopilot',
+              current_phase: 'deep-interview',
+            }, null, 2),
+          );
+
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            session_id: sessionId,
+            mode: 'autopilot',
+            active: true,
+            current_phase: 'ralplan',
+            ...topLevelPatch,
+            state: {
+              ...nestedPatch,
+              deep_interview_gate: {
+                status: 'complete',
+                rationale: `The ${caseName} marker requires a valid execution contract.`,
+                ...((nestedPatch as { deep_interview_gate?: Record<string, unknown> }).deep_interview_gate ?? {}),
+              },
+              handoff_artifacts: {
+                deep_interview: {
+                  spec_path: `.omx/specs/${caseName}-required.md`,
+                  execution_contract: aliasContract,
+                  ...handoffPatch,
+                },
+              },
+            },
+          });
+
+          assert.equal(response.isError, undefined);
+          const state = JSON.parse(
+            await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+          ) as Record<string, unknown>;
+          assert.equal(state.current_phase, 'ralplan');
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+
+
+
+  it('allows Autopilot deep-interview to ralplan self-write with explicit user-authorized skip evidence', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-child-phase-skip-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-child-phase-skip';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'authorized-skip.md'), '# Skip authorization and retained requirements\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'deep-interview',
+            state: {
+              deep_interview_gate: {
+                status: 'skipped',
+                skip_authorized_by_user: true,
+                skip_reason: 'User explicitly authorized skipping deep-interview for this bounded follow-up.',
+                skipped_at: '2026-05-28T00:02:00.000Z',
+                source: 'user',
+                session_id: sessionId,
+              },
+              handoff_artifacts: { deep_interview: { spec_path: '.omx/specs/authorized-skip.md' } },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ralplan');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves Autopilot satisfied question evidence under OMX_TEAM_STATE_ROOT', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-team-question-'));
+    const previousOmxRoot = process.env.OMX_ROOT;
+    const previousOmxStateRoot = process.env.OMX_STATE_ROOT;
+    const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+    try {
+      const wd = join(root, 'source');
+      const teamStateRoot = join(root, 'team-state');
+      const sessionId = 'sess-autopilot-team-question';
+      const sessionDir = join(teamStateRoot, 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'team-question.md'), '# Requirements\n');
+      const questionId = 'question-team-satisfied';
+      await mkdir(join(sessionDir, 'questions'), { recursive: true });
+      await writeFile(
+        join(sessionDir, 'questions', `${questionId}.json`),
+        JSON.stringify({
+          kind: 'omx.question/v1',
+          question_id: questionId,
+          session_id: sessionId,
+          source: 'deep-interview',
+          status: 'answered',
+          answer: 'clarified scope',
+          answers: [{ question_id: 'q-1', index: 0, answer: 'clarified scope' }],
+        }, null, 2),
+      );
+      await writeFile(
+        join(sessionDir, 'autopilot-state.json'),
+        JSON.stringify({
+          active: true,
+          mode: 'autopilot',
+          current_phase: 'deep-interview',
+          question_enforcement: {
+            obligation_id: 'obligation-team-question',
+            source: 'omx-question',
+            status: 'satisfied',
+            lifecycle_outcome: 'askuserQuestion',
+            requested_at: '2026-05-28T00:00:00.000Z',
+            question_id: questionId,
+            satisfied_at: '2026-05-28T00:01:00.000Z',
+          },
+          state: {
+            deep_interview_gate: {
+              status: 'complete',
+              rationale: 'The answered question resolves the execution boundary.',
+            },
+            handoff_artifacts: { deep_interview: { spec_path: '.omx/specs/team-question.md' } },
+          },
+        }, null, 2),
+      );
+
+      delete process.env.OMX_ROOT;
+      delete process.env.OMX_STATE_ROOT;
+      process.env.OMX_TEAM_STATE_ROOT = teamStateRoot;
+
+      const response = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: sessionId,
+        mode: 'autopilot',
+        active: true,
+        current_phase: 'ralplan',
+      });
+
+      assert.equal(response.isError, undefined);
+      const state = JSON.parse(
+        await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      assert.equal(state.current_phase, 'ralplan');
+      assert.equal(existsSync(join(wd, '.omx', 'state', 'sessions', sessionId, 'questions', `${questionId}.json`)), false);
+    } finally {
+      if (typeof previousOmxRoot === 'string') process.env.OMX_ROOT = previousOmxRoot;
+      else delete process.env.OMX_ROOT;
+      if (typeof previousOmxStateRoot === 'string') process.env.OMX_STATE_ROOT = previousOmxStateRoot;
+      else delete process.env.OMX_STATE_ROOT;
+      if (typeof previousTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = previousTeamStateRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+
+
+  it('permits Autopilot ralplan completion with an ultragoal advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ralplan-complete-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ralplan-complete-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'ralplan',
+            state: {
+              handoff_artifacts: {
+                ralplan: {
+                  plan_path: '.omx/plans/prd.md',
+                  test_spec_path: '.omx/plans/test-spec.md',
+                },
+              },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ultragoal');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(
+          await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'),
+        ) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'complete');
+        assert.equal(state.active, false);
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot deep-interview to ralplan with a handoff advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-di-missing-artifact-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-di-missing-artifact';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+          active: true,
+          mode: 'autopilot',
+          current_phase: 'deep-interview',
+          workingDirectory: wd,
+          state: { deep_interview_gate: { status: 'complete', rationale: 'Requirements are clear.' } },
+        }, null, 2));
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'deep-interview-handoff');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ralplan');
+        assert.equal(state.active, true);
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('advances the executable Autopilot chain through durable deep-interview and ralplan handoffs', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-executable-chain-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-executable-chain';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'specs'), { recursive: true });
+        await mkdir(join(wd, '.omx', 'plans'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'specs', 'autopilot-chain.md'), '# Requirements\n');
+        await writeFile(join(wd, '.omx', 'plans', 'prd-autopilot-chain.md'), '# Plan\n');
+        await writeFile(join(wd, '.omx', 'plans', 'test-spec-autopilot-chain.md'), '# Tests\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+          active: true,
+          mode: 'autopilot',
+          current_phase: 'deep-interview',
+          workingDirectory: wd,
+          session_id: sessionId,
+        }, null, 2));
+
+        const planning = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+          state: {
+            deep_interview_gate: {
+              status: 'complete',
+              rationale: 'Scope, constraints, and acceptance criteria are resolved.',
+            },
+            handoff_artifacts: {
+              deep_interview: { spec_path: '.omx/specs/autopilot-chain.md' },
+            },
+          },
+        });
+        assert.equal(planning.isError, undefined);
+
+        const execution = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ultragoal',
+          review_cycle: 0,
+          state: {
+            handoff_artifacts: {
+              ralplan: {
+                plan_path: '.omx/plans/prd-autopilot-chain.md',
+                test_spec_path: '.omx/plans/test-spec-autopilot-chain.md',
+              },
+            },
+            ralplan_consensus_gate: {
+              complete: true,
+              ralplan_architect_review: { agent_role: 'architect', verdict: 'approve', session_id: sessionId, review_cycle: 0, sequence_index: 1 },
+              ralplan_critic_review: { agent_role: 'critic', verdict: 'approve', session_id: sessionId, review_cycle: 0, sequence_index: 2 },
+            },
+            ralplan_execution_handoff: {
+              authorized: true,
+              source: 'autopilot',
+              reason: 'The explicit Autopilot run proceeds through its defining execution stage.',
+              authorized_at: '2026-08-13T00:00:00.000Z',
+              session_id: sessionId,
+              review_cycle: 0,
+            },
+          },
+        });
+        assert.equal(execution.isError, undefined);
+
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as {
+          current_phase?: string;
+          handoff_artifacts?: Record<string, unknown>;
+        };
+        assert.equal(state.current_phase, 'ultragoal');
+        assert.ok(state.handoff_artifacts?.deep_interview);
+        assert.ok(state.handoff_artifacts?.ralplan);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot ralplan to ultragoal with a handoff advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ralplan-missing-gates-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ralplan-missing-gates';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+          active: true,
+          mode: 'autopilot',
+          current_phase: 'ralplan',
+          state: { handoff_artifacts: { ralplan: { plan_path: '.omx/plans/prd.md' } } },
+        }, null, 2));
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ultragoal',
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ralplan-handoff');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.current_phase, 'ultragoal');
+        assert.equal(state.active, true);
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a malformed handoff carrier through state_write even when one is already stored', async () => {
+    // Generation-4 review: state_write has its own carrier merge, so the modes/base.ts guard did not
+    // cover it. With an existing non-empty carrier the malformed value was simply overwritten by the
+    // stored map, the gate saw an ordinary object, and the phase advanced with an advisory. The shared
+    // validator in src/state/handoff-carrier.ts now rejects it at every writer.
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-carrier-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-carrier-state-write';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        const stored = {
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ralplan',
+          session_id: sessionId,
+          workingDirectory: wd,
+          handoff_artifacts: { deep_interview: { spec_path: '.omx/specs/spec.md' } },
+        };
+        const statePath = join(sessionDir, 'autopilot-state.json');
+        await writeFile(statePath, JSON.stringify(stored));
+        const before = await readFile(statePath, 'utf-8');
+
+        for (const malformed of [[], 'forged', 42, true]) {
+          const result = await executeStateOperation('state_write', {
+            mode: 'autopilot',
+            session_id: sessionId,
+            workingDirectory: wd,
+            active: true,
+            current_phase: 'ultragoal',
+            handoff_artifacts: malformed,
+          } as never);
+          assert.equal(result.isError, true, `${JSON.stringify(malformed)} must be refused`);
+          assert.match(JSON.stringify(result), /malformed/i);
+          assert.equal(await readFile(statePath, 'utf-8'), before, 'state bytes must be unchanged');
+        }
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects forged string-typed Ralplan ordering and non-ISO authorization evidence', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ralplan-forged-types-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ralplan-forged-types';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(join(wd, '.omx', 'plans'), { recursive: true });
+        await writeFile(join(wd, '.omx', 'plans', 'plan.md'), '# Plan\n');
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+          active: true,
+          mode: 'autopilot',
+          current_phase: 'ralplan',
+          session_id: sessionId,
+          workingDirectory: wd,
+          review_cycle: 1,
+        }, null, 2));
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ultragoal',
+          state: {
+            handoff_artifacts: { ralplan: { plan_path: '.omx/plans/plan.md' } },
+            ralplan_consensus_gate: {
+              complete: true,
+              ralplan_architect_review: { agent_role: 'architect', verdict: 'approve', review_cycle: '1', sequence_index: '1' },
+              ralplan_critic_review: { agent_role: 'critic', verdict: 'approve', review_cycle: '1', sequence_index: '2' },
+            },
+            ralplan_execution_handoff: { authorized: true, authorized_at: 'yesterday', session_id: sessionId, review_cycle: '1', source: 'autopilot' },
+          },
+        });
+        assert.equal(response.isError, true);
+        assert.match(String((response.payload as { error?: string }).error ?? ''), /durable planning artifacts/);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects nested foreign Autopilot identity with zero mutation', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-foreign-identity-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-foreign-identity';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        const original = JSON.stringify({ active: true, mode: 'autopilot', current_phase: 'deep-interview', session_id: sessionId, workingDirectory: wd }, null, 2);
+        await writeFile(join(sessionDir, 'autopilot-state.json'), original);
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          state: { session_id: 'foreign-session', workingDirectory: join(wd, 'other') },
+        });
+        assert.equal(response.isError, true);
+        assert.equal(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8'), original);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Autopilot ralplan unsupported native non-clean recovery', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ralplan-unsupported-recovery-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ralplan-unsupported-recovery';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(join(sessionDir, 'autopilot-state.json'), JSON.stringify({
+          active: true,
+          mode: 'autopilot',
+          current_phase: 'ralplan',
+        }, null, 2));
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'blocked',
+          native_subagent_support: {
+            status: 'unsupported',
+            reason: 'multi_agent_v1_unavailable',
+            source: 'post_tool_failure',
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'blocked');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+
+
+  it('permits Autopilot implementation-phase completion with a code-review advisory', async () => {
+    for (const phase of ['ultragoal', 'rework', 'team', 'ralph']) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-${phase}-complete-deny-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-${phase}-complete-deny`;
+          const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+          await mkdir(sessionDir, { recursive: true });
+          await writeFile(
+            join(sessionDir, 'autopilot-state.json'),
+            JSON.stringify({
+              active: true,
+              mode: 'autopilot',
+              current_phase: phase,
+              state: { handoff_artifacts: { ultragoal: { verification: 'passed' } } },
+            }, null, 2),
+          );
+
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            session_id: sessionId,
+            mode: 'autopilot',
+            active: false,
+            current_phase: 'complete',
+            state: {
+              review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+              qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/1' },
+            },
+          });
+
+          assert.equal(response.isError, undefined);
+          const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+          assert.equal(advisory?.skippedGate, 'code-review');
+          assert.ok(advisory?.missingEvidence);
+          const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+          assert.equal(state.active, false);
+          assert.equal(state.current_phase, 'complete');
+          assert.equal((state.skipped_gates as unknown[]).length, 1);
+          assert.equal(state.completion_status, 'complete-with-skipped-gates');
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('permits Autopilot implementation-phase skip directly to ultraqa with a code-review advisory', async () => {
+    for (const phase of ['ultragoal', 'rework', 'team', 'ralph']) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-${phase}-ultraqa-skip-deny-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-${phase}-ultraqa-skip-deny`;
+          const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+          await mkdir(sessionDir, { recursive: true });
+          await writeFile(
+            join(sessionDir, 'autopilot-state.json'),
+            JSON.stringify({
+              active: true,
+              mode: 'autopilot',
+              current_phase: phase,
+              state: { handoff_artifacts: { ultragoal: { verification: 'passed' } } },
+            }, null, 2),
+          );
+
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            session_id: sessionId,
+            mode: 'autopilot',
+            active: true,
+            current_phase: 'ultraqa',
+          });
+
+          assert.equal(response.isError, undefined);
+          const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+          assert.equal(advisory?.skippedGate, 'code-review');
+          assert.ok(advisory?.missingEvidence);
+          const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+          assert.equal(state.active, true);
+          assert.equal(state.current_phase, 'ultraqa');
+          assert.equal((state.skipped_gates as unknown[]).length, 1);
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('permits Autopilot code-review completion with an ultraqa advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-code-review-complete-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-code-review-complete-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'code-review',
+            state: {
+              handoff_artifacts: { code_review: { source: 'native-subagent' } },
+              review_verdict: { recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          state: {
+            review_verdict: { recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true },
+            qa_verdict: { clean: true, skipped: false },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ultraqa');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Autopilot code-review REQUEST_CHANGES to enter implementation rework', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-review-rework-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-review-rework';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({ active: true, mode: 'autopilot', current_phase: 'code-review', review_cycle: 1 }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'rework',
+          review_cycle: 2,
+          state: {
+            handoff_artifacts: {
+              code_review: {
+                stage: 'code-review',
+                recommendation: 'REQUEST_CHANGES',
+                architectural_status: 'CLEAR',
+                clean: false,
+                artifact_path: '.omx/reviews/code-review-cycle-1.json',
+                findings: ['Fix src/implementation.ts'],
+              },
+            },
+            review_verdict: {
+              stage: 'code-review',
+              recommendation: 'REQUEST_CHANGES',
+              architectural_status: 'CLEAR',
+              clean: false,
+              artifact_path: '.omx/reviews/code-review-cycle-1.json',
+              findings: ['Fix src/implementation.ts'],
+            },
+            return_to_ralplan_reason: null,
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, true);
+        assert.equal(state.current_phase, 'rework');
+        assert.equal(state.review_cycle, 2);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('replaces stale blocking review state when Autopilot completes with clean latest evidence', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-clean-clears-stale-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-clean-clears-stale';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'ultraqa',
+            return_to_ralplan_reason: 'Earlier code-review BLOCK required fixes.',
+            handoff_artifacts: {
+              code_review: { stage: 'code-review', recommendation: 'REQUEST_CHANGES', architectural_status: 'BLOCK', clean: false, artifact_path: '.omx/reviews/stale-block.json' },
+              ultraqa: null,
+            },
+            state: {
+              review_verdict: { stage: 'code-review', recommendation: 'REQUEST_CHANGES', architectural_status: 'BLOCK', clean: false, artifact_path: '.omx/reviews/stale-block.json' },
+              qa_verdict: null,
+              return_to_ralplan_reason: 'Earlier code-review BLOCK required fixes.',
+            },
+          }, null, 2),
+        );
+
+        const cleanReview = { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review-cycle-2.json' };
+        const cleanQa = { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/2864' };
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          completed_at: '2026-06-18T05:00:00.000Z',
+          state: {
+            review_verdict: cleanReview,
+            qa_verdict: cleanQa,
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        const nestedState = state.state as Record<string, unknown>;
+        const handoffArtifacts = nestedState.handoff_artifacts as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.deepEqual(state.review_verdict, cleanReview);
+        assert.deepEqual(state.qa_verdict, cleanQa);
+        assert.equal(state.return_to_ralplan_reason, null);
+        assert.deepEqual(nestedState.review_verdict, cleanReview);
+        assert.deepEqual(nestedState.qa_verdict, cleanQa);
+        assert.equal(nestedState.return_to_ralplan_reason, null);
+        assert.deepEqual(handoffArtifacts.code_review, cleanReview);
+        assert.deepEqual(handoffArtifacts.ultraqa, cleanQa);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot ultraqa completion with a clean-evidence advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ultraqa-complete-evidence-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ultraqa-complete-evidence-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'ultraqa',
+            state: {
+              review_verdict: { recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true },
+              qa_verdict: null,
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          state: {
+            review_verdict: { recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ultraqa-evidence');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot implementation and code-review terminalization via ultraqa with advisories', async () => {
+    for (const phase of ['ultragoal', 'rework', 'team', 'ralph', 'code-review']) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-${phase}-inactive-ultraqa-deny-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-${phase}-inactive-ultraqa-deny`;
+          const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+          await mkdir(sessionDir, { recursive: true });
+          await writeFile(
+            join(sessionDir, 'autopilot-state.json'),
+            JSON.stringify({ active: true, mode: 'autopilot', current_phase: phase }, null, 2),
+          );
+
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            session_id: sessionId,
+            mode: 'autopilot',
+            active: false,
+            current_phase: 'ultraqa',
+            state: {
+              review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+              qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/3' },
+            },
+          });
+
+          assert.equal(response.isError, undefined);
+          const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+          assert.equal(advisory?.skippedGate, phase === 'code-review' ? 'ultraqa' : 'code-review');
+          assert.ok(advisory?.missingEvidence);
+          const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+          assert.equal(state.active, false);
+          assert.equal(state.current_phase, 'ultraqa');
+          assert.equal((state.skipped_gates as unknown[]).length, 1);
+          assert.equal(state.completion_status, 'complete-with-skipped-gates');
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('permits Autopilot ultraqa completion with provenance advisories', async () => {
+    const cases = [
+      {
+        name: 'swapped-stage',
+        review_verdict: { stage: 'ultraqa', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/state/autopilot-state.json#pipeline_stage_results.ultraqa.artifacts.qa_verdict' },
+        qa_verdict: { stage: 'code-review', clean: true, skipped: false, artifact_path: '.omx/state/autopilot-state.json#pipeline_stage_results.code-review.artifacts.review_verdict' },
+      },
+      {
+        name: 'swapped-artifact-path',
+        review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/state/autopilot-state.json#pipeline_stage_results.ultraqa.artifacts.qa_verdict' },
+        qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, artifact_path: '.omx/state/autopilot-state.json#pipeline_stage_results.code-review.artifacts.review_verdict' },
+      },
+      {
+        name: 'review-uses-ultraqa-provenance',
+        review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/ultraqa/qa-verdict.json' },
+        qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, artifact_path: '.omx/qa/qa-verdict.json' },
+      },
+      {
+        name: 'qa-uses-code-review-provenance',
+        review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+        qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, artifact_path: '.omx/reviews/code-review.json' },
+      },
+      {
+        name: 'shared-neutral-provenance',
+        review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/evidence/shared.json' },
+        qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, artifact_path: '.omx/evidence/shared.json' },
+      },
+    ];
+
+    for (const testCase of cases) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-ultraqa-${testCase.name}-deny-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-ultraqa-${testCase.name}-deny`;
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({ active: true, mode: 'autopilot', current_phase: 'ultraqa' }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          state: {
+            review_verdict: testCase.review_verdict,
+            qa_verdict: testCase.qa_verdict,
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ultraqa-evidence');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('permits Autopilot ultraqa completion with self-attested evidence advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ultraqa-self-attested-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ultraqa-self-attested-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'ultraqa',
+            state: {
+              review_verdict: { recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true },
+              qa_verdict: { clean: true, skipped: false },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          state: {
+            review_verdict: { recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true },
+            qa_verdict: { clean: true, skipped: false },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ultraqa-evidence');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot ultraqa skipped completion with a QA provenance advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ultraqa-skipped-no-provenance-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ultraqa-skipped-no-provenance-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({ active: true, mode: 'autopilot', current_phase: 'ultraqa' }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          state: {
+            review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+            qa_verdict: { stage: 'ultraqa', clean: true, skipped: true, reason: 'Docs-only change; QA not applicable.' },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'ultraqa-evidence');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot completion from an unknown active phase with an advisory', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-unknown-phase-complete-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-unknown-phase-complete-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'bogus',
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          completed_at: '2026-06-09T14:40:00.000Z',
+          state: {
+            review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+            qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/5' },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'autopilot-phase');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('permits Autopilot completion from an unknown active phase when persisted state omits mode', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-unknown-phase-no-mode-complete-deny-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-unknown-phase-no-mode-complete-deny';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            current_phase: 'bogus',
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          completed_at: '2026-06-09T14:45:00.000Z',
+          state: {
+            review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+            qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/6' },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const advisory = (response.payload as { advisory?: { skippedGate?: string; missingEvidence?: string } }).advisory;
+        assert.equal(advisory?.skippedGate, 'autopilot-phase');
+        assert.ok(advisory?.missingEvidence);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+        assert.equal((state.skipped_gates as unknown[]).length, 1);
+        assert.equal(state.completion_status, 'complete-with-skipped-gates');
+        assert.equal(Object.prototype.hasOwnProperty.call(state, 'mode'), false);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('does not persist user-supplied trustedPipelineProgress from Autopilot state_write', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-trusted-field-strip-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-trusted-field-strip';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            current_phase: 'ultraqa',
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: true,
+          current_phase: 'ultraqa',
+          trustedPipelineProgress: true,
+          state: {
+            trustedPipelineProgress: true,
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(Object.prototype.hasOwnProperty.call(state, 'trustedPipelineProgress'), false);
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Autopilot state_write cancellation from gated phases without clean review and QA evidence', async () => {
+    for (const phase of ['deep-interview', 'ralplan', 'ultragoal', 'code-review']) {
+      const wd = await mkdtemp(join(tmpdir(), `omx-state-ops-autopilot-${phase}-cancel-allow-`));
+      try {
+        await withOmxRootEnv(wd, async () => {
+          const sessionId = `sess-autopilot-${phase}-cancel-allow`;
+          const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+          await mkdir(sessionDir, { recursive: true });
+          await writeFile(
+            join(sessionDir, 'autopilot-state.json'),
+            JSON.stringify({
+              active: true,
+              current_phase: phase,
+            }, null, 2),
+          );
+
+          const response = await executeStateOperation('state_write', {
+            workingDirectory: wd,
+            session_id: sessionId,
+            mode: 'autopilot',
+            active: false,
+            current_phase: 'cancelled',
+            completed_at: '2026-06-09T16:30:00.000Z',
+          });
+
+          assert.equal(response.isError, undefined);
+          const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+          assert.equal(state.active, false);
+          assert.equal(state.current_phase, 'cancelled');
+          assert.equal(state.run_outcome, 'cancelled');
+          assert.equal(state.completed_at, '2026-06-09T16:30:00.000Z');
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    }
+  });
+
+  it('allows Autopilot ultraqa completion with clean review and QA evidence', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ultraqa-complete-allow-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ultraqa-complete-allow';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({
+            active: true,
+            mode: 'autopilot',
+            current_phase: 'ultraqa',
+            state: {
+              review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+              qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/1' },
+            },
+          }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          completed_at: '2026-06-09T14:30:00.000Z',
+          state: {
+            review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+            qa_verdict: { stage: 'ultraqa', clean: true, skipped: false, url: 'https://github.com/Yeachan-Heo/oh-my-codex/actions/runs/1' },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('allows Autopilot ultraqa skipped completion with reason and durable QA provenance', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-autopilot-ultraqa-skipped-allow-'));
+    try {
+      await withOmxRootEnv(wd, async () => {
+        const sessionId = 'sess-autopilot-ultraqa-skipped-allow';
+        const sessionDir = join(wd, '.omx', 'state', 'sessions', sessionId);
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(
+          join(sessionDir, 'autopilot-state.json'),
+          JSON.stringify({ active: true, mode: 'autopilot', current_phase: 'ultraqa' }, null, 2),
+        );
+
+        const response = await executeStateOperation('state_write', {
+          workingDirectory: wd,
+          session_id: sessionId,
+          mode: 'autopilot',
+          active: false,
+          current_phase: 'complete',
+          completed_at: '2026-06-09T14:35:00.000Z',
+          state: {
+            review_verdict: { stage: 'code-review', recommendation: 'APPROVE', architectural_status: 'CLEAR', clean: true, artifact_path: '.omx/reviews/code-review.json' },
+            qa_verdict: {
+              stage: 'ultraqa',
+              clean: true,
+              skipped: true,
+              reason: 'Docs-only change; QA not applicable.',
+              artifact_path: '.omx/state/autopilot-state.json#pipeline_stage_results.ultraqa.artifacts.qa_verdict',
+            },
+          },
+        });
+
+        assert.equal(response.isError, undefined);
+        const state = JSON.parse(await readFile(join(sessionDir, 'autopilot-state.json'), 'utf-8')) as Record<string, unknown>;
+        assert.equal(state.active, false);
+        assert.equal(state.current_phase, 'complete');
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+
+  it('does not auto-complete existing workflow state when tracked write validation fails', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-validate-before-transition-'));
+    try {
+      const sessionDir = join(wd, '.omx', 'state', 'sessions', 'sess-invalid');
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(
+        join(sessionDir, 'ralplan-state.json'),
+        JSON.stringify({ active: true, mode: 'ralplan', current_phase: 'planning' }, null, 2),
+      );
+
+      const denied = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: 'sess-invalid',
+        mode: 'ralph',
+        active: true,
+        current_phase: 'definitely-invalid',
+      });
+
+      assert.equal(denied.isError, true);
+      assert.match(String((denied.payload as { error?: string }).error || ''), /ralph\.current_phase/i);
+
+      const ralplanState = JSON.parse(
+        await readFile(join(sessionDir, 'ralplan-state.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      assert.equal(ralplanState.active, true);
+      assert.equal(ralplanState.current_phase, 'planning');
+      assert.equal(existsSync(join(sessionDir, 'ralph-state.json')), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps session-scoped tracked state writable after root-state parse fallback on resume', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-resume-root-fallback-'));
+    try {
+      const stateDir = join(wd, '.omx', 'state');
+      const sessionId = 'sess-resume-root-fallback';
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      await mkdir(sessionDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: sessionId, cwd: wd, state_root: stateDir }, null, 2));
+      await writeFile(
+        join(stateDir, 'ralph-state.json'),
+        JSON.stringify({
+          active: true,
+          current_phase: 'executing',
+          owner_omx_session_id: 'stale-root-owner',
+        }, null, 2),
+      );
+      await writeFile(
+        join(sessionDir, 'ralph-state.json'),
+        JSON.stringify({
+          active: true,
+          current_phase: 'executing',
+          owner_omx_session_id: sessionId,
+        }, null, 2),
+      );
+
+      const writeResult = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        mode: 'ralph',
+        state: {
+          current_phase: 'verify',
+        },
+      });
+
+      assert.equal(writeResult.isError, undefined);
+      const sessionState = JSON.parse(
+        await readFile(join(sessionDir, 'ralph-state.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      assert.equal(sessionState.active, true);
+      assert.equal(sessionState.current_phase, 'verifying');
+      assert.equal(sessionState.owner_omx_session_id, sessionId);
+
+      const rootState = JSON.parse(
+        await readFile(join(stateDir, 'ralph-state.json'), 'utf-8'),
+      ) as Record<string, unknown>;
+      assert.equal(rootState.current_phase, 'executing');
+      assert.equal(rootState.owner_omx_session_id, 'stale-root-owner');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+type WritableEvent = readonly [number, WritableCommitSite, 'write' | 'unlink', string];
+
+function installScopeTakeover(
+  stateDir: string,
+  expected: readonly [number, WritableCommitSite],
+  replacementPointer: string,
+): WritableEvent[] {
+  const events: WritableEvent[] = [];
+  __setWritableStateScopeTestHooksForTests({
+    beforeScopeRevalidation: async (event) => {
+      const actual: WritableEvent = [event.commitOrdinal, event.site, event.kind, event.path];
+      events.push(actual);
+      if (event.commitOrdinal === expected[0] && event.site === expected[1]) {
+        await writeFile(join(stateDir, 'session.json'), replacementPointer);
+        return;
+      }
+      if (event.commitOrdinal === expected[0] || event.site === expected[1]) {
+        throw new Error(`takeover drift: expected (${expected[0]}, ${expected[1]}), got (${event.commitOrdinal}, ${event.site})`);
+      }
+    },
+  });
+  return events;
+}
+
+async function seedWritableScope(wd: string, sessionId = 'sess-current'): Promise<{ stateDir: string; sessionId: string }> {
+  const stateDir = getBaseStateDir(wd);
+  await mkdir(join(stateDir, 'sessions', sessionId), { recursive: true });
+  await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: sessionId, cwd: wd, state_root: stateDir }));
+  return { stateDir, sessionId };
+}
+
+function assertPrefix(events: WritableEvent[], expected: WritableEvent[]): void {
+  assert.deepEqual(events.slice(0, expected.length), expected);
+}
+
+  it('fails closed before primary session persistence on malformed root skill-active state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-malformed-root-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      const rootPath = join(stateDir, 'skill-active-state.json');
+      const sessionPath = join(stateDir, 'sessions', sessionId, 'skill-active-state.json');
+      const rootBytes = '{"active":true,\n';
+      const sessionBytes = '{"active":true,"skill":"old"}\n';
+      await writeFile(rootPath, rootBytes);
+      await writeFile(sessionPath, sessionBytes);
+
+      const response = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: sessionId,
+        mode: 'skill-active',
+        active: true,
+        skill: 'new',
+        phase: 'executing',
+        active_skills: [{ skill: 'new', phase: 'executing', active: true, session_id: sessionId }],
+      });
+
+      assert.equal(response.isError, true);
+      assert.match(String((response.payload as { error?: string }).error || ''), /malformed root skill-active state/i);
+      assert.equal(await readFile(rootPath, 'utf8'), rootBytes);
+      assert.equal(await readFile(sessionPath, 'utf8'), sessionBytes);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed before primary session persistence on root lock timeout', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-lock-timeout-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      const rootPath = join(stateDir, 'skill-active-state.json');
+      const sessionPath = join(stateDir, 'sessions', sessionId, 'skill-active-state.json');
+      const rootBytes = `${JSON.stringify({ version: 1, active: true, skill: 'old', session_id: sessionId, active_skills: [] }, null, 2)}\n`;
+      const sessionBytes = '{"active":true,"skill":"old"}\n';
+      await writeFile(rootPath, rootBytes);
+      await writeFile(sessionPath, sessionBytes);
+      await mkdir(`${rootPath}.lock`);
+
+      const response = await executeStateOperation('state_write', {
+        workingDirectory: wd,
+        session_id: sessionId,
+        mode: 'skill-active',
+        active: true,
+        skill: 'new',
+        phase: 'executing',
+        active_skills: [{ skill: 'new', phase: 'executing', active: true, session_id: sessionId }],
+      });
+
+      assert.equal(response.isError, true);
+      assert.match(String((response.payload as { error?: string }).error || ''), /lock|timeout/i);
+      assert.equal(await readFile(rootPath, 'utf8'), rootBytes);
+      assert.equal(await readFile(sessionPath, 'utf8'), sessionBytes);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+  it('T4 records the full pinned state_write commit prefix', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-t4-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      const events: WritableEvent[] = [];
+      __setWritableStateScopeTestHooksForTests({ beforeScopeRevalidation: async (event) => { events.push([event.commitOrdinal, event.site, event.kind, event.path]); } });
+      const response = await executeStateOperation('state_write', { workingDirectory: wd, mode: 'autoresearch', active: true, current_phase: 'running' });
+      assert.equal(response.isError, undefined);
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      assertPrefix(events, [
+        [1, 'mode.primary', 'write', join(sessionDir, 'autoresearch-state.json')],
+        [2, 'skill-active.root-copy', 'write', join(stateDir, 'skill-active-state.json')],
+        [3, 'skill-active.session-copy', 'write', join(sessionDir, 'skill-active-state.json')],
+      ]);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T5 rejects a state_write takeover at its first commit', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-t5-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      installScopeTakeover(stateDir, [1, 'mode.primary'], JSON.stringify({ session_id: 'sess-replacement', cwd: wd, state_root: stateDir }));
+      const response = await executeStateOperation('state_write', { workingDirectory: wd, mode: 'autoresearch', active: true });
+      assert.equal(response.isError, true);
+      assert.deepEqual(response.payload, { error: WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite });
+      assert.equal(existsSync(join(stateDir, 'sessions', sessionId, 'autoresearch-state.json')), false);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T6 rejects a later state_write takeover after the non-atomic primary commit', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-t6-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      installScopeTakeover(stateDir, [2, 'skill-active.root-copy'], JSON.stringify({ session_id: 'sess-replacement', cwd: wd, state_root: stateDir }));
+      const response = await executeStateOperation('state_write', { workingDirectory: wd, mode: 'autoresearch', active: true });
+      assert.deepEqual(response.payload, { error: WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite });
+      // Earlier multi-file commits are not rolled back; each later site still performs its own point-in-time check, without closing the post-check race.
+      assert.equal(existsSync(join(stateDir, 'sessions', sessionId, 'autoresearch-state.json')), true);
+      assert.equal(existsSync(join(stateDir, 'skill-active-state.json')), false);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T7 records state_clear commits and rejects its native-stop takeover', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-t7-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      await writeFile(join(stateDir, 'native-stop-state.json'), JSON.stringify({ sessions: { [sessionId]: {} } }));
+      await writeFile(join(stateDir, 'sessions', sessionId, 'native-stop-state.json'), JSON.stringify({ sessions: { [sessionId]: {} } }));
+      await executeStateOperation('state_write', { workingDirectory: wd, mode: 'autoresearch', active: true });
+      const events: WritableEvent[] = [];
+      __setWritableStateScopeTestHooksForTests({ beforeScopeRevalidation: async (event) => { events.push([event.commitOrdinal, event.site, event.kind, event.path]); } });
+      await executeStateOperation('state_clear', { workingDirectory: wd, mode: 'autoresearch' });
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      assertPrefix(events, [
+        [1, 'state-clear.primary', 'unlink', join(sessionDir, 'autoresearch-state.json')],
+        [2, 'native-stop.root', 'write', join(stateDir, 'native-stop-state.json')],
+        [3, 'native-stop.session', 'write', join(sessionDir, 'native-stop-state.json')],
+        [4, 'skill-active.root-copy', 'write', join(stateDir, 'skill-active-state.json')],
+        [5, 'skill-active.session-copy', 'write', join(sessionDir, 'skill-active-state.json')],
+      ]);
+      await executeStateOperation('state_write', { workingDirectory: wd, mode: 'autoresearch', active: true });
+      await writeFile(join(stateDir, 'native-stop-state.json'), JSON.stringify({ sessions: { [sessionId]: {} } }));
+      await writeFile(join(sessionDir, 'native-stop-state.json'), JSON.stringify({ sessions: { [sessionId]: {} } }));
+      installScopeTakeover(stateDir, [2, 'native-stop.root'], JSON.stringify({ session_id: 'sess-replacement', cwd: wd, state_root: stateDir }));
+      const rejected = await executeStateOperation('state_clear', { workingDirectory: wd, mode: 'autoresearch' });
+      assert.equal(rejected.isError, true);
+      assert.deepEqual(rejected.payload, { error: WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite });
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T15 fails loudly when a takeover ordinal-site pair drifts', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-t15-'));
+    try {
+      const { stateDir } = await seedWritableScope(wd);
+      installScopeTakeover(stateDir, [2, 'mode.primary'], JSON.stringify({ session_id: 'sess-replacement', cwd: wd, state_root: stateDir }));
+      const response = await executeStateOperation('state_write', { workingDirectory: wd, mode: 'autoresearch', active: true });
+      assert.equal(response.isError, true);
+      const error = String((response.payload as { error?: unknown }).error);
+      assert.match(error, /takeover drift: expected \(2, mode.primary\), got \(1, mode.primary\)/);
+      assert.notEqual(error, WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('T14 revalidates the transition source-mode detail commit', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-t14-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd);
+      await startMode('deep-interview', 'clarify contract', 3, wd);
+      await updateModeState('deep-interview', { deep_interview_gate: { status: 'complete', rationale: 'ready' } }, wd);
+      const events: WritableEvent[] = [];
+      __setWritableStateScopeTestHooksForTests({ beforeScopeRevalidation: async (event) => { events.push([event.commitOrdinal, event.site, event.kind, event.path]); } });
+      await startMode('ralplan', 'plan contract', 5, wd);
+      assert.deepEqual(events[0], [1, 'transition.source-mode-detail', 'write', join(stateDir, 'sessions', sessionId, 'deep-interview-state.json')]);
+      await rm(join(stateDir, 'ralplan-state.json'), { force: true });
+      await writeFile(join(stateDir, 'sessions', sessionId, 'deep-interview-state.json'), JSON.stringify({ active: true, current_phase: 'starting', deep_interview_gate: { status: 'complete', rationale: 'ready' } }));
+      await writeFile(join(stateDir, 'skill-active-state.json'), JSON.stringify({ active: true, active_skills: [{ skill: 'deep-interview', active: true, session_id: sessionId }] }));
+      await writeFile(join(stateDir, 'sessions', sessionId, 'skill-active-state.json'), JSON.stringify({ active: true, active_skills: [{ skill: 'deep-interview', active: true, session_id: sessionId }] }));
+      const detail = await readFile(join(stateDir, 'sessions', sessionId, 'deep-interview-state.json'), 'utf-8');
+      const skill = await readFile(join(stateDir, 'sessions', sessionId, 'skill-active-state.json'), 'utf-8');
+      installScopeTakeover(stateDir, [1, 'transition.source-mode-detail'], JSON.stringify({ session_id: 'sess-replacement', cwd: wd, state_root: stateDir }));
+      await assert.rejects(() => startMode('ralplan', 'plan again', 5, wd), new Error(WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite));
+      assert.equal(await readFile(join(stateDir, 'sessions', sessionId, 'deep-interview-state.json'), 'utf-8'), detail);
+      assert.equal(await readFile(join(stateDir, 'sessions', sessionId, 'skill-active-state.json'), 'utf-8'), skill);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('requires capturedScope before checking either terminal or non-terminal ralplan state', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-f14-guard-'));
+    try {
+      const { sessionId } = await seedWritableScope(wd);
+      const terminal = { active: false, current_phase: 'complete', session_id: sessionId, ralplan_consensus_gate: { complete: true } };
+      const beforeCommit = async () => {};
+      await assert.rejects(() => completeRalplanSession({ cwd: wd, baseStateDir: getBaseStateDir(wd), state: terminal, beforeCommit }), new Error('completeRalplanSession requires capturedScope when beforeCommit is provided'));
+      await assert.rejects(() => completeRalplanSession({ cwd: wd, baseStateDir: getBaseStateDir(wd), state: { active: true, current_phase: 'planning' }, beforeCommit }), new Error('completeRalplanSession requires capturedScope when beforeCommit is provided'));
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps mode and run-state writes pinned to session A across transient A-B-A pointer movement', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-f14-pinned-run-state-'));
+    try {
+      const { stateDir, sessionId } = await seedWritableScope(wd, 'sess-a');
+      const sessionADir = join(stateDir, 'sessions', sessionId);
+      const sessionBId = 'sess-b';
+      const sessionBDir = join(stateDir, 'sessions', sessionBId);
+      await mkdir(sessionBDir, { recursive: true });
+      const pointerA = await readFile(join(stateDir, 'session.json'), 'utf-8');
+      const pointerB = JSON.stringify({ session_id: sessionBId, cwd: wd, state_root: stateDir });
+      const events: WritableEvent[] = [];
+      __setWritableStateScopeTestHooksForTests({
+        beforeScopeRevalidation: async (event) => {
+          events.push([event.commitOrdinal, event.site, event.kind, event.path]);
+          if (event.site === 'mode.primary') {
+            await writeFile(join(stateDir, 'session.json'), pointerB);
+            await writeFile(join(stateDir, 'session.json'), pointerA);
+          }
+        },
+      });
+      await startMode('autoresearch', 'verify pinned run-state target', 3, wd);
+      assert.deepEqual(events.find(([, site]) => site === 'run-state.mode-sync'), [2, 'run-state.mode-sync', 'write', join(sessionADir, 'run-state.json')]);
+      assert.deepEqual(events.find(([, site]) => site === 'mode.primary'), [1, 'mode.primary', 'write', join(sessionADir, 'autoresearch-state.json')]);
+      assert.equal(existsSync(join(sessionADir, 'run-state.json')), true);
+      assert.equal(existsSync(join(sessionADir, 'autoresearch-state.json')), true);
+      assert.equal(existsSync(join(sessionBDir, 'run-state.json')), false);
+      assert.equal(existsSync(join(sessionBDir, 'autoresearch-state.json')), false);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+  it('revalidates the root-scoped session skill-state unlink', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-state-ops-session-unlink-'));
+    try {
+      const stateDir = getBaseStateDir(wd);
+      const sessionId = 'sess-current';
+      const sessionDir = join(stateDir, 'sessions', sessionId);
+      const sessionPath = join(sessionDir, 'skill-active-state.json');
+      const writeFixture = async (): Promise<void> => {
+        const rootSkillState = JSON.stringify({
+          active: true,
+          skill: 'autoresearch',
+          active_skills: [{ skill: 'autoresearch', active: true }],
+        });
+        const sessionSkillState = JSON.stringify({
+          active: false,
+          skill: 'autoresearch',
+          session_id: sessionId,
+        });
+        await mkdir(sessionDir, { recursive: true });
+        await writeFile(join(stateDir, 'autoresearch-state.json'), JSON.stringify({ active: true }));
+        await writeFile(join(stateDir, 'skill-active-state.json'), rootSkillState);
+        await writeFile(sessionPath, sessionSkillState);
+      };
+
+      await writeFixture();
+      const events: WritableEvent[] = [];
+      __setWritableStateScopeTestHooksForTests({
+        beforeScopeRevalidation: async (event) => {
+          events.push([event.commitOrdinal, event.site, event.kind, event.path]);
+        },
+      });
+      const response = await executeStateOperation('state_clear', { workingDirectory: wd, mode: 'autoresearch' });
+      assert.equal(response.isError, undefined);
+      assertPrefix(events, [
+        [1, 'state-clear.primary', 'unlink', join(stateDir, 'autoresearch-state.json')],
+        [2, 'skill-active.root-copy', 'write', join(stateDir, 'skill-active-state.json')],
+        [3, 'skill-active.session-unlink', 'unlink', sessionPath],
+      ]);
+      assert.equal(existsSync(sessionPath), false);
+
+      await writeFixture();
+      installScopeTakeover(stateDir, [3, 'skill-active.session-unlink'], JSON.stringify({ session_id: 'sess-replacement', cwd: wd, state_root: stateDir }));
+      const rejected = await executeStateOperation('state_clear', { workingDirectory: wd, mode: 'autoresearch' });
+      assert.equal(rejected.isError, true);
+      assert.deepEqual(rejected.payload, { error: WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite });
+      // Earlier commits in the sequence are not rolled back; each site performs its own point-in-time check.
+      assert.equal(existsSync(sessionPath), true);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+});

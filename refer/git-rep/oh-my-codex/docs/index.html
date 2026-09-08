@@ -1,0 +1,123 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>oh-my-codex Docs</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <nav class="container nav" aria-label="Primary">
+        <a class="brand" href="./index.html">oh-my-codex</a>
+        <a class="active" href="./index.html">Home</a>
+        <a href="./getting-started.html">Getting Started</a>
+        <a href="./agents.html">Agents</a>
+        <a href="./skills.html">Skills</a>
+        <a href="./integrations.html">Integrations</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <section class="hero">
+        <span class="badge">GitHub Pages</span>
+        <h1>oh-my-codex</h1>
+        <p>Multi-agent orchestration for OpenAI Codex CLI.</p>
+        <p><strong>Official project:</strong> <a href="https://github.com/Yeachan-Heo/oh-my-codex">Yeachan-Heo/oh-my-codex</a>. <strong>Official package:</strong> <a href="https://www.npmjs.com/package/oh-my-codex">oh-my-codex</a>. Third-party projects or forks using names such as “OMX v2” are not official continuations or release lines unless these docs explicitly say so.</p>
+        <pre><code>npm install -g oh-my-codex</code></pre>
+        <p>Real global version bumps now print an explicit reminder instead of auto-launching <code>omx setup</code>. When you're ready, run <code>omx setup</code> manually or use <code>omx update</code> to check npm and then run the same setup refresh path. Launch-time update checks are throttled and prompt by default; set <code>OMX_AUTO_UPDATE=0</code> to disable them or <code>OMX_AUTO_UPDATE=defer</code> to schedule deferred updates without prompting. Fresh setup leaves <code>model_context_window</code> and <code>model_auto_compact_token_limit</code> unset so Codex uses the active model defaults. Rerunning setup removes only unchanged legacy values proven to have been seeded by OMX and preserves explicit, unmarked, and edited values.</p>
+      </section>
+
+      <section aria-labelledby="whats-new-0213">
+        <h2 id="whats-new-0213">What's New in 0.21.3</h2>
+        <p class="muted">Released 2026-09-03.</p>
+        <div class="grid">
+          <article class="card">
+            <h3>Team wake de-duplication</h3>
+            <p>
+              Duplicate Team wakes are prevented and terminal projections are retired instead of lingering, so completed workers no longer re-trigger coordination work.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Long-session transcript readability</h3>
+            <p>
+              Detached leader tmux scrollback now clamps at 5000 lines (up from 500), so long assistant responses are not discarded from scrollback.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Composer prompt-drift triage</h3>
+            <p>
+              Troubleshooting docs now cover prompt input drift symptoms, measured repro cases, and tmux resize recovery.
+            </p>
+          </article>
+          <article class="card">
+            <h3>Dependency updates</h3>
+            <p>
+              Updated <code>@types/node</code> to 26.4.0, <code>zod</code> to 4.5.2, and <code>@biomejs/biome</code> to 2.5.11.
+            </p>
+          </article>
+        </div>
+        <p><a href="./release-notes-0.21.3.md">Read the full 0.21.3 release notes.</a></p>
+      </section>
+
+      <h2>Core Features</h2>
+      <div class="grid">
+        <article class="card"><h3>Agent Prompts</h3><p>Specialized roles for implementation, review, design, and planning.</p></article>
+        <article class="card"><h3>Skills</h3><p>Composable workflows from autopilot and team pipelines to setup, release, and tracing.</p></article>
+        <article class="card"><h3>Team Orchestration</h3><p>Staged execution pipeline with verification and fix loops.</p></article>
+        <article class="card"><h3>MCP State Management</h3><p>Persistent lifecycle state, notepad, and project memory across sessions.</p></article>
+      </div>
+
+      <h2>Quick Start</h2>
+      <ol>
+        <li><code>npm install -g oh-my-codex</code></li>
+        <li>After install or real version bumps, run <code>omx setup</code> yourself when you're ready, or use <code>omx update</code> when you also want npm to update OMX first.</li>
+        <li><code>omx doctor</code></li>
+        <li><code>omx --xhigh --madmax</code> (trusted environments) or <code>omx</code></li>
+      </ol>
+
+      <h2>Reference Guides</h2>
+      <ul>
+        <li><a href="./architecture/cli-first-mcp-taxonomy.md">CLI-first MCP taxonomy and recovery matrix</a></li>
+        <li><a href="./reference/omx-config-schema-routing.md">.omx-config.json model/env routing reference</a></li>
+        <li><a href="./pipeline/github-pr-package-identity.md">GitHub / PR / package identity pipeline</a></li>
+      </ul>
+
+      <h2>Integration Guides</h2>
+      <p>OpenClaw / notification gateway setup and prompt-tuning guides by language:</p>
+      <p><a href="./integrations.html">Open dedicated Integrations page</a></p>
+      <ul>
+        <li><a href="./discord-integration.md">Discord setup: webhook URL vs bot token</a></li>
+        <li><a href="./openclaw-integration.md">English</a></li>
+        <li><a href="./openclaw-integration.ko.md">한국어</a></li>
+        <li><a href="./openclaw-integration.ja.md">日本語</a></li>
+        <li><a href="./openclaw-integration.zh.md">简体中文</a></li>
+        <li><a href="./openclaw-integration.zh-TW.md">繁體中文</a></li>
+        <li><a href="./openclaw-integration.vi.md">Tiếng Việt</a></li>
+        <li><a href="./openclaw-integration.es.md">Español</a></li>
+        <li><a href="./openclaw-integration.pt.md">Português</a></li>
+        <li><a href="./openclaw-integration.ru.md">Русский</a></li>
+        <li><a href="./openclaw-integration.tr.md">Türkçe</a></li>
+        <li><a href="./openclaw-integration.de.md">Deutsch</a></li>
+        <li><a href="./openclaw-integration.fr.md">Français</a></li>
+        <li><a href="./openclaw-integration.it.md">Italiano</a></li>
+        <li><a href="./openclaw-integration.uk.md">Українська</a></li>
+      </ul>
+
+      <h2>Architecture</h2>
+      <pre><code>User
+  -> Codex CLI
+     -> AGENTS.md (orchestration brain)
+     -> ~/.codex/prompts/*.md (installable active/internal agent prompt catalog)
+     -> ~/.codex/skills/*/SKILL.md (skill catalog)
+     -> ~/.codex/config.toml (features, notify, MCP)
+     -> .omx/ (runtime state, memory, plans, logs)</code></pre>
+    </main>
+
+    <footer>
+      <div class="container">
+        <span class="muted">GitHub: <a href="https://github.com/Yeachan-Heo/oh-my-codex">Yeachan-Heo/oh-my-codex</a></span>
+      </div>
+    </footer>
+  </body>
+</html>

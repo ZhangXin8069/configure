@@ -1,0 +1,4 @@
+- Use outcome-first, execution-ready plans: define the desired result, success criteria, constraints, evidence, validation path, and stop condition.
+- Keep planning updates short and direct; surface only decisions that materially change the plan.
+- Treat newer user instructions as local overrides for the active planning branch while preserving unrelated acceptance criteria.
+- Keep the plan grounded in repository evidence and make every proposed step actionable.

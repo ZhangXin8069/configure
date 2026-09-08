@@ -1,0 +1,2954 @@
+import { appendFile, readFile, writeFile, mkdir, rm, rename, readdir, open, realpath } from 'fs/promises';
+import { basename, join, dirname, resolve, sep } from 'path';
+import { existsSync } from 'fs';
+import { randomUUID } from 'crypto';
+import { AsyncLocalStorage } from 'async_hooks';
+import { readUsableSessionState } from '../hooks/session.js';
+import { isTerminalPhase, type TeamPhase, type TerminalPhase } from './orchestrator.js';
+import {
+  computeTaskReadiness as computeTaskReadinessImpl,
+  claimTask as claimTaskImpl,
+  transitionTaskStatus as transitionTaskStatusImpl,
+  releaseTaskClaim as releaseTaskClaimImpl,
+  reclaimExpiredTaskClaim as reclaimExpiredTaskClaimImpl,
+  listTasks as listTasksImpl,
+} from './state/tasks.js';
+import {
+  sendDirectMessage as sendDirectMessageImpl,
+  broadcastMessage as broadcastMessageImpl,
+  markMessageDelivered as markMessageDeliveredImpl,
+  markMessageNotified as markMessageNotifiedImpl,
+  listMailboxMessages as listMailboxMessagesImpl,
+  normalizeBridgeMailboxMessage,
+} from './state/mailbox.js';
+import {
+  enqueueDispatchRequest as enqueueDispatchRequestImpl,
+  listDispatchRequests as listDispatchRequestsImpl,
+  readDispatchRequest as readDispatchRequestImpl,
+  transitionDispatchRequest as transitionDispatchRequestImpl,
+  markDispatchRequestNotified as markDispatchRequestNotifiedImpl,
+  markDispatchRequestDelivered as markDispatchRequestDeliveredImpl,
+  markDispatchRequestFailed as markDispatchRequestFailedImpl,
+  normalizeBridgeDispatchRecord,
+  normalizeDispatchRequest as normalizeDispatchRequestImpl,
+} from './state/dispatch.js';
+import {
+  resolveDispatchLockTimeoutMs as resolveDispatchLockTimeoutMsImpl,
+  withDispatchLock as withDispatchLockImpl,
+} from './state/dispatch-lock.js';
+import {
+  writeTaskApproval as writeTaskApprovalImpl,
+  readTaskApproval as readTaskApprovalImpl,
+} from './state/approvals.js';
+import {
+  getTeamSummary as getTeamSummaryImpl,
+  readMonitorSnapshot as readMonitorSnapshotImpl,
+  writeMonitorSnapshot as writeMonitorSnapshotImpl,
+  readTeamPhase as readTeamPhaseImpl,
+  writeTeamPhase as writeTeamPhaseImpl,
+} from './state/monitor.js';
+import {
+  withScalingLock as withScalingLockImpl,
+  withTeamLock as withTeamLockImpl,
+  withTaskClaimLock as withTaskClaimLockImpl,
+  withMailboxLock as withMailboxLockImpl,
+} from './state/locks.js';
+import { getDefaultBridge, isBridgeEnabled, resolveBridgeStateDir, type DispatchRecord } from '../runtime/bridge.js';
+import {
+  type TeamDispatchRequestStatus,
+  TEAM_NAME_SAFE_PATTERN,
+  WORKER_NAME_SAFE_PATTERN,
+  TASK_ID_SAFE_PATTERN,
+  TEAM_TASK_STATUSES,
+  type TeamWorkerIntegrationStatus,
+  canTransitionTeamTaskStatus,
+  isTerminalTeamTaskStatus,
+  type TeamTaskStatus,
+  type TeamEventType,
+} from './contracts.js';
+import type { TeamReminderIntent } from './reminder-intents.js';
+import type { WorktreeMode } from './worktree.js';
+import { resolveCanonicalTeamStateRoot } from './state-root.js';
+import { normalizeTeamTaskCoordinationPlanForStorage } from './coordination-protocol.js';
+
+export type { TeamDispatchRequestStatus, TeamWorkerIntegrationStatus } from './contracts.js';
+
+export interface StartupCleanupPane {
+  pane_id: string;
+  pid: number | null;
+}
+
+export interface TeamConfig {
+  name: string;
+  task: string;
+  agent_type: string;
+  worker_launch_mode: 'interactive' | 'prompt';
+  lifecycle_profile: 'default';
+  worker_count: number;
+  max_workers: number; // default 20, configurable up to 20
+  workers: WorkerInfo[];
+  created_at: string;
+  tmux_session: string; // "omx-team-{name}"
+  tmux_session_id?: string;
+  tmux_session_created?: string;
+  next_task_id: number;
+  leader_cwd?: string;
+  team_state_root?: string;
+  workspace_mode?: 'single' | 'worktree';
+  worktree_mode?: WorktreeMode;
+  /** Leader's own tmux pane ID — must never be killed during worker cleanup. */
+  leader_pane_id: string | null;
+  /** Frozen leader pane PID paired with leader_pane_id; absent legacy bindings are never effect authority. */
+  leader_pane_pid?: number | null;
+  /** HUD pane spawned below the leader column — excluded from worker pane cleanup. */
+  hud_pane_id: string | null;
+  /** Frozen HUD pane PID paired with hud_pane_id; absent legacy bindings are never effect authority. */
+  hud_pane_pid?: number | null;
+  /** Team-scoped tmux pane owner token used by shutdown safety checks. */
+  tmux_pane_owner_id?: string;
+  /** Registered HUD resize hook name used for window-size reconciliation. */
+  resize_hook_name: string | null;
+  /** Registered HUD resize hook target in "<session>:<window>" form. */
+  resize_hook_target: string | null;
+  /** Monotonic counter for worker index assignment during scaling. */
+  next_worker_index?: number;
+  /** Split artifacts proven to belong to startup but not assignable to one worker slot. */
+  startup_cleanup_panes?: StartupCleanupPane[];
+  display_name?: string;
+  requested_name?: string;
+  identity_source?: string;
+  /** Monotonic canonical-config generation used to reject stale full-object saves. */
+  config_generation?: number;
+}
+
+
+export interface WorkerInfo {
+  name: string; // "worker-1"
+  index: number; // tmux window index (1-based)
+  role: string; // agent type
+  worker_cli?: 'codex' | 'claude' | 'gemini';
+  assigned_tasks: string[]; // task IDs
+  pid?: number;
+  pane_id?: string;
+  working_dir?: string;
+  worktree_repo_root?: string;
+  worktree_path?: string;
+  worktree_branch?: string;
+  worktree_detached?: boolean;
+  worktree_created?: boolean;
+  team_state_root?: string;
+}
+
+export interface WorkerHeartbeat {
+  pid: number;
+  last_turn_at: string;
+  turn_count: number;
+  alive: boolean;
+}
+
+export interface WorkerStatus {
+  state: 'idle' | 'working' | 'blocked' | 'done' | 'failed' | 'draining' | 'unknown';
+  current_task_id?: string;
+  reason?: string;
+  updated_at: string;
+}
+
+export type TeamTaskDelegationMode = 'none' | 'optional' | 'auto' | 'required';
+export type TeamTaskChildModelPolicy = 'standard' | 'fast' | 'inherit' | 'frontier';
+
+export interface TeamTaskDelegationComplianceEvidence {
+  status: 'spawned' | 'skipped';
+  source: 'terminal_result';
+  detail: string;
+  recorded_at: string;
+}
+
+export type TeamTaskCoordinationMode = 'lightweight' | 'coordinated';
+
+export type TeamTaskCoordinationMechanism =
+  | 'shared_mental_model'
+  | 'closed_loop_communication'
+  | 'mutual_performance_monitoring'
+  | 'backup_behavior'
+  | 'adaptability_checkpoint'
+  | 'team_orientation';
+
+export interface TeamTaskCoordinationPlan {
+  mode: TeamTaskCoordinationMode;
+  activation_reasons: string[];
+  required_mechanisms?: TeamTaskCoordinationMechanism[];
+  source?: 'explicit' | 'synthesized';
+}
+
+export interface TeamTaskCoordinationComplianceEvidence {
+  status: 'checked' | 'no_boundary_handoff';
+  source: 'terminal_result';
+  detail: string;
+  recorded_at: string;
+}
+
+export interface TeamTaskDelegationPlan {
+  mode: TeamTaskDelegationMode;
+  max_parallel_subtasks?: number;
+  required_parallel_probe?: boolean;
+  spawn_before_serial_search_threshold?: number;
+  child_model_policy?: TeamTaskChildModelPolicy;
+  child_model?: string;
+  subtask_candidates?: string[];
+  child_report_format?: 'bullets' | 'json';
+  skip_allowed_reason_required?: boolean;
+}
+
+export interface TeamTask {
+  id: string;
+  subject: string;
+  description: string;
+  status: 'pending' | 'blocked' | 'in_progress' | 'completed' | 'failed';
+  requires_code_change?: boolean;
+  role?: string; // agent role for this task (e.g., 'executor', 'test-engineer', 'designer')
+  owner?: string; // worker name
+  result?: string; // completion summary
+  error?: string; // failure reason
+  blocked_by?: string[]; // task IDs
+  depends_on?: string[]; // task IDs
+  filePaths?: string[];
+  domains?: string[];
+  lane?: string;
+  allocation_reason?: string;
+  version?: number;
+  claim?: TeamTaskClaim;
+  created_at: string;
+  completed_at?: string;
+  delegation?: TeamTaskDelegationPlan;
+  delegation_compliance?: TeamTaskDelegationComplianceEvidence;
+  coordination?: TeamTaskCoordinationPlan;
+  coordination_compliance?: TeamTaskCoordinationComplianceEvidence;
+}
+
+export interface TeamTaskClaim {
+  owner: string;
+  token: string;
+  leased_until: string;
+}
+
+export interface TeamTaskV2 extends TeamTask {
+  version: number;
+}
+
+export interface TeamLeader {
+  session_id: string;
+  thread_id?: string;
+  worker_id: string;
+  role: string;
+}
+
+export interface TeamPolicy {
+  display_mode: 'split_pane' | 'auto';
+  worker_launch_mode: 'interactive' | 'prompt';
+  dispatch_mode: 'hook_preferred_with_fallback' | 'transport_direct';
+  dispatch_ack_timeout_ms: number;
+}
+
+/**
+ * Lifecycle/workflow guardrails persisted alongside the manifest, but kept
+ * separate from transport/runtime policy so each layer has a single owner.
+ */
+export interface TeamGovernance {
+  delegation_only: boolean;
+  plan_approval_required: boolean;
+  nested_teams_allowed: boolean;
+  one_team_per_leader_session: boolean;
+  cleanup_requires_all_workers_inactive: boolean;
+}
+
+export type TeamDispatchRequestKind = 'inbox' | 'mailbox' | 'nudge';
+export type TeamDispatchTransportPreference = 'hook_preferred_with_fallback' | 'transport_direct' | 'prompt_stdin';
+
+export interface TeamDispatchRequest {
+  request_id: string;
+  kind: TeamDispatchRequestKind;
+  team_name: string;
+  to_worker: string;
+  worker_index?: number;
+  pane_id?: string;
+  trigger_message: string;
+  intent?: TeamReminderIntent;
+  message_id?: string;
+  inbox_correlation_key?: string;
+  transport_preference: TeamDispatchTransportPreference;
+  fallback_allowed: boolean;
+  status: TeamDispatchRequestStatus;
+  attempt_count: number;
+  created_at: string;
+  updated_at: string;
+  notified_at?: string;
+  delivered_at?: string;
+  failed_at?: string;
+  last_reason?: string;
+}
+
+export interface TeamDispatchRequestInput {
+  kind: TeamDispatchRequestKind;
+  to_worker: string;
+  worker_index?: number;
+  pane_id?: string;
+  trigger_message: string;
+  intent?: TeamReminderIntent;
+  message_id?: string;
+  inbox_correlation_key?: string;
+  transport_preference?: TeamDispatchTransportPreference;
+  fallback_allowed?: boolean;
+  last_reason?: string;
+}
+
+export interface PermissionsSnapshot {
+  approval_mode: string;
+  sandbox_mode: string;
+  network_access: boolean;
+}
+
+export interface TeamManifestV2 {
+  schema_version: 2;
+  name: string;
+  task: string;
+  leader: TeamLeader;
+  policy: TeamPolicy;
+  governance: TeamGovernance;
+  lifecycle_profile: 'default';
+  permissions_snapshot: PermissionsSnapshot;
+  team_decomposition?: Record<string, unknown>;
+  tmux_session: string;
+  tmux_session_id?: string;
+  tmux_session_created?: string;
+  worker_count: number;
+  workers: WorkerInfo[];
+  next_task_id: number;
+  created_at: string;
+  leader_cwd?: string;
+  team_state_root?: string;
+  workspace_mode?: 'single' | 'worktree';
+  worktree_mode?: WorktreeMode;
+  leader_pane_id: string | null;
+  leader_pane_pid?: number | null;
+  hud_pane_id: string | null;
+  hud_pane_pid?: number | null;
+  tmux_pane_owner_id?: string;
+  resize_hook_name: string | null;
+  resize_hook_target: string | null;
+  /** Monotonic counter for worker index assignment during scaling. */
+  next_worker_index?: number;
+  startup_cleanup_panes?: StartupCleanupPane[];
+  display_name?: string;
+  requested_name?: string;
+  identity_source?: string;
+  /** Matches the canonical config generation for paired config/manifest writes. */
+  config_generation?: number;
+}
+
+export interface TeamWorkspaceMetadata {
+  leader_cwd?: string;
+  team_state_root?: string;
+  workspace_mode?: 'single' | 'worktree';
+  display_name?: string;
+  requested_name?: string;
+  identity_source?: string;
+  worktree_mode?: WorktreeMode;
+}
+
+export interface TeamEvent {
+  event_id: string;
+  team: string;
+  type: TeamEventType;
+  worker: string;
+  task_id?: string;
+  message_id?: string | null;
+  reason?: string;
+  intent?: TeamReminderIntent;
+  state?: WorkerStatus['state'];
+  prev_state?: WorkerStatus['state'];
+  worker_count?: number;
+  to_worker?: string;
+  source_type?: string;
+  metadata?: Record<string, unknown>;
+  created_at: string;
+  [key: string]: unknown;
+}
+
+export interface TeamMailboxMessage {
+  message_id: string;
+  from_worker: string;
+  to_worker: string;
+  body: string;
+  created_at: string;
+  notified_at?: string;
+  delivered_at?: string;
+}
+
+export interface TeamMailbox {
+  worker: string;
+  messages: TeamMailboxMessage[];
+}
+
+export interface TaskApprovalRecord {
+  task_id: string;
+  required: boolean;
+  status: 'pending' | 'approved' | 'rejected';
+  reviewer: string;
+  decision_reason: string;
+  decided_at: string;
+}
+
+let renameForAtomicWrite: typeof rename = rename;
+let openForAtomicWrite: typeof open = open;
+let platformForAtomicWrite: NodeJS.Platform = process.platform;
+
+export function setWriteAtomicOpenForTests(fn: typeof open): void {
+  openForAtomicWrite = fn;
+}
+
+export function resetWriteAtomicOpenForTests(): void {
+  openForAtomicWrite = open;
+}
+
+export function setWriteAtomicPlatformForTests(platform: NodeJS.Platform): void {
+  platformForAtomicWrite = platform;
+}
+
+export function resetWriteAtomicPlatformForTests(): void {
+  platformForAtomicWrite = process.platform;
+}
+
+export function setWriteAtomicRenameForTests(fn: typeof rename): void {
+  renameForAtomicWrite = fn;
+}
+
+export function resetWriteAtomicRenameForTests(): void {
+  renameForAtomicWrite = rename;
+}
+export type TaskReadiness =
+  | { ready: true }
+  | { ready: false; reason: 'blocked_dependency'; dependencies: string[] };
+
+export type ClaimTaskResult =
+  | { ok: true; task: TeamTaskV2; claimToken: string }
+  | { ok: false; error: 'claim_conflict' | 'blocked_dependency' | 'task_not_found' | 'already_terminal' | 'worker_not_found'; dependencies?: string[] };
+
+export type TransitionTaskResult =
+  | { ok: true; task: TeamTaskV2 }
+  | { ok: false; error: 'claim_conflict' | 'invalid_transition' | 'task_not_found' | 'already_terminal' | 'lease_expired' | 'missing_delegation_compliance_evidence' | 'missing_coordination_compliance_evidence' };
+
+export type ReleaseTaskClaimResult =
+  | { ok: true; task: TeamTaskV2 }
+  | { ok: false; error: 'claim_conflict' | 'task_not_found' | 'already_terminal' | 'lease_expired' };
+
+export type ReclaimTaskResult =
+  | { ok: true; task: TeamTaskV2; reclaimed: boolean }
+  | { ok: false; error: 'claim_conflict' | 'task_not_found' | 'already_terminal' | 'lease_active' };
+
+export interface TeamSummary {
+  teamName: string;
+  workerCount: number;
+  tasks: {
+    total: number;
+    pending: number;
+    blocked: number;
+    in_progress: number;
+    completed: number;
+    failed: number;
+  };
+  workers: Array<{ name: string; alive: boolean; lastTurnAt: string | null; turnsWithoutProgress: number }>;
+  nonReportingWorkers: string[];
+  performance?: TeamSummaryPerformance;
+}
+
+export interface TeamSummaryPerformance {
+  total_ms: number;
+  tasks_loaded_ms: number;
+  workers_polled_ms: number;
+  task_count: number;
+  worker_count: number;
+}
+
+export const DEFAULT_MAX_WORKERS = 20;
+export const ABSOLUTE_MAX_WORKERS = 20;
+const LOCK_STALE_MS = 5 * 60 * 1000;
+// Hook-preferred delivery can wait for the fallback watcher tick plus tmux
+// injection verification; keep the default ack budget above that steady-state
+// control-plane cadence to avoid spurious fallback/failed confirmations.
+const DEFAULT_DISPATCH_ACK_TIMEOUT_MS = 2_000;
+const MIN_DISPATCH_ACK_TIMEOUT_MS = 100;
+const MAX_DISPATCH_ACK_TIMEOUT_MS = 10_000;
+
+function isTerminalTaskStatus(status: TeamTaskStatus): boolean {
+  return isTerminalTeamTaskStatus(status);
+}
+
+function canTransitionTaskStatus(from: TeamTaskStatus, to: TeamTaskStatus): boolean {
+  return canTransitionTeamTaskStatus(from, to);
+}
+
+function assertPathWithinDir(filePath: string, rootDir: string): void {
+  const normalizedRoot = resolve(rootDir);
+  const normalizedPath = resolve(filePath);
+  if (normalizedPath !== normalizedRoot && !normalizedPath.startsWith(normalizedRoot + sep)) {
+    throw new Error('Path traversal detected: path is outside the allowed directory');
+  }
+}
+
+function validateWorkerName(name: string): void {
+  if (!WORKER_NAME_SAFE_PATTERN.test(name)) {
+    throw new Error(
+      `Invalid worker name: "${name}". Must match /^[a-z0-9][a-z0-9-]{0,63}$/ (lowercase alphanumeric + hyphens, max 64 chars).`
+    );
+  }
+}
+
+function validateTaskId(taskId: string): void {
+  if (!TASK_ID_SAFE_PATTERN.test(taskId)) {
+    throw new Error(
+      `Invalid task ID: "${taskId}". Must be a positive integer (digits only, max 20 digits).`
+    );
+  }
+}
+
+function defaultLeader(): TeamLeader {
+  return {
+    session_id: '',
+    worker_id: 'leader-fixed',
+    role: 'coordinator',
+  };
+}
+
+function defaultTmuxPaneOwnerId(teamName: string): string {
+  return `team:${teamName}`;
+}
+
+function defaultPolicy(
+  displayMode: TeamPolicy['display_mode'] = 'auto',
+  workerLaunchMode: TeamPolicy['worker_launch_mode'] = 'interactive',
+): TeamPolicy {
+  return {
+    display_mode: displayMode,
+    worker_launch_mode: workerLaunchMode,
+    dispatch_mode: 'hook_preferred_with_fallback',
+    dispatch_ack_timeout_ms: DEFAULT_DISPATCH_ACK_TIMEOUT_MS,
+  };
+}
+
+function defaultGovernance(): TeamGovernance {
+  return {
+    delegation_only: false,
+    plan_approval_required: false,
+    nested_teams_allowed: false,
+    one_team_per_leader_session: true,
+    cleanup_requires_all_workers_inactive: true,
+  };
+}
+
+function clampDispatchAckTimeoutMs(raw: unknown): number {
+  const asNum = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(asNum)) return DEFAULT_DISPATCH_ACK_TIMEOUT_MS;
+  const floored = Math.floor(asNum);
+  return Math.max(MIN_DISPATCH_ACK_TIMEOUT_MS, Math.min(MAX_DISPATCH_ACK_TIMEOUT_MS, floored));
+}
+
+export function normalizeTeamPolicy(
+  policy: Partial<TeamPolicy> | null | undefined,
+  defaults: Pick<TeamPolicy, 'display_mode' | 'worker_launch_mode'> = { display_mode: 'auto', worker_launch_mode: 'interactive' },
+): TeamPolicy {
+  const base = defaultPolicy(defaults.display_mode, defaults.worker_launch_mode);
+  const dispatchMode = policy?.dispatch_mode === 'transport_direct'
+    ? 'transport_direct'
+    : 'hook_preferred_with_fallback';
+
+  return {
+    worker_launch_mode: policy?.worker_launch_mode === 'prompt' ? 'prompt' : base.worker_launch_mode,
+    display_mode: policy?.display_mode === 'split_pane' ? 'split_pane' : base.display_mode,
+    dispatch_mode: dispatchMode,
+    dispatch_ack_timeout_ms: clampDispatchAckTimeoutMs(policy?.dispatch_ack_timeout_ms),
+  };
+}
+
+export function normalizeTeamGovernance(
+  governance: Partial<TeamGovernance> | null | undefined,
+  legacyPolicy: Partial<TeamGovernance> | null | undefined = null,
+): TeamGovernance {
+  const source = governance ?? legacyPolicy ?? {};
+  return {
+    delegation_only: source?.delegation_only === true,
+    plan_approval_required: source?.plan_approval_required === true,
+    nested_teams_allowed: source?.nested_teams_allowed === true,
+    one_team_per_leader_session: source?.one_team_per_leader_session !== false,
+    cleanup_requires_all_workers_inactive: source?.cleanup_requires_all_workers_inactive !== false,
+  };
+}
+
+function defaultPermissionsSnapshot(): PermissionsSnapshot {
+  return {
+    approval_mode: 'unknown',
+    sandbox_mode: 'unknown',
+    network_access: true,
+  };
+}
+
+function readEnvValue(env: NodeJS.ProcessEnv, keys: string[]): string | null {
+  for (const key of keys) {
+    const value = env[key];
+    if (typeof value === 'string' && value.trim() !== '') return value.trim();
+  }
+  return null;
+}
+
+function parseOptionalBoolean(raw: string | null): boolean | null {
+  if (!raw) return null;
+  const normalized = raw.trim().toLowerCase();
+  if (['1', 'true', 'yes', 'on', 'enabled', 'allow', 'allowed'].includes(normalized)) return true;
+  if (['0', 'false', 'no', 'off', 'disabled', 'deny', 'denied'].includes(normalized)) return false;
+  return null;
+}
+
+function resolveDisplayModeFromEnv(env: NodeJS.ProcessEnv): TeamPolicy['display_mode'] {
+  const raw = readEnvValue(env, ['OMX_TEAM_DISPLAY_MODE', 'OMX_TEAM_MODE']);
+  if (!raw) return 'auto';
+  if (raw === 'in_process' || raw === 'in-process') return 'split_pane';
+  if (raw === 'split_pane' || raw === 'tmux') return 'split_pane';
+  if (raw === 'auto') return 'auto';
+  return 'auto';
+}
+
+function resolveWorkerLaunchModeFromEnv(env: NodeJS.ProcessEnv): TeamPolicy['worker_launch_mode'] {
+  const raw = readEnvValue(env, ['OMX_TEAM_WORKER_LAUNCH_MODE']);
+  if (!raw || raw === 'interactive') return 'interactive';
+  if (raw === 'prompt') return 'prompt';
+  throw new Error(`Invalid OMX_TEAM_WORKER_LAUNCH_MODE value "${raw}". Expected: interactive, prompt`);
+}
+
+function resolvePermissionsSnapshot(env: NodeJS.ProcessEnv): PermissionsSnapshot {
+  const snapshot = defaultPermissionsSnapshot();
+
+  const approvalMode = readEnvValue(env, [
+    'OMX_APPROVAL_MODE',
+    'CODEX_APPROVAL_MODE',
+    'CODEX_APPROVAL_POLICY',
+    'CLAUDE_CODE_APPROVAL_MODE',
+  ]);
+  if (approvalMode) snapshot.approval_mode = approvalMode;
+
+  const sandboxMode = readEnvValue(env, ['OMX_SANDBOX_MODE', 'CODEX_SANDBOX_MODE', 'SANDBOX_MODE']);
+  if (sandboxMode) snapshot.sandbox_mode = sandboxMode;
+
+  const network = parseOptionalBoolean(readEnvValue(env, ['OMX_NETWORK_ACCESS', 'CODEX_NETWORK_ACCESS', 'NETWORK_ACCESS']));
+  if (network !== null) snapshot.network_access = network;
+  else if (snapshot.sandbox_mode.toLowerCase().includes('offline')) snapshot.network_access = false;
+
+  return snapshot;
+}
+
+async function resolveLeaderSessionId(cwd: string, env: NodeJS.ProcessEnv): Promise<string> {
+  const fromEnv = readEnvValue(env, ['OMX_SESSION_ID', 'CODEX_SESSION_ID', 'SESSION_ID']);
+  if (fromEnv) return fromEnv;
+  return (await readUsableSessionState(cwd))?.session_id ?? '';
+}
+
+function normalizeTask(task: TeamTask): TeamTaskV2 {
+  const normalizedCoordination = normalizeTeamTaskCoordinationPlanForStorage(task.coordination);
+  const { coordination: _coordination, ...rest } = task;
+  return {
+    ...rest,
+    depends_on: task.depends_on ?? task.blocked_by ?? [],
+    ...(normalizedCoordination ? { coordination: normalizedCoordination } : {}),
+    version: Math.max(1, task.version ?? 1),
+  };
+}
+
+// Team state directory: .omx/state/team/{teamName}/
+function resolveTeamStateRoot(cwd: string, env: NodeJS.ProcessEnv = process.env): string {
+  return resolveCanonicalTeamStateRoot(cwd, env);
+}
+
+function assertSafeTeamName(teamName: string): void {
+  if (!TEAM_NAME_SAFE_PATTERN.test(teamName)) {
+    throw new Error(`invalid_team_name:${teamName}`);
+  }
+}
+
+function teamDir(teamName: string, cwd: string): string {
+  assertSafeTeamName(teamName);
+  return join(resolveTeamStateRoot(cwd), 'team', teamName);
+}
+
+function workerDir(teamName: string, workerName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'workers', workerName);
+}
+
+function teamConfigPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'config.json');
+}
+
+function teamManifestV2Path(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'manifest.v2.json');
+}
+
+function taskClaimLockDir(teamName: string, taskId: string, cwd: string): string {
+  validateTaskId(taskId);
+  const p = join(teamDir(teamName, cwd), 'claims', `task-${taskId}.lock`);
+  assertPathWithinDir(p, resolveTeamStateRoot(cwd));
+  return p;
+}
+
+export function teamEventLogPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'events', 'events.ndjson');
+}
+
+function mailboxPath(teamName: string, workerName: string, cwd: string): string {
+  validateWorkerName(workerName);
+  const p = join(teamDir(teamName, cwd), 'mailbox', `${workerName}.json`);
+  assertPathWithinDir(p, resolveTeamStateRoot(cwd));
+  return p;
+}
+
+function mailboxLockDir(teamName: string, workerName: string, cwd: string): string {
+  validateWorkerName(workerName);
+  const p = join(teamDir(teamName, cwd), 'mailbox', `.lock-${workerName}`);
+  assertPathWithinDir(p, resolveTeamStateRoot(cwd));
+  return p;
+}
+
+function dispatchRequestsPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'dispatch', 'requests.json');
+}
+
+function dispatchLockDir(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'dispatch', '.lock');
+}
+
+function approvalPath(teamName: string, taskId: string, cwd: string): string {
+  validateTaskId(taskId);
+  const p = join(teamDir(teamName, cwd), 'approvals', `task-${taskId}.json`);
+  assertPathWithinDir(p, resolveTeamStateRoot(cwd));
+  return p;
+}
+
+function summarySnapshotPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'summary-snapshot.json');
+}
+
+// Validate team name: alphanumeric + hyphens only, max 30 chars
+function validateTeamName(name: string): void {
+  if (!TEAM_NAME_SAFE_PATTERN.test(name)) {
+    throw new Error(
+      `Invalid team name: "${name}". Team name must match /^[a-z0-9][a-z0-9-]{0,29}$/ (lowercase alphanumeric + hyphens, max 30 chars).`
+    );
+  }
+}
+
+function isWorkerHeartbeat(value: unknown): value is WorkerHeartbeat {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  return (
+    typeof v.pid === 'number' &&
+    typeof v.last_turn_at === 'string' &&
+    typeof v.turn_count === 'number' &&
+    typeof v.alive === 'boolean'
+  );
+}
+
+function isWorkerStatus(value: unknown): value is WorkerStatus {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  const state = v.state;
+  const allowed = ['idle', 'working', 'blocked', 'done', 'failed', 'draining', 'unknown'];
+  if (typeof state !== 'string' || !allowed.includes(state)) return false;
+  return typeof v.updated_at === 'string';
+}
+
+function isTeamTask(value: unknown): value is TeamTask {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (typeof v.id !== 'string') return false;
+  if (typeof v.subject !== 'string') return false;
+  if (typeof v.description !== 'string') return false;
+  if (typeof v.status !== 'string' || !TEAM_TASK_STATUSES.includes(v.status as TeamTaskStatus)) return false;
+  if (typeof v.created_at !== 'string') return false;
+  return true;
+}
+
+function isTeamManifestV2(value: unknown): value is TeamManifestV2 {
+  if (!value || typeof value !== 'object') return false;
+  const v = value as Record<string, unknown>;
+  if (v.schema_version !== 2) return false;
+  if (typeof v.name !== 'string') return false;
+  if (typeof v.task !== 'string') return false;
+  if (typeof v.tmux_session !== 'string') return false;
+  if (typeof v.worker_count !== 'number') return false;
+  if (typeof v.next_task_id !== 'number') return false;
+  if (typeof v.created_at !== 'string') return false;
+  if (!Array.isArray(v.workers)) return false;
+  if (!(typeof v.leader_pane_id === 'string' || v.leader_pane_id === null)) return false;
+  if (!(typeof v.hud_pane_id === 'string' || v.hud_pane_id === null)) return false;
+  if (!(typeof v.leader_pane_pid === 'number' || v.leader_pane_pid === null || v.leader_pane_pid === undefined)) return false;
+  if (!(typeof v.hud_pane_pid === 'number' || v.hud_pane_pid === null || v.hud_pane_pid === undefined)) return false;
+  if (v.startup_cleanup_panes !== undefined && !normalizeStartupCleanupPanes(v.startup_cleanup_panes)) return false;
+  if (!(typeof v.resize_hook_name === 'string' || v.resize_hook_name === null)) return false;
+  if (!(typeof v.resize_hook_target === 'string' || v.resize_hook_target === null)) return false;
+  if (!v.leader || typeof v.leader !== 'object') return false;
+  if (!v.policy || typeof v.policy !== 'object') return false;
+  if (!v.permissions_snapshot || typeof v.permissions_snapshot !== 'object') return false;
+  return true;
+}
+
+// Atomic write: write to {path}.tmp.{pid}, fsync it, rename, then fsync parent.
+function isUnsupportedParentDirectorySyncError(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    code === 'EINVAL'
+    || code === 'ENOTSUP'
+    || code === 'EISDIR'
+    || (code === 'EPERM' && platformForAtomicWrite === 'win32')
+  );
+}
+
+async function syncParentDirectory(path: string): Promise<void> {
+  let handle: Awaited<ReturnType<typeof open>>;
+  try {
+    handle = await openForAtomicWrite(dirname(path), 'r');
+  } catch (error) {
+    if (isUnsupportedParentDirectorySyncError(error)) return;
+    throw error;
+  }
+
+  try {
+    await handle.sync();
+  } catch (error) {
+    if (!isUnsupportedParentDirectorySyncError(error)) throw error;
+  } finally {
+    await handle.close();
+  }
+}
+
+export async function removeDurableFile(path: string): Promise<void> {
+  await rm(path, { force: true });
+  await syncParentDirectory(path);
+}
+
+export async function writeAtomic(filePath: string, data: string): Promise<void> {
+  const parent = dirname(filePath);
+  await mkdir(parent, { recursive: true });
+
+  const tmpPath = `${filePath}.tmp.${process.pid}.${Date.now()}.${Math.random().toString(16).slice(2)}`;
+  await writeFile(tmpPath, data, 'utf8');
+  const handle = await openForAtomicWrite(tmpPath, 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+
+  try {
+    await renameForAtomicWrite(tmpPath, filePath);
+    await syncParentDirectory(filePath);
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT' && existsSync(filePath)) {
+      try {
+        const existing = await readFile(filePath, 'utf8');
+        if (existing === data) return;
+      } catch {
+        // Preserve original ENOENT below if destination cannot be read.
+      }
+    }
+    throw error;
+  }
+}
+
+type MembershipTransactionFile = {
+  path: string;
+  oldBytes: string | null;
+  newBytes: string | null;
+};
+
+type MembershipTransactionJournal = {
+  schemaVersion: 1;
+  phase: 'prepared' | 'committed';
+  files: MembershipTransactionFile[];
+};
+
+export type TeamMembershipTaskTransaction = {
+  /** Canonical config generation observed with the membership snapshot. */
+  baseGeneration: number;
+  tasks: Array<{ taskId: string; oldBytes: string | null; newBytes: string | null }>;
+  config: { oldBytes: string; newBytes: string };
+  manifest?: { oldBytes: string | null; newBytes: string | null };
+  interruptAfterFirstTaskWrite?: boolean;
+  failRollbackPersistence?: boolean;
+  /** Inject an interrupted rollback after the selected old-generation file write. */
+  failRollbackPersistenceAfter?: 'config' | 'manifest';
+  /** Recovery must complete the new generation rather than restore old bytes. */
+  recoverToNewOnFailure?: boolean;
+  /** Keep the committed journal until the caller verifies raw canonical membership. */
+  retainJournalOnSuccess?: boolean;
+};
+
+function membershipTransactionPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), '.membership-task-transaction.json');
+}
+
+async function applyMembershipTransactionFiles(files: readonly MembershipTransactionFile[], useNewBytes: boolean): Promise<void> {
+  for (const file of files) {
+    const bytes = useNewBytes ? file.newBytes : file.oldBytes;
+    if (bytes === null) await removeDurableFile(file.path);
+    else await writeAtomic(file.path, bytes);
+  }
+}
+
+async function validateMembershipTransactionFiles(
+  teamName: string,
+  cwd: string,
+  files: readonly MembershipTransactionFile[],
+): Promise<void> {
+  const expectedConfigPath = resolve(teamConfigPath(teamName, cwd));
+  const expectedManifestPath = resolve(teamManifestV2Path(teamName, cwd));
+  const expectedTasksDir = resolve(teamDir(teamName, cwd), 'tasks');
+  const seenPaths = new Set<string>();
+  let configCount = 0;
+  const canonicalStateRoot = await realpath(resolveTeamStateRoot(cwd));
+  const canonicalTeamRoot = await realpath(teamDir(teamName, cwd));
+  if (canonicalTeamRoot !== canonicalStateRoot && !canonicalTeamRoot.startsWith(`${canonicalStateRoot}${sep}`)) {
+    throw new Error(`Membership transaction team root escapes canonical state root for ${teamName}`);
+  }
+  const canonicalTasksDir = await realpath(resolve(teamDir(teamName, cwd), 'tasks'));
+  if (!canonicalTasksDir.startsWith(`${canonicalTeamRoot}${sep}`)) {
+    throw new Error(`Membership transaction tasks root escapes canonical team root for ${teamName}`);
+  }
+
+  for (const file of files) {
+    if (!file || typeof file.path !== 'string'
+      || (file.oldBytes !== null && typeof file.oldBytes !== 'string')
+      || (file.newBytes !== null && typeof file.newBytes !== 'string')) {
+      throw new Error(`Invalid membership transaction file entry for ${teamName}`);
+    }
+    const resolvedPath = resolve(file.path);
+    if (resolvedPath !== file.path || seenPaths.has(resolvedPath)) {
+      throw new Error(`Invalid membership transaction path for ${teamName}`);
+    }
+    seenPaths.add(resolvedPath);
+    let expectedParent: string;
+    if (resolvedPath === expectedConfigPath) {
+      configCount += 1;
+      expectedParent = canonicalTeamRoot;
+    } else if (resolvedPath === expectedManifestPath) {
+      expectedParent = canonicalTeamRoot;
+    } else {
+      if (dirname(resolvedPath) !== expectedTasksDir) {
+        throw new Error(`Membership transaction path escapes expected team files for ${teamName}`);
+      }
+      const match = basename(resolvedPath).match(/^task-([A-Za-z0-9_-]+)\.json$/);
+      if (!match || resolve(taskFilePath(teamName, match[1]!, cwd)) !== resolvedPath) {
+        throw new Error(`Invalid membership transaction task path for ${teamName}`);
+      }
+      expectedParent = canonicalTasksDir;
+    }
+    const canonicalParent = await realpath(dirname(resolvedPath));
+    if (canonicalParent !== expectedParent) {
+      throw new Error(`Membership transaction path traverses a symlink for ${teamName}`);
+    }
+  }
+  if (configCount !== 1) {
+    throw new Error(`Membership transaction must contain exactly one config path for ${teamName}`);
+  }
+}
+
+/**
+ * Resolve an interrupted membership/task commit before a reader or writer observes
+ * its files. Prepared transactions roll back; committed transactions roll forward.
+ */
+export async function recoverTeamMembershipTaskTransaction(
+  teamName: string,
+  cwd: string,
+  options: { retainJournal?: boolean } = {},
+): Promise<void> {
+  const journalPath = membershipTransactionPath(teamName, cwd);
+  let journal: MembershipTransactionJournal;
+  try {
+    journal = JSON.parse(await readFile(journalPath, 'utf8')) as MembershipTransactionJournal;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return;
+    throw error;
+  }
+  if (journal.schemaVersion !== 1 || (journal.phase !== 'prepared' && journal.phase !== 'committed') || !Array.isArray(journal.files)) {
+    throw new Error(`Invalid membership transaction journal for ${teamName}`);
+  }
+  await validateMembershipTransactionFiles(teamName, cwd, journal.files);
+  await applyMembershipTransactionFiles(journal.files, journal.phase === 'committed');
+  if (!options.retainJournal) await removeDurableFile(journalPath);
+}
+
+/** Finalize a previously committed membership transaction after caller verification. */
+export async function finalizeTeamMembershipTaskTransaction(teamName: string, cwd: string): Promise<void> {
+  const journalPath = membershipTransactionPath(teamName, cwd);
+  const journal = JSON.parse(await readFile(journalPath, 'utf8')) as MembershipTransactionJournal;
+  if (journal.schemaVersion !== 1 || journal.phase !== 'committed' || !Array.isArray(journal.files)) {
+    throw new Error(`Cannot finalize non-committed membership transaction for ${teamName}`);
+  }
+  await validateMembershipTransactionFiles(teamName, cwd, journal.files);
+  await removeDurableFile(journalPath);
+}
+
+/**
+ * Persist config/manifest and task membership changes as an old-or-new journaled
+ * generation. Callers must hold the team membership barrier for the whole call.
+ */
+export async function commitTeamMembershipTaskTransaction(
+  teamName: string,
+  cwd: string,
+  transaction: TeamMembershipTaskTransaction,
+): Promise<void> {
+  if (!taskMembershipBarrierContext.getStore()?.has(taskMembershipBarrierKey(teamName, cwd))) {
+    throw new Error(`membership_transaction_barrier_required:${teamName}`);
+  }
+  const currentGeneration = await readConfigGenerationRaw(teamName, cwd);
+  if (currentGeneration === null) throw new Error(`team_config_missing:${teamName}`);
+  if (transaction.baseGeneration !== currentGeneration) {
+    throw new Error(`team_membership_stale_generation:${teamName}:${transaction.baseGeneration}:${currentGeneration}`);
+  }
+  const acceptedGeneration = currentGeneration + 1;
+  const nextConfig = JSON.parse(transaction.config.newBytes) as TeamConfig;
+  nextConfig.config_generation = acceptedGeneration;
+  const nextManifest = transaction.manifest?.newBytes === null
+    ? null
+    : transaction.manifest
+      ? { ...(JSON.parse(transaction.manifest.newBytes) as TeamManifestV2), config_generation: acceptedGeneration }
+      : undefined;
+  const files: MembershipTransactionFile[] = [
+    ...transaction.tasks.map((task) => ({
+      path: taskFilePath(teamName, task.taskId, cwd),
+      oldBytes: task.oldBytes,
+      newBytes: task.newBytes,
+    })),
+    {
+      path: teamConfigPath(teamName, cwd),
+      oldBytes: transaction.config.oldBytes,
+      newBytes: JSON.stringify(nextConfig, null, 2),
+    },
+  ];
+  if (transaction.manifest) {
+    files.push({
+      path: teamManifestV2Path(teamName, cwd),
+      oldBytes: transaction.manifest.oldBytes,
+      newBytes: nextManifest === null ? null : JSON.stringify(nextManifest, null, 2),
+    });
+  }
+  const journalPath = membershipTransactionPath(teamName, cwd);
+  const journal: MembershipTransactionJournal = {
+    schemaVersion: 1,
+    // Membership rollback is itself a durable desired-state transition: an
+    // interruption must finish restoring the original membership, not revive
+    // the transient scaled-up generation.
+    phase: transaction.recoverToNewOnFailure ? 'committed' : 'prepared',
+    files,
+  };
+  await writeAtomic(journalPath, JSON.stringify(journal, null, 2));
+  try {
+    if (transaction.interruptAfterFirstTaskWrite && transaction.tasks.length > 0) {
+      await applyMembershipTransactionFiles(files.slice(0, 1), true);
+      throw new Error('injected_scale_down_interruption:after-first-task-write');
+    }
+    await applyMembershipTransactionFiles(files, true);
+    if (transaction.failRollbackPersistence || transaction.failRollbackPersistenceAfter) {
+      // Exercise the restore path after a complete new generation is visible.
+      // The catch below intentionally writes OLD bytes then leaves the durable
+      // journal in place so public entry recovery owns convergence.
+      throw new Error('injected_scale_down_failure:rollback-persistence-failure');
+    }
+    journal.phase = 'committed';
+    await writeAtomic(journalPath, JSON.stringify(journal, null, 2));
+    if (!transaction.retainJournalOnSuccess) await removeDurableFile(journalPath);
+  } catch (error) {
+    if (error instanceof Error && error.message === 'injected_scale_down_interruption:after-first-task-write') throw error;
+    if (transaction.failRollbackPersistence || transaction.failRollbackPersistenceAfter) {
+      const target = transaction.failRollbackPersistenceAfter;
+      const targetIndex = target ? files.findIndex((file) => file.path === (target === 'config'
+        ? teamConfigPath(teamName, cwd)
+        : teamManifestV2Path(teamName, cwd))) : 0;
+      const partial = files.slice(0, Math.max(1, targetIndex + 1));
+      await applyMembershipTransactionFiles(partial, false);
+      throw error;
+    }
+    if (transaction.recoverToNewOnFailure) {
+      try {
+        await recoverTeamMembershipTaskTransaction(teamName, cwd);
+      } catch {
+        // Keep the committed-direction journal as durable recovery authority.
+      }
+      throw error;
+    }
+    // Leave the prepared marker durable if restoring old bytes also fails. Entry
+    // recovery will retry until the state has converged to the old generation.
+    try {
+      await applyMembershipTransactionFiles(files, false);
+      await removeDurableFile(journalPath);
+    } catch {
+      // The prepared journal is the durable recovery authority.
+    }
+    throw error;
+  }
+}
+
+// Initialize team state directory + config.json
+// Creates: .omx/state/team/{name}/, workers/{worker-1}..{worker-N}/, tasks/
+// Throws if workerCount > maxWorkers (default 20)
+export async function initTeamState(
+  teamName: string,
+  task: string,
+  agentType: string,
+  workerCount: number,
+  cwd: string,
+  maxWorkers: number = DEFAULT_MAX_WORKERS,
+  env: NodeJS.ProcessEnv = process.env,
+  workspace: TeamWorkspaceMetadata = {},
+  lifecycleProfile: 'default' = 'default',
+): Promise<TeamConfig> {
+  validateTeamName(teamName);
+
+  if (maxWorkers > ABSOLUTE_MAX_WORKERS) {
+    throw new Error(`maxWorkers (${maxWorkers}) exceeds ABSOLUTE_MAX_WORKERS (${ABSOLUTE_MAX_WORKERS})`);
+  }
+
+  if (workerCount > maxWorkers) {
+    throw new Error(`workerCount (${workerCount}) exceeds maxWorkers (${maxWorkers})`);
+  }
+
+  const root = teamDir(teamName, cwd);
+  const workersRoot = join(root, 'workers');
+  const tasksRoot = join(root, 'tasks');
+  const claimsRoot = join(root, 'claims');
+  const mailboxRoot = join(root, 'mailbox');
+  const dispatchRoot = join(root, 'dispatch');
+  const eventsRoot = join(root, 'events');
+  const approvalsRoot = join(root, 'approvals');
+
+  await mkdir(workersRoot, { recursive: true });
+  await mkdir(tasksRoot, { recursive: true });
+  await mkdir(claimsRoot, { recursive: true });
+  await mkdir(mailboxRoot, { recursive: true });
+  await mkdir(dispatchRoot, { recursive: true });
+  await mkdir(eventsRoot, { recursive: true });
+  await mkdir(approvalsRoot, { recursive: true });
+  await writeAtomic(join(dispatchRoot, 'requests.json'), JSON.stringify([], null, 2));
+
+  const workers: WorkerInfo[] = [];
+  for (let i = 1; i <= workerCount; i++) {
+    const name = `worker-${i}`;
+    const worker: WorkerInfo = { name, index: i, role: agentType, assigned_tasks: [] };
+    workers.push(worker);
+    await mkdir(join(workersRoot, name), { recursive: true });
+  }
+
+  const leaderSessionId = await resolveLeaderSessionId(cwd, env);
+  const leaderWorkerId = readEnvValue(env, ['OMX_TEAM_WORKER']) ?? 'leader-fixed';
+  const displayMode = resolveDisplayModeFromEnv(env);
+  const permissionsSnapshot = resolvePermissionsSnapshot(env);
+  const workerLaunchMode = resolveWorkerLaunchModeFromEnv(env);
+  const tmuxPaneOwnerId = defaultTmuxPaneOwnerId(teamName);
+
+  const config: TeamConfig = {
+    name: teamName,
+    task,
+    agent_type: agentType,
+    worker_launch_mode: workerLaunchMode,
+    lifecycle_profile: lifecycleProfile,
+    worker_count: workerCount,
+    max_workers: maxWorkers,
+    workers,
+    created_at: new Date().toISOString(),
+    tmux_session: `omx-team-${teamName}`,
+    tmux_session_id: undefined,
+    tmux_session_created: undefined,
+    next_task_id: 1,
+    leader_cwd: workspace.leader_cwd,
+    team_state_root: workspace.team_state_root,
+    workspace_mode: workspace.workspace_mode,
+    worktree_mode: workspace.worktree_mode,
+    leader_pane_id: null,
+    leader_pane_pid: null,
+    hud_pane_pid: null,
+    hud_pane_id: null,
+    tmux_pane_owner_id: tmuxPaneOwnerId,
+    resize_hook_name: null,
+    resize_hook_target: null,
+    next_worker_index: workerCount + 1,
+    display_name: workspace.display_name,
+    requested_name: workspace.requested_name,
+    identity_source: workspace.identity_source,
+    config_generation: 0,
+
+  };
+
+  await withTeamTaskBarrier(teamName, cwd, async () => {
+    await writeAtomic(join(root, 'config.json'), JSON.stringify(config, null, 2));
+  });
+  await writeTeamPhase(
+    teamName,
+    {
+      current_phase: 'team-exec',
+      max_fix_attempts: 3,
+      current_fix_attempt: 0,
+      transitions: [],
+      updated_at: new Date().toISOString(),
+    },
+    cwd
+  );
+  await writeTeamManifestV2(
+    {
+      schema_version: 2,
+      name: teamName,
+      task,
+      leader: {
+        ...defaultLeader(),
+        session_id: leaderSessionId,
+        worker_id: leaderWorkerId,
+      },
+      policy: defaultPolicy(displayMode, workerLaunchMode),
+      governance: defaultGovernance(),
+      lifecycle_profile: lifecycleProfile,
+      permissions_snapshot: permissionsSnapshot,
+      tmux_session: config.tmux_session,
+      tmux_session_id: config.tmux_session_id,
+      tmux_session_created: config.tmux_session_created,
+      worker_count: workerCount,
+      workers,
+      next_task_id: 1,
+      created_at: config.created_at,
+      leader_cwd: workspace.leader_cwd,
+      team_state_root: workspace.team_state_root,
+      workspace_mode: workspace.workspace_mode,
+      worktree_mode: workspace.worktree_mode,
+      leader_pane_id: null,
+      leader_pane_pid: null,
+      hud_pane_pid: null,
+      hud_pane_id: null,
+      tmux_pane_owner_id: tmuxPaneOwnerId,
+      resize_hook_name: null,
+      resize_hook_target: null,
+      next_worker_index: workerCount + 1,
+      startup_cleanup_panes: undefined,
+      display_name: workspace.display_name,
+      requested_name: workspace.requested_name,
+      identity_source: workspace.identity_source,
+    },
+    cwd
+  );
+  return config;
+}
+
+async function writeConfig(cfg: TeamConfig, cwd: string): Promise<void> {
+  const normalized = normalizeTeamConfig(cfg);
+  const configPath = teamConfigPath(normalized.name, cwd);
+  const oldConfigBytes = await readFile(configPath, 'utf8');
+
+  // Keep v2 manifest in sync when present. Don't create it implicitly here to preserve migration behavior.
+  const existing = await readTeamManifestV2Raw(normalized.name, cwd);
+  if (!existing) {
+    await writeAtomic(configPath, JSON.stringify(normalized, null, 2));
+    return;
+  }
+
+  const merged: TeamManifestV2 = {
+    ...existing,
+    task: normalized.task,
+    tmux_session: normalized.tmux_session,
+    tmux_session_id: normalized.tmux_session_id,
+    tmux_session_created: normalized.tmux_session_created,
+    worker_count: normalized.worker_count,
+    workers: normalized.workers,
+    lifecycle_profile: normalized.lifecycle_profile,
+    next_task_id: normalizeNextTaskId(normalized.next_task_id),
+    leader_cwd: normalized.leader_cwd,
+    team_state_root: normalized.team_state_root,
+    workspace_mode: normalized.workspace_mode,
+    worktree_mode: normalized.worktree_mode,
+    leader_pane_id: normalized.leader_pane_id,
+    leader_pane_pid: normalized.leader_pane_pid,
+    hud_pane_pid: normalized.hud_pane_pid,
+    hud_pane_id: normalized.hud_pane_id,
+    tmux_pane_owner_id: normalized.tmux_pane_owner_id,
+    resize_hook_name: normalized.resize_hook_name,
+    resize_hook_target: normalized.resize_hook_target,
+    next_worker_index: normalized.next_worker_index ?? existing.next_worker_index,
+    startup_cleanup_panes: normalized.startup_cleanup_panes,
+    display_name: normalized.display_name ?? existing.display_name,
+    requested_name: normalized.requested_name ?? existing.requested_name,
+    identity_source: normalized.identity_source ?? existing.identity_source,
+    config_generation: normalized.config_generation,
+  };
+  const manifestPath = teamManifestV2Path(normalized.name, cwd);
+  const files: MembershipTransactionFile[] = [
+    { path: configPath, oldBytes: oldConfigBytes, newBytes: JSON.stringify(normalized, null, 2) },
+    { path: manifestPath, oldBytes: await readFile(manifestPath, 'utf8'), newBytes: JSON.stringify(merged, null, 2) },
+  ];
+  const journalPath = membershipTransactionPath(normalized.name, cwd);
+  const journal: MembershipTransactionJournal = { schemaVersion: 1, phase: 'prepared', files };
+  await writeAtomic(journalPath, JSON.stringify(journal, null, 2));
+  try {
+    await applyMembershipTransactionFiles(files, true);
+    journal.phase = 'committed';
+    await writeAtomic(journalPath, JSON.stringify(journal, null, 2));
+    await removeDurableFile(journalPath);
+  } catch (error) {
+    try {
+      await recoverTeamMembershipTaskTransaction(normalized.name, cwd);
+    } catch {
+      // The prepared journal is the durable recovery authority.
+    }
+    throw error;
+  }
+}
+
+function teamConfigFromManifest(manifest: TeamManifestV2): TeamConfig {
+  const normalizedPolicy = normalizeTeamPolicy(manifest.policy, {
+    display_mode: manifest.policy?.display_mode === 'split_pane' ? 'split_pane' : 'auto',
+    worker_launch_mode: manifest.policy?.worker_launch_mode === 'prompt' ? 'prompt' : 'interactive',
+  });
+  const workerLaunchMode = normalizedPolicy.worker_launch_mode;
+  return {
+    name: manifest.name,
+    task: manifest.task,
+    agent_type: manifest.workers[0]?.role ?? 'executor',
+    worker_launch_mode: workerLaunchMode,
+    lifecycle_profile: manifest.lifecycle_profile,
+    worker_count: manifest.worker_count,
+    max_workers: DEFAULT_MAX_WORKERS,
+    workers: manifest.workers,
+    created_at: manifest.created_at,
+    tmux_session: manifest.tmux_session,
+    tmux_session_id: manifest.tmux_session_id,
+    tmux_session_created: manifest.tmux_session_created,
+    next_task_id: manifest.next_task_id,
+    leader_cwd: manifest.leader_cwd,
+    team_state_root: manifest.team_state_root,
+    workspace_mode: manifest.workspace_mode,
+    worktree_mode: manifest.worktree_mode,
+    leader_pane_id: manifest.leader_pane_id,
+    leader_pane_pid: manifest.leader_pane_pid ?? null,
+    hud_pane_pid: manifest.hud_pane_pid ?? null,
+    hud_pane_id: manifest.hud_pane_id,
+    tmux_pane_owner_id: typeof manifest.tmux_pane_owner_id === 'string' && manifest.tmux_pane_owner_id.trim() !== ''
+      ? manifest.tmux_pane_owner_id.trim()
+      : undefined,
+    resize_hook_name: manifest.resize_hook_name,
+    resize_hook_target: manifest.resize_hook_target,
+    next_worker_index: manifest.next_worker_index,
+    startup_cleanup_panes: manifest.startup_cleanup_panes,
+    display_name: manifest.display_name,
+    requested_name: manifest.requested_name,
+    identity_source: manifest.identity_source,
+  };
+}
+
+function normalizeStartupCleanupPanes(value: unknown): StartupCleanupPane[] | null {
+  if (!Array.isArray(value)) return null;
+  const panes = new Map<string, StartupCleanupPane>();
+  for (const raw of value) {
+    if (!raw || typeof raw !== 'object') return null;
+    const paneId = (raw as Record<string, unknown>).pane_id;
+    const pid = (raw as Record<string, unknown>).pid;
+    if (typeof paneId !== 'string' || !/^%[0-9]+$/.test(paneId)) return null;
+    if (!(pid === null || (typeof pid === 'number' && Number.isSafeInteger(pid) && pid > 0))) return null;
+    panes.set(paneId, { pane_id: paneId, pid });
+  }
+  return [...panes.values()];
+}
+
+function normalizeTeamConfig(config: TeamConfig): TeamConfig {
+  const workerLaunchMode = config.worker_launch_mode === 'prompt' ? 'prompt' : 'interactive';
+  const configGeneration = typeof config.config_generation === 'number'
+    && Number.isSafeInteger(config.config_generation) && config.config_generation >= 0
+    ? config.config_generation
+    : 0;
+  const startupCleanupPanes = normalizeStartupCleanupPanes(config.startup_cleanup_panes ?? []);
+  return {
+    ...config,
+    config_generation: configGeneration,
+    lifecycle_profile: 'default',
+    leader_pane_id: config.leader_pane_id ?? null,
+    leader_pane_pid: typeof config.leader_pane_pid === 'number' && Number.isSafeInteger(config.leader_pane_pid) && config.leader_pane_pid > 0
+      ? config.leader_pane_pid
+      : null,
+    hud_pane_pid: typeof config.hud_pane_pid === 'number' && Number.isSafeInteger(config.hud_pane_pid) && config.hud_pane_pid > 0
+      ? config.hud_pane_pid
+      : null,
+    hud_pane_id: config.hud_pane_id ?? null,
+    tmux_pane_owner_id: typeof config.tmux_pane_owner_id === 'string' && config.tmux_pane_owner_id.trim() !== ''
+      ? config.tmux_pane_owner_id.trim()
+      : undefined,
+    resize_hook_name: config.resize_hook_name ?? null,
+    resize_hook_target: config.resize_hook_target ?? null,
+    startup_cleanup_panes: startupCleanupPanes && startupCleanupPanes.length > 0
+      ? startupCleanupPanes
+      : undefined,
+    worker_launch_mode: workerLaunchMode,
+  };
+}
+
+function teamManifestFromConfig(config: TeamConfig): TeamManifestV2 {
+  const normalized = normalizeTeamConfig(config);
+  const policy = normalizeTeamPolicy(
+    {
+      worker_launch_mode: normalized.worker_launch_mode,
+    },
+    {
+      display_mode: 'auto',
+      worker_launch_mode: normalized.worker_launch_mode,
+    },
+  );
+  return {
+    schema_version: 2,
+    name: normalized.name,
+    task: normalized.task,
+    leader: defaultLeader(),
+    policy,
+    governance: defaultGovernance(),
+    lifecycle_profile: normalized.lifecycle_profile,
+    permissions_snapshot: defaultPermissionsSnapshot(),
+    tmux_session: normalized.tmux_session,
+    tmux_session_id: normalized.tmux_session_id,
+    tmux_session_created: normalized.tmux_session_created,
+    worker_count: normalized.worker_count,
+    workers: normalized.workers,
+    next_task_id: normalizeNextTaskId(normalized.next_task_id),
+    created_at: normalized.created_at,
+    leader_cwd: normalized.leader_cwd,
+    team_state_root: normalized.team_state_root,
+    workspace_mode: normalized.workspace_mode,
+    worktree_mode: normalized.worktree_mode,
+    leader_pane_id: normalized.leader_pane_id,
+    leader_pane_pid: normalized.leader_pane_pid,
+    hud_pane_pid: normalized.hud_pane_pid,
+    hud_pane_id: normalized.hud_pane_id,
+    tmux_pane_owner_id: normalized.tmux_pane_owner_id,
+    resize_hook_name: normalized.resize_hook_name,
+    resize_hook_target: normalized.resize_hook_target,
+    next_worker_index: normalized.next_worker_index,
+    startup_cleanup_panes: normalized.startup_cleanup_panes,
+    display_name: normalized.display_name,
+    requested_name: normalized.requested_name,
+    identity_source: normalized.identity_source,
+    config_generation: normalized.config_generation,
+  };
+}
+
+export async function writeTeamManifestV2(manifest: TeamManifestV2, cwd: string): Promise<void> {
+  await withTeamTaskBarrier(manifest.name, cwd, async () => {
+  const normalizedPolicy = normalizeTeamPolicy(manifest.policy, {
+    display_mode: manifest.policy?.display_mode === 'split_pane' ? 'split_pane' : 'auto',
+    worker_launch_mode: manifest.policy?.worker_launch_mode === 'prompt' ? 'prompt' : 'interactive',
+  });
+  const normalizedGovernance = normalizeTeamGovernance(
+    manifest.governance,
+    manifest.policy as Partial<TeamGovernance>,
+  );
+  const tmuxPaneOwnerId = typeof manifest.tmux_pane_owner_id === 'string' && manifest.tmux_pane_owner_id.trim() !== ''
+    ? manifest.tmux_pane_owner_id.trim()
+    : undefined;
+  const p = teamManifestV2Path(manifest.name, cwd);
+  await writeAtomic(
+    p,
+    JSON.stringify(
+      {
+        ...manifest,
+        tmux_pane_owner_id: tmuxPaneOwnerId,
+        policy: normalizedPolicy,
+        governance: normalizedGovernance,
+        lifecycle_profile: 'default',
+      },
+      null,
+      2,
+    ),
+  );
+  });
+}
+
+async function readTeamManifestV2Raw(teamName: string, cwd: string): Promise<TeamManifestV2 | null> {
+  try {
+    const p = teamManifestV2Path(teamName, cwd);
+    if (!existsSync(p)) return null;
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isTeamManifestV2(parsed)) return null;
+    const parsedManifest = parsed as TeamManifestV2 & {
+      policy?: Partial<TeamPolicy> & Partial<TeamGovernance>;
+      governance?: Partial<TeamGovernance>;
+    };
+    const legacyPolicy = parsedManifest.policy as (Partial<TeamPolicy> & Partial<TeamGovernance> & {
+      team_decomposition?: unknown;
+    }) | undefined;
+    const legacyTeamDecomposition = legacyPolicy?.team_decomposition;
+    const tmuxPaneOwnerId = typeof parsedManifest.tmux_pane_owner_id === 'string' && parsedManifest.tmux_pane_owner_id.trim() !== ''
+      ? parsedManifest.tmux_pane_owner_id.trim()
+      : undefined;
+    return {
+      ...parsedManifest,
+      tmux_pane_owner_id: tmuxPaneOwnerId,
+      policy: normalizeTeamPolicy(parsedManifest.policy, {
+        display_mode: parsedManifest.policy?.display_mode === 'split_pane' ? 'split_pane' : 'auto',
+        worker_launch_mode: parsedManifest.policy?.worker_launch_mode === 'prompt' ? 'prompt' : 'interactive',
+      }),
+      governance: normalizeTeamGovernance(parsedManifest.governance, parsedManifest.policy),
+      team_decomposition: parsedManifest.team_decomposition
+        ?? (legacyTeamDecomposition && typeof legacyTeamDecomposition === 'object' && !Array.isArray(legacyTeamDecomposition)
+          ? legacyTeamDecomposition as Record<string, unknown>
+          : undefined),
+      lifecycle_profile: 'default',
+    };
+  } catch {
+    return null;
+  }
+}
+
+export async function readTeamManifestV2(teamName: string, cwd: string): Promise<TeamManifestV2 | null> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await readTeamManifestV2Raw(teamName, cwd);
+  });
+}
+
+// Idempotent migration; keeps config.json untouched.
+export async function migrateV1ToV2(teamName: string, cwd: string): Promise<TeamManifestV2 | null> {
+  const existing = await readTeamManifestV2(teamName, cwd);
+  if (existing) return existing;
+
+  try {
+    const p = teamConfigPath(teamName, cwd);
+    if (!existsSync(p)) return null;
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    const manifest = teamManifestFromConfig(parsed as TeamConfig);
+    await writeTeamManifestV2(manifest, cwd);
+    return await readTeamManifestV2(teamName, cwd);
+  } catch {
+    return null;
+  }
+}
+
+function normalizeNextTaskId(raw: unknown): number {
+  const asNum = typeof raw === 'number' ? raw : Number(raw);
+  if (!Number.isFinite(asNum)) return 1;
+  const floored = Math.floor(asNum);
+  return Math.max(1, floored);
+}
+
+function hasValidNextTaskId(raw: unknown): boolean {
+  const asNum = typeof raw === 'number' ? raw : Number(raw);
+  return Number.isFinite(asNum) && Math.floor(asNum) >= 1;
+}
+
+async function computeNextTaskIdFromDisk(teamName: string, cwd: string): Promise<number> {
+  const tasksRoot = join(teamDir(teamName, cwd), 'tasks');
+  if (!existsSync(tasksRoot)) return 1;
+
+  let maxId = 0;
+  try {
+    const files = await readdir(tasksRoot);
+    for (const f of files) {
+      const m = /^task-(\d+)\.json$/.exec(f);
+      if (!m) continue;
+      const id = Number(m[1]);
+      if (Number.isFinite(id) && id > maxId) maxId = id;
+    }
+  } catch (error) {
+    const err = error as NodeJS.ErrnoException;
+    if (err.code === 'ENOENT') return 1;
+    throw error;
+  }
+
+  return maxId + 1;
+}
+
+async function readConfigGenerationRaw(teamName: string, cwd: string): Promise<number | null> {
+  try {
+    const raw = JSON.parse(await readFile(teamConfigPath(teamName, cwd), 'utf8')) as { config_generation?: unknown };
+    return typeof raw.config_generation === 'number'
+      && Number.isSafeInteger(raw.config_generation) && raw.config_generation >= 0
+      ? raw.config_generation
+      : 0;
+  } catch {
+    return null;
+  }
+}
+
+
+// Read team config
+async function readTeamConfigRaw(teamName: string, cwd: string): Promise<TeamConfig | null> {
+  const v2 = await readTeamManifestV2Raw(teamName, cwd);
+  if (v2) return { ...teamConfigFromManifest(v2), config_generation: (await readConfigGenerationRaw(teamName, cwd)) ?? 0 };
+
+
+
+  // Attempt idempotent migration on first read.
+  const migrated = await migrateV1ToV2(teamName, cwd);
+  if (migrated) return teamConfigFromManifest(migrated);
+
+  try {
+    const p = teamConfigPath(teamName, cwd);
+    if (!existsSync(p)) return null;
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return normalizeTeamConfig(parsed as TeamConfig);
+  } catch {
+    return null;
+  }
+}
+
+export async function readTeamConfig(teamName: string, cwd: string): Promise<TeamConfig | null> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await readTeamConfigRaw(teamName, cwd);
+  });
+}
+
+// Write worker identity file
+export async function writeWorkerIdentity(
+  teamName: string,
+  workerName: string,
+  identity: WorkerInfo,
+  cwd: string
+): Promise<void> {
+  const p = join(workerDir(teamName, workerName, cwd), 'identity.json');
+  await writeAtomic(p, JSON.stringify(identity, null, 2));
+}
+
+// Read worker heartbeat (returns null on missing/malformed)
+export async function readWorkerHeartbeat(
+  teamName: string,
+  workerName: string,
+  cwd: string
+): Promise<WorkerHeartbeat | null> {
+  const p = join(workerDir(teamName, workerName, cwd), 'heartbeat.json');
+  try {
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    return isWorkerHeartbeat(parsed) ? parsed : null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    return null;
+  }
+}
+
+// Atomic write worker heartbeat
+export async function updateWorkerHeartbeat(
+  teamName: string,
+  workerName: string,
+  heartbeat: WorkerHeartbeat,
+  cwd: string
+): Promise<void> {
+  const p = join(workerDir(teamName, workerName, cwd), 'heartbeat.json');
+  await writeAtomic(p, JSON.stringify(heartbeat, null, 2));
+}
+
+// Read worker status (returns {state:'unknown'} on missing/malformed)
+export async function readWorkerStatus(teamName: string, workerName: string, cwd: string): Promise<WorkerStatus> {
+  const unknownStatus: WorkerStatus = { state: 'unknown', updated_at: '1970-01-01T00:00:00.000Z' };
+  const p = join(workerDir(teamName, workerName, cwd), 'status.json');
+  try {
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!isWorkerStatus(parsed)) {
+      return unknownStatus;
+    }
+    return parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return unknownStatus;
+    return unknownStatus;
+  }
+}
+
+// Atomic write worker status
+export async function writeWorkerStatus(
+  teamName: string,
+  workerName: string,
+  status: WorkerStatus,
+  cwd: string
+): Promise<void> {
+  const p = join(workerDir(teamName, workerName, cwd), 'status.json');
+  await writeAtomic(p, JSON.stringify(status, null, 2));
+}
+
+// File-based scaling lock kept outside the deletable team root. Operations that
+// also mutate membership acquire this lock before the membership barrier.
+export async function withScalingLock<T>(
+  teamName: string,
+  cwd: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return await withScalingLockImpl(teamName, cwd, LOCK_STALE_MS, { teamDir, taskClaimLockDir, mailboxLockDir }, fn);
+}
+
+// Write prompt to worker's inbox.md (atomic)
+export async function writeWorkerInbox(
+  teamName: string,
+  workerName: string,
+  prompt: string,
+  cwd: string
+): Promise<void> {
+  const p = join(workerDir(teamName, workerName, cwd), 'inbox.md');
+  await writeAtomic(p, prompt);
+}
+
+function taskFilePath(teamName: string, taskId: string, cwd: string): string {
+  validateTaskId(taskId);
+  const p = join(teamDir(teamName, cwd), 'tasks', `task-${taskId}.json`);
+  assertPathWithinDir(p, resolveTeamStateRoot(cwd));
+  return p;
+}
+
+const taskMembershipBarrierContext = new AsyncLocalStorage<Set<string>>();
+
+function taskMembershipBarrierKey(teamName: string, cwd: string): string {
+  return `${resolve(cwd)}\0${teamName}`;
+}
+
+async function withTeamLock<T>(teamName: string, cwd: string, fn: () => Promise<T>): Promise<T> {
+  return await withTeamLockImpl(teamName, cwd, LOCK_STALE_MS, { teamDir, taskClaimLockDir, mailboxLockDir }, fn);
+}
+
+/**
+ * Serializes membership snapshots with task creation and claims. The global
+ * lock order is scaling, membership, then task claim locks. Operations that do
+ * not scale acquire only this barrier (and then any task claim lock).
+ */
+export async function withTeamTaskBarrier<T>(teamName: string, cwd: string, fn: () => Promise<T>): Promise<T> {
+  const key = taskMembershipBarrierKey(teamName, cwd);
+  if (taskMembershipBarrierContext.getStore()?.has(key)) return await fn();
+  return await withTeamLock(teamName, cwd, async () => {
+    const held = new Set<string>(taskMembershipBarrierContext.getStore() ?? []);
+    held.add(key);
+    return await taskMembershipBarrierContext.run(held, fn);
+  });
+}
+
+async function withTaskClaimLock<T>(
+  teamName: string,
+  taskId: string,
+  cwd: string,
+  fn: () => Promise<T>
+): Promise<{ ok: true; value: T } | { ok: false }> {
+  return await withTaskClaimLockImpl(teamName, taskId, cwd, LOCK_STALE_MS, { teamDir, taskClaimLockDir, mailboxLockDir }, fn);
+}
+
+async function withMailboxLock<T>(
+  teamName: string,
+  workerName: string,
+  cwd: string,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return await withMailboxLockImpl(teamName, workerName, cwd, LOCK_STALE_MS, { teamDir, taskClaimLockDir, mailboxLockDir }, fn);
+}
+
+export function teamContinuationRequiredDiagnostic(phase: TeamPhaseState): string {
+  const epoch = phase.terminal_epoch ?? phase.updated_at;
+  const reason = phase.terminal_reason ?? `terminal_phase_${phase.current_phase}`;
+  return `team_continuation_required:terminal_epoch=${epoch}:reason=${reason}:action=reopen_or_start_continuation`;
+}
+
+// Create a task (auto-increment ID)
+export async function createTask(
+  teamName: string,
+  task: Omit<TeamTask, 'id' | 'created_at'>,
+  cwd: string
+): Promise<TeamTaskV2> {
+  return withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    const cfg = await readTeamConfig(teamName, cwd);
+    if (!cfg) throw new Error(`Team ${teamName} not found`);
+    const phase = await readTeamPhase(teamName, cwd);
+    if (phase?.terminal_epoch || (phase && isTerminalPhase(phase.current_phase))) {
+      throw new Error(teamContinuationRequiredDiagnostic(phase));
+    }
+
+    let nextNumeric = normalizeNextTaskId(cfg.next_task_id);
+    const nextNumericFromDisk = await computeNextTaskIdFromDisk(teamName, cwd);
+    if (!hasValidNextTaskId(cfg.next_task_id) || nextNumericFromDisk > nextNumeric) {
+      nextNumeric = nextNumericFromDisk;
+    }
+    const nextId = String(nextNumeric);
+
+    const created: TeamTaskV2 = {
+      ...normalizeTask({
+        ...task,
+        id: nextId,
+        created_at: new Date().toISOString(),
+      }),
+      id: nextId,
+      status: task.status ?? 'pending',
+      depends_on: task.depends_on ?? task.blocked_by ?? [],
+      version: 1,
+    };
+
+    await writeAtomic(taskFilePath(teamName, nextId, cwd), JSON.stringify(created, null, 2));
+
+    // Advance counter after the task is safely persisted.
+    cfg.next_task_id = nextNumeric + 1;
+    await writeConfig(cfg, cwd);
+    return created;
+  });
+}
+
+// Read a task (returns null on missing/malformed)
+async function readTaskRaw(teamName: string, taskId: string, cwd: string): Promise<TeamTask | null> {
+  try {
+    const p = taskFilePath(teamName, taskId, cwd);
+    if (!existsSync(p)) return null;
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    return isTeamTask(parsed) ? normalizeTask(parsed) : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function readTask(teamName: string, taskId: string, cwd: string): Promise<TeamTask | null> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await readTaskRaw(teamName, taskId, cwd);
+  });
+}
+
+// Update a task (merge updates, atomic write)
+export async function updateTask(
+  teamName: string,
+  taskId: string,
+  updates: Partial<TeamTask>,
+  cwd: string
+): Promise<TeamTask | null> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    const lock = await withTaskClaimLock(teamName, taskId, cwd, async () => {
+      const existing = await readTaskRaw(teamName, taskId, cwd);
+      if (!existing) return null;
+
+      if (updates.status !== undefined && !['pending', 'blocked', 'in_progress', 'completed', 'failed'].includes(updates.status)) {
+        throw new Error(`Invalid task status: ${updates.status}`);
+      }
+
+      const rawDeps = updates.depends_on ?? updates.blocked_by ?? existing.depends_on ?? existing.blocked_by ?? [];
+      const normalizedDeps = Array.isArray(rawDeps) ? rawDeps : [];
+      const merged = normalizeTask({
+        ...normalizeTask(existing),
+        ...updates,
+        id: existing.id,
+        created_at: existing.created_at,
+        depends_on: normalizedDeps,
+        version: Math.max(1, existing.version ?? 1) + 1,
+      });
+      await writeAtomic(taskFilePath(teamName, taskId, cwd), JSON.stringify(merged, null, 2));
+      return merged;
+    });
+    if (!lock.ok) throw new Error(`Timed out acquiring task claim lock for ${teamName}/${taskId}`);
+    return lock.value;
+  });
+}
+
+// List all tasks sorted by numeric ID
+export async function listTasks(teamName: string, cwd: string): Promise<TeamTask[]> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await listTasksImpl(teamName, cwd, {
+      teamDir,
+      isTeamTask,
+      normalizeTask,
+    });
+  });
+}
+
+export async function computeTaskReadiness(teamName: string, taskId: string, cwd: string): Promise<TaskReadiness> {
+  return await computeTaskReadinessImpl(teamName, taskId, cwd, { readTask });
+}
+
+export async function claimTask(
+  teamName: string,
+  taskId: string,
+  workerName: string,
+  expectedVersion: number | null,
+  cwd: string
+): Promise<ClaimTaskResult> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await claimTaskImpl(taskId, workerName, expectedVersion, {
+      teamName,
+      cwd,
+      readTask,
+      readTeamConfig,
+      withTaskClaimLock,
+      normalizeTask,
+      isTerminalTaskStatus,
+      taskFilePath,
+      writeAtomic,
+    });
+  });
+}
+
+export async function transitionTaskStatus(
+  teamName: string,
+  taskId: string,
+  from: TeamTask['status'],
+  to: TeamTask['status'],
+  claimToken: string,
+  cwd: string,
+  terminalData?: { result?: string; error?: string },
+): Promise<TransitionTaskResult> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await transitionTaskStatusImpl(taskId, from, to, claimToken, terminalData, {
+      teamName,
+      cwd,
+      readTask,
+      readTeamConfig,
+      withTaskClaimLock,
+      normalizeTask,
+      isTerminalTaskStatus,
+      canTransitionTaskStatus,
+      taskFilePath,
+      writeAtomic,
+      appendTeamEvent,
+      readMonitorSnapshot,
+      writeMonitorSnapshot,
+    });
+  });
+}
+
+export async function releaseTaskClaim(
+  teamName: string,
+  taskId: string,
+  claimToken: string,
+  workerName: string,
+  cwd: string
+): Promise<ReleaseTaskClaimResult> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await releaseTaskClaimImpl(taskId, claimToken, workerName, {
+      teamName,
+      cwd,
+      readTask,
+      readTeamConfig,
+      withTaskClaimLock,
+      normalizeTask,
+      isTerminalTaskStatus,
+      taskFilePath,
+      writeAtomic,
+    });
+  });
+}
+
+export async function reclaimExpiredTaskClaim(
+  teamName: string,
+  taskId: string,
+  cwd: string
+): Promise<ReclaimTaskResult> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => {
+    await recoverTeamMembershipTaskTransaction(teamName, cwd);
+    return await reclaimExpiredTaskClaimImpl(taskId, {
+      teamName,
+      cwd,
+      readTask,
+      readTeamConfig,
+      withTaskClaimLock,
+      normalizeTask,
+      isTerminalTaskStatus,
+      taskFilePath,
+      writeAtomic,
+    });
+  });
+}
+
+export async function appendTeamEvent(teamName: string, event: Omit<TeamEvent, 'event_id' | 'created_at' | 'team'>, cwd: string): Promise<TeamEvent> {
+  const full = {
+    ...event,
+    event_id: randomUUID(),
+    team: teamName,
+    created_at: new Date().toISOString(),
+  } as TeamEvent;
+  const p = teamEventLogPath(teamName, cwd);
+  await mkdir(dirname(p), { recursive: true });
+  await appendFile(p, `${JSON.stringify(full)}\n`, 'utf8');
+  return full;
+}
+
+async function readMailbox(teamName: string, workerName: string, cwd: string): Promise<TeamMailbox> {
+  const legacyMailbox = await readLegacyMailbox(teamName, workerName, cwd);
+
+  if (isBridgeEnabled()) {
+    try {
+      const bridge = getDefaultBridge(resolveBridgeStateDir(cwd));
+      const compat = bridge.readCompatFile<{ records?: unknown[] }>('mailbox.json');
+      if (compat) {
+        const legacyById = new Map(
+          legacyMailbox.messages
+            .filter((message) => typeof message.message_id === 'string' && message.message_id !== '')
+            .map((message) => [message.message_id, message]),
+        );
+        const bridgeMessages = bridge.readMailboxRecords()
+          .filter((record) => record.to_worker === workerName)
+          .map((record) => {
+            const normalized = normalizeBridgeMailboxMessage(record);
+            if (!normalized.body) {
+              const legacyMessage = legacyById.get(normalized.message_id);
+              if (legacyMessage?.body) return { ...normalized, body: legacyMessage.body };
+            }
+            return normalized;
+          });
+        return { worker: workerName, messages: bridgeMessages };
+      }
+    } catch {
+      // fall through to legacy file fallback
+    }
+  }
+
+  return legacyMailbox;
+}
+
+async function readLegacyMailbox(teamName: string, workerName: string, cwd: string): Promise<TeamMailbox> {
+  const p = mailboxPath(teamName, workerName, cwd);
+  try {
+    if (!existsSync(p)) return { worker: workerName, messages: [] };
+    const raw = await readFile(p, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== 'object') return { worker: workerName, messages: [] };
+    const v = parsed as { worker?: unknown; messages?: unknown };
+    if (v.worker !== workerName || !Array.isArray(v.messages)) return { worker: workerName, messages: [] };
+    return { worker: workerName, messages: v.messages as TeamMailboxMessage[] };
+  } catch {
+    return { worker: workerName, messages: [] };
+  }
+}
+
+async function writeMailbox(teamName: string, mailbox: TeamMailbox, cwd: string): Promise<void> {
+  const p = mailboxPath(teamName, mailbox.worker, cwd);
+  await writeAtomic(p, JSON.stringify(mailbox, null, 2));
+}
+
+async function readDispatchRequests(teamName: string, cwd: string): Promise<TeamDispatchRequest[]> {
+  if (isBridgeEnabled()) {
+    try {
+      const bridge = getDefaultBridge(resolveBridgeStateDir(cwd));
+      const compat = bridge.readCompatFile<{ records?: unknown[] }>('dispatch.json');
+      if (compat) {
+        const nowIso = new Date().toISOString();
+        return bridge.readDispatchRecords()
+          .map((record) => normalizeBridgeDispatchRecord(teamName, record, nowIso))
+          .filter((record): record is TeamDispatchRequest => record !== null);
+      }
+    } catch {
+      // fall through to legacy file fallback
+    }
+  }
+
+  const path = dispatchRequestsPath(teamName, cwd);
+  try {
+    if (!existsSync(path)) return [];
+    const raw = await readFile(path, 'utf8');
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    const nowIso = new Date().toISOString();
+    return parsed
+      .map((entry) => normalizeDispatchRequestImpl(teamName, (entry ?? {}) as Partial<TeamDispatchRequest>, nowIso))
+      .filter((entry): entry is TeamDispatchRequest => entry !== null);
+  } catch {
+    return [];
+  }
+}
+
+/** Read only strictly recognized target-team legacy request records for rollback scoping. */
+function isStrictLegacyDispatchRequestForRollback(
+  value: unknown,
+  teamName: string,
+): value is TeamDispatchRequest {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const request = value as Record<string, unknown>;
+  const requiredFields = [
+    'request_id', 'kind', 'team_name', 'to_worker', 'trigger_message',
+    'transport_preference', 'fallback_allowed', 'status', 'attempt_count',
+    'created_at', 'updated_at',
+  ];
+  if (requiredFields.some((field) => !Object.prototype.hasOwnProperty.call(request, field))) return false;
+  return typeof request.request_id === 'string'
+    && request.request_id.length > 0
+    && ['inbox', 'mailbox', 'nudge'].includes(String(request.kind))
+    && request.team_name === teamName
+    && typeof request.to_worker === 'string'
+    && request.to_worker.length > 0
+    && typeof request.trigger_message === 'string'
+    && ['hook_preferred_with_fallback', 'transport_direct', 'prompt_stdin'].includes(String(request.transport_preference))
+    && typeof request.fallback_allowed === 'boolean'
+    && ['pending', 'notified', 'delivered', 'failed'].includes(String(request.status))
+    && typeof request.attempt_count === 'number'
+    && Number.isFinite(request.attempt_count)
+    && typeof request.created_at === 'string'
+    && typeof request.updated_at === 'string';
+}
+
+async function readLegacyDispatchRequestsForRollback(teamName: string, cwd: string): Promise<TeamDispatchRequest[]> {
+  const path = dispatchRequestsPath(teamName, cwd);
+  try {
+    const raw = JSON.parse(await readFile(path, 'utf8')) as unknown;
+    if (!Array.isArray(raw) || raw.some((entry) => !isStrictLegacyDispatchRequestForRollback(entry, teamName))) {
+      throw new Error('legacy dispatch rollback evidence is malformed or unrecognized');
+    }
+    return raw as TeamDispatchRequest[];
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw error;
+  }
+}
+
+async function writeDispatchRequests(teamName: string, requests: TeamDispatchRequest[], cwd: string): Promise<void> {
+  await writeAtomic(dispatchRequestsPath(teamName, cwd), JSON.stringify(requests, null, 2));
+  await writeBridgeDispatchCompat(teamName, requests, cwd);
+}
+
+function serializeDispatchRequestToBridgeRecord(request: TeamDispatchRequest): DispatchRecord {
+  return {
+    request_id: request.request_id,
+    target: request.to_worker,
+    status: request.status,
+    created_at: request.created_at,
+    notified_at: request.notified_at ?? null,
+    delivered_at: request.delivered_at ?? null,
+    failed_at: request.failed_at ?? null,
+    reason: request.last_reason ?? null,
+    metadata: {
+      kind: request.kind,
+      team_name: request.team_name,
+      worker_index: request.worker_index,
+      pane_id: request.pane_id,
+      trigger_message: request.trigger_message,
+      intent: request.intent,
+      message_id: request.message_id,
+      inbox_correlation_key: request.inbox_correlation_key,
+      transport_preference: request.transport_preference,
+      fallback_allowed: request.fallback_allowed,
+      attempt_count: request.attempt_count,
+    },
+  };
+}
+
+async function writeBridgeDispatchCompat(teamName: string, requests: TeamDispatchRequest[], cwd: string): Promise<void> {
+  if (!isBridgeEnabled()) return;
+  const stateDir = resolveBridgeStateDir(cwd);
+  const path = join(stateDir, 'dispatch.json');
+  const existing = getDefaultBridge(stateDir).readCompatFile<{ records?: DispatchRecord[] }>('dispatch.json');
+  const otherRecords = Array.isArray(existing?.records)
+    ? existing.records.filter((record) => {
+      const metadata = record?.metadata && typeof record.metadata === 'object'
+        ? record.metadata as Record<string, unknown>
+        : {};
+      const metadataTeam = typeof metadata.team_name === 'string' ? metadata.team_name.trim() : '';
+      return metadataTeam !== teamName;
+    })
+    : [];
+  const records = [...otherRecords, ...requests.map(serializeDispatchRequestToBridgeRecord)];
+  await writeAtomic(path, JSON.stringify({ records }, null, 2));
+}
+
+
+export function resolveDispatchLockTimeoutMs(env: NodeJS.ProcessEnv = process.env): number {
+  return resolveDispatchLockTimeoutMsImpl(env);
+}
+
+async function withDispatchLock<T>(teamName: string, cwd: string, fn: () => Promise<T>): Promise<T> {
+  return await withDispatchLockImpl(teamName, cwd, teamDir, dispatchLockDir, fn);
+}
+
+/** Remove worker-targeted dispatch requests under the authoritative dispatch lock. */
+export async function removeDispatchRequestsForWorkers(
+  teamName: string,
+  workerNames: readonly string[],
+  cwd: string,
+): Promise<void> {
+  const names = new Set(workerNames);
+  await withDispatchLock(teamName, cwd, async () => {
+    // Do not derive rollback IDs from bridge-normalized root records: unscoped
+    // and other-team records can share a target worker name. This team's legacy
+    // file is the canonical rollback scope.
+    const requests = await readLegacyDispatchRequestsForRollback(teamName, cwd);
+    const legacyRequestIds = requests
+      .filter((request) => names.has(request.to_worker))
+      .map((request) => request.request_id);
+    let removedRequestIds = legacyRequestIds;
+    if (isBridgeEnabled()) {
+      const stateDir = resolveBridgeStateDir(cwd);
+      const bridge = getDefaultBridge(stateDir);
+      const compat = bridge.readCompatFile<{ records?: unknown[] }>('dispatch.json');
+      const compatPath = join(stateDir, 'dispatch.json');
+      if (legacyRequestIds.length === 0
+        && (!existsSync(compatPath) || (Array.isArray(compat?.records) && compat.records.length === 0))) {
+        await writeAtomic(dispatchRequestsPath(teamName, cwd), JSON.stringify(requests, null, 2));
+        return;
+      }
+      const snapshot = bridge.execCommand({ command: 'CaptureSnapshot' });
+      if (snapshot.event !== 'SnapshotCaptured') {
+        throw new Error(`authoritative_dispatch_rollback_discovery_failed:${[...names].join(',')}`);
+      }
+      const scopedAuthoritativeIds = bridge.readDispatchRecordsStrict()
+        .filter((record) => {
+          const metadataTeam = typeof record.metadata?.team_name === 'string' ? record.metadata.team_name : '';
+          return metadataTeam === teamName && names.has(record.target);
+        })
+        .map((record) => record.request_id);
+      removedRequestIds = [...new Set([...legacyRequestIds, ...scopedAuthoritativeIds])];
+      if (removedRequestIds.length === 0) {
+        await writeAtomic(dispatchRequestsPath(teamName, cwd), JSON.stringify(requests, null, 2));
+        return;
+      }
+      const removal = bridge.removeDispatchRecords(removedRequestIds);
+      if (
+        removal.event !== 'DispatchRecordsRemoved'
+        || removedRequestIds.some((requestId) => !removal.request_ids.includes(requestId))
+      ) {
+        throw new Error(`authoritative_dispatch_rollback_command_failed:${[...names].join(',')}`);
+      }
+      // Force a separate runtime command after mutation. The removal event is
+      // the authoritative acknowledgement; TS must not inspect or rewrite the
+      // shared root dispatch.json as a substitute for runtime verification.
+      const verificationSnapshot = bridge.execCommand({ command: 'CaptureSnapshot' });
+      if (verificationSnapshot.event !== 'SnapshotCaptured') {
+        throw new Error(`authoritative_dispatch_rollback_verification_failed:${[...names].join(',')}`);
+      }
+      const remainingRemovedRecord = bridge.readDispatchRecordsStrict()
+        .some((record) => removedRequestIds.includes(record.request_id));
+      if (remainingRemovedRecord) {
+        throw new Error(`authoritative_dispatch_rollback_verification_failed:${[...names].join(',')}`);
+      }
+    }
+    // The legacy per-team request file is compatibility output only. Update it
+    // only after the authoritative runtime confirms removal; never regenerate
+    // the shared bridge dispatch.json from a local snapshot during rollback.
+    const retained = requests.filter((request) => !names.has(request.to_worker));
+    await writeAtomic(dispatchRequestsPath(teamName, cwd), JSON.stringify(retained, null, 2));
+  });
+}
+
+export async function enqueueDispatchRequest(
+  teamName: string,
+  requestInput: TeamDispatchRequestInput,
+  cwd: string,
+): Promise<{ request: TeamDispatchRequest; deduped: boolean }> {
+  return await enqueueDispatchRequestImpl(requestInput, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function listDispatchRequests(
+  teamName: string,
+  cwd: string,
+  opts: { status?: TeamDispatchRequestStatus; kind?: TeamDispatchRequestKind; to_worker?: string; limit?: number } = {},
+): Promise<TeamDispatchRequest[]> {
+  return await listDispatchRequestsImpl(opts, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function readDispatchRequest(teamName: string, requestId: string, cwd: string): Promise<TeamDispatchRequest | null> {
+  return await readDispatchRequestImpl(requestId, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function transitionDispatchRequest(
+  teamName: string,
+  requestId: string,
+  from: TeamDispatchRequestStatus,
+  to: TeamDispatchRequestStatus,
+  patch: Partial<TeamDispatchRequest> = {},
+  cwd: string,
+): Promise<TeamDispatchRequest | null> {
+  return await transitionDispatchRequestImpl(requestId, from, to, patch, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function markDispatchRequestNotified(
+  teamName: string,
+  requestId: string,
+  patch: Partial<TeamDispatchRequest> = {},
+  cwd: string,
+): Promise<TeamDispatchRequest | null> {
+  return await markDispatchRequestNotifiedImpl(requestId, patch, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function markDispatchRequestDelivered(
+  teamName: string,
+  requestId: string,
+  patch: Partial<TeamDispatchRequest> = {},
+  cwd: string,
+): Promise<TeamDispatchRequest | null> {
+  return await markDispatchRequestDeliveredImpl(requestId, patch, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function markDispatchRequestFailed(
+  teamName: string,
+  requestId: string,
+  reason: string,
+  cwd: string,
+): Promise<void> {
+  await markDispatchRequestFailedImpl(requestId, reason, {
+    teamName,
+    cwd,
+    validateWorkerName,
+    withDispatchLock,
+    readDispatchRequests,
+    writeDispatchRequests,
+  });
+}
+
+export async function sendDirectMessage(
+  teamName: string,
+  fromWorker: string,
+  toWorker: string,
+  body: string,
+  cwd: string
+): Promise<TeamMailboxMessage> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => await sendDirectMessageImpl(fromWorker, toWorker, body, {
+    teamName,
+    cwd,
+    withMailboxLock,
+    readMailbox,
+    readLegacyMailbox,
+    writeMailbox,
+    appendTeamEvent,
+    readTeamConfig,
+  }));
+}
+
+export async function broadcastMessage(
+  teamName: string,
+  fromWorker: string,
+  body: string,
+  cwd: string
+): Promise<TeamMailboxMessage[]> {
+  return await withTeamTaskBarrier(teamName, cwd, async () => await broadcastMessageImpl(fromWorker, body, {
+    teamName,
+    cwd,
+    withMailboxLock,
+    readMailbox,
+    readLegacyMailbox,
+    writeMailbox,
+    appendTeamEvent,
+    readTeamConfig,
+  }));
+}
+
+export async function markMessageDelivered(
+  teamName: string,
+  workerName: string,
+  messageId: string,
+  cwd: string
+): Promise<boolean> {
+  return await markMessageDeliveredImpl(workerName, messageId, {
+    teamName,
+    cwd,
+    withMailboxLock,
+    readMailbox,
+    readLegacyMailbox,
+    writeMailbox,
+    appendTeamEvent,
+    readTeamConfig,
+  });
+}
+
+export async function markMessageNotified(
+  teamName: string,
+  workerName: string,
+  messageId: string,
+  cwd: string
+): Promise<boolean> {
+  return await markMessageNotifiedImpl(workerName, messageId, {
+    teamName,
+    cwd,
+    withMailboxLock,
+    readMailbox,
+    readLegacyMailbox,
+    writeMailbox,
+    appendTeamEvent,
+    readTeamConfig,
+  });
+}
+
+export async function listMailboxMessages(
+  teamName: string,
+  workerName: string,
+  cwd: string
+): Promise<TeamMailboxMessage[]> {
+  return await listMailboxMessagesImpl(workerName, {
+    teamName,
+    cwd,
+    withMailboxLock,
+    readMailbox,
+    readLegacyMailbox,
+    writeMailbox,
+    appendTeamEvent,
+    readTeamConfig,
+  });
+}
+
+/** Retire only mailbox messages proven by this Team's per-target compatibility shadows. */
+export async function retireTeamMailboxMessages(
+  teamName: string,
+  workerNames: readonly string[],
+  cwd: string,
+): Promise<number> {
+  let retired = 0;
+  const targets = new Set(workerNames);
+  try {
+    for (const entry of await readdir(join(teamDir(teamName, cwd), 'mailbox'))) {
+      if (!entry.endsWith('.json')) continue;
+      const workerName = entry.slice(0, -'.json'.length);
+      if (WORKER_NAME_SAFE_PATTERN.test(workerName)) targets.add(workerName);
+    }
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+  for (const workerName of targets) {
+    await withMailboxLock(teamName, workerName, cwd, async () => {
+      const mailbox = await readLegacyMailbox(teamName, workerName, cwd);
+      if (mailbox.messages.length === 0) return;
+
+      if (isBridgeEnabled()) {
+        const stateDir = resolveBridgeStateDir(cwd);
+        const bridge = getDefaultBridge(stateDir);
+        const compatPath = join(stateDir, 'mailbox.json');
+        const compat = bridge.readCompatFile<{ records?: unknown[] }>('mailbox.json');
+        if (!existsSync(compatPath) || !Array.isArray(compat?.records)) {
+          throw new Error('authoritative_mailbox_retirement_discovery_failed');
+        }
+        const bridgeRecords = bridge.readMailboxRecords();
+        if (bridgeRecords.some((record) => !record
+          || typeof record.message_id !== 'string'
+          || typeof record.from_worker !== 'string'
+          || typeof record.to_worker !== 'string'
+          || typeof record.body !== 'string'
+          || typeof record.created_at !== 'string'
+          || (record.notified_at !== null && typeof record.notified_at !== 'string')
+          || (record.delivered_at !== null && typeof record.delivered_at !== 'string'))) {
+          throw new Error('authoritative_mailbox_retirement_discovery_failed');
+        }
+        const bridgeIds = new Set(bridgeRecords.map((record) => record.message_id));
+        const unproven = mailbox.messages.filter((message) => !message.delivered_at && !bridgeIds.has(message.message_id));
+        if (unproven.length > 0) {
+          throw new Error(`authoritative_mailbox_retirement_discovery_failed:${unproven.map((message) => message.message_id).join(',')}`);
+        }
+        let changed = false;
+        let retiredFromAuthoritative = 0;
+        for (const message of mailbox.messages) {
+          const authoritative = bridgeRecords.find((record) => record.message_id === message.message_id);
+          if (!authoritative) continue;
+          if (authoritative.to_worker !== workerName) {
+            throw new Error(`authoritative_mailbox_retirement_discovery_failed:${message.message_id}`);
+          }
+          if (!authoritative.delivered_at) {
+            const event = bridge.execCommand({ command: 'MarkMailboxDelivered', message_id: message.message_id });
+            if (event.event !== 'MailboxDelivered' || event.message_id !== message.message_id) {
+              throw new Error(`authoritative_mailbox_retirement_failed:${message.message_id}`);
+            }
+          }
+          const verified = bridge.readMailboxRecords().find((record) => record.message_id === message.message_id);
+          if (!verified?.delivered_at) {
+            throw new Error(`authoritative_mailbox_retirement_verification_failed:${message.message_id}`);
+          }
+          if (!message.delivered_at) {
+            message.delivered_at = new Date().toISOString();
+            changed = true;
+            retiredFromAuthoritative += 1;
+          }
+        }
+        if (changed) {
+          await writeMailbox(teamName, mailbox, cwd);
+          retired += retiredFromAuthoritative;
+        }
+        return;
+      }
+
+      const pending = mailbox.messages.filter((message) => !message.delivered_at);
+      if (pending.length === 0) return;
+      const deliveredAt = new Date().toISOString();
+      for (const message of pending) message.delivered_at = deliveredAt;
+      await writeMailbox(teamName, mailbox, cwd);
+      retired += pending.length;
+    });
+  }
+  return retired;
+}
+
+export async function writeTaskApproval(
+  teamName: string,
+  approval: TaskApprovalRecord,
+  cwd: string
+): Promise<void> {
+  await writeTaskApprovalImpl(approval, {
+    teamName,
+    cwd,
+    approvalPath,
+    writeAtomic,
+    appendTeamEvent,
+  });
+}
+
+export async function readTaskApproval(
+  teamName: string,
+  taskId: string,
+  cwd: string
+): Promise<TaskApprovalRecord | null> {
+  return await readTaskApprovalImpl(taskId, {
+    teamName,
+    cwd,
+    approvalPath,
+    writeAtomic,
+    appendTeamEvent,
+  });
+}
+
+// Get team summary with aggregation and non-reporting worker detection
+export async function getTeamSummary(teamName: string, cwd: string): Promise<TeamSummary | null> {
+  return await getTeamSummaryImpl({
+    teamName,
+    cwd,
+    readTeamConfig,
+    listTasks,
+    readWorkerHeartbeat,
+    readWorkerStatus,
+    summarySnapshotPath,
+    monitorSnapshotPath,
+    teamPhasePath,
+    writeAtomic,
+  });
+}
+
+// === Shutdown control ===
+
+export interface ShutdownAck {
+  status: 'accept' | 'reject';
+  reason?: string;
+  updated_at?: string;
+}
+
+export async function writeShutdownRequest(
+  teamName: string,
+  workerName: string,
+  requestedBy: string,
+  cwd: string,
+): Promise<void> {
+  const p = join(workerDir(teamName, workerName, cwd), 'shutdown-request.json');
+  await writeAtomic(p, JSON.stringify({ requested_at: new Date().toISOString(), requested_by: requestedBy }, null, 2));
+}
+
+export async function readShutdownAck(
+  teamName: string,
+  workerName: string,
+  cwd: string,
+  minUpdatedAt?: string,
+): Promise<ShutdownAck | null> {
+  const ackPath = join(workerDir(teamName, workerName, cwd), 'shutdown-ack.json');
+  try {
+    const raw = await readFile(ackPath, 'utf-8');
+    const parsed = JSON.parse(raw) as ShutdownAck;
+    if (parsed.status !== 'accept' && parsed.status !== 'reject') return null;
+    if (typeof minUpdatedAt === 'string' && minUpdatedAt.trim() !== '') {
+      const minTs = Date.parse(minUpdatedAt);
+      const ackTs = Date.parse(parsed.updated_at ?? '');
+      if (!Number.isFinite(minTs) || !Number.isFinite(ackTs) || ackTs < minTs) return null;
+    }
+    return parsed;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    return null;
+  }
+}
+
+// === Monitor snapshot ===
+
+export interface TeamWorkerIntegrationState {
+  last_seen_head?: string;
+  last_integrated_head?: string;
+  last_leader_head?: string;
+  last_rebased_leader_head?: string;
+  status?: TeamWorkerIntegrationStatus;
+  conflict_commit?: string;
+  conflict_files?: string[];
+  updated_at?: string;
+}
+
+export interface TeamMonitorSnapshotState {
+  taskStatusById: Record<string, string>;
+  workerAliveByName: Record<string, boolean>;
+  workerStateByName: Record<string, string>;
+  workerTurnCountByName: Record<string, number>;
+  workerTaskIdByName: Record<string, string>;
+  mailboxNotifiedByMessageId: Record<string, string>;
+  /** Task IDs for which a task_completed event has already been emitted (from any path). */
+  completedEventTaskIds: Record<string, boolean>;
+  integrationByWorker?: Record<string, TeamWorkerIntegrationState>;
+  /** Optional timing telemetry from the most recent monitorTeam poll. */
+  monitorTimings?: {
+    list_tasks_ms: number;
+    worker_scan_ms: number;
+    mailbox_delivery_ms: number;
+    total_ms: number;
+    updated_at: string;
+  };
+}
+
+export interface TeamPhaseState {
+  current_phase: TeamPhase | TerminalPhase;
+  max_fix_attempts: number;
+  current_fix_attempt: number;
+  transitions: Array<{ from: string; to: string; at: string; reason?: string }>;
+  updated_at: string;
+  terminal_epoch?: string;
+  terminal_reason?: string;
+  final_task_counts?: {
+    total: number;
+    pending: number;
+    blocked: number;
+    in_progress: number;
+    completed: number;
+    failed: number;
+  };
+}
+
+export type TeamLeaderDecisionState = 'still_actionable' | 'done_waiting_on_leader' | 'stuck_waiting_on_leader';
+
+export interface TeamLeaderAttentionState {
+  team_name: string;
+  updated_at: string;
+  source: 'notify_hook' | 'native_stop' | 'native_session_end';
+  leader_decision_state: TeamLeaderDecisionState;
+  leader_attention_pending: boolean;
+  leader_attention_reason: string | null;
+  attention_reasons: string[];
+  leader_stale: boolean;
+  leader_session_active: boolean;
+  leader_session_id: string | null;
+  leader_session_stopped_at: string | null;
+  unread_leader_message_count: number;
+  work_remaining: boolean;
+  stalled_for_ms: number | null;
+}
+
+function teamPhasePath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'phase.json');
+}
+
+function monitorSnapshotPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'monitor-snapshot.json');
+}
+
+function leaderAttentionPath(teamName: string, cwd: string): string {
+  return join(teamDir(teamName, cwd), 'leader-attention.json');
+}
+
+function normalizeTeamLeaderAttentionState(
+  teamName: string,
+  raw: unknown,
+): TeamLeaderAttentionState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const parsed = raw as Record<string, unknown>;
+  const source = parsed.source === 'native_stop'
+    ? 'native_stop'
+    : parsed.source === 'native_session_end'
+      ? 'native_session_end'
+      : 'notify_hook';
+  const leaderDecisionState = parsed.leader_decision_state === 'done_waiting_on_leader'
+    || parsed.leader_decision_state === 'stuck_waiting_on_leader'
+    ? parsed.leader_decision_state
+    : 'still_actionable';
+  const attentionReasons = Array.isArray(parsed.attention_reasons)
+    ? parsed.attention_reasons.filter((entry): entry is string => typeof entry === 'string' && entry.trim().length > 0)
+    : [];
+  return {
+    team_name: typeof parsed.team_name === 'string' && parsed.team_name.trim() !== '' ? parsed.team_name : teamName,
+    updated_at: typeof parsed.updated_at === 'string' && parsed.updated_at.trim() !== '' ? parsed.updated_at : new Date().toISOString(),
+    source,
+    leader_decision_state: leaderDecisionState,
+    leader_attention_pending: parsed.leader_attention_pending === true,
+    leader_attention_reason:
+      typeof parsed.leader_attention_reason === 'string' && parsed.leader_attention_reason.trim() !== ''
+        ? parsed.leader_attention_reason
+        : null,
+    attention_reasons: attentionReasons,
+    leader_stale: parsed.leader_stale === true,
+    leader_session_active: parsed.leader_session_active !== false,
+    leader_session_id:
+      typeof parsed.leader_session_id === 'string' && parsed.leader_session_id.trim() !== ''
+        ? parsed.leader_session_id
+        : null,
+    leader_session_stopped_at:
+      typeof parsed.leader_session_stopped_at === 'string' && parsed.leader_session_stopped_at.trim() !== ''
+        ? parsed.leader_session_stopped_at
+        : null,
+    unread_leader_message_count:
+      typeof parsed.unread_leader_message_count === 'number' && Number.isFinite(parsed.unread_leader_message_count)
+        ? parsed.unread_leader_message_count
+        : 0,
+    work_remaining: parsed.work_remaining === true,
+    stalled_for_ms:
+      typeof parsed.stalled_for_ms === 'number' && Number.isFinite(parsed.stalled_for_ms)
+        ? parsed.stalled_for_ms
+        : null,
+  };
+}
+
+export async function readMonitorSnapshot(
+  teamName: string,
+  cwd: string,
+): Promise<TeamMonitorSnapshotState | null> {
+  return await readMonitorSnapshotImpl(teamName, cwd, monitorSnapshotPath);
+}
+
+export async function writeMonitorSnapshot(
+  teamName: string,
+  snapshot: TeamMonitorSnapshotState,
+  cwd: string,
+): Promise<void> {
+  await writeMonitorSnapshotImpl(teamName, snapshot, cwd, monitorSnapshotPath, writeAtomic);
+}
+
+export async function readTeamPhase(
+  teamName: string,
+  cwd: string,
+): Promise<TeamPhaseState | null> {
+  const phase = await readTeamPhaseImpl(teamName, cwd, teamPhasePath);
+  return phase as TeamPhaseState | null;
+}
+
+export async function writeTeamPhase(
+  teamName: string,
+  phaseState: TeamPhaseState,
+  cwd: string,
+): Promise<void> {
+  await writeTeamPhaseImpl(teamName, phaseState, cwd, teamPhasePath, writeAtomic);
+}
+
+export async function readTeamLeaderAttention(
+  teamName: string,
+  cwd: string,
+): Promise<TeamLeaderAttentionState | null> {
+  const path = leaderAttentionPath(teamName, cwd);
+  if (!existsSync(path)) return null;
+  try {
+    return normalizeTeamLeaderAttentionState(teamName, JSON.parse(await readFile(path, 'utf-8')));
+  } catch {
+    return null;
+  }
+}
+
+export async function writeTeamLeaderAttention(
+  teamName: string,
+  attentionState: TeamLeaderAttentionState,
+  cwd: string,
+): Promise<void> {
+  await writeAtomic(leaderAttentionPath(teamName, cwd), JSON.stringify({
+    ...attentionState,
+    team_name: teamName,
+  }, null, 2));
+}
+
+async function deriveLeaderStopAttentionState(
+  teamName: string,
+  cwd: string,
+  existing: TeamLeaderAttentionState | null,
+): Promise<Pick<
+  TeamLeaderAttentionState,
+  'leader_decision_state' | 'leader_attention_pending' | 'leader_attention_reason' | 'attention_reasons' | 'unread_leader_message_count' | 'work_remaining'
+>> {
+  const [config, tasks, snapshot, mailbox] = await Promise.all([
+    readTeamConfig(teamName, cwd),
+    listTasks(teamName, cwd).catch(() => [] as TeamTask[]),
+    readMonitorSnapshot(teamName, cwd),
+    listMailboxMessages(teamName, 'leader-fixed', cwd).catch(() => [] as TeamMailboxMessage[]),
+  ]);
+
+  const pendingCount = tasks.filter((task) => task.status === 'pending').length;
+  const blockedCount = tasks.filter((task) => task.status === 'blocked').length;
+  const inProgressCount = tasks.filter((task) => task.status === 'in_progress').length;
+  const workRemaining = pendingCount + blockedCount + inProgressCount > 0;
+
+  const workerNames = config?.workers.map((worker) => worker.name) ?? Object.keys(snapshot?.workerStateByName ?? {});
+  const workerStates = workerNames
+    .map((workerName) => snapshot?.workerStateByName?.[workerName] ?? '')
+    .filter((state) => typeof state === 'string' && state.trim() !== '');
+  const allWorkersIdle =
+    workerStates.length > 0
+    && workerStates.every((state) => state === 'idle' || state === 'done');
+
+  const leaderDecisionState: TeamLeaderDecisionState =
+    pendingCount === 0 && blockedCount === 0 && inProgressCount === 0 && allWorkersIdle
+      ? 'done_waiting_on_leader'
+      : blockedCount > 0 && pendingCount === 0 && inProgressCount === 0 && allWorkersIdle
+        ? 'stuck_waiting_on_leader'
+        : existing?.leader_decision_state ?? 'still_actionable';
+
+  const unreadLeaderMessageCount = mailbox.filter((message) => {
+    const deliveredAt = typeof message.delivered_at === 'string' ? message.delivered_at.trim() : '';
+    return deliveredAt.length === 0;
+  }).length;
+  const attentionReasons = new Set(existing?.attention_reasons ?? []);
+  const leaderAttentionPending =
+    leaderDecisionState !== 'still_actionable'
+    || unreadLeaderMessageCount > 0
+    || existing?.leader_attention_pending === true;
+  if (leaderAttentionPending) {
+    attentionReasons.add('leader_session_stopped');
+  }
+
+  return {
+    leader_decision_state: leaderDecisionState,
+    leader_attention_pending: leaderAttentionPending,
+    leader_attention_reason: leaderAttentionPending ? (existing?.leader_attention_reason ?? 'leader_session_stopped') : null,
+    attention_reasons: [...attentionReasons],
+    unread_leader_message_count: unreadLeaderMessageCount,
+    work_remaining: workRemaining,
+  };
+}
+
+export async function markTeamLeaderSessionStopped(
+  teamName: string,
+  cwd: string,
+  leaderSessionId: string,
+  nowIso: string = new Date().toISOString(),
+): Promise<TeamLeaderAttentionState> {
+  return await markTeamLeaderStopObserved(teamName, cwd, leaderSessionId, nowIso, 'native_session_end');
+}
+
+export async function markTeamLeaderStopObserved(
+  teamName: string,
+  cwd: string,
+  leaderSessionId: string,
+  nowIso: string = new Date().toISOString(),
+  source: TeamLeaderAttentionState['source'] = 'native_stop',
+): Promise<TeamLeaderAttentionState> {
+  const existing = await readTeamLeaderAttention(teamName, cwd);
+  const derived = await deriveLeaderStopAttentionState(teamName, cwd, existing);
+  const nextSource =
+    existing?.source === 'native_stop' && source === 'native_session_end'
+      ? 'native_stop'
+      : source;
+  const next: TeamLeaderAttentionState = {
+    team_name: teamName,
+    updated_at: nowIso,
+    source: nextSource,
+    leader_decision_state: derived.leader_decision_state,
+    leader_attention_pending: derived.leader_attention_pending,
+    leader_attention_reason: derived.leader_attention_reason,
+    attention_reasons: derived.attention_reasons,
+    leader_stale: existing?.leader_stale ?? false,
+    leader_session_active: false,
+    leader_session_id: leaderSessionId || existing?.leader_session_id || null,
+    leader_session_stopped_at: nowIso,
+    unread_leader_message_count: derived.unread_leader_message_count,
+    work_remaining: derived.work_remaining,
+    stalled_for_ms: existing?.stalled_for_ms ?? null,
+  };
+  await writeTeamLeaderAttention(teamName, next, cwd);
+  return next;
+}
+
+export async function markOwnedTeamsLeaderSessionStopped(
+  cwd: string,
+  leaderSessionId: string,
+  nowIso: string = new Date().toISOString(),
+): Promise<string[]> {
+  return await markOwnedTeamsLeaderStopObserved(cwd, leaderSessionId, nowIso, 'native_session_end');
+}
+
+export async function markOwnedTeamsLeaderStopObserved(
+  cwd: string,
+  leaderSessionId: string,
+  nowIso: string = new Date().toISOString(),
+  source: TeamLeaderAttentionState['source'] = 'native_stop',
+): Promise<string[]> {
+  if (!leaderSessionId.trim()) return [];
+  const teamsRoot = join(resolveTeamStateRoot(cwd), 'team');
+  if (!existsSync(teamsRoot)) return [];
+  const entries = await readdir(teamsRoot, { withFileTypes: true }).catch(() => []);
+  const updatedTeams: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const teamName = entry.name.trim();
+    if (!teamName) continue;
+    const [manifest, phase] = await Promise.all([
+      readTeamManifestV2(teamName, cwd),
+      readTeamPhase(teamName, cwd),
+    ]);
+    if (!manifest) continue;
+    if ((manifest.leader?.session_id ?? '').trim() !== leaderSessionId.trim()) continue;
+    if (phase && isTerminalPhase(phase.current_phase)) continue;
+    await markTeamLeaderStopObserved(teamName, cwd, leaderSessionId, nowIso, source);
+    updatedTeams.push(teamName);
+  }
+  return updatedTeams;
+}
+
+// === Config persistence (public wrapper) ===
+
+export async function saveTeamConfig(config: TeamConfig, cwd: string): Promise<void> {
+  await withTeamTaskBarrier(config.name, cwd, async () => {
+    // The caller's config is a full canonical replacement; recover any
+    // interrupted membership generation while holding the same barrier before
+    // deriving and writing its manifest companion.
+    await recoverTeamMembershipTaskTransaction(config.name, cwd);
+    const currentGeneration = await readConfigGenerationRaw(config.name, cwd);
+    if (currentGeneration === null) throw new Error(`team_config_missing:${config.name}`);
+    const expectedGeneration = normalizeTeamConfig(config).config_generation!;
+    if (expectedGeneration !== currentGeneration) {
+      throw new Error(`team_config_stale_generation:${config.name}:${expectedGeneration}:${currentGeneration}`);
+    }
+    config.config_generation = currentGeneration + 1;
+    await writeConfig(config, cwd);
+  });
+}
+
+// Delete team state only after excluding both scaling and membership mutations.
+// The scaling lock lives outside the deletable team root, so waiters cannot
+// recreate a deleted team merely by acquiring their lock.
+export async function cleanupTeamState(teamName: string, cwd: string): Promise<void> {
+  await withScalingLock(teamName, cwd, async () => {
+    await withTeamTaskBarrier(teamName, cwd, async () => {
+      await rm(teamDir(teamName, cwd), { recursive: true, force: true });
+    });
+  });
+}
