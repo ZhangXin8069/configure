@@ -3,7 +3,7 @@
 本目录记录经过初步核对的 Codex 插件项目，并提供用户显式执行的
 [`install-recommended.sh`](./install-recommended.sh) 安装器。仓库加载或 shell 启动时不会自动安装插件；安装器也不复制第三方源码、不创建个人 marketplace，只调用 Codex 的 marketplace 接口。
 
-选型依据是 2026-09-07 的公开仓库内容：先用 GitHub/GitLab/Gitee/Codeberg 热榜发现候选，再核对实际 manifest、许可证、兼容性、安装入口和与本库技能的职责重叠。star 仅用于发现候选，不代表安全或质量批准。
+选型依据是 2026-09-08 的公开仓库与官方插件页面：先用 GitHub/GitLab/Gitee/Codeberg 热榜发现候选，再核对实际 manifest、许可证、兼容性、安装入口和与本库技能的职责重叠。star 仅用于发现候选，不代表安全或质量批准。
 
 ## 一键安装
 
@@ -25,6 +25,9 @@ bash install-recommended.sh
 |---|---|---|
 | `core` | `superpowers` | 通用规划、TDD、调试和交付 |
 | `recommended` | `superpowers`、`nvidia`、`zotero` | 默认的开发、GPU 与文献工作组合 |
+| `research-workbench` | `nvidia`、`zotero`、`hugging-face`、`notion`、`google-drive`、`build-web-data-visualization` | 物理/ML 研究、文献、模型和报告 |
+| `workspace` | `notion`、`google-drive`、`airtable` | 日常协作、知识库、文件和台账 |
+| `app-dev` | `figma`、`build-web-apps`、`build-ios-apps`、`build-macos-apps`、`expo`、`netlify` | 前端、移动端、设计联动和发布 |
 | `gpu-research` | `nvidia`、`zotero` | GPU/HPC 与文献检索 |
 | `bioinformatics` | `life-science-research`、`ngs-analysis` | 生命科学和测序分析 |
 | `engineering` | `ecc`、`agent-skills`、`compound-engineering` | 外部工程工作流；重复能力较多 |
@@ -33,9 +36,14 @@ bash install-recommended.sh
 
 ```bash
 bash install-recommended.sh --profile gpu-research
+bash install-recommended.sh --profile research-workbench
+bash install-recommended.sh --profile workspace
+bash install-recommended.sh --profile app-dev
 bash install-recommended.sh ecc agent-skills
 bash install-recommended.sh --ref v2.1.0 ecc
 ```
+
+`recommended` 仍然是最小平衡包；`research-workbench` 偏物理/ML 和报告，`workspace` 偏日常协作，`app-dev` 偏工程交付和端侧应用。需要更细的组合时，直接按插件名指定更透明。
 
 安装器要求 Codex CLI 支持 `codex plugin marketplace` 与 `codex plugin add`，并要求已有
 `jq` 或 `python3` 解析 JSON；不会自动安装这些依赖。它会优先复用已配置的官方
@@ -46,6 +54,12 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 安装器拒绝执行，以免默认跟踪浮动分支。官方 marketplace 的 ref 可选，dry-run 即使本机没有
 `codex` 也会打印完整的 `codex plugin marketplace add openai/plugins` 注册命令。
 带 hooks、MCP 或大量技能的插件不会被自动信任；重启 Codex 后可用 `/plugins` 检查启用状态。
+
+### 新增官方候选
+
+- 研究/知识：`hugging-face` 适合模型和数据集工作，`build-web-data-visualization` 适合报告、PDF、图表和幻灯片自动化，`notion` 和 `google-drive` 适合笔记、文档和检索。
+- 工程/产品：`figma` 适合设计联动，`build-web-apps` 适合前端与全栈 Web，`build-ios-apps` / `build-macos-apps` / `expo` 适合端侧应用，`netlify` 适合发布和托管。
+- 日常协作：`airtable` 适合结构化台账、看板和流程跟踪，和 `workspace` profile 配套。
 
 ## 推荐项目
 
@@ -61,6 +75,17 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
   Omniverse，适合 HPC/GPU 工作流；上游技能仓库为 [NVIDIA/skills](https://github.com/NVIDIA/skills)。详情见其
   [manifest](https://github.com/openai/plugins/blob/main/plugins/nvidia/.codex-plugin/plugin.json)。
 - `zotero`：MIT，版本 0.1.2；连接 Zotero 桌面应用，检索个人文献库、导出 BibTeX 和插入引用。
+- `notion`：官方条目，适合会议记录、知识库和项目笔记。
+- `google-drive`：官方条目，适合文档、表格、幻灯片和文件检索。
+- `airtable`：官方条目，适合结构化看板、表格和流程跟踪。
+- `hugging-face`：官方条目，适合模型、数据集和 Spaces。
+- `build-web-data-visualization`：官方条目，适合报告、PDF、图表和幻灯片自动化。
+- `figma`：官方条目，适合设计资源和代码联动。
+- `build-web-apps`：官方条目，适合前端与全栈 Web 构建。
+- `build-ios-apps`：官方条目，适合 iOS / SwiftUI 构建。
+- `build-macos-apps`：官方条目，适合 macOS / SwiftUI 构建。
+- `expo`：官方条目，适合 React Native / Expo 工作流。
+- `netlify`：官方条目，适合 Web 部署和发布。
 - `ngs-analysis`：MIT，版本 1.0.3；BCL、FASTQ、DNA/RNA-seq、单细胞和表观组学分析路由与本地
   执行验证，适合需要明确 QC/产物索引的测序流程。
 - `life-science-research`：Proprietary，版本 1.0.3；生命科学数据库检索和证据综合。使用前必须

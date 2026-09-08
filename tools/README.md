@@ -22,6 +22,41 @@ tools/configure-check.sh --strict
 bash tools/configure-check.test.sh
 ```
 
+### `coverage-report.sh`
+
+只读汇总当前仓库四棵配置树的覆盖状况，输出 `skills/`、`tools/`、`hooks/`、`plugins/` 的摘要、`skills/` 与 `.opencode/skills/` 的镜像一致性线索，以及缺口提示。它复用 `configure-check.sh` 的发现思路，但不做门禁判定：数据缺口只会出现在报告里，不会把脚本本身变成失败入口。
+
+```bash
+tools/coverage-report.sh
+tools/coverage-report.sh --root /path/to/configure
+```
+
+退出码为 `0` 表示报表成功生成，`2` 表示命令行参数错误。插件 manifest 仍会按 `configure-check.sh` 的规则做 JSON/路径诊断，因此需要 `python3` 可用；其余部分只依赖 Bash、`find`、`sort`、`cmp`、`grep` 和 `sed`。
+
+回归测试：
+
+```bash
+bash tools/coverage-report.test.sh
+```
+
+### `task-scope.sh`
+
+只读任务分流入口：把自然语言任务分类为合适的技能组合，并给出可并行拆分建议。它不读仓库、不改仓库，也不执行子技能，只输出分类、推荐技能链、拆分建议和依据。
+
+```bash
+tools/task-scope.sh "创建 coverage-report.sh、task-scope.sh，并更新 README"
+printf '%s\n' "排查 coverage-report 在缺少 AGENTS.md 时的报错，并修复后回归测试" | tools/task-scope.sh
+tools/task-scope.sh --task "先帮我评估这个分类器的可行性，再给出实现计划"
+```
+
+退出码为 `0` 表示成功分类，`2` 表示参数错误或缺少任务文本。脚本依赖 Bash、`sed`、`tr` 等基础命令，不依赖仓库状态。
+
+回归测试：
+
+```bash
+bash tools/task-scope.test.sh
+```
+
 ## 上游推荐
 
 | 项目 | 来源 | 推荐用途 | 本库定位 |
@@ -35,4 +70,4 @@ bash tools/configure-check.test.sh
 
 ## 选择原则
 
-优先采用发行版或上游正式发布的可验证版本；安装前核对许可证、架构、更新日期和来源校验。`configure-check.sh` 是本目录唯一的本地运行入口，第三方工具均为可选能力，不会被它自动下载或调用。
+优先采用发行版或上游正式发布的可验证版本；安装前核对许可证、架构、更新日期和来源校验。`configure-check.sh` 仍是本目录唯一的门禁入口；`coverage-report.sh` 和 `task-scope.sh` 是只读诊断/建议入口，第三方工具均为可选能力，不会被它们自动下载或调用。

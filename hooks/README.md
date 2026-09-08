@@ -7,6 +7,7 @@
 | 事件 | 行为 | 默认退出语义 |
 |---|---|---|
 | `session-start` | 输出仓库根、分支、`AGENTS.md`/`CODEX.md` 和 `skills/` 的只读上下文 | 检查失败时非零 |
+| `session-summary` / `handoff` | 输出仓库根、分支、HEAD、最近提交和改动统计的只读交接摘要 | 检查失败时非零 |
 | `before-edit` | 校验待编辑路径在仓库内，拒绝仓库根、`.git/`、技能会话日志和仓库外路径 | 拒绝路径时非零 |
 | `after-edit` | 检查工作树改动的空白、Shell 语法和会话日志 | 检查失败时非零 |
 | `stop` | 与 `after-edit` 相同，用于停止前复查 | 检查失败时非零 |
@@ -17,6 +18,8 @@
 ```bash
 # 统一入口
 hooks/codex-hook.sh session-start
+hooks/codex-hook.sh session-summary
+hooks/codex-hook.sh handoff
 hooks/codex-hook.sh before-edit -- hooks/codex-hook.sh skills/all/SKILL.md
 hooks/codex-hook.sh after-edit
 hooks/codex-hook.sh stop
@@ -32,6 +35,8 @@ CODEX_HOOK_PAYLOAD='{"message":"任务已完成"}' hooks/codex-hook.sh notify
 ```bash
 hooks/codex-verify.sh --paths hooks/codex-hook.sh skills/all/SKILL.md
 ```
+
+`session-summary`/`handoff` 是只读的收尾事件：它不会修改工作树，只读取仓库根、分支、HEAD、最近提交和工作树状态，并按 `recent_path=` 输出最多 5 个上下文路径。
 
 ## 安全与依赖
 
