@@ -1,0 +1,24 @@
+[workspace]
+members = [
+  "crates/omx-api",
+  "crates/omx-explore",
+  "crates/omx-mux",
+  "crates/omx-runtime-core",
+  "crates/omx-runtime",
+  "crates/omx-sparkshell",
+]
+resolver = "2"
+
+[workspace.package]
+
+version = "0.21.4"
+
+edition = "2021"
+rust-version = "1.73"
+license = "MIT"
+repository = "https://github.com/Yeachan-Heo/oh-my-codex"
+
+# The profile that 'dist' will build with
+[profile.dist]
+inherits = "release"
+lto = "thin"

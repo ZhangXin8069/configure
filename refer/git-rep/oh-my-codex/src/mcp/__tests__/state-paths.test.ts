@@ -1,0 +1,1519 @@
+import { afterEach, beforeEach, describe, it } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, readdir, realpath, rm, symlink, writeFile } from 'fs/promises';
+
+import { existsSync } from 'fs';
+import { tmpdir } from 'os';
+import { join, resolve as resolvePath } from 'path';
+import {
+  getAllScopedStateDirs,
+  getAllScopedStatePaths,
+  getBaseStateDir,
+  getBaseStateDirWithSource,
+  getAllSessionScopedStateDirs,
+  getAllSessionScopedStatePaths,
+  getReadScopedStateFilePaths,
+  readCurrentSessionId,
+  readSessionMetadataFromBaseStateDir,
+  resolveRuntimeStateScope,
+  resolveStateScope,
+  resolveWritableStateScope,
+  createWritableCommitRevalidator,
+  __setWritableStateScopeTestHooksForTests,
+  resolveWorkingDirectoryForState,
+  getStateDir,
+  getStateFilePath,
+  getStatePath,
+  normalizeSessionId,
+  validateStateFileName,
+  validateStateModeSegment,
+  validateSessionId,
+  WRITABLE_STATE_SCOPE_ERRORS,
+  readCanonicalSessionBindingSnapshot,
+  VERIFIED_SESSION_BINDING_FIELDS,
+
+} from '../state-paths.js';
+
+import {
+  __resetSessionPointerTransactionDependenciesForTests,
+  __setSessionPointerTransactionDependenciesForTests,
+} from '../../hooks/session.js';
+
+
+const isolatedEnvKeys = [
+  'OMX_MCP_WORKDIR_ROOTS',
+  'OMX_ROOT',
+  'OMX_STATE_ROOT',
+  'OMX_TEAM_STATE_ROOT',
+  'OMX_SESSION_ID',
+  'CODEX_SESSION_ID',
+  'SESSION_ID',
+  'TMUX',
+  'TMUX_PANE',
+] as const;
+
+const originalEnv = Object.fromEntries(
+  isolatedEnvKeys.map((key) => [key, process.env[key]]),
+) as Record<(typeof isolatedEnvKeys)[number], string | undefined>;
+
+beforeEach(() => {
+  for (const key of isolatedEnvKeys) delete process.env[key];
+});
+
+afterEach(() => {
+  for (const key of isolatedEnvKeys) {
+    const value = originalEnv[key];
+    if (typeof value === 'string') process.env[key] = value;
+    else delete process.env[key];
+  }
+});
+
+async function mkRealTemp(prefix: string): Promise<string> {
+  return await realpath(await mkdtemp(join(await realpath(tmpdir()), prefix)));
+}
+
+function armPointerTakeover(options: {
+  expectedOrdinal: number;
+  expectedSite: string;
+  sessionPath: string;
+  replacementPointer: string;
+  beforePublish?: () => void;
+}): {
+  observed: Array<{ commitOrdinal: number; site: string; kind: string; path: string }>;
+  hook: (event: Readonly<{ commitOrdinal: number; site: string; kind: string; path: string }>) => Promise<void>;
+} {
+  const observed: Array<{ commitOrdinal: number; site: string; kind: string; path: string }> = [];
+  return {
+    observed,
+    hook: async (event) => {
+      const actual = { commitOrdinal: event.commitOrdinal, site: event.site, kind: event.kind, path: event.path };
+      observed.push(actual);
+      if (event.commitOrdinal === options.expectedOrdinal && event.site !== options.expectedSite) {
+        throw new Error(`Expected takeover at ordinal ${options.expectedOrdinal} site ${options.expectedSite}; received ordinal ${event.commitOrdinal} site ${event.site}.`);
+      }
+      if (event.site === options.expectedSite && event.commitOrdinal !== options.expectedOrdinal) {
+        throw new Error(`Expected takeover at ordinal ${options.expectedOrdinal} site ${options.expectedSite}; received ordinal ${event.commitOrdinal} site ${event.site}.`);
+      }
+      if (event.commitOrdinal === options.expectedOrdinal && event.site === options.expectedSite) {
+        options.beforePublish?.();
+        await writeFile(options.sessionPath, options.replacementPointer);
+      }
+    },
+  };
+}
+
+describe('validateSessionId', () => {
+  it('accepts undefined and valid ids', () => {
+    assert.equal(validateSessionId(undefined), undefined);
+    assert.equal(validateSessionId('abc_123-XYZ'), 'abc_123-XYZ');
+  });
+
+  it('rejects invalid ids', () => {
+    assert.throws(() => validateSessionId(''), /session_id must match/);
+    assert.throws(() => validateSessionId('bad/id'), /session_id must match/);
+    assert.throws(() => validateSessionId(123), /session_id must be a string/);
+  });
+});
+describe('normalizeSessionId', () => {
+  it('normalizes usable values without throwing on unusable input', () => {
+    assert.equal(normalizeSessionId(' sess-normalized '), 'sess-normalized');
+    assert.equal(normalizeSessionId('bad/session'), undefined);
+    assert.equal(normalizeSessionId(123), undefined);
+  });
+});
+
+describe('canonical session binding snapshot', () => {
+  it('accepts a descendant cwd through session authority and keeps the pointer bytes unchanged', async () => {
+    const root = await mkRealTemp('omx-binding-descendant-');
+    const nested = join(root, 'nested', 'child');
+    const env = { OMX_SESSION_ID: 'sess-descendant' };
+    try {
+      const stateDir = getBaseStateDir(root);
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(nested, { recursive: true });
+      const pointer = JSON.stringify({ session_id: 'sess-descendant', cwd: root, state_root: stateDir });
+      await writeFile(join(stateDir, 'session.json'), pointer);
+
+      const snapshot = await readCanonicalSessionBindingSnapshot(nested, env);
+      assert.equal(snapshot.status, 'usable');
+      assert.equal(snapshot.rootSource, 'session-authority');
+      assert.equal(snapshot.recordedCwd, root);
+      assert.equal(snapshot.baseStateDir, stateDir);
+      assert.equal(await readFile(join(stateDir, 'session.json'), 'utf8'), pointer);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects a selected pointer whose explicit state root mismatches the selected root', async () => {
+    const root = await mkRealTemp('omx-binding-root-mismatch-');
+    const selectedRoot = join(root, 'selected');
+    const env = { OMX_ROOT: selectedRoot };
+    try {
+      const stateDir = getBaseStateDir(root, env);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-mismatch', cwd: root, state_root: join(root, 'foreign-state'),
+      }));
+      const snapshot = await readCanonicalSessionBindingSnapshot(root, env);
+      assert.equal(snapshot.status, 'root-mismatch');
+      assert.equal(snapshot.rootSource, 'omx-root-env');
+      assert.equal(snapshot.baseStateDir, stateDir);
+      assert.equal(snapshot.selectedSessionJson, join(stateDir, 'session.json'));
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the legacy cwd-derived root and only exposes the six verified aliases', async () => {
+    const root = await mkRealTemp('omx-binding-legacy-aliases-');
+    try {
+      const stateDir = getBaseStateDir(root);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-canonical', native_session_id: 'native-id', codex_session_id: 'codex-id',
+        previous_native_session_id: 'previous-id', owner_omx_session_id: 'owner-omx', owner_codex_session_id: 'owner-codex',
+        owner_codex_thread_id: 'thread-must-not-bind', tmux_pane_id: '%9', tmux_session_name: 'foreign-tmux',
+        display_name: 'display-must-not-bind', owner_unknown_id: 'unknown-must-not-bind', cwd: root,
+      }));
+      const snapshot = await readCanonicalSessionBindingSnapshot(root, {});
+      assert.equal(snapshot.status, 'usable');
+      assert.equal(snapshot.baseStateDir, stateDir);
+      assert.deepEqual(Object.keys(snapshot.verifiedAliases), [...VERIFIED_SESSION_BINDING_FIELDS]);
+      assert.deepEqual(snapshot.verifiedAliases, {
+        session_id: 'sess-canonical', native_session_id: 'native-id', codex_session_id: 'codex-id',
+        previous_native_session_id: 'previous-id', owner_omx_session_id: 'owner-omx', owner_codex_session_id: 'owner-codex',
+      });
+      assert.equal((snapshot.verifiedAliases as Record<string, string | undefined>).owner_codex_thread_id, undefined);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+  it('fails closed when state_root is present but blank', async () => {
+    const root = await mkRealTemp('omx-binding-blank-state-root-');
+    try {
+      const stateDir = getBaseStateDir(root);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-blank-root', cwd: root, state_root: '   ',
+      }));
+      const snapshot = await readCanonicalSessionBindingSnapshot(root, {});
+      assert.equal(snapshot.status, 'malformed');
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('compares selected and recorded roots by realpath', async () => {
+    const realRoot = await mkRealTemp('omx-binding-real-root-');
+    const linkParent = await mkRealTemp('omx-binding-link-parent-');
+    const linkedRoot = join(linkParent, 'workspace-link');
+    try {
+      await symlink(realRoot, linkedRoot, process.platform === 'win32' ? 'junction' : 'dir');
+      const stateDir = getBaseStateDir(realRoot);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-realpath', cwd: realRoot, state_root: stateDir,
+      }));
+      const snapshot = await readCanonicalSessionBindingSnapshot(linkedRoot, { OMX_ROOT: linkedRoot });
+      assert.equal(snapshot.status, 'usable');
+      assert.ok(snapshot.baseStateDir);
+      assert.equal(await realpath(snapshot.baseStateDir), await realpath(stateDir));
+    } finally {
+      await rm(realRoot, { recursive: true, force: true });
+      await rm(linkParent, { recursive: true, force: true });
+    }
+  });
+});
+
+
+describe('validateStateModeSegment', () => {
+  it('accepts safe mode names', () => {
+    assert.equal(validateStateModeSegment('ralph'), 'ralph');
+    assert.equal(validateStateModeSegment('ultraqa'), 'ultraqa');
+  });
+
+  it('rejects traversal and path separators', () => {
+    assert.throws(() => validateStateModeSegment('../evil'), /must not contain "\.\."/);
+    assert.throws(() => validateStateModeSegment('foo/bar'), /path separators/);
+    assert.throws(() => validateStateModeSegment('foo\\bar'), /path separators/);
+  });
+});
+
+describe('validateStateFileName', () => {
+  it('accepts safe file names', () => {
+    assert.equal(validateStateFileName('hud-state.json'), 'hud-state.json');
+    assert.equal(validateStateFileName('session.json'), 'session.json');
+  });
+
+  it('rejects traversal and path separators', () => {
+    assert.throws(() => validateStateFileName('../evil.json'), /must not contain "\.\."/);
+    assert.throws(() => validateStateFileName('foo/bar.json'), /path separators/);
+    assert.throws(() => validateStateFileName('foo\\bar.json'), /path separators/);
+  });
+});
+
+describe('state paths', () => {
+  it('uses explicit OMX_TEAM_STATE_ROOT before boxed roots and workingDirectory', () => {
+    const prevRoot = process.env.OMX_ROOT;
+    const prevStateRoot = process.env.OMX_STATE_ROOT;
+    const prevTeamRoot = process.env.OMX_TEAM_STATE_ROOT;
+    process.env.OMX_ROOT = '/tmp/omx-box';
+    process.env.OMX_STATE_ROOT = '/tmp/ignored-state-root';
+    process.env.OMX_TEAM_STATE_ROOT = '/tmp/explicit-team-state';
+    try {
+      assert.equal(getBaseStateDir('/tmp/source'), '/tmp/explicit-team-state');
+      assert.equal(getStateDir('/tmp/source', 'sess1'), '/tmp/explicit-team-state/sessions/sess1');
+      assert.equal(getStatePath('ralph', '/tmp/source', 'sess1'), '/tmp/explicit-team-state/sessions/sess1/ralph-state.json');
+      assert.deepEqual(getBaseStateDirWithSource('/tmp/source'), {
+        baseStateDir: '/tmp/explicit-team-state',
+        rootSource: 'team-env',
+      });
+    } finally {
+      if (typeof prevRoot === 'string') process.env.OMX_ROOT = prevRoot;
+      else delete process.env.OMX_ROOT;
+      if (typeof prevStateRoot === 'string') process.env.OMX_STATE_ROOT = prevStateRoot;
+      else delete process.env.OMX_STATE_ROOT;
+      if (typeof prevTeamRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = prevTeamRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+    }
+  });
+
+  it('uses OMX_ROOT as boxed workspace root before workingDirectory when no team root is explicit', () => {
+    const prevRoot = process.env.OMX_ROOT;
+    const prevStateRoot = process.env.OMX_STATE_ROOT;
+    const prevTeamRoot = process.env.OMX_TEAM_STATE_ROOT;
+    process.env.OMX_ROOT = '/tmp/omx-box';
+    process.env.OMX_STATE_ROOT = '/tmp/ignored-state-root';
+    delete process.env.OMX_TEAM_STATE_ROOT;
+    try {
+      assert.equal(getBaseStateDir('/tmp/source'), '/tmp/omx-box/.omx/state');
+      assert.equal(getStateDir('/tmp/source', 'sess1'), '/tmp/omx-box/.omx/state/sessions/sess1');
+      assert.equal(getStatePath('ralph', '/tmp/source', 'sess1'), '/tmp/omx-box/.omx/state/sessions/sess1/ralph-state.json');
+      assert.deepEqual(getBaseStateDirWithSource('/tmp/source'), {
+        baseStateDir: '/tmp/omx-box/.omx/state',
+        rootSource: 'omx-root-env',
+      });
+    } finally {
+      if (typeof prevRoot === 'string') process.env.OMX_ROOT = prevRoot;
+      else delete process.env.OMX_ROOT;
+      if (typeof prevStateRoot === 'string') process.env.OMX_STATE_ROOT = prevStateRoot;
+      else delete process.env.OMX_STATE_ROOT;
+      if (typeof prevTeamRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = prevTeamRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+    }
+  });
+
+  it('uses the ancestor session pointer matching OMX_SESSION_ID as the authoritative root', async () => {
+    const parent = await mkRealTemp('omx-state-authority-parent-');
+    const nested = join(parent, 'nested', 'project');
+    const parentState = join(parent, '.omx', 'state');
+    const nestedState = join(nested, '.omx', 'state');
+    try {
+      await mkdir(parentState, { recursive: true });
+      await mkdir(nestedState, { recursive: true });
+      await writeFile(join(parentState, 'session.json'), JSON.stringify({ session_id: 'sess-parent', cwd: parent, state_root: parentState }));
+      await writeFile(join(nestedState, 'session.json'), JSON.stringify({ session_id: 'sess-nested', cwd: nested }));
+      process.env.OMX_SESSION_ID = 'sess-parent';
+
+      assert.deepEqual(getBaseStateDirWithSource(nested), {
+        baseStateDir: parentState,
+        rootSource: 'session-authority',
+      });
+      const writable = await resolveWritableStateScope(nested);
+      assert.equal(writable.stateDir, join(parentState, 'sessions', 'sess-parent'));
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('uses a live legacy ancestor pointer when its inferred root matches exactly', async () => {
+    const parent = await mkRealTemp('omx-state-authority-legacy-');
+    const nested = join(parent, 'nested');
+    const parentState = join(parent, '.omx', 'state');
+    try {
+      await mkdir(parentState, { recursive: true });
+      await mkdir(nested, { recursive: true });
+      await writeFile(join(parentState, 'session.json'), JSON.stringify({ session_id: 'sess-legacy', cwd: parent }));
+      process.env.OMX_SESSION_ID = 'sess-legacy';
+
+      assert.deepEqual(getBaseStateDirWithSource(nested), {
+        baseStateDir: parentState,
+        rootSource: 'session-authority',
+      });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects pointers whose persisted or inferred root does not own the selected base', async () => {
+    const cwd = await mkRealTemp('omx-state-pointer-root-owner-');
+    const selectedState = join(cwd, 'selected-state');
+    const claimedState = join(cwd, 'claimed-state');
+    try {
+      await mkdir(selectedState, { recursive: true });
+      await writeFile(join(selectedState, 'session.json'), JSON.stringify({
+        session_id: 'sess-mismatch',
+        cwd,
+        state_root: claimedState,
+      }));
+      assert.equal(await readSessionMetadataFromBaseStateDir(cwd, selectedState), undefined);
+
+      await writeFile(join(selectedState, 'session.json'), JSON.stringify({ session_id: 'sess-legacy-explicit', cwd }));
+      assert.equal(await readSessionMetadataFromBaseStateDir(cwd, selectedState), undefined);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('fails explicitly when multiple ancestor pointers claim the same session authority', async () => {
+    const parent = await mkRealTemp('omx-state-authority-conflict-');
+    const nested = join(parent, 'nested');
+    const parentState = join(parent, '.omx', 'state');
+    const nestedState = join(nested, '.omx', 'state');
+    try {
+      await mkdir(parentState, { recursive: true });
+      await mkdir(nestedState, { recursive: true });
+      await writeFile(join(parentState, 'session.json'), JSON.stringify({ session_id: 'sess-conflict', cwd: parent, state_root: parentState }));
+      await writeFile(join(nestedState, 'session.json'), JSON.stringify({ session_id: 'sess-conflict', cwd: nested, state_root: nestedState }));
+      process.env.OMX_SESSION_ID = 'sess-conflict';
+
+      assert.throws(
+        () => getBaseStateDirWithSource(nested),
+        new RegExp(`Conflicting authoritative state roots.*${parentState}.*${nestedState}|Conflicting authoritative state roots.*${nestedState}.*${parentState}`),
+      );
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores a dead matching ancestor session pointer', async () => {
+    const parent = await mkRealTemp('omx-state-authority-dead-');
+    const nested = join(parent, 'nested');
+    const parentState = join(parent, '.omx', 'state');
+    try {
+      await mkdir(parentState, { recursive: true });
+      await mkdir(nested, { recursive: true });
+      await writeFile(join(parentState, 'session.json'), JSON.stringify({
+        session_id: 'sess-dead',
+        cwd: parent,
+        pid: 2_147_483_647,
+      }));
+      process.env.OMX_SESSION_ID = 'sess-dead';
+
+      assert.deepEqual(getBaseStateDirWithSource(nested), {
+        baseStateDir: join(nested, '.omx', 'state'),
+        rootSource: 'cwd-default',
+      });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('does not discover ancestor authority outside OMX_MCP_WORKDIR_ROOTS', async () => {
+    const parent = await mkRealTemp('omx-state-authority-allowlist-');
+    const nested = join(parent, 'nested');
+    const parentState = join(parent, '.omx', 'state');
+    try {
+      await mkdir(parentState, { recursive: true });
+      await mkdir(nested, { recursive: true });
+      await writeFile(join(parentState, 'session.json'), JSON.stringify({ session_id: 'sess-outside', cwd: parent }));
+      process.env.OMX_SESSION_ID = 'sess-outside';
+      process.env.OMX_MCP_WORKDIR_ROOTS = nested;
+
+      assert.deepEqual(getBaseStateDirWithSource(nested), {
+        baseStateDir: join(nested, '.omx', 'state'),
+        rootSource: 'cwd-default',
+      });
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('does not select an in-allowlist state symlink that escapes the allowed root', async () => {
+    const parent = await mkRealTemp('omx-state-authority-symlink-');
+    const nested = join(parent, 'nested');
+    const outsideState = join(parent, 'outside-state');
+    try {
+      await mkdir(join(nested, '.omx'), { recursive: true });
+      await mkdir(outsideState, { recursive: true });
+      await writeFile(join(outsideState, 'session.json'), JSON.stringify({ session_id: 'sess-symlink', cwd: nested }));
+      await symlink(outsideState, join(nested, '.omx', 'state'), process.platform === 'win32' ? 'junction' : 'dir');
+      process.env.OMX_SESSION_ID = 'sess-symlink';
+      process.env.OMX_MCP_WORKDIR_ROOTS = nested;
+
+      assert.throws(
+        () => getBaseStateDirWithSource(nested),
+        /State root .* is outside allowed roots \(OMX_MCP_WORKDIR_ROOTS\)/,
+      );
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects OMX_ROOT and OMX_STATE_ROOT whose appended state directory escapes the allowlist', async () => {
+    const parent = await mkRealTemp('omx-state-override-symlink-');
+    const allowed = join(parent, 'allowed');
+    const outsideState = join(parent, 'outside-state');
+    try {
+      await mkdir(join(allowed, '.omx'), { recursive: true });
+      await mkdir(outsideState, { recursive: true });
+      await symlink(outsideState, join(allowed, '.omx', 'state'), process.platform === 'win32' ? 'junction' : 'dir');
+      process.env.OMX_MCP_WORKDIR_ROOTS = allowed;
+      process.env.OMX_ROOT = allowed;
+      assert.throws(() => getBaseStateDirWithSource(allowed), /State root .* is outside allowed roots/);
+
+      delete process.env.OMX_ROOT;
+      process.env.OMX_STATE_ROOT = allowed;
+      assert.throws(() => getBaseStateDirWithSource(allowed), /State root .* is outside allowed roots/);
+    } finally {
+      await rm(parent, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when an explicit state root is outside the allowlist', async () => {
+    const allowedRoot = await mkRealTemp('omx-state-root-allowed-');
+    const disallowedRoot = await mkRealTemp('omx-state-root-disallowed-');
+    const prevAllowlist = process.env.OMX_MCP_WORKDIR_ROOTS;
+    const prevTeamRoot = process.env.OMX_TEAM_STATE_ROOT;
+    process.env.OMX_MCP_WORKDIR_ROOTS = allowedRoot;
+    process.env.OMX_TEAM_STATE_ROOT = disallowedRoot;
+    try {
+      assert.throws(
+        () => getBaseStateDirWithSource(join(allowedRoot, 'workspace')),
+        /outside allowed roots \(OMX_MCP_WORKDIR_ROOTS\)/,
+      );
+    } finally {
+      if (typeof prevAllowlist === 'string') process.env.OMX_MCP_WORKDIR_ROOTS = prevAllowlist;
+      else delete process.env.OMX_MCP_WORKDIR_ROOTS;
+      if (typeof prevTeamRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = prevTeamRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+      await rm(allowedRoot, { recursive: true, force: true });
+      await rm(disallowedRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('resolveWorkingDirectoryForState defaults to process.cwd()', () => {
+    assert.equal(resolveWorkingDirectoryForState(undefined), process.cwd());
+    assert.equal(resolveWorkingDirectoryForState(''), process.cwd());
+    assert.equal(resolveWorkingDirectoryForState('   '), process.cwd());
+  });
+
+  it('resolveWorkingDirectoryForState normalizes Windows path on WSL/Linux when mount exists', () => {
+    const raw = 'D:\\SIYUAN\\external\\repo';
+    if (process.platform === 'win32') {
+      assert.equal(resolveWorkingDirectoryForState(raw), resolvePath(raw));
+      return;
+    }
+    if (existsSync('/mnt/d')) {
+      assert.equal(resolveWorkingDirectoryForState(raw), '/mnt/d/SIYUAN/external/repo');
+    } else {
+      assert.throws(() => resolveWorkingDirectoryForState(raw), /not available on this host/);
+    }
+  });
+
+  it('resolveWorkingDirectoryForState returns absolute normalized paths', () => {
+    assert.equal(resolveWorkingDirectoryForState('.'), process.cwd());
+  });
+
+  it('rejects NUL bytes in workingDirectory', () => {
+    assert.throws(() => resolveWorkingDirectoryForState('bad\0path'), /NUL byte/);
+  });
+
+  it('enforces OMX_MCP_WORKDIR_ROOTS allowlist when configured', async () => {
+    const allowedRoot = await mkRealTemp('omx-allowed-root-');
+    const disallowedRoot = await mkRealTemp('omx-disallowed-root-');
+    const prev = process.env.OMX_MCP_WORKDIR_ROOTS;
+    process.env.OMX_MCP_WORKDIR_ROOTS = allowedRoot;
+    try {
+      assert.equal(
+        resolveWorkingDirectoryForState(join(allowedRoot, 'nested')),
+        join(allowedRoot, 'nested'),
+      );
+      assert.throws(
+        () => resolveWorkingDirectoryForState(disallowedRoot),
+        /outside allowed roots \(OMX_MCP_WORKDIR_ROOTS\)/,
+      );
+    } finally {
+      if (typeof prev === 'string') process.env.OMX_MCP_WORKDIR_ROOTS = prev;
+      else delete process.env.OMX_MCP_WORKDIR_ROOTS;
+      await rm(allowedRoot, { recursive: true, force: true });
+      await rm(disallowedRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves symlinked workingDirectory spelling when no allowlist is configured', async () => {
+    const realRoot = await mkRealTemp('omx-real-root-');
+    const linkParent = await mkRealTemp('omx-link-parent-');
+    const link = join(linkParent, 'workspace-link');
+    const prev = process.env.OMX_MCP_WORKDIR_ROOTS;
+    delete process.env.OMX_MCP_WORKDIR_ROOTS;
+    try {
+      await symlink(realRoot, link);
+
+      assert.equal(resolveWorkingDirectoryForState(link), link);
+    } finally {
+      if (typeof prev === 'string') process.env.OMX_MCP_WORKDIR_ROOTS = prev;
+      else delete process.env.OMX_MCP_WORKDIR_ROOTS;
+      await rm(realRoot, { recursive: true, force: true });
+      await rm(linkParent, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects symlinked workingDirectory candidates that escape OMX_MCP_WORKDIR_ROOTS', async () => {
+    const allowedRoot = await mkRealTemp('omx-allowed-root-');
+    const outsideRoot = await mkRealTemp('omx-outside-root-');
+    const prev = process.env.OMX_MCP_WORKDIR_ROOTS;
+    process.env.OMX_MCP_WORKDIR_ROOTS = allowedRoot;
+    try {
+      const link = join(allowedRoot, 'link');
+      await symlink(outsideRoot, link);
+
+      assert.throws(
+        () => resolveWorkingDirectoryForState(link),
+        /outside allowed roots \(OMX_MCP_WORKDIR_ROOTS\)/,
+      );
+    } finally {
+      if (typeof prev === 'string') process.env.OMX_MCP_WORKDIR_ROOTS = prev;
+      else delete process.env.OMX_MCP_WORKDIR_ROOTS;
+      await rm(allowedRoot, { recursive: true, force: true });
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('rejects symlinked OMX_MCP_WORKDIR_ROOTS entries instead of treating their targets as allowed roots', async () => {
+    const intendedRoot = await mkRealTemp('omx-intended-root-');
+    const outsideRoot = await mkRealTemp('omx-outside-root-');
+    const prev = process.env.OMX_MCP_WORKDIR_ROOTS;
+    const symlinkedRoot = join(intendedRoot, 'allowed-link');
+    process.env.OMX_MCP_WORKDIR_ROOTS = symlinkedRoot;
+    try {
+      await symlink(outsideRoot, symlinkedRoot);
+
+      assert.throws(
+        () => resolveWorkingDirectoryForState(symlinkedRoot),
+        /OMX_MCP_WORKDIR_ROOTS root .* resolves through a symlink/,
+      );
+    } finally {
+      if (typeof prev === 'string') process.env.OMX_MCP_WORKDIR_ROOTS = prev;
+      else delete process.env.OMX_MCP_WORKDIR_ROOTS;
+      await rm(intendedRoot, { recursive: true, force: true });
+      await rm(outsideRoot, { recursive: true, force: true });
+    }
+  });
+
+  it('builds global state paths', () => {
+    const base = getBaseStateDir('/repo');
+    assert.equal(base, '/repo/.omx/state');
+    assert.equal(getStateDir('/repo'), '/repo/.omx/state');
+    assert.equal(getStatePath('team', '/repo'), '/repo/.omx/state/team-state.json');
+  });
+
+  it('builds session state paths', () => {
+    assert.equal(getStateDir('/repo', 'sess1'), '/repo/.omx/state/sessions/sess1');
+    assert.equal(
+      getStatePath('ralph', '/repo', 'sess1'),
+      '/repo/.omx/state/sessions/sess1/ralph-state.json'
+    );
+    assert.equal(
+      getStateFilePath('hud-state.json', '/repo', 'sess1'),
+      '/repo/.omx/state/sessions/sess1/hud-state.json'
+    );
+  });
+
+  it('throws when mode contains traversal tokens', () => {
+    assert.throws(() => getStatePath('../../etc/passwd', '/repo'), /must not contain "\.\."/);
+  });
+
+  it('enumerates global-only path', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    try {
+      const paths = await getAllScopedStatePaths('team', wd);
+      assert.deepEqual(paths, [getStatePath('team', wd)]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('enumerates session-scoped paths', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    try {
+      const sessionsRoot = join(getBaseStateDir(wd), 'sessions');
+      await mkdir(join(sessionsRoot, 'sess1'), { recursive: true });
+      await mkdir(join(sessionsRoot, 'sess_2'), { recursive: true });
+
+      const paths = await getAllSessionScopedStatePaths('team', wd);
+      assert.deepEqual(paths.sort(), [
+        getStatePath('team', wd, 'sess1'),
+        getStatePath('team', wd, 'sess_2'),
+      ].sort());
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('enumerates state directories across all scopes', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    try {
+      const sessionsRoot = join(getBaseStateDir(wd), 'sessions');
+      await mkdir(join(sessionsRoot, 'sess1'), { recursive: true });
+      await mkdir(join(sessionsRoot, 'bad.name'), { recursive: true });
+
+      const sessionDirs = await getAllSessionScopedStateDirs(wd);
+      assert.deepEqual(sessionDirs, [join(sessionsRoot, 'sess1')]);
+
+      const dirs = await getAllScopedStateDirs(wd);
+      assert.deepEqual(dirs, [getBaseStateDir(wd), join(sessionsRoot, 'sess1')]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('enumerates global and session-scoped paths together', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    try {
+      const sessionsRoot = join(getBaseStateDir(wd), 'sessions');
+      await mkdir(join(sessionsRoot, 'sess1'), { recursive: true });
+      await mkdir(join(sessionsRoot, 'sess2'), { recursive: true });
+
+      const paths = await getAllScopedStatePaths('ralph', wd);
+      assert.deepEqual(paths.sort(), [
+        getStatePath('ralph', wd),
+        getStatePath('ralph', wd, 'sess1'),
+        getStatePath('ralph', wd, 'sess2'),
+      ].sort());
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('ignores invalid session directory names', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    try {
+      const sessionsRoot = join(getBaseStateDir(wd), 'sessions');
+      await mkdir(join(sessionsRoot, 'valid-session'), { recursive: true });
+      await mkdir(join(sessionsRoot, 'bad.name'), { recursive: true });
+      await mkdir(join(sessionsRoot, 'bad name'), { recursive: true });
+
+      const paths = await getAllSessionScopedStatePaths('team', wd);
+      assert.deepEqual(paths, [getStatePath('team', wd, 'valid-session')]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('reads session-sensitive runtime files from the current session without root fallback when requested', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(join(stateDir, 'sessions', 'sess-current'), { recursive: true });
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-current',
+        cwd: wd,
+        state_root: stateDir,
+      }));
+
+      const paths = await getReadScopedStateFilePaths('hud-state.json', wd, undefined, {
+        rootFallback: false,
+      });
+      assert.deepEqual(paths, [join(stateDir, 'sessions', 'sess-current', 'hud-state.json')]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('prefers OMX_SESSION_ID over stale session.json when resolving current session id', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    const previousSessionId = process.env.OMX_SESSION_ID;
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(join(stateDir, 'sessions', 'sess-env'), { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-stale',
+        cwd: join(wd, '..', 'other-worktree'),
+      }));
+      process.env.OMX_SESSION_ID = 'sess-env';
+
+      assert.equal(await readCurrentSessionId(wd), 'sess-env');
+    } finally {
+      if (typeof previousSessionId === 'string') process.env.OMX_SESSION_ID = previousSessionId;
+      else delete process.env.OMX_SESSION_ID;
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('maps native Codex session aliases to the canonical OMX session id', async () => {
+    const wd = await mkRealTemp('omx-state-paths-native-alias-');
+    const previousOmxSessionId = process.env.OMX_SESSION_ID;
+    const previousCodexSessionId = process.env.CODEX_SESSION_ID;
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(join(stateDir, 'sessions', 'omx-canonical'), { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'omx-canonical',
+        native_session_id: 'codex-native',
+        codex_session_id: 'codex-current',
+        previous_native_session_id: 'codex-previous',
+        cwd: wd,
+      }));
+      delete process.env.OMX_SESSION_ID;
+      process.env.CODEX_SESSION_ID = 'codex-previous';
+
+      assert.equal(await readCurrentSessionId(wd), 'omx-canonical');
+      const scope = await resolveRuntimeStateScope(wd);
+      assert.equal(scope.sessionId, 'omx-canonical');
+      assert.equal(scope.source, 'native-alias');
+    } finally {
+      if (typeof previousOmxSessionId === 'string') process.env.OMX_SESSION_ID = previousOmxSessionId;
+      else delete process.env.OMX_SESSION_ID;
+      if (typeof previousCodexSessionId === 'string') process.env.CODEX_SESSION_ID = previousCodexSessionId;
+      else delete process.env.CODEX_SESSION_ID;
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+
+  it('maps owner OMX session ids through current session and state scope resolution', async () => {
+    const wd = await mkRealTemp('omx-state-paths-owner-alias-');
+    const previousOmxSessionId = process.env.OMX_SESSION_ID;
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(join(stateDir, 'sessions', 'native-id'), { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'native-id',
+        native_session_id: 'native-id',
+        owner_omx_session_id: 'omx-owner-id',
+        owner_codex_session_id: 'codex-owner-id',
+        cwd: wd,
+      }));
+      process.env.OMX_SESSION_ID = 'omx-owner-id';
+
+      assert.equal(await readCurrentSessionId(wd), 'native-id');
+      const scope = await resolveStateScope(wd);
+      assert.equal(scope.sessionId, 'native-id');
+      assert.equal(scope.stateDir, join(stateDir, 'sessions', 'native-id'));
+      assert.notEqual(scope.stateDir, join(stateDir, 'sessions', 'omx-owner-id'));
+
+      const runtimeScope = await resolveRuntimeStateScope(wd);
+      assert.equal(runtimeScope.sessionId, 'native-id');
+      assert.equal(runtimeScope.stateDir, join(stateDir, 'sessions', 'native-id'));
+      assert.equal(runtimeScope.source, 'native-alias');
+
+      process.env.OMX_SESSION_ID = 'codex-owner-id';
+      assert.equal(await readCurrentSessionId(wd), 'native-id');
+      const codexScope = await resolveStateScope(wd);
+      assert.equal(codexScope.sessionId, 'native-id');
+      assert.equal(codexScope.stateDir, join(stateDir, 'sessions', 'native-id'));
+      const codexRuntimeScope = await resolveRuntimeStateScope(wd);
+      assert.equal(codexRuntimeScope.sessionId, 'native-id');
+      assert.equal(codexRuntimeScope.stateDir, join(stateDir, 'sessions', 'native-id'));
+    } finally {
+      if (typeof previousOmxSessionId === 'string') process.env.OMX_SESSION_ID = previousOmxSessionId;
+      else delete process.env.OMX_SESSION_ID;
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('maps explicit owner OMX session ids through resolveStateScope', async () => {
+    const wd = await mkRealTemp('omx-state-paths-explicit-owner-alias-');
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(join(stateDir, 'sessions', 'native-id'), { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'native-id',
+        native_session_id: 'native-id',
+        owner_omx_session_id: 'omx-owner-id',
+        owner_codex_session_id: 'codex-owner-id',
+        cwd: wd,
+      }));
+
+      const scope = await resolveStateScope(wd, 'omx-owner-id');
+      assert.equal(scope.sessionId, 'native-id');
+      assert.equal(scope.stateDir, join(stateDir, 'sessions', 'native-id'));
+      assert.notEqual(scope.stateDir, join(stateDir, 'sessions', 'omx-owner-id'));
+
+      const codexScope = await resolveStateScope(wd, 'codex-owner-id');
+      assert.equal(codexScope.sessionId, 'native-id');
+      assert.equal(codexScope.stateDir, join(stateDir, 'sessions', 'native-id'));
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('maps explicit native Codex session aliases through resolveStateScope', async () => {
+    const wd = await mkRealTemp('omx-state-paths-explicit-native-alias-');
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await mkdir(join(stateDir, 'sessions', 'omx-canonical'), { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+        session_id: 'omx-canonical',
+        native_session_id: 'codex-native',
+        previous_native_session_id: 'codex-previous',
+        cwd: wd,
+      }));
+
+      const scope = await resolveStateScope(wd, 'codex-previous');
+      assert.equal(scope.sessionId, 'omx-canonical');
+      assert.equal(scope.stateDir, join(stateDir, 'sessions', 'omx-canonical'));
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves OMX_SESSION_ID even before the session directory exists', async () => {
+    const wd = await mkRealTemp('omx-state-paths-');
+    const previousSessionId = process.env.OMX_SESSION_ID;
+    try {
+      await mkdir(getBaseStateDir(wd), { recursive: true });
+      process.env.OMX_SESSION_ID = 'sess-not-yet-materialized';
+
+      assert.equal(await readCurrentSessionId(wd), 'sess-not-yet-materialized');
+    } finally {
+      if (typeof previousSessionId === 'string') process.env.OMX_SESSION_ID = previousSessionId;
+      else delete process.env.OMX_SESSION_ID;
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves current session from authoritative team state root without OMX_SESSION_ID', async () => {
+    const wd = await mkRealTemp('omx-state-paths-team-root-session-');
+    const teamStateRoot = join(wd, 'team-state-root');
+    const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+    const previousSessionId = process.env.OMX_SESSION_ID;
+    try {
+      process.env.OMX_TEAM_STATE_ROOT = teamStateRoot;
+      delete process.env.OMX_SESSION_ID;
+      await mkdir(join(teamStateRoot, 'sessions', 'sess-team-current'), { recursive: true });
+      await writeFile(join(teamStateRoot, 'session.json'), JSON.stringify({
+        session_id: 'sess-team-current',
+        cwd: wd,
+        state_root: teamStateRoot,
+      }));
+      await mkdir(join(wd, '.omx', 'state'), { recursive: true });
+      await writeFile(join(wd, '.omx', 'state', 'session.json'), JSON.stringify({
+        session_id: 'sess-stale-source-root',
+        cwd: join(wd, '..', 'other-worktree'),
+      }));
+
+      assert.equal(await readCurrentSessionId(wd), 'sess-team-current');
+    } finally {
+      if (typeof previousTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = previousTeamStateRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+      if (typeof previousSessionId === 'string') process.env.OMX_SESSION_ID = previousSessionId;
+      else delete process.env.OMX_SESSION_ID;
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('does not resolve current session from source root when a team state root is authoritative', async () => {
+    const wd = await mkRealTemp('omx-state-paths-ignore-source-session-');
+    const teamStateRoot = join(wd, 'team-state-root');
+    const previousTeamStateRoot = process.env.OMX_TEAM_STATE_ROOT;
+    const previousSessionId = process.env.OMX_SESSION_ID;
+    try {
+      process.env.OMX_TEAM_STATE_ROOT = teamStateRoot;
+      delete process.env.OMX_SESSION_ID;
+      await mkdir(teamStateRoot, { recursive: true });
+      const sourceStateDir = join(wd, '.omx', 'state');
+      await mkdir(join(sourceStateDir, 'sessions', 'sess-source-current'), { recursive: true });
+      await writeFile(join(sourceStateDir, 'session.json'), JSON.stringify({
+        session_id: 'sess-source-current',
+        cwd: wd,
+      }));
+
+      assert.equal(await readCurrentSessionId(wd), undefined);
+    } finally {
+      if (typeof previousTeamStateRoot === 'string') process.env.OMX_TEAM_STATE_ROOT = previousTeamStateRoot;
+      else delete process.env.OMX_TEAM_STATE_ROOT;
+      if (typeof previousSessionId === 'string') process.env.OMX_SESSION_ID = previousSessionId;
+      else delete process.env.OMX_SESSION_ID;
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+  describe('writable state scope', () => {
+    it('uses root only when session.json is absent and ignores compatibility-only environment aliases', async () => {
+      const wd = await mkRealTemp('omx-writable-root-');
+      try {
+        process.env.CODEX_SESSION_ID = 'compat-read-session';
+
+        const scope = await resolveWritableStateScope(wd);
+        assert.deepEqual(scope, {
+          source: 'root',
+          stateDir: getBaseStateDir(wd),
+        });
+        assert.equal(existsSync(join(wd, '.omx', 'state')), false);
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('uses a usable canonical session.json scope and rejects a present unusable session.json', async () => {
+      const wd = await mkRealTemp('omx-writable-session-');
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+          session_id: 'sess-canonical',
+          cwd: wd,
+        }));
+
+        assert.deepEqual(await resolveWritableStateScope(wd), {
+          source: 'session',
+          sessionId: 'sess-canonical',
+          stateDir: join(stateDir, 'sessions', 'sess-canonical'),
+        });
+
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+          session_id: 'sess-unusable',
+          cwd: join(wd, 'other-worktree'),
+        }));
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('fails closed for an unmatched OMX_SESSION_ID while preserving explicit fork scope', async () => {
+      const wd = await mkRealTemp('omx-writable-unmatched-env-');
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-canonical', cwd: wd }));
+        process.env.OMX_SESSION_ID = 'sess-unmatched';
+
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.sessionBindingMismatch);
+            return true;
+          },
+        );
+        assert.equal(existsSync(join(stateDir, 'sessions', 'sess-unmatched')), false);
+
+        assert.deepEqual(await resolveWritableStateScope(wd, 'explicit-fork'), {
+          source: 'explicit',
+          sessionId: 'explicit-fork',
+          stateDir: join(stateDir, 'sessions', 'explicit-fork'),
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('maps a persisted OMX owner alias to the canonical writable session without re-proving tmux evidence', async () => {
+      const wd = await mkRealTemp('omx-writable-alias-');
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+          session_id: 'sess-canonical',
+          native_session_id: 'native-alias',
+          owner_omx_session_id: 'omx-owner-alias',
+          owner_codex_session_id: 'codex-owner-alias',
+          cwd: wd,
+        }));
+        process.env.OMX_SESSION_ID = 'omx-owner-alias';
+
+        assert.deepEqual(await resolveWritableStateScope(wd), {
+          source: 'session',
+          sessionId: 'sess-canonical',
+          stateDir: join(stateDir, 'sessions', 'sess-canonical'),
+        });
+
+        process.env.OMX_SESSION_ID = 'codex-owner-alias';
+        assert.deepEqual(await resolveWritableStateScope(wd), {
+          source: 'session',
+          sessionId: 'sess-canonical',
+          stateDir: join(stateDir, 'sessions', 'sess-canonical'),
+        });
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('binds an explicit exact-current OMX_SESSION_ID when the selected pointer is stale-dead', async () => {
+      const wd = await mkRealTemp('omx-writable-stale-dead-env-');
+      __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        const pointerBody = JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 });
+        await writeFile(join(stateDir, 'session.json'), pointerBody);
+        process.env.OMX_SESSION_ID = 'sess-current';
+
+        assert.deepEqual(await resolveWritableStateScope(wd), {
+          source: 'session',
+          sessionId: 'sess-current',
+          stateDir: join(stateDir, 'sessions', 'sess-current'),
+        });
+
+        // Scope resolution must never mutate the selected pointer; SessionStart
+        // remains the only session.json writer.
+        assert.equal(await readFile(join(stateDir, 'session.json'), 'utf-8'), pointerBody);
+      } finally {
+        __resetSessionPointerTransactionDependenciesForTests();
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('still fails closed for a stale-dead pointer without an env binding', async () => {
+      const wd = await mkRealTemp('omx-writable-stale-dead-noenv-');
+      __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 }));
+
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+      } finally {
+        __resetSessionPointerTransactionDependenciesForTests();
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('fails closed for malformed and foreign-cwd pointers even with an env binding', async () => {
+      const wd = await mkRealTemp('omx-writable-ambiguous-env-');
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        process.env.OMX_SESSION_ID = 'sess-current';
+
+        await writeFile(join(stateDir, 'session.json'), '{not json');
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+          session_id: 'sess-foreign',
+          cwd: join(wd, 'other-worktree'),
+        }));
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('fails closed for JSON-valid non-object pointers even with an env binding', async () => {
+      const wd = await mkRealTemp('omx-writable-nonobject-env-');
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        const sessionPath = join(stateDir, 'session.json');
+        process.env.OMX_SESSION_ID = 'sess-current';
+
+        // JSON null, arrays, and scalars parse cleanly but are not pointer
+        // objects. They must surface the same stable unusable-session error as
+        // syntactically malformed bytes rather than throwing on property access.
+        for (const body of ['null', '[]', '42', '"sess-current"']) {
+          await writeFile(sessionPath, body);
+          await assert.rejects(
+            () => resolveWritableStateScope(wd),
+            (error: unknown) => {
+              assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+              return true;
+            },
+          );
+          assert.equal(await readFile(sessionPath, 'utf-8'), body);
+          assert.equal(existsSync(join(stateDir, 'sessions', 'sess-current')), false);
+        }
+      } finally {
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+    it('recovers writable scope for an identity-indeterminate pointer with an exact-match OMX_SESSION_ID', async () => {
+      const wd = await mkRealTemp('omx-writable-indeterminate-exact-');
+      __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'indeterminate' });
+      try {
+        const stateDir = getBaseStateDir(wd);
+        const sessionPath = join(stateDir, 'session.json');
+        await mkdir(stateDir, { recursive: true });
+        const pointerBody = JSON.stringify({ session_id: 'sess-exact', cwd: wd, pid: 8388607 });
+        await writeFile(sessionPath, pointerBody);
+        const beforePointer = await readFile(sessionPath, 'utf-8');
+        const beforeEntries = (await readdir(stateDir)).sort();
+        process.env.OMX_SESSION_ID = 'sess-exact';
+
+        assert.deepEqual(await resolveWritableStateScope(wd), {
+          source: 'session',
+          sessionId: 'sess-exact',
+          stateDir: join(stateDir, 'sessions', 'sess-exact'),
+        });
+        assert.equal(await readFile(sessionPath, 'utf-8'), beforePointer);
+        assert.deepEqual((await readdir(stateDir)).sort(), beforeEntries);
+      } finally {
+        __resetSessionPointerTransactionDependenciesForTests();
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+    it('fails closed for an identity-indeterminate pointer even with an env binding', async () => {
+      const wd = await mkRealTemp('omx-writable-indeterminate-env-');
+      __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'indeterminate' });
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-unknown', cwd: wd, pid: 8388607 }));
+        process.env.OMX_SESSION_ID = 'sess-current';
+
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+        assert.equal(existsSync(join(stateDir, 'sessions', 'sess-current')), false);
+      } finally {
+        __resetSessionPointerTransactionDependenciesForTests();
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+    it('fails closed for a stale-dead pointer without cwd or state_root authority even with an env binding', async () => {
+      const wd = await mkRealTemp('omx-writable-stale-dead-noauthority-');
+      __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+      try {
+        const stateDir = getBaseStateDir(wd);
+        await mkdir(stateDir, { recursive: true });
+        process.env.OMX_SESSION_ID = 'sess-current';
+
+        // A dead PID does not cure a missing recorded cwd: the pointer holds
+        // no selected-root authority, so recovery must stay fail-closed.
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-dead', pid: 8388607 }));
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+
+        // A recorded state_root naming another root is equally non-authoritative.
+        const foreignRoot = join(wd, 'other-root');
+        await mkdir(foreignRoot, { recursive: true });
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify({
+          session_id: 'sess-dead',
+          cwd: wd,
+          state_root: foreignRoot,
+          pid: 8388607,
+        }));
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+            return true;
+          },
+        );
+        assert.equal(existsSync(join(stateDir, 'sessions', 'sess-current')), false);
+      } finally {
+        __resetSessionPointerTransactionDependenciesForTests();
+        await rm(wd, { recursive: true, force: true });
+      }
+    });
+
+  });
+
+});
+
+describe('writable state scope recovery and revalidation', () => {
+  it('T10 reads the selected decision snapshot and recovery stability snapshot once', async () => {
+    const wd = await mkRealTemp('omx-writable-single-snapshot-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 }));
+      process.env.OMX_SESSION_ID = 'sess-current';
+      const decisions: Array<{ ordinal: number; raw: string }> = [];
+      const stability: Array<{ ordinal: number; raw: string | undefined }> = [];
+      __setWritableStateScopeTestHooksForTests({
+        onSelectedDecisionSnapshotRead: (event) => decisions.push({ ...event }),
+        onRecoveryStabilityReread: (event) => stability.push({ ...event }),
+      });
+      await resolveWritableStateScope(wd);
+      assert.deepEqual(decisions.map(({ ordinal }) => ordinal), [1]);
+      assert.deepEqual(stability.map(({ ordinal }) => ordinal), [1]);
+      assert.equal(stability[0]?.raw, decisions[0]?.raw);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T11 fails closed when the pointer bytes change during stale-dead recovery', async () => {
+    const wd = await mkRealTemp('omx-writable-unstable-recovery-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      const sessionPath = join(stateDir, 'session.json');
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(sessionPath, JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 }));
+      process.env.OMX_SESSION_ID = 'sess-current';
+      __setWritableStateScopeTestHooksForTests({
+        beforeRecoveryReread: async () => {
+          await writeFile(sessionPath, JSON.stringify({ session_id: 'sess-replaced', cwd: wd }));
+        },
+      });
+      await assert.rejects(
+        () => resolveWritableStateScope(wd),
+        (error: unknown) => {
+          assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+          return true;
+        },
+      );
+      assert.equal(existsSync(join(stateDir, 'sessions', 'sess-current')), false);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when the pointer bytes change during identity-indeterminate exact-match recovery', async () => {
+    const wd = await mkRealTemp('omx-writable-indeterminate-unstable-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'indeterminate' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      const sessionPath = join(stateDir, 'session.json');
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(sessionPath, JSON.stringify({ session_id: 'sess-indeterminate', cwd: wd, pid: 8388607 }));
+      process.env.OMX_SESSION_ID = 'sess-indeterminate';
+      __setWritableStateScopeTestHooksForTests({
+        beforeRecoveryReread: async () => {
+          await writeFile(sessionPath, JSON.stringify({ session_id: 'sess-indeterminate', cwd: wd, pid: 9999999 }));
+        },
+      });
+      await assert.rejects(
+        () => resolveWritableStateScope(wd),
+        (error: unknown) => {
+          assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+          return true;
+        },
+      );
+      assert.equal(existsSync(join(stateDir, 'sessions', 'sess-indeterminate')), false);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T12 leaves the stale-dead pointer and base state root entries unchanged during recovery', async () => {
+    const wd = await mkRealTemp('omx-writable-pointer-immutable-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      const sessionPath = join(stateDir, 'session.json');
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(sessionPath, JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 }));
+      const beforePointer = await readFile(sessionPath, 'utf-8');
+      const beforeEntries = (await readdir(stateDir)).sort();
+      process.env.OMX_SESSION_ID = 'sess-current';
+      await resolveWritableStateScope(wd);
+      assert.equal(await readFile(sessionPath, 'utf-8'), beforePointer);
+      assert.deepEqual((await readdir(stateDir)).sort(), beforeEntries);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T13 rejects stale-dead recovery without selected-root authority', async () => {
+    const wd = await mkRealTemp('omx-writable-authority-matrix-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      process.env.OMX_SESSION_ID = 'sess-current';
+      const cases = [
+        { name: 'missing recorded cwd', pointer: { session_id: 'sess-dead', pid: 8388607 } },
+        { name: 'different state root', pointer: { session_id: 'sess-dead', cwd: wd, state_root: join(wd, 'other-root'), pid: 8388607 } },
+        { name: 'recorded cwd does not contain the observed cwd', pointer: { session_id: 'sess-dead', cwd: join(wd, 'other-worktree'), pid: 8388607 } },
+      ];
+      for (const testCase of cases) {
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify(testCase.pointer));
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession, testCase.name);
+            return true;
+          },
+        );
+        assert.equal(existsSync(join(stateDir, 'sessions', 'sess-current')), false, testCase.name);
+      }
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed for identity-indeterminate pointer without selected-root authority even with an exact-match env binding', async () => {
+    const wd = await mkRealTemp('omx-writable-indeterminate-noauthority-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'indeterminate' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      process.env.OMX_SESSION_ID = 'sess-indeterminate';
+      const cases = [
+        { name: 'missing recorded cwd', pointer: { session_id: 'sess-indeterminate', pid: 8388607 } },
+        { name: 'different state root', pointer: { session_id: 'sess-indeterminate', cwd: wd, state_root: join(wd, 'other-root'), pid: 8388607 } },
+        { name: 'recorded cwd does not contain the observed cwd', pointer: { session_id: 'sess-indeterminate', cwd: join(wd, 'other-worktree'), pid: 8388607 } },
+      ];
+      for (const testCase of cases) {
+        await writeFile(join(stateDir, 'session.json'), JSON.stringify(testCase.pointer));
+        await assert.rejects(
+          () => resolveWritableStateScope(wd),
+          (error: unknown) => {
+            assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.unusableSession, testCase.name);
+            return true;
+          },
+        );
+        assert.equal(existsSync(join(stateDir, 'sessions', 'sess-indeterminate')), false, testCase.name);
+      }
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T1 gives each writable commit revalidator a closure-local ordinal sequence', async () => {
+    const wd = await mkRealTemp('omx-writable-revalidator-ordinals-');
+    __setSessionPointerTransactionDependenciesForTests({});
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-current', cwd: wd }));
+      const capturedScope = await resolveWritableStateScope(wd);
+      const events: Array<{ operation: string; commitOrdinal: number; site: string; kind: string; path: string }> = [];
+      __setWritableStateScopeTestHooksForTests({
+        beforeScopeRevalidation: async (event) => { events.push({ ...event }); },
+      });
+      const options = { operation: 'state_write' as const, cwd: wd, explicitSessionId: undefined, capturedScope, baseStateDir: stateDir };
+      const revalidate = createWritableCommitRevalidator(options);
+      const attempts = [
+        { site: 'mode.primary' as const, kind: 'write' as const, path: join(stateDir, 'mode-state.json') },
+        { site: 'skill-active.root-copy' as const, kind: 'write' as const, path: join(stateDir, 'skill-active.json') },
+        { site: 'skill-active.session-copy' as const, kind: 'write' as const, path: join(stateDir, 'sessions', 'sess-current', 'skill-active.json') },
+      ];
+      for (const attempt of attempts) await revalidate(attempt);
+      await createWritableCommitRevalidator(options)(attempts[0]!);
+      assert.deepEqual(events, [
+        ...attempts.map((attempt, index) => ({ operation: 'state_write', commitOrdinal: index + 1, ...attempt })),
+        { operation: 'state_write', commitOrdinal: 1, ...attempts[0]! },
+      ]);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T2 rejects a writable commit when revalidation observes a replacement scope', async () => {
+    const wd = await mkRealTemp('omx-writable-revalidator-drift-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      const sessionPath = join(stateDir, 'session.json');
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(sessionPath, JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 }));
+      process.env.OMX_SESSION_ID = 'sess-current';
+      const capturedScope = await resolveWritableStateScope(wd);
+      const takeover = armPointerTakeover({
+        expectedOrdinal: 1,
+        expectedSite: 'mode.primary',
+        sessionPath,
+        replacementPointer: JSON.stringify({ session_id: 'sess-replacement', cwd: wd }),
+        beforePublish: () => { process.env.OMX_SESSION_ID = 'sess-replacement'; },
+      });
+      __setWritableStateScopeTestHooksForTests({ beforeScopeRevalidation: takeover.hook });
+      const revalidate = createWritableCommitRevalidator({
+        operation: 'state_write', cwd: wd, explicitSessionId: undefined, capturedScope, baseStateDir: stateDir,
+      });
+      await assert.rejects(
+        () => revalidate({ site: 'mode.primary', kind: 'write', path: join(stateDir, 'mode-state.json') }),
+        (error: unknown) => {
+          assert.equal((error as Error).message, WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite);
+          return true;
+        },
+      );
+      assert.deepEqual(takeover.observed, [{
+        commitOrdinal: 1,
+        site: 'mode.primary',
+        kind: 'write',
+        path: join(stateDir, 'mode-state.json'),
+      }]);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('T3 clears recovery and revalidation hooks and resets snapshot ordinals', async () => {
+    const wd = await mkRealTemp('omx-writable-hooks-clear-');
+    __setSessionPointerTransactionDependenciesForTests({ probePid: () => 'dead' });
+    try {
+      const stateDir = getBaseStateDir(wd);
+      await mkdir(stateDir, { recursive: true });
+      await writeFile(join(stateDir, 'session.json'), JSON.stringify({ session_id: 'sess-dead', cwd: wd, pid: 8388607 }));
+      process.env.OMX_SESSION_ID = 'sess-current';
+      const oldCounters = { recovery: 0, revalidation: 0, decision: 0, stability: 0 };
+      __setWritableStateScopeTestHooksForTests({
+        beforeRecoveryReread: async () => { oldCounters.recovery += 1; },
+        beforeScopeRevalidation: async () => { oldCounters.revalidation += 1; },
+        onSelectedDecisionSnapshotRead: () => { oldCounters.decision += 1; },
+        onRecoveryStabilityReread: () => { oldCounters.stability += 1; },
+      });
+      await resolveWritableStateScope(wd);
+      __setWritableStateScopeTestHooksForTests({});
+      await resolveWritableStateScope(wd);
+      assert.deepEqual(oldCounters, { recovery: 1, revalidation: 0, decision: 1, stability: 1 });
+      const restarted: Array<{ decision: number; stability: number }> = [];
+      __setWritableStateScopeTestHooksForTests({
+        onSelectedDecisionSnapshotRead: ({ ordinal }) => restarted.push({ decision: ordinal, stability: 0 }),
+        onRecoveryStabilityReread: ({ ordinal }) => {
+          const event = restarted.at(-1);
+          assert.ok(event);
+          event.stability = ordinal;
+        },
+      });
+      await resolveWritableStateScope(wd);
+      assert.deepEqual(restarted, [{ decision: 1, stability: 1 }]);
+    } finally {
+      __setWritableStateScopeTestHooksForTests({});
+      __resetSessionPointerTransactionDependenciesForTests();
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+});

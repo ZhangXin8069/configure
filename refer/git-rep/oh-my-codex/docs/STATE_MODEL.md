@@ -1,0 +1,289 @@
+# OMX State Model
+
+This document explains how OMX tracks workflow/skill state, how transition rules are evaluated, and which transitions are commonly allowed or blocked.
+
+## Goals
+
+- make mode state predictable across CLI, MCP, hooks, and HUD
+- show which files are authoritative vs compatibility-only
+- explain how allowlisted handoffs and overlap rules work
+- document common workflow transitions in one place
+
+## State authorities
+
+### 1. Per-mode state files — authoritative
+
+Authoritative workflow state lives in per-mode files under `.omx/state/`:
+
+- root scope: `.omx/state/<mode>-state.json`
+- session scope: `.omx/state/sessions/<session_id>/<mode>-state.json`
+
+Examples:
+
+- `.omx/state/ralplan-state.json`
+- `.omx/state/sessions/<session_id>/ralph-state.json`
+- `.omx/state/team-state.json`
+
+These files determine whether a workflow mode is active, completed, cancelled, or failed. Those mode phases are not always identical to the user-facing terminal lifecycle vocabulary; see the explicit terminal lifecycle section below for that compatibility boundary.
+
+### 2. `skill-active-state.json` — compatibility / visibility layer
+
+`skill-active-state.json` is still used as a compatibility surface for hooks/HUD/native messaging, but transition reconciliation should be driven from the shared transition/reconciliation helpers rather than re-deriving semantics ad hoc.
+
+Locations:
+
+- `.omx/state/skill-active-state.json`
+- `.omx/state/sessions/<session_id>/skill-active-state.json`
+
+### 3. Session precedence
+
+Read precedence is:
+
+1. explicit session scope
+2. current session scope
+3. root scope fallback
+
+If root and session disagree for the same mode, session wins for the active execution context, but stale root survivors should be terminalized during reconciliation when they would otherwise resurrect old state.
+
+## Terminal lifecycle outcome compatibility
+
+For the explicit terminal stop model, treat workflow `current_phase` and user-facing terminal lifecycle outcome as related but separate concepts.
+
+Canonical user-facing lifecycle outcomes are:
+
+- `finished`
+- `blocked`
+- `failed`
+- `userinterlude`
+- `askuserQuestion`
+
+Compatibility rules:
+
+- Prefer a dedicated canonical lifecycle field over legacy `run_outcome` when both exist.
+- Treat legacy `run_outcome` as a compatibility layer during migration.
+- Infer from `current_phase` only when neither canonical lifecycle metadata nor legacy `run_outcome` is available.
+- Keep `cancelled` as an internal legacy/admin phase, not as the canonical public lifecycle vocabulary.
+
+Recommended read precedence for terminal lifecycle interpretation:
+
+1. canonical lifecycle metadata (for example `lifecycle_outcome`)
+2. legacy `run_outcome`
+3. compatibility inference from `current_phase`, question metadata, and persisted error/completion fields
+
+`blocked_on_user` is also compatibility-only. When surrounding question metadata proves OMX asked a blocking question, classify it as `askuserQuestion`; otherwise treat it as a user-wait compatibility signal instead of exposing it as the canonical vocabulary directly.
+
+## Core files
+
+- `src/state/workflow-transition.ts` — transition policy and decision model
+- `src/state/workflow-transition-reconcile.ts` — shared transition reconciliation helper
+- `src/modes/base.ts` — mode start/update lifecycle
+- `src/mcp/state-server.ts` — MCP state projection, **read-only**: it advertises `state_read`,
+  `state_list_active`, and `state_get_status` only. `state_write`/`state_clear` are not part of
+  the advertised MCP surface; durable mutation goes through `executeStateOperation` in
+  `src/state/operations.ts`
+- `src/hooks/keyword-detector.ts` — prompt keyword activation + state seeding
+- `src/scripts/codex-native-hook.ts` — native hook routing and prompt-submit output
+
+## Transition flow
+
+```mermaid
+flowchart TD
+  A[Prompt / CLI / MCP request] --> B[Detect requested workflow skill(s)]
+  B --> C[Evaluate transition policy]
+  C -->|fail closed: malformed state, identity/scope violation| D[Return denial message]
+  C -->|allow overlap| E[Keep current active modes + add destination]
+  C -->|allow auto-complete| F[Complete source mode(s)]
+  F --> G[Sync compatibility skill-active state]
+  G --> H[Activate destination mode(s)]
+  E --> G
+  H --> I[Emit routing / transition message]
+```
+
+## Reconciliation sequence
+
+The shared reconciliation helper should follow this sequence:
+
+1. decide outcome
+2. complete source mode(s) with audit metadata
+3. sync compatibility `skill-active` state
+4. activate destination mode(s)
+5. return transition message for rendering
+
+This ordering matters because syncing too early can resurrect a mode that was just auto-completed.
+
+## Prompt-submit flow
+
+```mermaid
+flowchart TD
+  A[UserPromptSubmit] --> B[detectKeywords()]
+  B --> C[ordered explicit skill list]
+  C --> D[recordSkillActivation()]
+  D --> E[shared reconciliation helper]
+  E --> F[final active skills]
+  F --> G[buildAdditionalContextMessage()]
+  G --> H[native hook output]
+```
+
+## Transition rule categories
+
+### A. Allow with no change
+
+The requested mode is already active.
+
+### B. Allow as overlap
+
+The requested mode is added without completing the source mode.
+
+Examples:
+
+- `team + ralph`
+- `ultrawork + <any tracked mode>`
+
+### C. Allow with source auto-complete
+
+The source mode is terminalized and the destination becomes active.
+
+Current allowlisted forward handoffs:
+
+- `deep-interview -> ralplan` (evidence-gated)
+- `ralplan -> team`
+- `ralplan -> ralph`
+- `ralplan -> autopilot`
+
+### D. Deny
+
+The requested transition is not allowed and no state is changed.
+
+## Common transition rules
+
+| From | To | Result |
+|---|---|---|
+| `deep-interview` | `ralplan` | evidence-gated auto-complete: requires a durable deep-interview completion gate or explicit user-authorized skip; a satisfied/cleared question obligation alone is not enough |
+| `ralplan` | `team` | auto-complete `ralplan`, start `team` |
+| `ralplan` | `ralph` | auto-complete `ralplan`, start `ralph` |
+| `ralplan` | `autopilot` | auto-complete `ralplan`, start `autopilot` |
+| `autopilot` | `ralplan` | denied as a peer transition; represent supervised ralplan by updating `autopilot.current_phase` |
+| `team` | `ralph` | allowed overlap |
+| `ralph` | `team` | allowed overlap |
+| `<any tracked mode>` | `ultrawork` | allowed overlap |
+| `ultrawork` | `<any tracked mode>` | allowed overlap |
+| execution-like mode | planning-like mode | denied rollback auto-complete |
+| anything else non-allowlisted | new conflicting mode | denied |
+
+Autopilot is a supervisor over child stages, not a peer that is completed by
+entering its `ralplan` child stage. Review/QA loopbacks should keep
+`autopilot-state.json` active and set `current_phase: "ralplan"` rather than
+starting standalone `ralplan` over Autopilot.
+
+The hard Autopilot/Ralplan consensus-receipt gate was removed by #3492. Workflow
+transitions no longer require a host-issued receipt, and missing host provenance
+must not terminalize Autopilot or block authority-decreasing recovery. Architect,
+Critic, tracker, and artifact evidence may still inform planning and review, but
+Autopilot's canonical `deep-interview -> ralplan -> ultragoal` progression does
+not turn those local records into an authorization boundary.
+
+## Planning-like vs execution-like
+
+### Planning-like
+
+- `deep-interview`
+- `ralplan`
+- `autoresearch`
+
+### Execution-like
+
+- `team`
+- `ralph`
+- `autopilot`
+- `ultrawork`
+- `ultraqa`
+
+Execution-like -> planning-like rollback auto-complete is forbidden. The denial should tell the user, in substance:
+
+> first clear current state first and retry if this action is intended
+
+## Multi-skill prompt-submit behavior
+
+A single prompt can explicitly invoke multiple contiguous `$skill` tokens.
+
+Example:
+
+```text
+$ralplan $team $ultragoal ship this fix
+```
+
+Expected result:
+
+1. `ralplan` is recognized as the planning source
+2. simultaneous execution follow-ups are deferred instead of auto-starting
+3. final active skill remains `ralplan`
+4. deferred execution skills are surfaced in native-hook output for traceability
+5. native hook output should describe all explicit skills, not only the primary one
+
+Recommended message shape:
+
+- detected keywords summary
+- deferred-skill summary, e.g. `planning preserved over simultaneous execution follow-up; deferred skills: team, ultragoal`
+- final active skill / initialized state summary
+- team runtime hint only when `team` is actually among the final active skills
+
+## Audit fields for auto-complete
+
+When a source mode is auto-completed during transition, the source state should record:
+
+- `active: false`
+- `current_phase: completed`
+- `completed_at`
+- `auto_completed_reason` or equivalent
+- `completion_note` or equivalent
+- destination metadata when useful (`transition_target_mode`, source path, etc.)
+
+## Invariants
+
+These rules should remain true unless intentionally changed:
+
+- rollback to planning never auto-completes
+- non-allowlisted transitions remain blocked
+- `ultrawork` overlap-any must not weaken `ralplan-first` gating
+- native-hook output is a presentation layer over shared transition results, not a separate decision engine
+- compatibility sync must not resurrect completed source modes
+
+## Ralplan Advisory lifecycle
+
+Standalone `$ralplan --advisory` is a cooperative planning pause, not a security fence or permission system. Its append-only generation state lives at `.omx/state/sessions/<session>/ralplan-advisory/<generation>/`; `current.json` selects the auditable generation, chained lifecycle events retain planning outcomes, and `closeout-journal.json` reconciles mode/skill mirrors after crashes.
+
+An approved Advisory terminalizes as `active:false` with `ralplan_review_lifecycle.complete:true`, while `ralplan_consensus_gate.complete`, `host_verified`, and `execution_handoff_authorized` are present and explicitly `false` (absence is invalid). `approved+proven` additionally requires the complete generation/iteration lifecycle digests and a successful post-write evidence revalidation; `approved+unproven` can only enter recovery-required. Negative outcomes terminalize as abandoned or recovery-required. Every inactive Advisory state requires either a canonical terminal fence plus committed generation-bound closeout journal, or an abandoned fence plus a separate append-only `admin-event-0001.json` bound to the exact prior fence/journal bytes. The closeout journal stores the exact reduced root/session skill projections so reconciliation repairs drift without deleting unrelated entries. Administrative abandonment never rewrites the original consensus journal and is idempotently recoverable whether that journal was prepared or committed. Missing, corrupt, unknown, mismatched, or partially committed state is reported as invalid evidence and never treated as a valid lifecycle projection. Advisory evidence files are capped at 128 KiB on Darwin because the pinned-directory helper enforces that platform ceiling; other supported platforms use the 8 MiB ceiling.
+
+Advisory state never emits a `PreToolUse` allow/block decision, never suppresses unrelated host side effects, and never turns local JSON, classifier output, session/thread fields, or a later prompt into execution authority. A later affirmative execution request may produce non-authoritative routing context, but it does not rewrite the terminal planning evidence or create an automatic handoff. Every terminal mode projection remains `active:false`, `host_verified:false`, and `execution_handoff_authorized:false`. Replan and new-Advisory requests may roll over to a new auditable generation without rewriting the predecessor; administrative cancel/abandon remains append-only and crash-recoverable. Real enforcement requires an explicit receipt or capability issued and verified by the host on a non-user-mintable surface; current local Advisory artifacts cannot substitute for one.
+
+## Practical guidance
+
+### If you are changing transition rules
+
+Update together:
+
+- `src/state/workflow-transition.ts`
+- `src/state/workflow-transition-reconcile.ts`
+- lifecycle / MCP callers
+- prompt-submit/native-hook rendering
+- regression tests
+
+### If you are debugging stale state
+
+Check these in order:
+
+1. session-scoped `<mode>-state.json`
+2. root `<mode>-state.json`
+3. session/root `skill-active-state.json`
+4. whether a previous auto-complete wrote audit metadata but compatibility sync reintroduced the mode
+
+### If you are adding a new allowlisted handoff
+
+Define:
+
+- source mode
+- destination mode(s)
+- whether source auto-completes or destination overlaps
+- rollback behavior
+- expected native-hook / CLI / MCP transition output
+- regression tests for both session and root scope

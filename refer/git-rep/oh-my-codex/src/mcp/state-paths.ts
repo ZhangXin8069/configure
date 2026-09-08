@@ -1,0 +1,1343 @@
+import { delimiter, isAbsolute, join, relative, resolve as resolvePath } from 'path';
+import { existsSync, realpathSync, readFileSync } from 'fs';
+import { readFile, readdir } from 'fs/promises';
+import {
+  classifySessionStateLiveness,
+  isSessionStateUsable,
+  type SessionState,
+} from '../hooks/session.js';
+
+export const VERIFIED_SESSION_BINDING_FIELDS = [
+  'session_id',
+  'native_session_id',
+  'codex_session_id',
+  'previous_native_session_id',
+  'owner_omx_session_id',
+  'owner_codex_session_id',
+] as const;
+
+export type VerifiedSessionBindingField = (typeof VERIFIED_SESSION_BINDING_FIELDS)[number];
+
+export type CanonicalSessionBindingStatus =
+  | 'resolution-error'
+  | 'absent'
+  | 'read-error'
+  | 'malformed'
+  | 'missing-recorded-cwd'
+  | 'root-mismatch'
+  | 'foreign-cwd'
+  | 'usable'
+  | 'stale-dead'
+  | 'identity-indeterminate';
+
+export interface CanonicalSessionBindingSnapshot {
+  cwd: string;
+  status: CanonicalSessionBindingStatus;
+  rootSource?: StateRootSource;
+  baseStateDir?: string;
+  selectedSessionJson?: string;
+  recordedCwd?: string;
+  state?: SessionState;
+  raw?: string;
+  liveness?: 'usable' | 'stale-dead' | 'identity-indeterminate';
+  verifiedAliases: Partial<Record<VerifiedSessionBindingField, string>>;
+}
+
+function verifiedSessionAliases(state: SessionState): Partial<Record<VerifiedSessionBindingField, string>> {
+  const raw = state as SessionState & Record<string, unknown>;
+  const aliases: Partial<Record<VerifiedSessionBindingField, string>> = {};
+  for (const field of VERIFIED_SESSION_BINDING_FIELDS) {
+    const normalized = normalizeSessionId(raw[field]);
+    if (normalized) aliases[field] = normalized;
+  }
+  return aliases;
+}
+
+export const SESSION_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+export const STATE_MODE_SEGMENT_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
+const STATE_FILE_SUFFIX = '-state.json';
+const STATE_FILE_NAME_PATTERN = /^[A-Za-z0-9._-]{1,128}$/;
+const WORKDIR_ALLOWLIST_ENV = 'OMX_MCP_WORKDIR_ROOTS';
+const OMX_ROOT_ENV = 'OMX_ROOT';
+const OMX_STATE_ROOT_ENV = 'OMX_STATE_ROOT';
+const OMX_TEAM_STATE_ROOT_ENV = 'OMX_TEAM_STATE_ROOT';
+const OMX_SESSION_ID_ENV = 'OMX_SESSION_ID';
+
+export const WRITABLE_STATE_SCOPE_ERRORS = {
+  unusableSession: 'Cannot resolve writable state scope: session.json is present but unusable.',
+  unboundEnvironment: 'Cannot resolve writable state scope: OMX_SESSION_ID is not bound to session.json.',
+  sessionBindingMismatch: 'Cannot resolve writable state scope: OMX_SESSION_ID does not match the live session recorded in session.json.',
+  scopeChangedDuringWrite: 'Cannot commit the state write: the writable state scope changed while the write was in progress.',
+} as const;
+
+
+export type StateRootSource = 'team-env' | 'omx-root-env' | 'omx-state-root-env' | 'session-authority' | 'cwd-default';
+export type SessionScopeSource = 'explicit' | 'env' | 'session-json' | 'native-alias' | 'root';
+
+export interface ResolvedSessionMetadata {
+  sessionId: string;
+  nativeSessionId?: string;
+  nativeSessionAliases: string[];
+  ownerOmxSessionId?: string;
+  ownerCodexSessionId?: string;
+  ownerCodexThreadId?: string;
+  leaderPaneId?: string;
+  tmuxSessionName?: string;
+  displayName?: string;
+  raw?: SessionState;
+  sourcePath?: string;
+}
+
+export interface ResolvedRuntimeStateScope {
+  cwd: string;
+  baseStateDir: string;
+  stateDir: string;
+  rootSource: StateRootSource;
+  sessionId?: string;
+  source: SessionScopeSource;
+  metadata?: ResolvedSessionMetadata;
+  isSessionScoped: boolean;
+  authoritativeActiveDirs: string[];
+  compatibilityReadDirs: string[];
+}
+
+export type StateFileScope = 'root' | 'session';
+
+export interface ModeStateFileRef {
+  mode: string;
+  path: string;
+  scope: StateFileScope;
+}
+
+export function normalizeSessionId(sessionId: unknown): string | undefined {
+  if (typeof sessionId !== 'string') return undefined;
+  const normalized = sessionId.trim();
+  return SESSION_ID_PATTERN.test(normalized) ? normalized : undefined;
+}
+
+export function validateSessionId(sessionId: unknown): string | undefined {
+  if (sessionId == null) return undefined;
+  if (typeof sessionId !== 'string') {
+    throw new Error('session_id must be a string');
+  }
+  if (!SESSION_ID_PATTERN.test(sessionId)) {
+    throw new Error('session_id must match ^[A-Za-z0-9_-]{1,64}$');
+  }
+  return sessionId;
+}
+
+
+export function validateStateModeSegment(mode: unknown): string {
+  if (typeof mode !== 'string') {
+    throw new Error('mode must be a string');
+  }
+  const normalized = mode.trim();
+  if (!normalized) {
+    throw new Error('mode must be a non-empty string');
+  }
+  if (normalized.includes('..')) {
+    throw new Error('mode must not contain ".."');
+  }
+  if (normalized.includes('/') || normalized.includes('\\')) {
+    throw new Error('mode must not contain path separators');
+  }
+  if (!STATE_MODE_SEGMENT_PATTERN.test(normalized)) {
+    throw new Error('mode must match ^[A-Za-z0-9_-]{1,64}$');
+  }
+  return normalized;
+}
+
+export function getStateFilename(mode: string): string {
+  return `${validateStateModeSegment(mode)}${STATE_FILE_SUFFIX}`;
+}
+
+export function validateStateFileName(fileName: unknown): string {
+  if (typeof fileName !== 'string') {
+    throw new Error('fileName must be a string');
+  }
+  const normalized = fileName.trim();
+  if (!normalized) {
+    throw new Error('fileName must be a non-empty string');
+  }
+  if (normalized.includes('..')) {
+    throw new Error('fileName must not contain ".."');
+  }
+  if (normalized.includes('/') || normalized.includes('\\')) {
+    throw new Error('fileName must not contain path separators');
+  }
+  if (!STATE_FILE_NAME_PATTERN.test(normalized)) {
+    throw new Error('fileName must match ^[A-Za-z0-9._-]{1,128}$');
+  }
+  return normalized;
+}
+
+function convertWindowsToWslPath(raw: string): string {
+  const m = /^([a-zA-Z]):[\\/](.*)$/.exec(raw);
+  if (!m) return raw;
+  const drive = m[1].toLowerCase();
+  const rest = String(m[2] || '').replace(/\\/g, '/');
+  const mountRoot = `/mnt/${drive}`;
+  if (!existsSync(mountRoot)) return raw;
+  return rest ? `${mountRoot}/${rest}` : mountRoot;
+}
+
+function convertWslToWindowsPath(raw: string): string {
+  const m = /^\/mnt\/([a-zA-Z])(?:\/(.*))?$/.exec(raw);
+  if (!m) return raw;
+  const drive = m[1].toUpperCase();
+  const rest = String(m[2] || '').replace(/\//g, '\\');
+  return rest ? `${drive}:\\${rest}` : `${drive}:\\`;
+}
+
+export function resolveWorkingDirectoryForState(
+  workingDirectory?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const raw = typeof workingDirectory === 'string' ? workingDirectory.trim() : '';
+  if (raw.includes('\0')) {
+    throw new Error('workingDirectory contains a NUL byte');
+  }
+  if (!raw) {
+    const cwd = resolvePath(process.cwd());
+    return enforceWorkingDirectoryPolicy(cwd, env);
+  }
+
+  let normalized = raw;
+
+  if (process.platform === 'win32') {
+    if (normalized.startsWith('/mnt/')) {
+      normalized = convertWslToWindowsPath(normalized);
+    }
+  } else if (/^[a-zA-Z]:[\\/]/.test(normalized)) {
+    const converted = convertWindowsToWslPath(normalized);
+    if (converted === normalized) {
+      throw new Error('workingDirectory Windows path is not available on this host');
+    }
+    normalized = converted;
+  }
+
+  if (normalized.includes('\0')) {
+    throw new Error('workingDirectory contains a NUL byte');
+  }
+
+  const resolved = resolvePath(normalized);
+  return enforceWorkingDirectoryPolicy(resolved, env);
+}
+
+function canonicalizeExistingPath(path: string): string {
+  try {
+    return realpathSync.native(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+  }
+
+  let current = path;
+  const suffixes: string[] = [];
+  while (true) {
+    const parent = resolvePath(current, '..');
+    if (parent === current) break;
+    suffixes.unshift(current.substring(parent.length).replace(/^[\\/]+/, ''));
+    current = parent;
+    try {
+      const realParent = realpathSync.native(current);
+      return suffixes.reduce((acc, segment) => resolvePath(acc, segment), realParent);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+    }
+  }
+
+  return path;
+}
+
+function parseAllowedWorkingDirectoryRoots(env: NodeJS.ProcessEnv = process.env): string[] {
+  const raw = env[WORKDIR_ALLOWLIST_ENV];
+  if (typeof raw !== 'string' || raw.trim() === '') return [];
+
+  const roots = raw
+    .split(delimiter)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .map((part) => {
+      if (part.includes('\0')) {
+        throw new Error(`${WORKDIR_ALLOWLIST_ENV} contains an invalid root with a NUL byte`);
+      }
+      const resolvedRoot = resolvePath(part);
+      const realRoot = canonicalizeExistingPath(resolvedRoot);
+      if (realRoot !== resolvedRoot) {
+        throw new Error(`${WORKDIR_ALLOWLIST_ENV} root "${resolvedRoot}" resolves through a symlink to "${realRoot}"`);
+      }
+      return realRoot;
+    });
+
+  return [...new Set(roots)];
+}
+
+function isWithinRoot(path: string, root: string): boolean {
+  const rel = relative(root, path);
+  return rel === '' || (!rel.startsWith('..') && !isAbsolute(rel));
+}
+
+function enforceWorkingDirectoryPolicy(
+  resolvedWorkingDirectory: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const roots = parseAllowedWorkingDirectoryRoots(env);
+  if (roots.length === 0) return resolvedWorkingDirectory;
+
+  const canonicalWorkingDirectory = canonicalizeExistingPath(resolvedWorkingDirectory);
+  const allowed = roots.some((root) => isWithinRoot(canonicalWorkingDirectory, root));
+  if (!allowed) {
+    throw new Error(
+      `workingDirectory "${canonicalWorkingDirectory}" is outside allowed roots (${WORKDIR_ALLOWLIST_ENV})`,
+    );
+  }
+  return canonicalWorkingDirectory;
+}
+
+function sessionPointerMatchesId(pointer: Record<string, unknown>, sessionId: string): boolean {
+  return [
+    pointer.session_id,
+    pointer.native_session_id,
+    pointer.owner_omx_session_id,
+    pointer.owner_codex_session_id,
+    pointer.codex_session_id,
+  ].some((value) => normalizeSessionId(value) === sessionId);
+}
+
+interface SessionAuthorityObservation {
+  baseStateDir: string;
+  raw: string;
+  state: SessionState;
+  recordedCwd: string;
+}
+
+function discoverSessionAuthorityBaseStateDir(
+  workingDirectory?: string,
+  env: NodeJS.ProcessEnv = process.env,
+  onMatch?: (observation: SessionAuthorityObservation) => void,
+): string | undefined {
+  const sessionId = normalizeSessionId(env[OMX_SESSION_ID_ENV]);
+  if (!sessionId) return undefined;
+
+  let current = resolveWorkingDirectoryForState(workingDirectory, env);
+  const observedCwd = canonicalizeExistingPath(current);
+  const allowedRoots = parseAllowedWorkingDirectoryRoots(env);
+  const matches: string[] = [];
+  while (true) {
+    const canonicalCurrent = canonicalizeExistingPath(current);
+    if (allowedRoots.length > 0 && !allowedRoots.some((root) => isWithinRoot(canonicalCurrent, root))) break;
+
+    const candidate = join(current, '.omx', 'state');
+    const canonicalCandidate = canonicalizeExistingPath(candidate);
+    if (allowedRoots.length > 0 && !allowedRoots.some((root) => isWithinRoot(canonicalCandidate, root))) {
+      const parent = resolvePath(current, '..');
+      if (parent === current) break;
+      current = parent;
+      continue;
+    }
+    const pointerPath = join(canonicalCandidate, 'session.json');
+    if (existsSync(pointerPath)) {
+      try {
+        const raw = readFileSync(pointerPath, 'utf8');
+        const parsed = JSON.parse(raw) as unknown;
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          const state = parsed as SessionState;
+          const recordedCwd = typeof state.cwd === 'string'
+            ? canonicalizeExistingPath(resolvePath(state.cwd))
+            : '';
+          const recordedStateRoot = typeof state.state_root === 'string'
+            ? canonicalizeExistingPath(resolvePath(state.state_root))
+            : recordedCwd
+              ? canonicalizeExistingPath(join(recordedCwd, '.omx', 'state'))
+              : '';
+          if (sessionPointerMatchesId(state as unknown as Record<string, unknown>, sessionId)
+            && recordedCwd
+            && recordedStateRoot === canonicalCandidate
+            && isWithinRoot(observedCwd, recordedCwd)
+            && isSessionStateUsable(state, recordedCwd)) {
+            matches.push(canonicalCandidate);
+            onMatch?.({ baseStateDir: canonicalCandidate, raw, state, recordedCwd });
+          }
+        }
+      } catch {
+        // Malformed pointers are classified by the normal state-scope resolver.
+      }
+    }
+    const parent = resolvePath(current, '..');
+    if (parent === current) break;
+    current = parent;
+  }
+
+  const uniqueMatches = [...new Set(matches)];
+  if (uniqueMatches.length > 1) {
+    throw new Error(
+      `Conflicting authoritative state roots for OMX_SESSION_ID ${sessionId}: ${uniqueMatches.join(', ')}`,
+    );
+  }
+  return uniqueMatches[0];
+}
+
+function validateResolvedBaseStateDir(
+  baseStateDir: string,
+  rootSource: StateRootSource,
+  env: NodeJS.ProcessEnv,
+): { baseStateDir: string; rootSource: StateRootSource } {
+  const allowedRoots = parseAllowedWorkingDirectoryRoots(env);
+  if (allowedRoots.length > 0) {
+    const canonicalBaseStateDir = canonicalizeExistingPath(baseStateDir);
+    if (!allowedRoots.some((root) => isWithinRoot(canonicalBaseStateDir, root))) {
+      throw new Error(`State root "${canonicalBaseStateDir}" is outside allowed roots (${WORKDIR_ALLOWLIST_ENV})`);
+    }
+  }
+  return { baseStateDir, rootSource };
+}
+
+export function getBaseStateDirWithSource(
+  workingDirectory?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): { baseStateDir: string; rootSource: StateRootSource } {
+  const teamStateRootOverride = env[OMX_TEAM_STATE_ROOT_ENV]?.trim();
+  if (typeof teamStateRootOverride === 'string' && teamStateRootOverride !== '') {
+    return validateResolvedBaseStateDir(resolveWorkingDirectoryForState(teamStateRootOverride, env), 'team-env', env);
+  }
+
+  const omxRootOverride = env[OMX_ROOT_ENV]?.trim();
+  if (typeof omxRootOverride === 'string' && omxRootOverride !== '') {
+    return validateResolvedBaseStateDir(join(resolveWorkingDirectoryForState(omxRootOverride, env), '.omx', 'state'), 'omx-root-env', env);
+  }
+
+  const omxStateRootOverride = env[OMX_STATE_ROOT_ENV]?.trim();
+  if (typeof omxStateRootOverride === 'string' && omxStateRootOverride !== '') {
+    return validateResolvedBaseStateDir(join(resolveWorkingDirectoryForState(omxStateRootOverride, env), '.omx', 'state'), 'omx-state-root-env', env);
+  }
+
+  const sessionAuthority = discoverSessionAuthorityBaseStateDir(workingDirectory, env);
+  if (sessionAuthority) {
+    return validateResolvedBaseStateDir(sessionAuthority, 'session-authority', env);
+  }
+
+  return validateResolvedBaseStateDir(
+    join(resolveWorkingDirectoryForState(workingDirectory, env), '.omx', 'state'),
+    'cwd-default',
+    env,
+  );
+}
+export function getBaseStateDir(workingDirectory?: string, env: NodeJS.ProcessEnv = process.env): string {
+  return getBaseStateDirWithSource(workingDirectory, env).baseStateDir;
+}
+
+function bindingRootSelector(env: NodeJS.ProcessEnv): { source: StateRootSource; selector: string } | undefined {
+  if (typeof env[OMX_TEAM_STATE_ROOT_ENV] === 'string' && env[OMX_TEAM_STATE_ROOT_ENV].trim() !== '') {
+    return { source: 'team-env', selector: OMX_TEAM_STATE_ROOT_ENV };
+  }
+  if (typeof env[OMX_ROOT_ENV] === 'string' && env[OMX_ROOT_ENV].trim() !== '') {
+    return { source: 'omx-root-env', selector: OMX_ROOT_ENV };
+  }
+  if (typeof env[OMX_STATE_ROOT_ENV] === 'string' && env[OMX_STATE_ROOT_ENV].trim() !== '') {
+    return { source: 'omx-state-root-env', selector: OMX_STATE_ROOT_ENV };
+  }
+  return undefined;
+}
+
+/**
+ * Read the selected session pointer once and classify its canonical binding.
+ * This is intentionally read-only: it never probes fallback roots, repairs
+ * pointers, touches tmux, or mutates the supplied environment.
+ */
+export async function readCanonicalSessionBindingSnapshot(
+  workingDirectory?: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<CanonicalSessionBindingSnapshot> {
+  let cwd: string;
+  try {
+    cwd = resolveWorkingDirectoryForState(workingDirectory, env);
+  } catch {
+    let fallbackCwd = process.cwd();
+    try {
+      if (typeof workingDirectory === 'string' && workingDirectory.trim()) fallbackCwd = resolvePath(workingDirectory);
+    } catch {
+      // Keep the process cwd as a safe diagnostic anchor.
+    }
+    return {
+      cwd: fallbackCwd,
+      ...(bindingRootSelector(env) ? { rootSource: bindingRootSelector(env)?.source } : normalizeSessionId(env[OMX_SESSION_ID_ENV]) ? { rootSource: 'session-authority' as const } : {}),
+      status: 'resolution-error',
+      verifiedAliases: {},
+    };
+  }
+
+  let resolved: { baseStateDir: string; rootSource: StateRootSource };
+  let selectedObservation: SessionAuthorityObservation | undefined;
+  try {
+    const teamStateRootOverride = env[OMX_TEAM_STATE_ROOT_ENV]?.trim();
+    const omxRootOverride = env[OMX_ROOT_ENV]?.trim();
+    const omxStateRootOverride = env[OMX_STATE_ROOT_ENV]?.trim();
+    if (teamStateRootOverride) {
+      resolved = validateResolvedBaseStateDir(resolveWorkingDirectoryForState(teamStateRootOverride, env), 'team-env', env);
+    } else if (omxRootOverride) {
+      resolved = validateResolvedBaseStateDir(join(resolveWorkingDirectoryForState(omxRootOverride, env), '.omx', 'state'), 'omx-root-env', env);
+    } else if (omxStateRootOverride) {
+      resolved = validateResolvedBaseStateDir(join(resolveWorkingDirectoryForState(omxStateRootOverride, env), '.omx', 'state'), 'omx-state-root-env', env);
+    } else {
+      const sessionAuthority = discoverSessionAuthorityBaseStateDir(cwd, env, (observation) => {
+        selectedObservation = observation;
+      });
+      if (sessionAuthority) {
+        resolved = validateResolvedBaseStateDir(sessionAuthority, 'session-authority', env);
+      } else {
+        resolved = validateResolvedBaseStateDir(join(cwd, '.omx', 'state'), 'cwd-default', env);
+      }
+    }
+  } catch {
+    const selector = bindingRootSelector(env);
+    return {
+      cwd,
+      ...(selector ? { rootSource: selector.source } : normalizeSessionId(env[OMX_SESSION_ID_ENV]) ? { rootSource: 'session-authority' as const } : {}),
+      status: 'resolution-error',
+      verifiedAliases: {},
+    };
+  }
+
+  const baseStateDir = resolved.baseStateDir;
+  const selectedSessionJson = join(baseStateDir, 'session.json');
+  let raw: string;
+  let parsed: unknown;
+  if (selectedObservation && selectedObservation.baseStateDir === baseStateDir) {
+    raw = selectedObservation.raw;
+    parsed = selectedObservation.state;
+  } else {
+    try {
+      raw = await readFile(selectedSessionJson, 'utf-8');
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+        return {
+          cwd,
+          baseStateDir,
+          rootSource: resolved.rootSource,
+          selectedSessionJson,
+          status: 'absent',
+          verifiedAliases: {},
+        };
+      }
+      return {
+        cwd,
+        baseStateDir,
+        rootSource: resolved.rootSource,
+        selectedSessionJson,
+        status: 'read-error',
+        verifiedAliases: {},
+      };
+    }
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      return {
+        cwd,
+        baseStateDir,
+        rootSource: resolved.rootSource,
+        selectedSessionJson,
+        raw,
+        status: 'malformed',
+        verifiedAliases: {},
+      };
+    }
+  }
+  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      raw,
+      status: 'malformed',
+      verifiedAliases: {},
+    };
+  }
+
+  const state = parsed as SessionState;
+  const aliases = verifiedSessionAliases(state);
+  if (!aliases.session_id) {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      raw,
+      state,
+      status: 'malformed',
+      verifiedAliases: aliases,
+    };
+  }
+
+  const recordedCwdRaw = typeof state.cwd === 'string' ? state.cwd.trim() : '';
+  if (Object.prototype.hasOwnProperty.call(state, 'state_root') && typeof state.state_root === 'string' && state.state_root.trim() === '') {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      raw,
+      state,
+      status: 'malformed',
+      verifiedAliases: aliases,
+    };
+  }
+  if (!recordedCwdRaw) {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      raw,
+      state,
+      status: 'missing-recorded-cwd',
+      verifiedAliases: aliases,
+    };
+  }
+
+  let recordedCwd: string;
+  let canonicalBaseStateDir: string;
+  let canonicalObservedCwd: string;
+  try {
+    recordedCwd = canonicalizeExistingPath(resolvePath(recordedCwdRaw));
+    canonicalBaseStateDir = canonicalizeExistingPath(baseStateDir);
+    canonicalObservedCwd = canonicalizeExistingPath(resolvePath(cwd));
+  } catch {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      raw,
+      state,
+      status: 'read-error',
+      verifiedAliases: aliases,
+    };
+  }
+
+  const explicitRoot = typeof state.state_root === 'string' && state.state_root.trim() !== ''
+    ? state.state_root.trim()
+    : undefined;
+  let recordedStateRoot: string;
+  try {
+    recordedStateRoot = explicitRoot
+      ? canonicalizeExistingPath(resolvePath(explicitRoot))
+      : canonicalizeExistingPath(join(recordedCwd, '.omx', 'state'));
+  } catch {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      recordedCwd,
+      raw,
+      state,
+      status: 'root-mismatch',
+      verifiedAliases: aliases,
+    };
+  }
+  if (recordedStateRoot !== canonicalBaseStateDir) {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      recordedCwd,
+      raw,
+      state,
+      status: 'root-mismatch',
+      verifiedAliases: aliases,
+    };
+  }
+  if (!isWithinRoot(canonicalObservedCwd, recordedCwd)) {
+    return {
+      cwd,
+      baseStateDir,
+      rootSource: resolved.rootSource,
+      selectedSessionJson,
+      recordedCwd,
+      raw,
+      state,
+      status: 'foreign-cwd',
+      verifiedAliases: aliases,
+    };
+  }
+
+  let liveness: 'usable' | 'stale-dead' | 'identity-indeterminate';
+  try {
+    liveness = classifySessionStateLiveness(state);
+  } catch {
+    liveness = 'identity-indeterminate';
+  }
+  return {
+    cwd,
+    baseStateDir,
+    rootSource: resolved.rootSource,
+    selectedSessionJson,
+    recordedCwd,
+    raw,
+    state,
+    liveness,
+    status: liveness,
+    verifiedAliases: aliases,
+  };
+}
+
+export function getStateDir(workingDirectory?: string, sessionId?: string): string {
+  const base = getBaseStateDir(workingDirectory);
+  return sessionId ? join(base, 'sessions', sessionId) : base;
+}
+
+export function getStatePath(mode: string, workingDirectory?: string, sessionId?: string): string {
+  return join(getStateDir(workingDirectory, sessionId), getStateFilename(mode));
+}
+
+export function getStateFilePath(fileName: string, workingDirectory?: string, sessionId?: string): string {
+  return join(getStateDir(workingDirectory, sessionId), validateStateFileName(fileName));
+}
+
+export type StateScopeSource = 'explicit' | 'session' | 'root';
+
+export interface ResolvedStateScope {
+  source: StateScopeSource;
+  sessionId?: string;
+  stateDir: string;
+}
+
+function readSessionIdFromEnvironment(env: NodeJS.ProcessEnv = process.env): string | undefined {
+  const candidates = [env[OMX_SESSION_ID_ENV], env.CODEX_SESSION_ID, env.SESSION_ID];
+  for (const candidate of candidates) {
+    const sessionId = normalizeSessionId(candidate);
+    if (sessionId) return sessionId;
+  }
+  return undefined;
+}
+
+
+function resolveCanonicalSessionId(candidate: string | undefined, metadata: ResolvedSessionMetadata | undefined): string | undefined {
+  if (!candidate) return undefined;
+  if (!metadata) return candidate;
+  return metadata.nativeSessionAliases.includes(candidate)
+      || metadata.ownerOmxSessionId === candidate
+      || metadata.ownerCodexSessionId === candidate
+    ? metadata.sessionId
+    : candidate;
+}
+
+interface AuthoritativeSessionSnapshot {
+  baseStateDir: string;
+  raw: string;
+  state: SessionState;
+  recordedCwd: string;
+}
+
+/**
+ * Read the selected session.json once and return the parsed snapshot only
+ * when it holds full selected-root authority for this exact base state
+ * directory: a nonempty recorded cwd that contains the observed cwd, and a
+ * recorded state_root canonical-equal to the selected base (with the
+ * historical cwd-derived fallback when state_root is absent). Usability/
+ * liveness is deliberately NOT checked here so stale-dead recovery can
+ * evaluate authority AND liveness from the same immutable bytes. A malformed
+ * or non-authoritative pointer returns null (fail closed); unexpected read
+ * I/O errors propagate instead of being collapsed into a generic classification.
+ */
+async function readAuthoritativeSessionSnapshotFromBaseStateDir(
+  cwd: string,
+  baseStateDir?: string,
+  selectedSnapshot?: CanonicalSessionBindingSnapshot,
+): Promise<AuthoritativeSessionSnapshot | null> {
+  const snapshot = selectedSnapshot ?? await readCanonicalSessionBindingSnapshot(cwd);
+  const selectedBaseStateDir = baseStateDir ?? snapshot.baseStateDir;
+  if (!selectedBaseStateDir) return null;
+  if (snapshot.status === 'read-error') {
+    throw new Error('selected session pointer read failed');
+  }
+  if (
+    !snapshot.raw
+    || !snapshot.state
+    || !snapshot.recordedCwd
+    || !snapshot.baseStateDir
+    || canonicalizeExistingPath(snapshot.baseStateDir) !== canonicalizeExistingPath(selectedBaseStateDir)
+    || !['usable', 'stale-dead', 'identity-indeterminate'].includes(snapshot.status)
+  ) {
+    return null;
+  }
+  return {
+    baseStateDir: selectedBaseStateDir,
+    raw: snapshot.raw,
+    state: snapshot.state,
+    recordedCwd: snapshot.recordedCwd,
+  };
+}
+
+function normalizeSessionMetadata(state: SessionState | null, sourcePath?: string): ResolvedSessionMetadata | undefined {
+  const sessionId = normalizeSessionId(state?.session_id);
+  if (!state || !sessionId) return undefined;
+  const raw = state as SessionState & Record<string, unknown>;
+  const nativeSessionId = normalizeSessionId(state.native_session_id);
+  const nativeSessionAliases = [...new Set([
+    raw.native_session_id,
+    raw.codex_session_id,
+    raw.previous_native_session_id,
+  ]
+    .map(normalizeSessionId)
+    .filter((value): value is string => Boolean(value)))];
+  const ownerOmxSessionId = normalizeSessionId(raw.owner_omx_session_id);
+  const ownerCodexSessionId = normalizeSessionId(raw.owner_codex_session_id);
+  const ownerCodexThreadId = typeof raw.owner_codex_thread_id === 'string' && raw.owner_codex_thread_id.trim()
+    ? raw.owner_codex_thread_id.trim()
+    : undefined;
+  const leaderPaneId = typeof raw.tmux_pane_id === 'string' && raw.tmux_pane_id.trim()
+    ? raw.tmux_pane_id.trim()
+    : undefined;
+  const tmuxSessionName = typeof raw.tmux_session_name === 'string' && raw.tmux_session_name.trim()
+    ? raw.tmux_session_name.trim()
+    : undefined;
+  const displayName = typeof raw.display_name === 'string' && raw.display_name.trim()
+    ? raw.display_name.trim()
+    : undefined;
+  return {
+    sessionId,
+    ...(nativeSessionId ? { nativeSessionId } : {}),
+    nativeSessionAliases,
+    ...(ownerOmxSessionId ? { ownerOmxSessionId } : {}),
+    ...(ownerCodexSessionId ? { ownerCodexSessionId } : {}),
+    ...(ownerCodexThreadId ? { ownerCodexThreadId } : {}),
+    ...(leaderPaneId ? { leaderPaneId } : {}),
+    ...(tmuxSessionName ? { tmuxSessionName } : {}),
+    ...(displayName ? { displayName } : {}),
+    raw: state,
+    ...(sourcePath ? { sourcePath } : {}),
+  };
+}
+
+
+export async function readSessionMetadataFromBaseStateDir(
+  cwd: string,
+  baseStateDir?: string,
+  options: { allowLegacyBoundHud?: boolean } = {},
+): Promise<ResolvedSessionMetadata | undefined> {
+  const selectedBaseStateDir = baseStateDir ?? getBaseStateDir(cwd);
+  const snapshot = await readCanonicalSessionBindingSnapshot(cwd, options.allowLegacyBoundHud
+    ? { ...process.env, [OMX_TEAM_STATE_ROOT_ENV]: selectedBaseStateDir, [OMX_ROOT_ENV]: '', [OMX_STATE_ROOT_ENV]: '' }
+    : process.env);
+  if (!selectedBaseStateDir) return undefined;
+  const sessionPath = join(selectedBaseStateDir, 'session.json');
+  const authoritative = await readAuthoritativeSessionSnapshotFromBaseStateDir(cwd, selectedBaseStateDir, snapshot);
+  const session = authoritative && isSessionStateUsable(authoritative.state, authoritative.recordedCwd)
+    ? authoritative.state
+    : options.allowLegacyBoundHud
+      && snapshot.status === 'identity-indeterminate'
+      && snapshot.state
+      && snapshot.baseStateDir
+      && canonicalizeExistingPath(snapshot.baseStateDir) === canonicalizeExistingPath(selectedBaseStateDir)
+      ? snapshot.state
+      : null;
+  return normalizeSessionMetadata(session, sessionPath);
+}
+
+export async function readCurrentSessionId(workingDirectory?: string): Promise<string | undefined> {
+  const cwd = resolveWorkingDirectoryForState(workingDirectory);
+  const snapshot = await readCanonicalSessionBindingSnapshot(cwd);
+  const baseStateDir = snapshot.baseStateDir ?? getBaseStateDir(cwd);
+  const envSessionId = readSessionIdFromEnvironment();
+  const authoritative = await readAuthoritativeSessionSnapshotFromBaseStateDir(cwd, baseStateDir, snapshot);
+  const metadata = normalizeSessionMetadata(
+    authoritative && isSessionStateUsable(authoritative.state, authoritative.recordedCwd) ? authoritative.state : null,
+    join(baseStateDir, 'session.json'),
+  );
+  if (envSessionId) return resolveCanonicalSessionId(envSessionId, metadata);
+
+  if (metadata?.sessionId) return metadata.sessionId;
+
+  const localStateDir = join(cwd, '.omx', 'state');
+  if (resolvePath(baseStateDir) !== resolvePath(localStateDir)) {
+    return undefined;
+  }
+
+  if (authoritative && isSessionStateUsable(authoritative.state, authoritative.recordedCwd)) {
+    return authoritative.state.session_id;
+  }
+  // Legacy HUD readers may carry only a local session_id pointer. This is never
+  // used for explicit, foreign, malformed, or otherwise contaminated roots.
+  if (snapshot.status !== 'missing-recorded-cwd') return undefined;
+  try {
+    const raw = JSON.parse(await readFile(join(baseStateDir, 'session.json'), 'utf-8')) as Record<string, unknown>;
+    return typeof raw.session_id === 'string' ? normalizeSessionId(raw.session_id) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isKnownSessionAlias(sessionId: string, metadata: ResolvedSessionMetadata): boolean {
+  return metadata.nativeSessionAliases.includes(sessionId)
+    || metadata.ownerOmxSessionId === sessionId
+    || metadata.ownerCodexSessionId === sessionId;
+}
+
+
+export type WritableCommitOperation =
+  | 'startMode'
+  | 'updateModeState'
+  | 'state_write'
+  | 'state_clear'
+  | 'completeRalplanSession';
+
+export type WritableCommitKind = 'write' | 'unlink';
+
+export type WritableCommitSite =
+  | 'transition.source-mode-detail'
+  | 'mode.primary'
+  | 'run-state.mode-sync'
+  | 'skill-active.root-copy'
+  | 'skill-active.session-copy'
+  | 'skill-active.session-unlink'
+  | 'state-clear.primary'
+  | 'native-stop.root'
+  | 'native-stop.session'
+  | 'ralplan.root-state'
+  | 'ralplan.session-state'
+  | 'ralplan.root-skill-write'
+  | 'ralplan.root-skill-unlink'
+  | 'ralplan.session-skill-write';
+
+export interface WritableCommitAttempt {
+  site: WritableCommitSite;
+  kind: WritableCommitKind;
+  path: string;
+}
+
+export interface WritableScopeRevalidationEvent extends WritableCommitAttempt {
+  operation: WritableCommitOperation;
+  commitOrdinal: number;
+}
+
+export type BeforeWritableCommit = (event: WritableCommitAttempt) => Promise<void>;
+
+export interface WritableStateScopeTestHooks {
+  beforeRecoveryReread?: () => Promise<void>;
+  beforeScopeRevalidation?: (event: Readonly<WritableScopeRevalidationEvent>) => Promise<void>;
+  onSelectedDecisionSnapshotRead?: (event: Readonly<{ ordinal: number; raw: string }>) => void;
+  onRecoveryStabilityReread?: (event: Readonly<{ ordinal: number; raw: string | undefined }>) => void;
+}
+
+let selectedPointerRecoveryHookForTests: (() => Promise<void>) | undefined;
+let writableScopeRevalidationHookForTests: WritableStateScopeTestHooks['beforeScopeRevalidation'];
+let selectedDecisionSnapshotReadHookForTests: WritableStateScopeTestHooks['onSelectedDecisionSnapshotRead'];
+let recoveryStabilityRereadHookForTests: WritableStateScopeTestHooks['onRecoveryStabilityReread'];
+
+export function __setWritableStateScopeTestHooksForTests(hooks: WritableStateScopeTestHooks): void {
+  selectedPointerRecoveryHookForTests = hooks.beforeRecoveryReread;
+  writableScopeRevalidationHookForTests = hooks.beforeScopeRevalidation;
+  selectedDecisionSnapshotReadHookForTests = hooks.onSelectedDecisionSnapshotRead;
+  recoveryStabilityRereadHookForTests = hooks.onRecoveryStabilityReread;
+}
+
+
+/**
+ * Writable scope precedence:
+ * - explicit session_id preserves explicit fork writes;
+ * - a usable session.json supplies the only implicit session scope;
+ * - OMX_SESSION_ID may bind a known alias only when the live tmux pane proves
+ *   the canonical session tag;
+ * - a stale-dead session.json yields to an explicit exact-current
+ *   OMX_SESSION_ID binding (the dead owner holds no authority; SessionStart
+ *   remains the only pointer writer);
+ * - an identity-indeterminate session.json may recover only when OMX_SESSION_ID
+ *   exactly matches the pointer's own session_id (the owner may still be alive,
+ *   so unlike stale-dead recovery, no looser validated binding is accepted);
+ * - root writes are allowed only when session.json is absent.
+ */
+export async function resolveWritableStateScope(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<ResolvedStateScope> {
+  const cwd = resolveWorkingDirectoryForState(workingDirectory);
+  const canonicalSnapshot = await readCanonicalSessionBindingSnapshot(cwd);
+  const baseStateDir = canonicalSnapshot.baseStateDir ?? getBaseStateDir(cwd);
+  let selectedDecisionSnapshotReadOrdinalForTests = 0;
+  let recoveryStabilityRereadOrdinalForTests = 0;
+  const snapshot = await readAuthoritativeSessionSnapshotFromBaseStateDir(cwd, baseStateDir, canonicalSnapshot);
+  const liveness = snapshot ? classifySessionStateLiveness(snapshot.state) : undefined;
+  const metadata = normalizeSessionMetadata(
+    snapshot && liveness === 'usable' ? snapshot.state : null,
+    join(baseStateDir, 'session.json'),
+  );
+  const validatedExplicit = validateSessionId(explicitSessionId);
+  if (validatedExplicit) {
+    const sessionId = resolveCanonicalSessionId(validatedExplicit, metadata) ?? validatedExplicit;
+    return {
+      source: 'explicit',
+      sessionId,
+      stateDir: join(baseStateDir, 'sessions', sessionId),
+    };
+  }
+
+  if (!metadata) {
+    const sessionPath = join(baseStateDir, 'session.json');
+    if (existsSync(sessionPath)) {
+      const envSessionId = normalizeSessionId(process.env[OMX_SESSION_ID_ENV]);
+      if (snapshot && selectedDecisionSnapshotReadHookForTests) {
+        selectedDecisionSnapshotReadHookForTests({
+          ordinal: ++selectedDecisionSnapshotReadOrdinalForTests,
+          raw: snapshot.raw,
+        });
+      }
+      if (snapshot && envSessionId) {
+        const canonicalPointerSessionId = normalizeSessionId(snapshot.state.session_id);
+        const recoveryEligible = Boolean(
+          canonicalPointerSessionId
+          && (
+            liveness === 'stale-dead'
+            || (liveness === 'identity-indeterminate' && envSessionId === canonicalPointerSessionId)
+          ),
+        );
+        if (recoveryEligible) {
+          if (selectedPointerRecoveryHookForTests) await selectedPointerRecoveryHookForTests();
+          const reread = await readFile(sessionPath, 'utf-8').catch((error: NodeJS.ErrnoException) => {
+            if (error.code === 'ENOENT') return undefined;
+            throw error;
+          });
+          if (recoveryStabilityRereadHookForTests) {
+            recoveryStabilityRereadHookForTests({
+              ordinal: ++recoveryStabilityRereadOrdinalForTests,
+              raw: reread,
+            });
+          }
+          if (reread === snapshot.raw) {
+            return {
+              source: 'session',
+              sessionId: envSessionId,
+              stateDir: join(baseStateDir, 'sessions', envSessionId),
+            };
+          }
+        }
+      }
+      throw new Error(WRITABLE_STATE_SCOPE_ERRORS.unusableSession);
+    }
+    if (normalizeSessionId(process.env[OMX_SESSION_ID_ENV])) {
+      throw new Error(WRITABLE_STATE_SCOPE_ERRORS.unboundEnvironment);
+    }
+    return {
+      source: 'root',
+      stateDir: baseStateDir,
+    };
+  }
+
+  const envSessionId = normalizeSessionId(process.env[OMX_SESSION_ID_ENV]);
+  if (!envSessionId || envSessionId === metadata.sessionId) {
+    return {
+      source: 'session',
+      sessionId: metadata.sessionId,
+      stateDir: join(baseStateDir, 'sessions', metadata.sessionId),
+    };
+  }
+
+  if (!isKnownSessionAlias(envSessionId, metadata)) {
+    throw new Error(WRITABLE_STATE_SCOPE_ERRORS.sessionBindingMismatch);
+  }
+  return {
+    source: 'session',
+    sessionId: metadata.sessionId,
+    stateDir: join(baseStateDir, 'sessions', metadata.sessionId),
+  };
+}
+
+/**
+ * Point-in-time check performed immediately before the caller's commit. It
+ * reduces, but does not eliminate, the window for a pointer or root
+ * publication to move the selected target: one can still land after this
+ * check returns and before the caller's write, rename, or unlink. Multi-file
+ * sequences are not atomic.
+ */
+export async function assertWritableStateScopeUnchanged(
+  workingDirectory: string | undefined,
+  explicitSessionId: string | undefined,
+  expected: ResolvedStateScope,
+  expectedBaseStateDir: string,
+  event?: Readonly<WritableScopeRevalidationEvent>,
+): Promise<void> {
+  if (writableScopeRevalidationHookForTests) await writableScopeRevalidationHookForTests(event!);
+  const current = await resolveWritableStateScope(workingDirectory, explicitSessionId);
+  const currentBaseStateDir = getBaseStateDirWithSource(workingDirectory).baseStateDir;
+  if (
+    current.source !== expected.source
+    || current.sessionId !== expected.sessionId
+    || current.stateDir !== expected.stateDir
+    || currentBaseStateDir !== expectedBaseStateDir
+  ) {
+    throw new Error(WRITABLE_STATE_SCOPE_ERRORS.scopeChangedDuringWrite);
+  }
+}
+
+export function createWritableCommitRevalidator(options: {
+  operation: WritableCommitOperation;
+  cwd: string;
+  explicitSessionId: string | undefined;
+  capturedScope: ResolvedStateScope;
+  baseStateDir: string;
+}): BeforeWritableCommit {
+  let commitOrdinal = 0;
+  return async (attempt) => {
+    const event: WritableScopeRevalidationEvent = {
+      operation: options.operation,
+      commitOrdinal: ++commitOrdinal,
+      ...attempt,
+    };
+    await assertWritableStateScopeUnchanged(
+      options.cwd,
+      options.explicitSessionId,
+      options.capturedScope,
+      options.baseStateDir,
+      event,
+    );
+  };
+}
+
+export async function resolveStateScope(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<ResolvedStateScope> {
+  const cwd = resolveWorkingDirectoryForState(workingDirectory);
+  const baseStateDir = getBaseStateDir(cwd);
+  const metadata = await readSessionMetadataFromBaseStateDir(cwd, baseStateDir);
+  const validatedExplicit = validateSessionId(explicitSessionId);
+  if (validatedExplicit) {
+    const sessionId = resolveCanonicalSessionId(validatedExplicit, metadata) ?? validatedExplicit;
+    return {
+      source: 'explicit',
+      sessionId,
+      stateDir: join(baseStateDir, 'sessions', sessionId),
+    };
+  }
+
+  const currentSessionId = await readCurrentSessionId(cwd);
+  if (currentSessionId) {
+    return {
+      source: 'session',
+      sessionId: currentSessionId,
+      stateDir: getStateDir(workingDirectory, currentSessionId),
+    };
+  }
+
+  return {
+    source: 'root',
+    stateDir: getStateDir(workingDirectory),
+  };
+}
+export async function resolveRuntimeStateScope(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<ResolvedRuntimeStateScope> {
+  const cwd = resolveWorkingDirectoryForState(workingDirectory);
+  const { baseStateDir, rootSource } = getBaseStateDirWithSource(cwd);
+  const metadata = await readSessionMetadataFromBaseStateDir(cwd, baseStateDir);
+  const validatedExplicit = validateSessionId(explicitSessionId);
+  const envSessionId = readSessionIdFromEnvironment();
+  let sessionId: string | undefined;
+  let source: SessionScopeSource = 'root';
+
+  if (validatedExplicit) {
+    const canonicalSessionId = resolveCanonicalSessionId(validatedExplicit, metadata);
+    sessionId = canonicalSessionId ?? validatedExplicit;
+    source = metadata && canonicalSessionId === metadata.sessionId && validatedExplicit !== metadata.sessionId ? 'native-alias' : 'explicit';
+  } else if (envSessionId) {
+    const canonicalSessionId = resolveCanonicalSessionId(envSessionId, metadata);
+    sessionId = canonicalSessionId ?? envSessionId;
+    source = metadata && canonicalSessionId === metadata.sessionId && envSessionId !== metadata.sessionId ? 'native-alias' : 'env';
+  } else if (metadata?.sessionId) {
+    sessionId = metadata.sessionId;
+    source = 'session-json';
+  }
+
+  const stateDir = sessionId ? join(baseStateDir, 'sessions', sessionId) : baseStateDir;
+  const isSessionScoped = Boolean(sessionId);
+  return {
+    cwd,
+    baseStateDir,
+    stateDir,
+    rootSource,
+    ...(sessionId ? { sessionId } : {}),
+    source,
+    ...(metadata && (!sessionId || metadata.sessionId === sessionId) ? { metadata } : {}),
+    isSessionScoped,
+    authoritativeActiveDirs: [stateDir],
+    compatibilityReadDirs: isSessionScoped && source !== 'explicit' ? [stateDir, baseStateDir] : [stateDir],
+  };
+}
+
+export async function getCompatibilityReadScopedStateDirs(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  return (await resolveRuntimeStateScope(workingDirectory, explicitSessionId)).compatibilityReadDirs;
+}
+
+export async function getCompatibilityReadScopedStatePaths(
+  mode: string,
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  const fileName = getStateFilename(mode);
+  return (await getCompatibilityReadScopedStateDirs(workingDirectory, explicitSessionId)).map((dir) => join(dir, fileName));
+}
+
+export async function getCompatibilityReadScopedStateFilePaths(
+  fileName: string,
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  const normalizedFileName = validateStateFileName(fileName);
+  return (await getCompatibilityReadScopedStateDirs(workingDirectory, explicitSessionId)).map((dir) => join(dir, normalizedFileName));
+}
+
+/**
+ * Read scope precedence:
+ * - explicit session_id => session path only
+ * - implicit current session => session path first, root as compatibility fallback
+ * - no session => root path only
+ *
+ * This is a compatibility read surface. Do not use it for active-mode
+ * decisions that drive Stop hooks or runtime continuation; use
+ * getAuthoritativeActiveStateDirs instead so stale root state cannot
+ * reactivate an explicitly session-scoped turn.
+ */
+export async function getReadScopedStateDirs(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  const scope = await resolveStateScope(workingDirectory, explicitSessionId);
+  if (scope.source === 'root') return [scope.stateDir];
+  if (scope.source === 'explicit') {
+    if (existsSync(scope.stateDir)) return [scope.stateDir];
+    return [scope.stateDir, getBaseStateDir(workingDirectory)];
+  }
+  return [scope.stateDir, getBaseStateDir(workingDirectory)];
+}
+
+/**
+ * Active-decision scope precedence:
+ * - explicit/current session => that session path only, even if it is missing
+ * - no session => root path only
+ *
+ * Stop hooks, list-active, and other continuation gates should use this path
+ * instead of compatibility reads. A missing session directory means no active
+ * state for that session; root fallback remains available only to explicit
+ * read/status compatibility surfaces.
+ */
+export async function getAuthoritativeActiveStateDirs(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  const scope = await resolveStateScope(workingDirectory, explicitSessionId);
+  return [scope.stateDir];
+}
+
+export async function getAuthoritativeActiveStatePaths(
+  mode: string,
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  const dirs = await getAuthoritativeActiveStateDirs(workingDirectory, explicitSessionId);
+  const fileName = getStateFilename(mode);
+  return dirs.map((dir) => join(dir, fileName));
+}
+
+export async function getReadScopedStatePaths(
+  mode: string,
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<string[]> {
+  const dirs = await getReadScopedStateDirs(workingDirectory, explicitSessionId);
+  const fileName = getStateFilename(mode);
+  return dirs.map((dir) => join(dir, fileName));
+}
+
+export async function getReadScopedStateFilePaths(
+  fileName: string,
+  workingDirectory?: string,
+  explicitSessionId?: string,
+  options: { rootFallback?: boolean } = {},
+): Promise<string[]> {
+  const normalizedFileName = validateStateFileName(fileName);
+  const scope = await resolveStateScope(workingDirectory, explicitSessionId);
+  if (scope.source === 'root') {
+    return [join(scope.stateDir, normalizedFileName)];
+  }
+  if (options.rootFallback === false) {
+    return [join(scope.stateDir, normalizedFileName)];
+  }
+  return [
+    join(scope.stateDir, normalizedFileName),
+    join(getBaseStateDir(workingDirectory), normalizedFileName),
+  ];
+}
+
+export async function getAllSessionScopedStatePaths(
+  mode: string,
+  workingDirectory?: string,
+): Promise<string[]> {
+  const sessionDirs = await getAllSessionScopedStateDirs(workingDirectory);
+  const fileName = getStateFilename(mode);
+  return sessionDirs.map((dir) => join(dir, fileName));
+}
+
+export async function getAllScopedStatePaths(
+  mode: string,
+  workingDirectory?: string,
+): Promise<string[]> {
+  return [
+    getStatePath(mode, workingDirectory),
+    ...(await getAllSessionScopedStatePaths(mode, workingDirectory)),
+  ];
+}
+
+export async function getAllSessionScopedStateDirs(workingDirectory?: string): Promise<string[]> {
+  const sessionsRoot = join(getBaseStateDir(workingDirectory), 'sessions');
+  if (!existsSync(sessionsRoot)) return [];
+
+  const entries = await readdir(sessionsRoot, { withFileTypes: true });
+  return entries
+    .filter((entry) => entry.isDirectory() && SESSION_ID_PATTERN.test(entry.name))
+    .map((entry) => join(sessionsRoot, entry.name));
+}
+
+export async function getAllScopedStateDirs(workingDirectory?: string): Promise<string[]> {
+  return [getBaseStateDir(workingDirectory), ...(await getAllSessionScopedStateDirs(workingDirectory))];
+}
+
+export function isModeStateFilename(filename: string): boolean {
+  return filename.endsWith(STATE_FILE_SUFFIX) && filename !== 'session.json' && filename !== 'run-state.json';
+}
+
+async function listModeStateFilesInDir(dir: string, scope: StateFileScope): Promise<ModeStateFileRef[]> {
+  if (!existsSync(dir)) return [];
+  const files = await readdir(dir).catch(() => [] as string[]);
+  return files
+    .filter((file) => isModeStateFilename(file))
+    .map((file) => ({
+      mode: file.slice(0, -STATE_FILE_SUFFIX.length),
+      path: join(dir, file),
+      scope,
+    }));
+}
+
+export async function listModeStateFilesWithScopePreference(
+  workingDirectory?: string,
+  explicitSessionId?: string,
+): Promise<ModeStateFileRef[]> {
+  const readDirs = await getReadScopedStateDirs(workingDirectory, explicitSessionId);
+  const rootDir = getBaseStateDir(workingDirectory);
+  const preferred = new Map<string, ModeStateFileRef>();
+
+  // Compatibility fallback: root first, then higher-precedence scope overrides.
+  for (const dir of [...readDirs].reverse()) {
+    const scope: StateFileScope = dir === rootDir ? 'root' : 'session';
+    for (const ref of await listModeStateFilesInDir(dir, scope)) {
+      preferred.set(ref.mode, ref);
+    }
+  }
+
+  return [...preferred.values()].sort((a, b) => a.mode.localeCompare(b.mode));
+}

@@ -1,0 +1,235 @@
+/**
+ * HUD type definitions for oh-my-codex
+ */
+
+/** Ralph loop state for HUD display */
+export interface RalphStateForHud {
+  active: boolean;
+  iteration?: number;
+  max_iterations?: number;
+}
+
+/** Ultragoal durable goal-plan state for HUD display */
+export interface UltragoalActiveGoalForHud {
+  id: string;
+  title: string;
+  objective: string;
+  status: string;
+  index: number;
+}
+
+export interface UltragoalStateForHud {
+  active: boolean;
+  current_phase?: string;
+  mode?: string;
+  started_at?: string;
+  updated_at?: string;
+  session_id?: string;
+  status?: string;
+  total: number;
+  complete: number;
+  pending: number;
+  inProgress: number;
+  failed: number;
+  reviewBlocked: number;
+  needsUserDecision: number;
+  progressTotal: number;
+  activeGoal?: UltragoalActiveGoalForHud;
+  ongoingGoals?: UltragoalActiveGoalForHud[];
+  nextGoals?: UltragoalActiveGoalForHud[];
+}
+
+/** Ultrawork state for HUD display */
+export interface UltraworkStateForHud {
+  active: boolean;
+  reinforcement_count?: number;
+}
+
+/** Autopilot state for HUD display */
+export interface AutopilotStateForHud {
+  active: boolean;
+  current_phase?: string;
+  mode?: string;
+  session_id?: string;
+  tmux_pane_id?: string;
+  source?: 'authoritative' | 'current-autopilot-stale';
+  stale_reason?: string;
+}
+
+/** Ralplan state for HUD display */
+export interface RalplanStateForHud {
+  active: boolean;
+  current_phase?: string;
+  iteration?: number;
+  planning_complete?: boolean;
+}
+
+/** Deep-interview state for HUD display */
+export interface DeepInterviewStateForHud {
+  active: boolean;
+  current_phase?: string;
+  input_lock_active?: boolean;
+}
+
+/** Autoresearch state for HUD display */
+export interface AutoresearchStateForHud {
+  active: boolean;
+  current_phase?: string;
+}
+
+export type LateGateHudSource = 'canonical-skill' | 'autopilot' | 'subagent-tracking';
+
+/** Code-review state for HUD display */
+export interface CodeReviewStateForHud {
+  active: boolean;
+  current_phase?: string;
+  /** Authority that produced this HUD-only status. */
+  source?: LateGateHudSource;
+}
+
+/** Ultraqa state for HUD display */
+export interface UltraqaStateForHud {
+  active: boolean;
+  current_phase?: string;
+  /** Authority that produced this derived/fallback HUD status. */
+  source?: LateGateHudSource;
+}
+
+/** Team state for HUD display */
+export interface TeamStateForHud {
+  active: boolean;
+  current_phase?: string;
+  agent_count?: number;
+  team_name?: string;
+}
+
+/** Active GitGuardex branch-finish progress for HUD display. */
+export interface GuardexFinishStateForHud {
+  active: true;
+  stage: string;
+  state: string;
+  index: number;
+  total: number;
+  label: string;
+  updatedAt: string;
+}
+
+/** Metrics tracked by notify hook */
+export interface HudMetrics {
+  total_turns: number;
+  session_turns: number;
+  last_activity: string;
+  session_input_tokens?: number;
+  session_output_tokens?: number;
+  session_total_tokens?: number;
+  five_hour_limit_pct?: number;
+  weekly_limit_pct?: number;
+}
+
+/** HUD notify state written by notify hook */
+export interface HudNotifyState {
+  last_turn_at: string;
+  turn_count: number;
+  last_agent_output?: string;
+}
+
+/** Session state for HUD display */
+export interface SessionStateForHud {
+  session_id: string;
+  started_at: string;
+}
+
+/** All data needed to render one HUD frame */
+export interface HudRenderContext {
+  version: string | null;
+  gitBranch: string | null;
+  ralph: RalphStateForHud | null;
+  ultragoal?: UltragoalStateForHud | null;
+  ultrawork: UltraworkStateForHud | null;
+  autopilot: AutopilotStateForHud | null;
+  ralplan: RalplanStateForHud | null;
+  deepInterview: DeepInterviewStateForHud | null;
+  autoresearch: AutoresearchStateForHud | null;
+  codeReview?: CodeReviewStateForHud | null;
+  ultraqa: UltraqaStateForHud | null;
+  team: TeamStateForHud | null;
+  guardexFinish?: GuardexFinishStateForHud | null;
+  metrics: HudMetrics | null;
+  hudNotify: HudNotifyState | null;
+  session: SessionStateForHud | null;
+  staleAutopilot?: AutopilotStateForHud | null;
+  /** Rust-authored runtime snapshot (present when bridge is enabled and snapshot.json exists). */
+  runtimeSnapshot?: import('../runtime/bridge.js').RuntimeSnapshot | null;
+}
+
+/** HUD preset names */
+export type HudPreset = 'minimal' | 'focused' | 'full';
+
+export type HudGitDisplay = 'branch' | 'repo-branch';
+
+export interface HudGitConfig {
+  display?: HudGitDisplay;
+  remoteName?: string;
+  repoLabel?: string;
+}
+
+/** Status line preset configuration (drives [tui].status_line in ~/.codex/config.toml) */
+export interface HudStatusLineConfig {
+  preset?: HudPreset;
+}
+
+export interface HudGuardexConfig {
+  /** Read repository-local `gx branch finish` progress into the HUD. */
+  enabled?: boolean;
+}
+
+/** HUD configuration stored in .omx/hud-config.json */
+export interface HudConfig {
+  preset?: HudPreset;
+  git?: HudGitConfig;
+  statusLine?: HudStatusLineConfig;
+  guardex?: HudGuardexConfig;
+}
+
+export interface ResolvedHudGitConfig {
+  display: HudGitDisplay;
+  remoteName?: string;
+  repoLabel?: string;
+}
+
+export interface ResolvedHudStatusLineConfig {
+  preset: HudPreset;
+}
+
+export interface ResolvedHudGuardexConfig {
+  enabled: boolean;
+}
+
+export interface ResolvedHudConfig {
+  preset: HudPreset;
+  git: ResolvedHudGitConfig;
+  statusLine: ResolvedHudStatusLineConfig;
+  guardex?: ResolvedHudGuardexConfig;
+}
+
+/** Default HUD configuration */
+export const DEFAULT_HUD_CONFIG: ResolvedHudConfig = {
+  preset: 'focused',
+  git: {
+    display: 'repo-branch',
+  },
+  statusLine: {
+    preset: 'focused',
+  },
+  guardex: {
+    enabled: false,
+  },
+};
+
+/** CLI flags for omx hud */
+export interface HudFlags {
+  watch: boolean;
+  json: boolean;
+  tmux: boolean;
+  preset?: HudPreset;
+}

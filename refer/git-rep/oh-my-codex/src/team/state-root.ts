@@ -1,0 +1,594 @@
+import { existsSync } from 'fs';
+import { readFile, realpath, stat } from 'fs/promises';
+import { join, relative, resolve, sep } from 'path';
+import { omxStateDir } from '../utils/paths.js';
+
+/**
+ * Resolve the canonical OMX team state root for a leader working directory.
+ */
+export function resolveCanonicalTeamStateRoot(
+  leaderCwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): string {
+  const explicit = env.OMX_TEAM_STATE_ROOT;
+  if (typeof explicit === 'string' && explicit.trim() !== '') {
+    return resolve(leaderCwd, explicit.trim());
+  }
+
+  const boxedRoot = env.OMX_ROOT || env.OMX_STATE_ROOT;
+  if (typeof boxedRoot === 'string' && boxedRoot.trim() !== '') {
+    return resolve(leaderCwd, boxedRoot.trim(), '.omx', 'state');
+  }
+
+  return omxStateDir(leaderCwd);
+}
+
+export interface TeamWorkerIdentityRef {
+  teamName: string;
+  workerName: string;
+}
+
+export type WorkerTeamStateRootSource =
+  | 'env'
+  | 'leader_cwd'
+  | 'cwd'
+  | 'worker_directory'
+  | 'identity_metadata'
+  | 'manifest_metadata'
+  | 'config_metadata';
+
+interface WorkerTeamStateRootResolveOptions {
+  /**
+   * Allow probing cwd/.omx/state as a last-resort candidate. This remains
+   * available for the strict PostToolUse/git path where the worker worktree
+   * itself may intentionally carry a validated state root, but notify-hook
+   * paths should leave it disabled so they never guess a local state root.
+   */
+  allowCwdFallback: boolean;
+  /**
+   * When a validated hint root contains identity/manifest/config metadata that
+   * points at the canonical team_state_root, prefer the metadata root over the
+   * hint root. Worker notify paths need this because their hooks are not git
+   * operations and should follow runtime metadata rather than local probes.
+   */
+  preferMetadataRoot: boolean;
+}
+
+export interface WorkerTeamStateRootResolution {
+  ok: boolean;
+  stateRoot: string | null;
+  source: WorkerTeamStateRootSource | null;
+  reason?: string;
+  identityPath?: string;
+  worktreePath?: string;
+}
+
+type JsonRecord = Record<string, unknown>;
+
+export interface VerifiedDetachedTeamContext {
+  readonly stateRoot: string;
+  readonly leaderCwd: string;
+  readonly worker: string;
+  readonly internalWorker: string;
+}
+
+function parseWorkerIdentityToken(raw: string | undefined): { teamName: string; workerName: string } | undefined {
+  const value = raw?.trim() ?? '';
+  const match = /^([A-Za-z0-9_-]+)\/([A-Za-z0-9_-]+)$/.exec(value);
+  return match ? { teamName: match[1], workerName: match[2] } : undefined;
+}
+
+function metadataPathValue(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+/**
+ * Return a detached team tuple only when the worker identity and paired team
+ * metadata agree on root, worktree, leader cwd, and (when present) pane.
+ * Ambient team strings never grant authority; failure returns undefined.
+ */
+export async function resolveVerifiedDetachedTeamContext(
+  cwd: string,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<VerifiedDetachedTeamContext | undefined> {
+  const publicIdentity = parseWorkerIdentityToken(env.OMX_TEAM_WORKER);
+  const internalIdentity = parseWorkerIdentityToken(env.OMX_TEAM_INTERNAL_WORKER);
+  if (!internalIdentity) return undefined;
+  if (publicIdentity && publicIdentity.workerName !== internalIdentity.workerName) return undefined;
+
+  const identity = internalIdentity;
+  const resolution = await resolveWorkerTeamStateRoot(cwd, identity, env);
+  if (!resolution.ok || !resolution.stateRoot) return undefined;
+
+  const stateRoot = await normalizePath(resolution.stateRoot);
+  const leaderRaw = metadataPathValue(env.OMX_TEAM_LEADER_CWD);
+  if (!leaderRaw) return undefined;
+  const leaderCwd = await normalizeExistingPath(resolve(cwd, leaderRaw));
+  if (!leaderCwd) return undefined;
+  const identityPath = join(stateRoot, 'team', identity.teamName, 'workers', identity.workerName, 'identity.json');
+  const teamRoot = join(stateRoot, 'team', identity.teamName);
+  const identityRecord = await readJsonIfExists(identityPath);
+  const manifest = await readJsonIfExists(join(teamRoot, 'manifest.v2.json'));
+  const config = await readJsonIfExists(join(teamRoot, 'config.json'));
+  if (!identityRecord || !manifest || !config) return undefined;
+  if (
+    !metadataPathValue(identityRecord.name)
+    || metadataPathValue(identityRecord.name) !== identity.workerName
+    || (metadataPathValue(identityRecord.team_name) && metadataPathValue(identityRecord.team_name) !== identity.teamName)
+    || metadataPathValue(manifest.name) !== identity.teamName
+    || metadataPathValue(config.name) !== identity.teamName
+  ) return undefined;
+  let metadataLeaderEvidence = false;
+
+  const identityRoot = metadataPathValue(identityRecord.team_state_root);
+  if (identityRoot && await normalizePath(resolve(cwd, identityRoot)) !== stateRoot) return undefined;
+  const identityWorktree = metadataPathValue(identityRecord.worktree_path);
+  if (!identityWorktree || !pathIsSameOrInside(await normalizePath(cwd), await normalizePath(identityWorktree))) return undefined;
+  const identityPane = metadataPathValue(identityRecord.pane_id);
+  if (identityPane && (!env.TMUX_PANE?.trim() || identityPane !== env.TMUX_PANE.trim())) return undefined;
+  const expectedLeaderStateRoot = await normalizePath(join(leaderCwd, '.omx', 'state'));
+
+  for (const metadata of [manifest, config]) {
+    const metadataRoot = metadataPathValue(metadata.team_state_root);
+    if (metadataRoot && await normalizePath(resolve(cwd, metadataRoot)) !== stateRoot) return undefined;
+    const metadataLeader = metadataPathValue(metadata.leader_cwd);
+    if (metadataLeader) metadataLeaderEvidence = true;
+    if (metadataLeader && await normalizePath(resolve(cwd, metadataLeader)) !== leaderCwd) return undefined;
+    const workers = metadata.workers;
+    if (!Array.isArray(workers)) return undefined;
+    const worker = workers.find((entry) => entry && typeof entry === 'object' && (entry as JsonRecord).name === identity.workerName) as JsonRecord | undefined;
+    if (!worker) return undefined;
+    const workerWorktree = metadataPathValue(worker.worktree_path);
+    if (workerWorktree && await normalizePath(workerWorktree) !== await normalizePath(identityWorktree)) return undefined;
+    const paneId = metadataPathValue(worker.pane_id);
+    if (paneId && (!env.TMUX_PANE?.trim() || paneId !== env.TMUX_PANE.trim())) return undefined;
+  }
+
+  if (!metadataLeaderEvidence && stateRoot !== expectedLeaderStateRoot) return undefined;
+  const internalWorker = internalIdentity
+    ? `${internalIdentity.teamName}/${internalIdentity.workerName}`
+    : `${identity.teamName}/${identity.workerName}`;
+  const worker = publicIdentity
+    ? `${publicIdentity.teamName}/${publicIdentity.workerName}`
+    : internalWorker;
+  return Object.freeze({ stateRoot, leaderCwd, worker, internalWorker });
+}
+
+async function readJsonIfExists(path: string): Promise<JsonRecord | null> {
+  try {
+    if (!existsSync(path)) return null;
+    const parsed = JSON.parse(await readFile(path, 'utf-8')) as unknown;
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? parsed as JsonRecord
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+function metadataStateRoot(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
+async function normalizePath(path: string): Promise<string> {
+  const resolved = resolve(path);
+  try {
+    return await realpath(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+async function normalizeExistingPath(path: string): Promise<string | undefined> {
+  try {
+    const canonical = await realpath(resolve(path));
+    return (await stat(canonical)).isDirectory() ? canonical : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function pathIsSameOrInside(candidate: string, parent: string): boolean {
+  if (candidate === parent) return true;
+  const rel = relative(parent, candidate);
+  return rel !== '' && !rel.startsWith('..') && rel !== '..' && !rel.startsWith(`..${sep}`);
+}
+
+async function cwdMatchesIdentityWorktree(cwd: string, identity: JsonRecord): Promise<{ matches: boolean; worktreePath?: string }> {
+  const worktreePath = metadataStateRoot(identity.worktree_path);
+  if (!worktreePath) return { matches: true };
+
+  const [normalizedCwd, normalizedWorktree] = await Promise.all([
+    normalizePath(cwd),
+    normalizePath(worktreePath),
+  ]);
+
+  return pathIsSameOrInside(normalizedCwd, normalizedWorktree)
+    ? { matches: true, worktreePath: normalizedWorktree }
+    : { matches: false, worktreePath: normalizedWorktree };
+}
+
+async function validateWorkerStateRoot(
+  stateRoot: string,
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+): Promise<WorkerTeamStateRootResolution> {
+  const resolvedStateRoot = resolve(cwd, stateRoot);
+  const identityPath = join(
+    resolvedStateRoot,
+    'team',
+    worker.teamName,
+    'workers',
+    worker.workerName,
+    'identity.json',
+  );
+  const identity = await readJsonIfExists(identityPath);
+  if (!identity) {
+    return {
+      ok: false,
+      stateRoot: null,
+      source: null,
+      reason: 'missing_or_invalid_identity',
+      identityPath,
+    };
+  }
+
+  const identityName = metadataStateRoot(identity.name);
+  if (identityName && identityName !== worker.workerName) {
+    return {
+      ok: false,
+      stateRoot: null,
+      source: null,
+      reason: 'identity_worker_mismatch',
+      identityPath,
+    };
+  }
+
+  // A hinted root is valid only when every present canonical binding agrees with it.
+  const canonicalStateRoot = await normalizePath(resolvedStateRoot);
+  const metadataRoots: Array<[string, JsonRecord | null]> = [
+    ['identity', identity],
+    ['manifest', await readJsonIfExists(join(resolvedStateRoot, 'team', worker.teamName, 'manifest.v2.json'))],
+    ['config', await readJsonIfExists(join(resolvedStateRoot, 'team', worker.teamName, 'config.json'))],
+  ];
+  for (const [source, metadata] of metadataRoots) {
+    const metadataRoot = metadataStateRoot(metadata?.team_state_root);
+    if (metadataRoot && await normalizePath(resolve(cwd, metadataRoot)) !== canonicalStateRoot) {
+      return {
+        ok: false,
+        stateRoot: null,
+        source: null,
+        reason: `${source}_state_root_mismatch`,
+        identityPath,
+      };
+    }
+    const workers = metadata?.workers;
+    if (!Array.isArray(workers)) continue;
+    const workerMetadata = workers.find((candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+      && metadataStateRoot((candidate as JsonRecord).name) === worker.workerName) as JsonRecord | undefined;
+    const workerRoot = metadataStateRoot(workerMetadata?.team_state_root);
+    if (workerRoot && await normalizePath(resolve(cwd, workerRoot)) !== canonicalStateRoot) {
+      return {
+        ok: false,
+        stateRoot: null,
+        source: null,
+        reason: `${source}_worker_state_root_mismatch`,
+        identityPath,
+      };
+    }
+  }
+
+  const worktreeMatch = await cwdMatchesIdentityWorktree(cwd, identity);
+  if (!worktreeMatch.matches) {
+    return {
+      ok: false,
+      stateRoot: null,
+      source: null,
+      reason: 'identity_worktree_mismatch',
+      identityPath,
+      worktreePath: worktreeMatch.worktreePath,
+    };
+  }
+
+  return {
+    ok: true,
+    stateRoot: resolvedStateRoot,
+    source: null,
+    identityPath,
+    worktreePath: worktreeMatch.worktreePath,
+  };
+}
+
+async function validateWithSource(
+  stateRoot: string,
+  source: WorkerTeamStateRootSource,
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+): Promise<WorkerTeamStateRootResolution> {
+  const validated = await validateWorkerStateRoot(stateRoot, cwd, worker);
+  return validated.ok ? { ...validated, source } : validated;
+}
+
+async function readMetadataRootFromValidatedCandidate(
+  candidateStateRoot: string,
+  filename: 'identity.json' | 'manifest.v2.json' | 'config.json',
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+): Promise<string | null> {
+  const validated = await validateWorkerStateRoot(candidateStateRoot, cwd, worker);
+  if (!validated.ok) return null;
+
+  const metadataPath = filename === 'identity.json'
+    ? join(candidateStateRoot, 'team', worker.teamName, 'workers', worker.workerName, filename)
+    : join(candidateStateRoot, 'team', worker.teamName, filename);
+  const parsed = await readJsonIfExists(metadataPath);
+  return metadataStateRoot(parsed?.team_state_root);
+}
+
+async function pathIsDirectory(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+function workerListContains(parsed: JsonRecord | null, workerName: string): boolean {
+  const workers = parsed?.workers;
+  return Array.isArray(workers)
+    && workers.some((worker) => worker && typeof worker === 'object' && !Array.isArray(worker)
+      && metadataStateRoot((worker as JsonRecord).name) === workerName);
+}
+
+function metadataTeamMatches(parsed: JsonRecord | null, teamName: string): boolean {
+  const name = metadataStateRoot(parsed?.name);
+  return !name || name === teamName;
+}
+
+async function readTeamMetadataRootFromCandidate(
+  candidateStateRoot: string,
+  filename: 'manifest.v2.json' | 'config.json',
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+): Promise<string | null> {
+  const resolvedStateRoot = resolve(cwd, candidateStateRoot);
+  const parsed = await readJsonIfExists(join(resolvedStateRoot, 'team', worker.teamName, filename));
+  if (!metadataTeamMatches(parsed, worker.teamName) || !workerListContains(parsed, worker.workerName)) return null;
+  return metadataStateRoot(parsed?.team_state_root);
+}
+
+async function validateWorkerNotifyStateRoot(
+  stateRoot: string,
+  source: WorkerTeamStateRootSource,
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+): Promise<WorkerTeamStateRootResolution> {
+  // Explicit env roots are authoritative selections and must fail closed on mismatch;
+  // only leader-cwd discovery may follow a worker identity's declared canonical root.
+  const identityResolved = await validateWithSource(stateRoot, source, cwd, worker);
+  if (identityResolved.ok) return identityResolved;
+  const resolvedStateRoot = resolve(cwd, stateRoot);
+  const identityPath = join(resolvedStateRoot, 'team', worker.teamName, 'workers', worker.workerName, 'identity.json');
+  const hintedIdentity = await readJsonIfExists(identityPath);
+  const identityRoot = metadataStateRoot(hintedIdentity?.team_state_root);
+  if (source === 'leader_cwd' && identityRoot && await normalizePath(resolve(cwd, identityRoot)) !== await normalizePath(resolvedStateRoot)) {
+    const canonicalResolved = await validateWorkerStateRoot(resolve(cwd, identityRoot), cwd, worker);
+    if (canonicalResolved.ok) return { ...canonicalResolved, source: 'identity_metadata' };
+    return { ...identityResolved, source };
+  }
+  if (source === 'env' && identityResolved.reason !== 'missing_or_invalid_identity') return { ...identityResolved, source };
+  if (source === 'leader_cwd' && hintedIdentity) return { ...identityResolved, source };
+  const teamRoot = join(resolvedStateRoot, 'team', worker.teamName);
+  const canonicalStateRoot = await normalizePath(resolvedStateRoot);
+  for (const [filename, metadataSource] of [
+    ['manifest.v2.json', 'manifest_metadata'],
+    ['config.json', 'config_metadata'],
+  ] as const) {
+    const parsed = await readJsonIfExists(join(teamRoot, filename));
+    const topLevelRoot = metadataStateRoot(parsed?.team_state_root);
+    if (topLevelRoot && await normalizePath(resolve(cwd, topLevelRoot)) !== canonicalStateRoot) {
+      return {
+        ok: false,
+        stateRoot: null,
+        source: null,
+        reason: `${metadataSource}_state_root_mismatch`,
+        identityPath,
+      };
+    }
+    const workers = parsed?.workers;
+    if (!Array.isArray(workers)) continue;
+    const workerMetadata = workers.find((candidate) => candidate && typeof candidate === 'object' && !Array.isArray(candidate)
+      && metadataStateRoot((candidate as JsonRecord).name) === worker.workerName) as JsonRecord | undefined;
+    const workerRoot = metadataStateRoot(workerMetadata?.team_state_root);
+    if (workerRoot && await normalizePath(resolve(cwd, workerRoot)) !== canonicalStateRoot) {
+      return {
+        ok: false,
+        stateRoot: null,
+        source: null,
+        reason: `${metadataSource}_worker_state_root_mismatch`,
+        identityPath,
+      };
+    }
+  }
+  const workerDir = join(teamRoot, 'workers', worker.workerName);
+  if (await pathIsDirectory(workerDir)) {
+    return {
+      ok: true,
+      stateRoot: resolvedStateRoot,
+      source: 'worker_directory',
+      identityPath: join(workerDir, 'identity.json'),
+    };
+  }
+
+  for (const [filename, metadataSource] of [
+    ['manifest.v2.json', 'manifest_metadata'],
+    ['config.json', 'config_metadata'],
+  ] as const) {
+    const parsed = await readJsonIfExists(join(teamRoot, filename));
+    if (!metadataTeamMatches(parsed, worker.teamName) || !workerListContains(parsed, worker.workerName)) continue;
+    return {
+      ok: true,
+      stateRoot: resolvedStateRoot,
+      source: metadataSource,
+      identityPath: join(workerDir, 'identity.json'),
+    };
+  }
+
+  return {
+    ok: false,
+    stateRoot: null,
+    source: null,
+    reason: identityResolved.reason || 'missing_worker_marker',
+    identityPath: identityResolved.identityPath,
+  };
+}
+
+async function resolveWorkerTeamStateRootWithOptions(
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+  env: NodeJS.ProcessEnv,
+  options: WorkerTeamStateRootResolveOptions,
+): Promise<WorkerTeamStateRootResolution> {
+  const explicit = typeof env.OMX_TEAM_STATE_ROOT === 'string' ? env.OMX_TEAM_STATE_ROOT.trim() : '';
+  if (explicit) {
+    const resolved = await validateWithSource(resolve(cwd, explicit), 'env', cwd, worker);
+    if (resolved.ok) return resolved;
+    return { ...resolved, source: 'env' };
+  }
+
+  const leaderCwd = typeof env.OMX_TEAM_LEADER_CWD === 'string' ? env.OMX_TEAM_LEADER_CWD.trim() : '';
+  const leaderStateRoot = leaderCwd ? join(resolve(cwd, leaderCwd), '.omx', 'state') : '';
+  const cwdStateRoot = join(cwd, '.omx', 'state');
+
+  const hintedCandidates: Array<{ stateRoot: string; source: WorkerTeamStateRootSource }> = [
+    ...(leaderStateRoot ? [{ stateRoot: leaderStateRoot, source: 'leader_cwd' as const }] : []),
+    ...(options.allowCwdFallback ? [{ stateRoot: cwdStateRoot, source: 'cwd' as const }] : []),
+  ];
+
+  const metadataSources: Array<[
+    'identity.json' | 'manifest.v2.json' | 'config.json',
+    WorkerTeamStateRootSource,
+  ]> = [
+    ['identity.json', 'identity_metadata'],
+    ['manifest.v2.json', 'manifest_metadata'],
+    ['config.json', 'config_metadata'],
+  ];
+
+  for (const candidate of hintedCandidates) {
+    const direct = await validateWithSource(candidate.stateRoot, candidate.source, cwd, worker);
+    if (!direct.ok) continue;
+
+    if (options.preferMetadataRoot) {
+      for (const [filename, source] of metadataSources) {
+        const metadataRoot = await readMetadataRootFromValidatedCandidate(candidate.stateRoot, filename, cwd, worker);
+        if (!metadataRoot) continue;
+        const resolved = await validateWithSource(resolve(cwd, metadataRoot), source, cwd, worker);
+        if (resolved.ok) return resolved;
+      }
+    }
+
+    return direct;
+  }
+
+  const diagnosticStateRoot = leaderStateRoot || (options.allowCwdFallback ? cwdStateRoot : '');
+  const diagnostic = diagnosticStateRoot
+    ? await validateWithSource(diagnosticStateRoot, leaderStateRoot ? 'leader_cwd' : 'cwd', cwd, worker)
+    : null;
+
+  return {
+    ok: false,
+    stateRoot: null,
+    source: null,
+    reason: diagnostic?.reason || 'no_valid_worker_state_root',
+    identityPath: diagnostic?.identityPath,
+  };
+}
+
+/**
+ * Resolve the canonical team state root for an OMX team worker PostToolUse/git hook.
+ *
+ * This resolver is intentionally fail-closed: every successful source must have
+ * a valid worker identity and, when present, whose worktree path matches the hook cwd/current
+ * worktree. It prevents hooks running inside worker worktrees from guessing a
+ * local `.omx/state` root and writing cross-worker runtime state in the wrong
+ * place. The cwd fallback is retained only for this strict worker-worktree path.
+ */
+export async function resolveWorkerTeamStateRoot(
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<WorkerTeamStateRootResolution> {
+  return resolveWorkerTeamStateRootWithOptions(cwd, worker, env, {
+    allowCwdFallback: true,
+    preferMetadataRoot: false,
+  });
+}
+
+/**
+ * Resolve the team state root for non-git worker notify hooks.
+ *
+ * Notify hooks update heartbeat/idle/dispatch state and may run in contexts that
+ * are not safe git operation contexts. They must still be worker-aware, but they
+ * must not invent `cwd/.omx/state` when the runtime did not provide a canonical
+ * root hint. Only explicit environment/leader metadata roots are considered, and
+ * all successful roots still require a matching worker identity.
+ */
+export async function resolveWorkerNotifyTeamStateRoot(
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<WorkerTeamStateRootResolution> {
+  const explicit = typeof env.OMX_TEAM_STATE_ROOT === 'string' ? env.OMX_TEAM_STATE_ROOT.trim() : '';
+  if (explicit) {
+    const resolved = await validateWorkerNotifyStateRoot(resolve(cwd, explicit), 'env', cwd, worker);
+    if (resolved.ok) return resolved;
+    return { ...resolved, source: 'env' };
+  }
+
+  const leaderCwd = typeof env.OMX_TEAM_LEADER_CWD === 'string' ? env.OMX_TEAM_LEADER_CWD.trim() : '';
+  const leaderStateRoot = leaderCwd ? join(resolve(cwd, leaderCwd), '.omx', 'state') : '';
+  if (!leaderStateRoot) {
+    return {
+      ok: false,
+      stateRoot: null,
+      source: null,
+      reason: 'no_valid_worker_state_root',
+    };
+  }
+
+  const direct = await validateWorkerNotifyStateRoot(leaderStateRoot, 'leader_cwd', cwd, worker);
+  if (!direct.ok) return direct;
+
+  for (const [filename, source] of [
+    ['identity.json', 'identity_metadata'],
+    ['manifest.v2.json', 'manifest_metadata'],
+    ['config.json', 'config_metadata'],
+  ] as const) {
+    const metadataRoot = filename === 'identity.json'
+      ? await readMetadataRootFromValidatedCandidate(leaderStateRoot, filename, cwd, worker)
+      : await readTeamMetadataRootFromCandidate(leaderStateRoot, filename, cwd, worker);
+    if (!metadataRoot) continue;
+    const resolved = await validateWorkerNotifyStateRoot(resolve(cwd, metadataRoot), source, cwd, worker);
+    if (resolved.ok) return resolved;
+  }
+
+  return direct;
+}
+
+export async function resolveWorkerTeamStateRootPath(
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  const resolved = await resolveWorkerTeamStateRoot(cwd, worker, env);
+  return resolved.ok ? resolved.stateRoot : null;
+}
+
+export async function resolveWorkerNotifyTeamStateRootPath(
+  cwd: string,
+  worker: TeamWorkerIdentityRef,
+  env: NodeJS.ProcessEnv = process.env,
+): Promise<string | null> {
+  const resolved = await resolveWorkerNotifyTeamStateRoot(cwd, worker, env);
+  return resolved.ok ? resolved.stateRoot : null;
+}

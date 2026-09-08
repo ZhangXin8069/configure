@@ -1,0 +1,7199 @@
+import { afterEach, describe, it, mock } from "node:test";
+import assert from "node:assert/strict";
+import { chmodSync, chownSync, existsSync, mkdirSync, readFileSync, statSync, utimesSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { chmod, lstat, mkdir, mkdtemp, readFile, readdir as fsReaddir, rm, stat, symlink, writeFile } from "node:fs/promises";
+import { delimiter, dirname, join } from "node:path";
+import { tmpdir } from "node:os";
+import { fileURLToPath } from "node:url";
+import { once } from "node:events";
+import TOML from "@iarna/toml";
+import {
+  HELP,
+  normalizeCodexLaunchArgs,
+  buildTmuxShellCommand,
+  buildTmuxPaneCommand,
+  shouldSourceTmuxPaneShellRc,
+  buildWindowsPromptCommand,
+  buildWindowsDetachedChildCommand,
+  buildTmuxSessionName,
+  resolveCliInvocation,
+  parseResumeCodexHomeSelection,
+  isResumeCodexLaunch,
+  CODEX_GLOBAL_OPTIONS_WITH_SPLIT_VALUE,
+  isCodexVersionRequest,
+  resolveUpdateChannelArg,
+  commandOwnsLocalHelp,
+  resolveCodexLaunchPolicy,
+  resolveEffectiveLeaderLaunchPolicyOverride,
+  resolveEnvLaunchPolicyOverride,
+  resolveLeaderLaunchPolicyOverride,
+  classifyCodexExecFailure,
+  resolveSignalExitCode,
+  parseTmuxPaneSnapshot,
+  findHudWatchPaneIds,
+  buildHudPaneCleanupTargets,
+  readTopLevelTomlString,
+  upsertTopLevelTomlString,
+  collectInheritableTeamWorkerArgs,
+  resolveTeamWorkerLaunchArgsEnv,
+  injectModelInstructionsBypassArgs,
+  resolveWorkerSparkModel,
+  resolveSetupInstallModeArg,
+  resolveSetupMcpModeArg,
+  resolveSetupScopeArg,
+  resolveSetupTeamModeArg,
+  resolveSetupAgentsMergePolicyArg,
+  resolveLaunchConfigRepairOptions,
+  readPersistedSetupPreferences,
+  readPersistedSetupScope,
+  resolveCodexConfigPathForLaunch,
+  resolveCodexHomeForLaunch,
+  resolveProjectLocalCodexHomeForLaunch,
+  shouldAutoIsolateMadmaxLaunch,
+  createMadmaxIsolatedRoot,
+  buildMadmaxDetachedLaunchContextKey,
+  withMadmaxDetachedContextLock,
+  executeDetachedLaunchStateMachine,
+  isExactDetachedFinalization,
+  type DetachedLaunchDependencies,
+  type DetachedReleaseFailureResolution,
+  resolveOmxRootForLaunch,
+  resolveDisposableWorktreeOmxRootForLaunch,
+  prepareCodexHomeForLaunch,
+  prepareRuntimeCodexHomeForProjectLaunch,
+  historyDestinationMode,
+  acquireHistoryPersistenceLock,
+  releaseHistoryPersistenceLock,
+  captureMadmaxWorktreeRuntimeContext,
+  persistProjectLaunchRuntimeAuthState,
+  persistProjectLaunchRuntimeProjectTrustState,
+  cleanupRuntimeCodexHome,
+  runtimeCodexHomePath,
+  buildDetachedSessionBootstrapSteps,
+  buildDetachedTmuxSessionName,
+  buildDetachedSessionFinalizeSteps,
+  shouldAttachDetachedTmuxSession,
+  buildDetachedSessionRollbackSteps,
+  detectDetachedSessionWindowIndex,
+  resolveNotifyTempContract,
+  buildNotifyTempStartupMessages,
+  buildNotifyFallbackWatcherEnv,
+  shouldEnableNotifyFallbackWatcher,
+  reapStaleNotifyFallbackWatcher,
+  cleanupLaunchOrphanedMcpProcesses,
+  reapPostLaunchOrphanedMcpProcesses,
+  cleanupPostLaunchModeStateFiles,
+  resolveBackgroundHelperLaunchMode,
+  shouldDetachBackgroundHelper,
+  resolveNotifyFallbackWatcherScript,
+  resolveHookDerivedWatcherScript,
+  resolveNotifyHookScript,
+  acquireTmuxExtendedKeysLease,
+  resolveNativeSessionName,
+  releaseTmuxExtendedKeysLease,
+  withTmuxExtendedKeys,
+  serializeDetachedSessionParentEnv,
+  buildInsideTmuxHudHookEnv,
+  registerInsideTmuxHudResizeHook,
+  buildDetachedHudHookEnv,
+  registerDetachedHudLayoutReconcileHook,
+  ensureOmxRuntimeCommandShim,
+  omxRuntimeCommandShimPath,
+  prependOmxRuntimeCommandShimToEnv,
+  CODEX_SQLITE_HOME_ENV,
+  DETACHED_TMUX_HISTORY_LIMIT,
+  DETACHED_TMUX_HISTORY_LIMIT_MAX,
+  DETACHED_TMUX_HISTORY_LIMIT_MIN,
+  resolveDetachedTmuxHistoryLimit,
+  isExistingTmuxWindowTooCrampedForLaunchHud,
+  guardDetachedHudDeferredMutation,
+  DETACHED_LAUNCH_CONTROL_PLANE_KEYS,
+  buildDetachedLaunchControlPlane,
+} from "../index.js";
+import { buildResumeArgsWithPreservedFlags, stripHotswapArg } from "../../auth/hotswap.js";
+import { writeSkillActiveStateCopiesForStateDir } from '../../state/skill-active.js';
+import { mergeConfig, repairConfigIfNeeded } from "../../config/generator.js";
+import { ensureReusableNodeModules } from "../../utils/repo-deps.js";
+import { readAllState } from "../../hud/state.js";
+import { generateOverlay } from "../../hooks/agents-overlay.js";
+import { HUD_TMUX_HEIGHT_LINES, HUD_TMUX_MIN_LAUNCH_WINDOW_HEIGHT_LINES } from "../../hud/constants.js";
+import { createHudWatchPane as createSharedHudWatchPane, listCurrentWindowHudPaneIds } from "../../hud/tmux.js";
+import {
+  DEFAULT_FRONTIER_MODEL,
+  getTeamLowComplexityModel,
+} from "../../config/models.js";
+import type { ProcessEntry } from "../cleanup.js";
+import { splitWorkerLaunchArgs } from "../../team/model-contract.js";
+import { buildRegisterResizeHookArgs } from "../../team/tmux-session.js";
+
+
+const testDir = dirname(fileURLToPath(import.meta.url));
+const repoRoot = join(testDir, "..", "..", "..");
+
+function normalizeDarwinTmpPath(value: string): string {
+  return process.platform === "darwin" ? value.replaceAll("/private/var/", "/var/") : value;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function countMatches(text: string, pattern: RegExp): number {
+  return text.match(pattern)?.length ?? 0;
+}
+
+function expectedLowComplexityModel(codexHomeOverride?: string): string {
+  return getTeamLowComplexityModel(codexHomeOverride);
+}
+
+afterEach(() => {
+  mock.restoreAll();
+});
+
+describe("madmax state isolation", () => {
+  it("auto-isolates madmax launch and exec invocations without boxing worktree-only launches", () => {
+    assert.equal(shouldAutoIsolateMadmaxLaunch("launch", ["--madmax"], {}), true);
+    assert.equal(shouldAutoIsolateMadmaxLaunch("exec", ["--madmax-spark"], {}), true);
+    assert.equal(shouldAutoIsolateMadmaxLaunch("launch", ["--worktree"], {}), false);
+    assert.equal(shouldAutoIsolateMadmaxLaunch("launch", ["-wfeature"], {}), false);
+    assert.equal(shouldAutoIsolateMadmaxLaunch("team", ["--madmax"], {}), false);
+    assert.equal(shouldAutoIsolateMadmaxLaunch("launch", ["--yolo"], {}), false);
+  });
+
+  it("does not let stale inherited madmax env suppress top-level isolation", () => {
+    assert.equal(
+      shouldAutoIsolateMadmaxLaunch("launch", ["--madmax"], { OMX_ROOT: "/already/boxed" }, "/repo"),
+      true,
+    );
+    assert.equal(
+      shouldAutoIsolateMadmaxLaunch("launch", ["--madmax"], { OMXBOX_ACTIVE: "1" }, "/repo"),
+      true,
+    );
+    assert.equal(
+      shouldAutoIsolateMadmaxLaunch(
+        "launch",
+        ["--madmax"],
+        { OMX_STATE_ROOT: "/already/boxed-state" },
+        "/repo",
+      ),
+      true,
+    );
+    assert.equal(
+      shouldAutoIsolateMadmaxLaunch(
+        "launch",
+        ["--worktree"],
+        {
+          OMXBOX_ACTIVE: "1",
+          OMX_ROOT: "/old/root",
+          OMX_MADMAX_DETACHED_CONTEXT: "old-context",
+        },
+        "/repo",
+      ),
+      false,
+    );
+  });
+
+  it("preserves active boxed detached context reuse when only the context is inherited", () => {
+    assert.equal(
+      shouldAutoIsolateMadmaxLaunch(
+        "launch",
+        ["--madmax", "--tmux"],
+        {
+          OMXBOX_ACTIVE: "1",
+          OMX_MADMAX_DETACHED_CONTEXT: "boxed-context-under-test",
+        },
+        "/repo",
+      ),
+      false,
+    );
+  });
+
+  it("preserves matching detached madmax child context reuse", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-madmax-source-"));
+    const runs = await mkdtemp(join(tmpdir(), "omx-madmax-runs-"));
+    try {
+      const env: NodeJS.ProcessEnv = { OMX_RUNS_DIR: runs };
+      const runDir = createMadmaxIsolatedRoot(wd, ["--madmax", "--high"], env);
+      env.OMX_ROOT = runDir;
+      env.OMXBOX_ACTIVE = "1";
+      env.OMX_SOURCE_CWD = wd;
+
+      assert.equal(
+        shouldAutoIsolateMadmaxLaunch("launch", ["--madmax", "--high"], env, wd),
+        false,
+      );
+      assert.equal(
+        shouldAutoIsolateMadmaxLaunch("launch", ["--madmax", "--xhigh"], env, wd),
+        true,
+        "changed launch semantics must not reuse an inherited boxed root",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+      await rm(runs, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves explicit no-box behavior", () => {
+    assert.equal(
+      shouldAutoIsolateMadmaxLaunch("launch", ["--madmax"], { OMX_NO_BOX: "1" }, "/repo"),
+      false,
+    );
+  });
+
+  it("captures madmax worktree context from parsed worktree state, not remaining args", async () => {
+    const sourceCwd = "/repo/source";
+    const worktreeCwd = "/repo/.worktrees/session";
+    const runDir = await mkdtemp(join(tmpdir(), "omx-run-issue-3043-"));
+    try {
+      const detachedContext = buildMadmaxDetachedLaunchContextKey(sourceCwd, ["--madmax", "--worktree", "--version"], runDir);
+      await writeFile(join(runDir, ".omxbox-run.json"), JSON.stringify({
+        cwd: runDir,
+        source_cwd: sourceCwd,
+        detached_launch_context: detachedContext,
+      }));
+      const context = captureMadmaxWorktreeRuntimeContext({
+        originalLaunchArgs: ["--madmax", "--worktree", "--version"],
+        worktreeEnabled: true,
+        sourceCwd,
+        worktreeCwd,
+        env: {
+          OMX_ROOT: runDir,
+          OMXBOX_ACTIVE: "1",
+          OMX_SOURCE_CWD: sourceCwd,
+          OMX_MADMAX_DETACHED_CONTEXT: detachedContext,
+        },
+      });
+
+      assert.deepEqual(context, {
+        omxRoot: runDir,
+        sourceCwd,
+        worktreeCwd,
+        madmaxDetachedContext: detachedContext,
+        boxedActive: true,
+      });
+    } finally {
+      await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it("does not capture ordinary worktree or unboxed madmax launches", () => {
+    assert.equal(
+      captureMadmaxWorktreeRuntimeContext({
+        originalLaunchArgs: ["--worktree"],
+        worktreeEnabled: true,
+        sourceCwd: "/repo/source",
+        worktreeCwd: "/repo/.worktrees/session",
+        env: { OMX_ROOT: "/runs/run", OMXBOX_ACTIVE: "1" },
+      }),
+      undefined,
+    );
+    assert.equal(
+      captureMadmaxWorktreeRuntimeContext({
+        originalLaunchArgs: ["--madmax", "--worktree"],
+        worktreeEnabled: true,
+        sourceCwd: "/repo/source",
+        worktreeCwd: "/repo/.worktrees/session",
+        env: { OMX_ROOT: "/runs/run" },
+      }),
+      undefined,
+    );
+    assert.equal(
+      captureMadmaxWorktreeRuntimeContext({
+        originalLaunchArgs: ["--madmax", "--worktree"],
+        worktreeEnabled: false,
+        sourceCwd: "/repo/source",
+        worktreeCwd: "/repo/.worktrees/session",
+        env: { OMX_ROOT: "/runs/run", OMXBOX_ACTIVE: "1" },
+      }),
+      undefined,
+    );
+  });
+
+  it("creates a per-run OMX_ROOT registry entry without touching source .omx", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-madmax-source-"));
+    const runs = await mkdtemp(join(tmpdir(), "omx-madmax-runs-"));
+    try {
+      const runDir = createMadmaxIsolatedRoot(wd, ["--madmax"], { OMX_RUNS_DIR: runs });
+      assert.equal(runDir.startsWith(runs), true);
+      assert.equal(existsSync(join(wd, ".omx")), false);
+      const metadata = JSON.parse(await readFile(join(runDir, ".omxbox-run.json"), "utf-8"));
+      assert.equal(metadata.source_cwd, wd);
+      assert.equal(metadata.cwd, runDir);
+      assert.deepEqual(metadata.argv, ["--madmax"]);
+      const registry = await readFile(join(runs, "registry.jsonl"), "utf-8");
+      assert.match(registry, /"launcher":"omx --madmax"/);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+      await rm(runs, { recursive: true, force: true });
+    }
+  });
+
+  it("stamps a stable detached launch context and exposes it to boxed launch", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-madmax-source-"));
+    const runs = await mkdtemp(join(tmpdir(), "omx-madmax-runs-"));
+    try {
+      const env: NodeJS.ProcessEnv = { OMX_RUNS_DIR: runs };
+      const runDir = createMadmaxIsolatedRoot(wd, ["--madmax", "--xhigh", "--tmux"], env);
+      const metadata = JSON.parse(await readFile(join(runDir, ".omxbox-run.json"), "utf-8"));
+      const expectedContext = buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--xhigh", "--tmux"], runDir);
+      assert.equal(metadata.detached_launch_context, expectedContext);
+      assert.equal(env.OMX_MADMAX_DETACHED_CONTEXT, expectedContext);
+      assert.equal(
+        buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--xhigh", "--tmux"], runDir),
+        buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--xhigh"], runDir),
+        "explicit --tmux is a transport choice and must not create a second context",
+      );
+      assert.equal(
+        buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--xhigh", "--tmux"], runDir),
+        buildMadmaxDetachedLaunchContextKey(wd, ["--xhigh", "--madmax", "--direct"], runDir),
+        "argument order and transport choices must not create duplicate detached contexts",
+      );
+      assert.notEqual(
+        expectedContext,
+        buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--low"], runDir),
+        "different launch semantics may run concurrently",
+      );
+      assert.notEqual(
+        buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--high", "--xhigh"], runDir),
+        buildMadmaxDetachedLaunchContextKey(wd, ["--madmax", "--xhigh", "--high"], runDir),
+        "last reasoning shorthand wins, so reversed reasoning order is a distinct context",
+      );
+      const otherWd = await mkdtemp(join(tmpdir(), "omx-madmax-other-source-"));
+      try {
+        assert.notEqual(
+          expectedContext,
+          buildMadmaxDetachedLaunchContextKey(otherWd, ["--madmax", "--xhigh"], runDir),
+          "different work contexts may run concurrently",
+        );
+      } finally {
+        await rm(otherWd, { recursive: true, force: true });
+      }
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+      await rm(runs, { recursive: true, force: true });
+    }
+  });
+
+  it("gives independent madmax run roots distinct detached launch context locks", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-madmax-source-"));
+    const runs = await mkdtemp(join(tmpdir(), "omx-madmax-runs-"));
+    try {
+      const firstEnv: NodeJS.ProcessEnv = { OMX_RUNS_DIR: runs };
+      const secondEnv: NodeJS.ProcessEnv = { OMX_RUNS_DIR: runs };
+      const firstRunDir = createMadmaxIsolatedRoot(wd, ["--madmax", "--high"], firstEnv);
+      const secondRunDir = createMadmaxIsolatedRoot(wd, ["--madmax", "--high"], secondEnv);
+
+      assert.notEqual(firstRunDir, secondRunDir);
+      assert.notEqual(
+        firstEnv.OMX_MADMAX_DETACHED_CONTEXT,
+        secondEnv.OMX_MADMAX_DETACHED_CONTEXT,
+        "same cwd and argv from independent boxed runs must not contend on one active-detached lock",
+      );
+      assert.equal(
+        firstEnv.OMX_MADMAX_DETACHED_CONTEXT,
+        buildMadmaxDetachedLaunchContextKey(wd, ["--high", "--madmax", "--tmux"], firstRunDir),
+        "transport and order normalization still deduplicates within the same isolated run",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+      await rm(runs, { recursive: true, force: true });
+    }
+  });
+
+  it("recovers a madmax detached context lock whose holder pid has already exited", async () => {
+    const runs = await mkdtemp(join(tmpdir(), "omx-madmax-lock-stale-"));
+    try {
+      const contextKey = "stale-context";
+      const lockPath = join(runs, "active-detached", `${contextKey}.lock`);
+      mkdirSync(lockPath, { recursive: true });
+      await writeFile(join(lockPath, "pid"), "2147483647");
+
+      let ran = false;
+      const result = await withMadmaxDetachedContextLock(
+        runs,
+        contextKey,
+        () => {
+          ran = true;
+          return "acquired";
+        },
+        { maxAttempts: 2, retryMs: 0 },
+      );
+
+      assert.equal(result, "acquired");
+      assert.equal(ran, true);
+      assert.equal(existsSync(lockPath), false);
+    } finally {
+      await rm(runs, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves a live madmax detached context lock and reports holder diagnostics on timeout", async () => {
+    const runs = await mkdtemp(join(tmpdir(), "omx-madmax-lock-live-"));
+    try {
+      const contextKey = "live-context";
+      const lockPath = join(runs, "active-detached", `${contextKey}.lock`);
+      mkdirSync(lockPath, { recursive: true });
+      await writeFile(
+        join(lockPath, "owner.json"),
+        `${JSON.stringify({
+          version: 1,
+          pid: process.pid,
+          context_key: contextKey,
+          acquired_at: new Date().toISOString(),
+        })}\n`,
+      );
+      await writeFile(join(lockPath, "pid"), String(process.pid));
+
+      await assert.rejects(
+        () => withMadmaxDetachedContextLock(runs, contextKey, () => "should-not-run", { maxAttempts: 1, retryMs: 0 }),
+        (err: unknown) => {
+          assert.ok(err instanceof Error);
+          assert.match(err.message, /timed out waiting for madmax detached launch context lock/);
+          assert.match(err.message, new RegExp(`holder pid ${process.pid} is still running`));
+          assert.match(err.message, /owner context live-context/);
+          assert.match(err.message, /Another madmax detached launch is active for this directory/);
+          assert.match(err.message, /close the existing madmax session or use --worktree for concurrent work/);
+          assert.match(err.message, /Multiple madmax sessions in one directory are unsafe/);
+          return true;
+        },
+      );
+      assert.equal(existsSync(lockPath), true);
+    } finally {
+      await rm(runs, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("detached launch state machine", () => {
+  function createDependencies(events: string[], failAt?: string): DetachedLaunchDependencies<string, string, string> {
+    const step = async (name: string): Promise<void> => {
+      events.push(name);
+      if (failAt === name) throw new Error(name);
+    };
+    return {
+      establish: async () => { await step("D1"); return "binding"; },
+      complete: async () => { await step("D2"); return { kind: "success" }; },
+      createInertSession: async () => { await step("D3"); return "inert"; },
+      capturePane: async () => { await step("D4"); return "%1"; },
+      updateNameMetadata: async () => { await step("D5"); return "committed-released"; },
+      updatePaneMetadata: async () => { await step("D6"); return "committed-released"; },
+      publishActiveRecord: async () => {
+        await step("D7");
+        return { bytes: "record", digest: "digest", nonce: "nonce" };
+      },
+      finalizeSetupFailure: async () => { await step("finalize-setup-failure"); },
+      releaseBarrier: async () => { await step("D9"); },
+      abortAndAwaitFinalization: async () => ({
+        acknowledged: true,
+        nonce: "nonce",
+        sessionId: "session",
+        sessionName: "session-name",
+        leaderPid: 123,
+        kind: "failed",
+      }),
+      attachOrReturn: async () => { await step("D10"); },
+      rollback: async () => { events.push("rollback"); },
+    };
+  }
+
+  it("uses the frozen D0 outcome without rediscovering transport or reuse", async () => {
+    const events: string[] = [];
+    const result = await executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      createDependencies(events),
+    );
+    assert.equal(result.kind, "attached");
+    assert.deepEqual(events, ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D9", "D10"]);
+  });
+
+  for (const platform of ["posix", "native-windows"] as const) {
+    it(`${platform}: releases only after atomic record and starts exactly once`, async () => {
+      const events: string[] = [];
+      const result = await executeDetachedLaunchStateMachine(
+        { preflight: { kind: "available", shouldAttach: platform === "posix", report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+        createDependencies(events),
+      );
+      assert.equal(result.kind, platform === "posix" ? "attached" : "returned");
+      assert.deepEqual(events, ["D1", "D2", "D3", "D4", "D5", "D6", "D7", "D9", "D10"]);
+    });
+  }
+
+  for (const failure of ["D1", "D2", "D3", "D4", "D5", "D6", "D7"] as const) {
+    it(`rolls back verified pre-release ownership when ${failure} fails`, async () => {
+      const events: string[] = [];
+      await assert.rejects(executeDetachedLaunchStateMachine(
+        { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+        createDependencies(events, failure),
+      ), (err: unknown) => {
+        assert.ok(err instanceof Error);
+        assert.equal((err as { report?: { transitions: string[] } }).report?.transitions.at(-1), failure);
+        return true;
+      });
+      assert.ok(events.includes("rollback"));
+      assert.equal(events.includes("D10"), false);
+    });
+  }
+
+  for (const failure of ["D3", "D4", "D5", "D6", "D7", "D9"] as const) {
+    it(`passes authenticated finalized failure authority to rollback when ${failure} fails`, async () => {
+      const events: string[] = [];
+      const deps = createDependencies(events, failure);
+      let finalization: unknown;
+      deps.rollback = async (_ownedRecord, _report, observedFinalization) => {
+        events.push("rollback");
+        finalization = observedFinalization;
+      };
+      await assert.rejects(executeDetachedLaunchStateMachine(
+        { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+        deps,
+      ));
+      assert.deepEqual(finalization, {
+        nonce: "nonce",
+        sessionId: "session",
+        sessionName: "session-name",
+        leaderPid: 123,
+        kind: "failed",
+      });
+      assert.equal(events.includes("rollback"), true);
+    });
+
+    it(`preserves the leader and does not roll back when ${failure} finalization is malformed`, async () => {
+      const events: string[] = [];
+      const deps = createDependencies(events, failure);
+      deps.abortAndAwaitFinalization = async () => ({
+        acknowledged: true,
+        nonce: "nonce",
+        sessionName: "session-name",
+        leaderPid: 123,
+        kind: "failed",
+      });
+      await assert.rejects(executeDetachedLaunchStateMachine(
+        { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+        deps,
+      ));
+      assert.equal(events.includes("rollback"), false);
+    });
+  }
+
+  it("routes an exact D9 terminal finalization to HUD-only cleanup instead of session rollback", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events, "D9");
+    deps.abortAndAwaitFinalization = async () => ({
+      acknowledged: true,
+      nonce: "nonce",
+      sessionId: "session",
+      sessionName: "session-name",
+      leaderPid: 123,
+      kind: "terminal",
+    });
+    let finalization: Parameters<typeof deps.rollback>[2];
+    deps.rollback = async (_ownedRecord, _report, observedFinalization) => {
+      events.push("hud-only-cleanup");
+      finalization = observedFinalization;
+    };
+    await assert.rejects(executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ));
+    assert.equal(isExactDetachedFinalization(finalization, {
+      nonce: "nonce",
+      sessionId: "session",
+      sessionName: "session-name",
+      leaderPid: 123,
+    }), true);
+    assert.equal(finalization?.kind, "terminal");
+    assert.deepEqual(events.slice(-2), ["D9", "hud-only-cleanup"]);
+  });
+  for (const kind of ["malformed", "", "FAILED", "terminal ", "terminalized"] as const) {
+    it(`never grants HUD-only rollback authority when a matching report kind is "${kind}"`, async () => {
+      const events: string[] = [];
+      const deps = createDependencies(events, "D9");
+      deps.abortAndAwaitFinalization = async () => ({
+        acknowledged: true,
+        nonce: "nonce",
+        sessionId: "session",
+        sessionName: "session-name",
+        leaderPid: 123,
+        kind,
+      } as unknown as DetachedReleaseFailureResolution);
+      let observedFinalization: Parameters<typeof deps.rollback>[2];
+      deps.rollback = async (_ownedRecord, _report, finalization) => {
+        events.push("rollback");
+        observedFinalization = finalization;
+      };
+      await assert.rejects(() => executeDetachedLaunchStateMachine(
+        { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+        deps,
+      ));
+      assert.equal(observedFinalization, undefined);
+      assert.equal(events.includes("rollback"), false, `kind ${JSON.stringify(kind)} must never reach rollback`);
+    });
+  }
+
+  it("finalizes and closes exactly once before D2 rollback without transport effects", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events);
+    deps.complete = async () => {
+      events.push("D2");
+      return { kind: "failure", operation: "session-instructions", error: new Error("instructions") };
+    };
+    await assert.rejects(() => executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ), /preLaunch session-instructions failed: instructions/);
+    assert.deepEqual(events, ["D1", "D2", "finalize-setup-failure", "rollback"]);
+  });
+
+  it("rolls back proven pane authority when leader parsing fails before a report PID", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events, "D2");
+    deps.abortAndAwaitFinalization = async () => ({ acknowledged: false, rollbackAuthorized: true });
+    await assert.rejects(executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ));
+    assert.equal(events.includes("rollback"), true);
+  });
+
+  it("never rolls back, deletes records, or falls back after D10 attach failure", async () => {
+    const events: string[] = [];
+    await assert.rejects(executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      createDependencies(events, "D10"),
+    ), (err: unknown) => {
+      assert.ok(err instanceof Error);
+      assert.equal((err as { report?: { transitions: string[] } }).report?.transitions.at(-1), "D10");
+      return true;
+    });
+    assert.equal(events.includes("rollback"), false);
+    assert.deepEqual(events.slice(-2), ["D9", "D10"]);
+  });
+
+  it("preserves leader authority when D9 publication fails without an authenticated finalization acknowledgement", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events, "D9");
+    deps.abortAndAwaitFinalization = async () => {
+      events.push("abort-request");
+      return { acknowledged: false };
+    };
+    await assert.rejects(() => executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ));
+    assert.deepEqual(events.slice(-2), ["D9", "abort-request"]);
+    assert.equal(events.includes("rollback"), false);
+  });
+
+  it("permits rollback only after an authenticated D9 abort acknowledgement", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events, "D9");
+    deps.abortAndAwaitFinalization = async () => ({
+      acknowledged: true,
+      nonce: "nonce",
+      sessionId: "session",
+      sessionName: "session-name",
+      leaderPid: 123,
+      kind: "failed",
+    });
+    await assert.rejects(() => executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ));
+    assert.equal(events.includes("rollback"), true);
+  });
+
+  it("fails closed when a purported D9 acknowledgement omits its finalized authority binding", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events, "D9");
+    deps.abortAndAwaitFinalization = async () => ({ acknowledged: true });
+    await assert.rejects(() => executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ));
+    assert.equal(events.includes("rollback"), false);
+  });
+
+  it("preserves the authority-owning leader on a pre-D9 failure without finalized acknowledgement", async () => {
+    const events: string[] = [];
+    const deps = createDependencies(events, "D4");
+    deps.abortAndAwaitFinalization = async () => {
+      events.push("abort-request");
+      return { acknowledged: false };
+    };
+    await assert.rejects(() => executeDetachedLaunchStateMachine(
+      { preflight: { kind: "available", shouldAttach: true, report: { transitions: ["D0"], rollback: { attempted: [], failures: [] } } } },
+      deps,
+    ));
+    assert.deepEqual(events.slice(-2), ["D4", "abort-request"]);
+    assert.equal(events.includes("rollback"), false);
+  });
+});
+
+describe("resolveOmxRootForLaunch", () => {
+  it("preserves POSIX absolute OMX_ROOT", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", { OMX_ROOT: "/var/tmp/omx" }),
+      "/var/tmp/omx",
+    );
+  });
+
+  it("preserves Windows drive-letter absolute OMX_ROOT", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", { OMX_ROOT: "C:\\Users\\me\\omx" }),
+      "C:\\Users\\me\\omx",
+    );
+  });
+
+  it("preserves Windows drive-letter absolute OMX_STATE_ROOT", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", { OMX_STATE_ROOT: "D:\\omx-state" }),
+      "D:\\omx-state",
+    );
+  });
+
+  it("preserves UNC absolute OMX_ROOT", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", { OMX_ROOT: "\\\\server\\share\\omx" }),
+      "\\\\server\\share\\omx",
+    );
+  });
+
+  it("joins relative OMX_ROOT to cwd", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", { OMX_ROOT: "relative/omx" }),
+      join("/repo", "relative/omx"),
+    );
+  });
+
+  it("returns undefined for blank OMX_ROOT and OMX_STATE_ROOT", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", { OMX_ROOT: "  ", OMX_STATE_ROOT: "" }),
+      undefined,
+    );
+  });
+
+  it("prefers OMX_ROOT over OMX_STATE_ROOT", () => {
+    assert.equal(
+      resolveOmxRootForLaunch("/repo", {
+        OMX_ROOT: "C:\\Users\\me\\root",
+        OMX_STATE_ROOT: "/state-root",
+      }),
+      "C:\\Users\\me\\root",
+    );
+  });
+});
+
+describe("disposable worktree state root resolution", () => {
+  it("uses the source repo root for launch worktrees when no explicit root is set", () => {
+    assert.equal(
+      resolveDisposableWorktreeOmxRootForLaunch(
+        { enabled: true, repoRoot: "/repo" },
+        {},
+      ),
+      "/repo",
+    );
+  });
+
+  it("preserves explicit OMX_ROOT and OMX_STATE_ROOT precedence", () => {
+    assert.equal(
+      resolveDisposableWorktreeOmxRootForLaunch(
+        { enabled: true, repoRoot: "/repo" },
+        { OMX_ROOT: "/explicit" },
+      ),
+      undefined,
+    );
+    assert.equal(
+      resolveDisposableWorktreeOmxRootForLaunch(
+        { enabled: true, repoRoot: "/repo" },
+        { OMX_STATE_ROOT: "/state-root" },
+      ),
+      undefined,
+    );
+  });
+
+  it("does not affect non-worktree launches", () => {
+    assert.equal(
+      resolveDisposableWorktreeOmxRootForLaunch({ enabled: false }, {}),
+      undefined,
+    );
+  });
+});
+
+describe("normalizeCodexLaunchArgs", () => {
+  it("maps --madmax to codex bypass flag", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--madmax"]), [
+      "--dangerously-bypass-approvals-and-sandbox",
+    ]);
+  });
+
+  it("does not forward --madmax and preserves other args", () => {
+    assert.deepEqual(
+      normalizeCodexLaunchArgs(["--model", "gpt-5", "--madmax", "--yolo"]),
+      [
+        "--model",
+        "gpt-5",
+        "--yolo",
+        "--dangerously-bypass-approvals-and-sandbox",
+      ],
+    );
+  });
+
+  it("avoids duplicate bypass flags when both are present", () => {
+    assert.deepEqual(
+      normalizeCodexLaunchArgs([
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--madmax",
+      ]),
+      ["--dangerously-bypass-approvals-and-sandbox"],
+    );
+  });
+
+  it("deduplicates repeated bypass-related flags", () => {
+    assert.deepEqual(
+      normalizeCodexLaunchArgs([
+        "--madmax",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--madmax",
+        "--dangerously-bypass-approvals-and-sandbox",
+      ]),
+      ["--dangerously-bypass-approvals-and-sandbox"],
+    );
+  });
+
+  it("leaves unrelated args unchanged", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--model", "gpt-5", "--yolo"]), [
+      "--model",
+      "gpt-5",
+      "--yolo",
+    ]);
+  });
+
+  it("maps --high to reasoning override", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--high"]), [
+      "-c",
+      'model_reasoning_effort="high"',
+    ]);
+  });
+
+  it("maps --xhigh to reasoning override", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--xhigh"]), [
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+  });
+
+  it("adds reasoning overrides before a literal -- marker", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--xhigh", "--", "--max"]), [
+      "-c",
+      'model_reasoning_effort="xhigh"',
+      "--",
+      "--max",
+    ]);
+  });
+
+  it("adds bypass and reasoning overrides before preserving raw marker suffix args", () => {
+    assert.deepEqual(
+      normalizeCodexLaunchArgs([
+        "--madmax",
+        "--xhigh",
+        "--",
+        "-c",
+        'model_reasoning_effort="ultra"',
+        "--max",
+      ]),
+      [
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+        "--",
+        "-c",
+        'model_reasoning_effort="ultra"',
+        "--max",
+      ],
+    );
+  });
+
+  it("uses the last reasoning shorthand when both are present", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--high", "--xhigh"]), [
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+  });
+
+  it("rejects pre-marker max and ultra reasoning shorthands with approved guidance", () => {
+    const errors = [
+      [
+        "--max",
+        'Unsupported OMX launch shorthand "--max".\nNo --max shorthand exists; use agentReasoning for per-agent "max" or pass -c model_reasoning_effort=... directly to Codex.\nRun "omx help" for usage.',
+      ],
+      [
+        "--ultra",
+        'Unsupported OMX launch shorthand "--ultra".\n"ultra" is not an OMX root or per-agent reasoning value and is not an alias for "max".\nRun "omx help" for usage.',
+      ],
+    ] as const;
+
+    for (const [flag, message] of errors) {
+      assert.throws(() => normalizeCodexLaunchArgs([flag]), { message });
+    }
+  });
+
+  it("preserves literal max and ultra after -- with raw -c arguments", () => {
+    const args = [
+      "-c",
+      "model_reasoning_effort=MAX",
+      "--",
+      "--max",
+      "--ultra",
+      "-c",
+      'model_reasoning_effort="ultra"',
+      "-c",
+      "model_reasoning_effort=future",
+    ];
+    assert.deepEqual(normalizeCodexLaunchArgs(args), args);
+  });
+
+  it("preserves post-marker OMX flags as literal Codex arguments", () => {
+    const args = [
+      "--",
+      "--worktree",
+      "post-marker-branch",
+      "--notify-temp",
+      "--discord",
+      "--custom",
+      "openclaw:ops",
+      "--spark",
+      "resume",
+      "--project",
+      "--codex-home",
+      "/tmp/literal-codex-home",
+      "--version",
+    ];
+    const notifyTempResult = resolveNotifyTempContract(args, {});
+    assert.equal(notifyTempResult.contract.active, false);
+    assert.deepEqual(notifyTempResult.contract.canonicalSelectors, []);
+    assert.deepEqual(notifyTempResult.passthroughArgs, args);
+    assert.equal(resolveWorkerSparkModel(notifyTempResult.passthroughArgs), undefined);
+    assert.equal(isResumeCodexLaunch(args), false);
+    assert.equal(isCodexVersionRequest(args), false);
+    assert.deepEqual(parseResumeCodexHomeSelection(args), {
+      args,
+      explicitCodexHome: undefined,
+      projectOnly: false,
+    });
+    assert.deepEqual(normalizeCodexLaunchArgs(notifyTempResult.passthroughArgs), args);
+  });
+
+  it("parses resume-owned selectors only before the end-of-options marker", () => {
+    assert.deepEqual(
+      parseResumeCodexHomeSelection([
+        "resume",
+        "--codex-home",
+        "/tmp/selected-codex-home",
+        "--project",
+        "--",
+        "--codex-home",
+        "/tmp/literal-codex-home",
+        "--project",
+      ]),
+      {
+        args: [
+          "resume",
+          "--",
+          "--codex-home",
+          "/tmp/literal-codex-home",
+          "--project",
+        ],
+        explicitCodexHome: "/tmp/selected-codex-home",
+        projectOnly: true,
+      },
+    );
+    assert.equal(isResumeCodexLaunch(["resume", "--", "literal"]), true);
+    assert.equal(isCodexVersionRequest(["--version", "--", "literal"]), true);
+  });
+
+  it("removes hotswap only before the end-of-options marker", () => {
+    assert.deepEqual(
+      stripHotswapArg(["--hotswap", "--", "--hotswap", "literal"]),
+      ["--", "--hotswap", "literal"],
+    );
+  });
+
+  it("preserves Codex launch authority and the first literal suffix when building quota resume args", () => {
+    assert.deepEqual(
+      buildResumeArgsWithPreservedFlags([
+        "--model", "gpt-review",
+        "--model=gpt-review-fast",
+        "--config", "developer_instructions=enabled",
+        "--config=developer_instructions=overridden",
+        "--add-dir", "src",
+        "--remote", "ws://127.0.0.1:4500",
+        "--remote=ws://127.0.0.1:4501",
+        "--remote-auth-token-env", "CODEX_REMOTE_TOKEN",
+        "--remote-auth-token-env=CODEX_REMOTE_TOKEN_BACKUP",
+        "-i", "one.png",
+        "--image", "two.png",
+        "-i", "three.png,four.png",
+        "--image=five.png,six.png",
+        "-iseven.png,eight.png",
+        "--image=resume", "resume",
+        "--oss",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--model", "gpt-resume",
+        "resume", "old-session",
+        "--last", "--all", "--include-non-interactive",
+        "--", "--hotswap", "--last", "--all", "--include-non-interactive", "--model", "opaque-model", "literal suffix",
+      ], "session-123"),
+      [
+        "resume", "session-123",
+        "--model", "gpt-review",
+        "--model=gpt-review-fast",
+        "--config", "developer_instructions=enabled",
+        "--config=developer_instructions=overridden",
+        "--add-dir", "src",
+        "--remote", "ws://127.0.0.1:4500",
+        "--remote=ws://127.0.0.1:4501",
+        "--remote-auth-token-env", "CODEX_REMOTE_TOKEN",
+        "--remote-auth-token-env=CODEX_REMOTE_TOKEN_BACKUP",
+        "-i", "one.png",
+        "--image", "two.png",
+        "-i", "three.png,four.png",
+        "--image=five.png,six.png",
+        "-iseven.png,eight.png",
+        "--image=resume",
+        "--oss",
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--model", "gpt-resume",
+        "--", "--hotswap", "--last", "--all", "--include-non-interactive", "--model", "opaque-model", "literal suffix",
+      ],
+    );
+  });
+
+  it("removes resume selectors only when synthesizing an explicit session", () => {
+    for (const selectors of [
+      ["--last"],
+      ["--all"],
+      ["--include-non-interactive"],
+      ["--last", "--all"],
+      ["--all", "--include-non-interactive"],
+      ["--last", "--all", "--include-non-interactive"],
+    ]) {
+      assert.deepEqual(
+        buildResumeArgsWithPreservedFlags([
+          "resume",
+          ...selectors,
+          "--model", "gpt-review",
+          "--remote", "ws://127.0.0.1:4500",
+          "--", ...selectors, "opaque suffix",
+        ], "session-123"),
+        [
+          "resume", "session-123",
+          "--model", "gpt-review",
+          "--remote", "ws://127.0.0.1:4500",
+          "--", ...selectors, "opaque suffix",
+        ],
+        JSON.stringify(selectors),
+      );
+    }
+  });
+
+  it("treats only split image values as variadic", () => {
+    assert.deepEqual([...CODEX_GLOBAL_OPTIONS_WITH_SPLIT_VALUE], [
+      ["-a", "single"], ["--ask-for-approval", "single"], ["-c", "single"],
+      ["--config", "single"], ["-C", "single"], ["--cd", "single"],
+      ["-i", "variadic"], ["--image", "variadic"], ["-m", "single"],
+      ["--model", "single"], ["-p", "single"], ["--profile", "single"],
+      ["-s", "single"], ["--sandbox", "single"], ["--add-dir", "single"],
+      ["--disable", "single"], ["--enable", "single"], ["--local-provider", "single"],
+      ["--remote", "single"], ["--remote-auth-token-env", "single"],
+    ]);
+    for (const args of [
+      ["--model", "resume"], ["--remote", "resume"],
+      ["--image", "resume"], ["-i", "resume"], ["--image=resume"], ["-iresume"], ["-i=resume"],
+      ["-i", "one.png", "resume"], ["--image", "one.png", "resume"],
+      ["-i", "one.png", "-i", "two.png", "resume"],
+      ["--image", "one.png", "--image", "two.png", "resume"],
+      ["-i", "one.png,two.png", "resume"], ["--image", "one.png,two.png", "resume"],
+      ["exec", "resume"], ["--image", "one.png", "--", "resume"],
+    ]) {
+      assert.equal(isResumeCodexLaunch(args), false, JSON.stringify(args));
+    }
+    for (const args of [
+      ["--model", "gpt-review", "resume"],
+      ["--image=one.png", "resume"], ["-ione.png", "resume"], ["-i=one.png", "resume"],
+      ["--image", "one.png", "--model", "gpt-review", "resume"],
+      ["--image=one.png", "--model=gpt-review", "resume"],
+      ["-ione.png", "--remote", "ws://127.0.0.1:4500", "resume"],
+    ]) {
+      assert.equal(isResumeCodexLaunch(args), true, JSON.stringify(args));
+    }
+  });
+
+  it("maps --xhigh --madmax to codex-native flags only", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--xhigh", "--madmax"]), [
+      "--dangerously-bypass-approvals-and-sandbox",
+      "-c",
+      'model_reasoning_effort="xhigh"',
+    ]);
+  });
+
+  it("--spark is stripped from leader args (model goes to workers only)", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--spark", "--yolo"]), [
+      "--yolo",
+    ]);
+  });
+
+  it("--spark alone produces no leader args", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--spark"]), []);
+  });
+
+  it("--madmax-spark adds bypass flag to leader args and is otherwise consumed", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--madmax-spark"]), [
+      "--dangerously-bypass-approvals-and-sandbox",
+    ]);
+  });
+
+  it("--madmax-spark deduplicates bypass when --madmax also present", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--madmax", "--madmax-spark"]), [
+      "--dangerously-bypass-approvals-and-sandbox",
+    ]);
+  });
+
+  it("--madmax-spark does not inject spark model into leader args", () => {
+    const args = normalizeCodexLaunchArgs(["--madmax-spark"]);
+    assert.ok(
+      !args.includes("--model"),
+      "leader args must not contain --model from --madmax-spark",
+    );
+    assert.ok(
+      !args.some((a) => a.includes("spark")),
+      "leader args must not reference spark model",
+    );
+  });
+
+  it("strips detached worktree flag from leader codex args", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--worktree", "--yolo"]), [
+      "--yolo",
+    ]);
+  });
+
+  it("strips named worktree flag from leader codex args", () => {
+    assert.deepEqual(
+      normalizeCodexLaunchArgs(["--worktree=feature/demo", "--model", "gpt-5"]),
+      ["--model", "gpt-5"],
+    );
+  });
+
+  it("does not forward notify-temp flags/selectors to leader codex args", () => {
+    const parsed = resolveNotifyTempContract(
+      [
+        "--notify-temp",
+        "--discord",
+        "--custom",
+        "openclaw:ops",
+        "--custom=my-hook",
+        "--model",
+        "gpt-5",
+      ],
+      {},
+    );
+    assert.deepEqual(normalizeCodexLaunchArgs(parsed.passthroughArgs), [
+      "--model",
+      "gpt-5",
+    ]);
+  });
+
+  it("strips --tmux from leader codex args", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--tmux", "--yolo"]), [
+      "--yolo",
+    ]);
+  });
+
+  it("strips --direct from leader codex args", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--direct", "--yolo"]), [
+      "--yolo",
+    ]);
+  });
+
+  it("preserves literal --tmux after -- in leader codex args", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--", "--tmux", "--yolo"]), [
+      "--",
+      "--tmux",
+      "--yolo",
+    ]);
+  });
+
+  it("preserves literal --direct after -- in leader codex args", () => {
+    assert.deepEqual(normalizeCodexLaunchArgs(["--", "--direct", "--yolo"]), [
+      "--",
+      "--direct",
+      "--yolo",
+    ]);
+  });
+});
+
+describe("resolveLeaderLaunchPolicyOverride", () => {
+  it("detects explicit detached tmux launch requests", () => {
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--tmux", "--model", "gpt-5"]),
+      "detached-tmux",
+    );
+  });
+
+  it("detects explicit direct launch requests", () => {
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--direct", "--model", "gpt-5"]),
+      "direct",
+    );
+  });
+
+  it("uses the last CLI launch policy flag before --", () => {
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--direct", "--tmux"]),
+      "detached-tmux",
+    );
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--tmux", "--direct"]),
+      "direct",
+    );
+  });
+
+  it("returns undefined when no explicit policy override is present", () => {
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--model", "gpt-5"]),
+      undefined,
+    );
+  });
+
+  it("stops scanning for --tmux after the end-of-options marker", () => {
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--", "--tmux", "--model", "gpt-5"]),
+      undefined,
+    );
+  });
+
+  it("stops scanning for --direct after the end-of-options marker", () => {
+    assert.equal(
+      resolveLeaderLaunchPolicyOverride(["--", "--direct", "--model", "gpt-5"]),
+      undefined,
+    );
+  });
+});
+
+describe("resolveEnvLaunchPolicyOverride", () => {
+  it("accepts direct, tmux, detached-tmux, auto, and empty policy values", () => {
+    assert.equal(resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "direct" }), "direct");
+    assert.equal(
+      resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "tmux" }),
+      "detached-tmux",
+    );
+    assert.equal(
+      resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "detached-tmux" }),
+      "detached-tmux",
+    );
+    assert.equal(resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "auto" }), undefined);
+    assert.equal(resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "" }), undefined);
+  });
+
+  it("warns once for invalid OMX_LAUNCH_POLICY and falls back to auto", () => {
+    const warn = mock.method(console, "warn", () => {});
+    assert.equal(
+      resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "banana" }),
+      undefined,
+    );
+    assert.equal(
+      resolveEnvLaunchPolicyOverride({ OMX_LAUNCH_POLICY: "banana" }),
+      undefined,
+    );
+    assert.equal(warn.mock.callCount(), 1);
+  });
+});
+
+describe("resolveEffectiveLeaderLaunchPolicyOverride", () => {
+  it("uses env policy when no CLI policy flag is present", () => {
+    assert.equal(
+      resolveEffectiveLeaderLaunchPolicyOverride(["--yolo"], {
+        OMX_LAUNCH_POLICY: "direct",
+      }),
+      "direct",
+    );
+  });
+
+  it("lets CLI policy flags override OMX_LAUNCH_POLICY", () => {
+    assert.equal(
+      resolveEffectiveLeaderLaunchPolicyOverride(["--tmux", "--yolo"], {
+        OMX_LAUNCH_POLICY: "direct",
+      }),
+      "detached-tmux",
+    );
+    assert.equal(
+      resolveEffectiveLeaderLaunchPolicyOverride(["--direct", "--yolo"], {
+        OMX_LAUNCH_POLICY: "tmux",
+      }),
+      "direct",
+    );
+  });
+});
+
+describe("resolveNotifyTempContract", () => {
+  it("activates from --notify-temp with no providers", () => {
+    const parsed = resolveNotifyTempContract(
+      ["--notify-temp", "--model", "gpt-5"],
+      {},
+    );
+    assert.equal(parsed.contract.active, true);
+    assert.equal(parsed.contract.source, "cli");
+    assert.deepEqual(parsed.contract.canonicalSelectors, []);
+    assert.deepEqual(parsed.passthroughArgs, ["--model", "gpt-5"]);
+  });
+
+  it("auto-activates when provider selectors are present", () => {
+    const parsed = resolveNotifyTempContract(["--discord", "--slack"], {});
+    assert.equal(parsed.contract.active, true);
+    assert.equal(parsed.contract.source, "providers");
+    assert.deepEqual(parsed.contract.canonicalSelectors, ["discord", "slack"]);
+    assert.equal(
+      parsed.contract.warnings.some((line) => line.includes("imply temp mode")),
+      true,
+    );
+  });
+
+  it("supports repeated --custom forms and canonicalizes selectors", () => {
+    const parsed = resolveNotifyTempContract(
+      ["--custom", "OpenClaw:Ops", "--custom=my-hook", "--custom=", "--custom"],
+      {},
+    );
+    assert.deepEqual(parsed.contract.canonicalSelectors, [
+      "openclaw:ops",
+      "custom:my-hook",
+    ]);
+    assert.equal(parsed.contract.warnings.length >= 1, true);
+  });
+
+  it("does not activate or consume selectors after --", () => {
+    const args = ["--", "--notify-temp", "--discord", "--custom", "openclaw:ops"];
+    const parsed = resolveNotifyTempContract(args, {});
+    assert.equal(parsed.contract.active, false);
+    assert.deepEqual(parsed.contract.selectors, []);
+    assert.deepEqual(parsed.passthroughArgs, args);
+  });
+
+  it("activates from OMX_NOTIFY_TEMP=1 env parity", () => {
+    const parsed = resolveNotifyTempContract(["--model", "gpt-5"], {
+      OMX_NOTIFY_TEMP: "1",
+    });
+    assert.equal(parsed.contract.active, true);
+    assert.equal(parsed.contract.source, "env");
+    assert.deepEqual(parsed.passthroughArgs, ["--model", "gpt-5"]);
+  });
+});
+
+describe("cleanupLaunchOrphanedMcpProcesses", () => {
+  it("reaps only detached OMX MCP processes without a live Codex ancestor", async () => {
+    const processes: ProcessEntry[] = [
+      { pid: 700, ppid: 500, command: "codex" },
+      { pid: 701, ppid: 700, command: "node /repo/bin/omx.js" },
+      {
+        pid: 710,
+        ppid: 700,
+        command: "node /repo/oh-my-codex/dist/mcp/state-server.js",
+      },
+      {
+        pid: 800,
+        ppid: 1,
+        command: "node /tmp/oh-my-codex/dist/mcp/memory-server.js",
+      },
+      {
+        pid: 810,
+        ppid: 42,
+        command: "node /tmp/oh-my-codex/dist/mcp/trace-server.js",
+      },
+      {
+        pid: 820,
+        ppid: 50,
+        command: "codex --model gpt-5",
+      },
+      {
+        pid: 821,
+        ppid: 820,
+        command: "node /tmp/other-session/dist/mcp/state-server.js",
+      },
+      {
+        pid: 830,
+        ppid: 50,
+        command: "node /repo/bin/omx.js autoresearch --topic launch",
+      },
+      {
+        pid: 831,
+        ppid: 830,
+        command: "node /tmp/parallel-session/dist/mcp/memory-server.js",
+      },
+    ];
+    const signals: Array<{ pid: number; signal: NodeJS.Signals }> = [];
+    const alive = new Set([800, 810]);
+
+    const result = await cleanupLaunchOrphanedMcpProcesses({
+      currentPid: 701,
+      listProcesses: () => processes,
+      isPidAlive: (pid) => alive.has(pid),
+      sendSignal: (pid, signal) => {
+        signals.push({ pid, signal });
+        alive.delete(pid);
+      },
+      sleep: async () => {},
+      now: () => 0,
+    });
+
+    assert.equal(result.terminatedCount, 2);
+    assert.equal(result.forceKilledCount, 0);
+    assert.deepEqual(result.failedPids, []);
+    assert.deepEqual(signals, [
+      { pid: 800, signal: "SIGTERM" },
+      { pid: 810, signal: "SIGTERM" },
+    ]);
+    assert.equal(
+      signals.some(({ pid }) => pid === 821),
+      false,
+      "launch-safe cleanup must preserve OMX MCP processes still attached to another live Codex tree",
+    );
+    assert.equal(
+      signals.some(({ pid }) => pid === 831),
+      false,
+      "launch-safe cleanup must preserve OMX MCP processes still attached to another live OMX launch tree",
+    );
+  });
+});
+
+describe("reapPostLaunchOrphanedMcpProcesses", () => {
+  it("logs postLaunch reaped MCP orphans and keeps cleanup non-fatal", async () => {
+    const info: string[] = [];
+    const warnings: string[] = [];
+    const errors: string[] = [];
+
+    await reapPostLaunchOrphanedMcpProcesses({
+      cleanup: async () => ({
+        dryRun: false,
+        candidates: [],
+        terminatedCount: 2,
+        forceKilledCount: 0,
+        failedPids: [810],
+      }),
+      writeInfo: (line) => info.push(line),
+      writeWarn: (line) => warnings.push(line),
+      writeError: (line) => errors.push(line),
+    });
+
+    assert.deepEqual(errors, []);
+    assert.match(
+      info.join("\n"),
+      /postLaunch: reaped 2 orphaned OMX MCP process/,
+    );
+    assert.match(
+      warnings.join("\n"),
+      /postLaunch: failed to reap 1 orphaned OMX MCP process/,
+    );
+  });
+
+  it("writes a non-fatal postLaunch cleanup error when the cleanup step throws", async () => {
+    const errors: string[] = [];
+
+    await reapPostLaunchOrphanedMcpProcesses({
+      cleanup: async () => {
+        throw new Error("boom");
+      },
+      writeError: (line) => errors.push(line),
+    });
+
+    assert.match(errors.join("\n"), /postLaunch MCP cleanup failed: Error: boom/);
+  });
+});
+
+describe("cleanupPostLaunchModeStateFiles", () => {
+  it("repairs empty or truncated mode state files and still cancels valid siblings", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-mode-cleanup-"));
+    const sessionId = "sess-postlaunch-cleanup";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+    const partialState = '{\n  "active": true,\n  "mode": "ralph",\n';
+    const warnings: string[] = [];
+
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(
+      join(sessionStateDir, "autopilot-state.json"),
+      JSON.stringify({ active: true, mode: "autopilot" }, null, 2),
+      "utf-8",
+    );
+    await writeFile(join(sessionStateDir, "deep-interview-state.json"), "", "utf-8");
+    await writeFile(join(sessionStateDir, "ralph-state.json"), partialState, "utf-8");
+
+    await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+      writeWarn: (line) => warnings.push(line),
+    });
+
+    const autopilot = JSON.parse(
+      await readFile(join(sessionStateDir, "autopilot-state.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    const deepInterview = JSON.parse(
+      await readFile(join(sessionStateDir, "deep-interview-state.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    const ralph = JSON.parse(
+      await readFile(join(sessionStateDir, "ralph-state.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    assert.equal(autopilot.active, false);
+    assert.equal(typeof autopilot.completed_at, "string");
+    assert.equal(deepInterview.active, false);
+    assert.equal(deepInterview.mode, "deep-interview");
+    assert.equal(deepInterview.current_phase, "cancelled");
+    assert.equal(typeof deepInterview.completed_at, "string");
+    assert.equal(typeof deepInterview.last_turn_at, "string");
+    assert.equal(ralph.active, false);
+    assert.equal(ralph.mode, "ralph");
+    assert.equal(ralph.current_phase, "cancelled");
+    assert.equal(typeof ralph.completed_at, "string");
+    assert.equal(typeof ralph.last_turn_at, "string");
+    const rootCanonicalPath = join(stateDir, "skill-active-state.json");
+    const sessionCanonicalPath = join(sessionStateDir, "skill-active-state.json");
+    if (existsSync(rootCanonicalPath)) {
+      const rootCanonical = JSON.parse(
+        await readFile(rootCanonicalPath, "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(rootCanonical.active, false);
+      assert.deepEqual(rootCanonical.active_skills, []);
+    }
+    if (existsSync(sessionCanonicalPath)) {
+      const sessionCanonical = JSON.parse(
+        await readFile(sessionCanonicalPath, "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(sessionCanonical.active, false);
+      assert.deepEqual(sessionCanonical.active_skills, []);
+    }
+    assert.deepEqual(warnings, []);
+  });
+  it('routes root skill-active cleanup through the locked root writer', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-postlaunch-root-writer-'));
+    const sessionId = 'sess-root-writer';
+    const stateDir = join(wd, '.omx', 'state');
+    const rootState = {
+      version: 1,
+      active: true,
+      skill: 'ralph',
+      session_id: sessionId,
+      active_skills: [{ skill: 'ralph', phase: 'executing', active: true, session_id: sessionId }],
+    };
+    await mkdir(join(stateDir, 'sessions', sessionId), { recursive: true });
+    await writeFile(join(stateDir, 'skill-active-state.json'), `${JSON.stringify(rootState, null, 2)}\n`, 'utf8');
+    let writerCalls = 0;
+
+    await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+      writeRootState: async (rootDir, update) => {
+        writerCalls += 1;
+        const concurrentRoot = {
+          ...rootState,
+          active_skills: [
+            ...rootState.active_skills,
+            { skill: 'team', phase: 'running', active: true, session_id: 'sess-concurrent' },
+          ],
+        };
+        const nextState = update(concurrentRoot);
+        assert.ok(nextState);
+        await writeSkillActiveStateCopiesForStateDir(rootDir, nextState);
+      },
+    });
+
+    assert.equal(writerCalls, 1);
+    const persisted = JSON.parse(await readFile(join(stateDir, 'skill-active-state.json'), 'utf8')) as typeof rootState;
+    assert.equal(persisted.active, true);
+    assert.deepEqual(persisted.active_skills, [{ skill: 'team', phase: 'running', active: true, session_id: 'sess-concurrent' }]);
+  });
+  it('preserves a process-level session update before root scrub cleanup', async () => {
+    const wd = await mkdtemp(join(tmpdir(), 'omx-postlaunch-process-scrub-'));
+    const sessionId = 'sess-process-scrub';
+    const stateDir = join(wd, '.omx', 'state');
+    const rootPath = join(stateDir, 'skill-active-state.json');
+    const rootState = {
+      version: 1,
+      active: true,
+      skill: 'ralph',
+      session_id: sessionId,
+      active_skills: [{ skill: 'ralph', phase: 'executing', active: true, session_id: sessionId }],
+    };
+    try {
+      await mkdir(join(stateDir, 'sessions', sessionId), { recursive: true });
+      await writeFile(rootPath, `${JSON.stringify(rootState, null, 2)}\n`, 'utf8');
+      const updateScript = `
+        import { readFile, writeFile } from 'node:fs/promises';
+        import { writeSkillActiveStateCopiesForStateDir } from './dist/state/skill-active.js';
+        const stateDir = process.env.STATE_DIR;
+        const current = JSON.parse(await readFile(process.env.ROOT_PATH, 'utf8'));
+        current.active_skills.push({ skill: 'team', phase: 'running', active: true, session_id: 'sess-process-concurrent' });
+        await writeSkillActiveStateCopiesForStateDir(stateDir, current, undefined, current);
+      `;
+      const update = spawnSync(process.execPath, ['--input-type=module', '-e', updateScript], {
+        cwd: repoRoot,
+        env: { ...process.env, STATE_DIR: stateDir, ROOT_PATH: rootPath },
+        encoding: 'utf8',
+      });
+      assert.equal(update.status, 0, update.stderr);
+
+      const scrub = spawnSync(process.execPath, ['--input-type=module', '-e', `
+        import { cleanupPostLaunchModeStateFiles } from './dist/cli/index.js';
+        await cleanupPostLaunchModeStateFiles(${JSON.stringify(wd)}, ${JSON.stringify(sessionId)});
+      `], { cwd: repoRoot, env: { ...process.env }, encoding: 'utf8' });
+      assert.equal(scrub.status, 0, scrub.stderr);
+
+      const persisted = JSON.parse(await readFile(rootPath, 'utf8')) as typeof rootState;
+      assert.deepEqual(persisted.active_skills, [{ skill: 'team', phase: 'running', active: true, session_id: 'sess-process-concurrent' }]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes stale terminal deep-interview locks during postLaunch cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-di-terminal-locks-"));
+    const sessionId = "sess-postlaunch-di-terminal-locks";
+    const sessionStateDir = join(wd, ".omx", "state", "sessions", sessionId);
+    const completedAt = "2026-07-09T00:00:00.000Z";
+
+    try {
+      await mkdir(sessionStateDir, { recursive: true });
+      await writeFile(
+        join(sessionStateDir, "deep-interview-state.json"),
+        JSON.stringify({
+          active: false,
+          mode: "deep-interview",
+          current_phase: "cancelled",
+          completed_at: completedAt,
+          input_lock: {
+            active: true,
+            owner: "stale-question",
+          },
+        }, null, 2),
+        "utf-8",
+      );
+
+      await cleanupPostLaunchModeStateFiles(wd, sessionId);
+
+      const deepInterview = JSON.parse(
+        await readFile(join(sessionStateDir, "deep-interview-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      const inputLock = deepInterview.input_lock as Record<string, unknown>;
+
+      assert.equal(deepInterview.active, false);
+      assert.equal(deepInterview.current_phase, "cancelled");
+      assert.equal(deepInterview.completed_at, completedAt);
+      assert.equal(inputLock.active, false);
+      assert.equal(inputLock.status, "released");
+      assert.equal(inputLock.released_at, completedAt);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not preserve complete Ralph cleanup state without completion-audit evidence", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-ralph-complete-audit-missing-"));
+    const sessionId = "sess-postlaunch-ralph-complete-audit-missing";
+    const sessionStateDir = join(wd, ".omx", "state", "sessions", sessionId);
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(
+      join(sessionStateDir, "ralph-state.json"),
+      JSON.stringify({
+        active: false,
+        mode: "ralph",
+        current_phase: "complete",
+        completed_at: "2026-05-09T07:00:00.000Z",
+      }, null, 2),
+      "utf-8",
+    );
+
+    try {
+      await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+        now: () => new Date("2026-05-09T08:00:00.000Z"),
+      });
+
+      const ralph = JSON.parse(
+        await readFile(join(sessionStateDir, "ralph-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(ralph.active, false);
+      assert.equal(ralph.current_phase, "cancelled");
+      assert.equal(ralph.stop_reason, "missing_completion_audit:missing_completion_audit");
+      assert.equal(ralph.completion_audit_gate, "blocked");
+      assert.equal(ralph.completion_audit_missing_reason, "missing_completion_audit");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves complete Ralph cleanup state when completion-audit evidence is present", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-ralph-complete-audit-present-"));
+    const sessionId = "sess-postlaunch-ralph-complete-audit-present";
+    const sessionStateDir = join(wd, ".omx", "state", "sessions", sessionId);
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(
+      join(sessionStateDir, "ralph-state.json"),
+      JSON.stringify({
+        active: false,
+        mode: "ralph",
+        current_phase: "complete",
+        completed_at: "2026-05-09T07:00:00.000Z",
+        completion_audit: {
+          passed: true,
+          prompt_to_artifact_checklist: ["all prompt requirements mapped"],
+          verification_evidence: ["npm test"],
+        },
+      }, null, 2),
+      "utf-8",
+    );
+
+    try {
+      await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+        now: () => new Date("2026-05-09T08:00:00.000Z"),
+      });
+
+      const ralph = JSON.parse(
+        await readFile(join(sessionStateDir, "ralph-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(ralph.active, false);
+      assert.equal(ralph.current_phase, "complete");
+      assert.equal(ralph.stop_reason, undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("marks active Ralph state cancelled with interrupted metadata during postLaunch cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-ralph-interrupted-"));
+    const sessionId = "sess-postlaunch-ralph-interrupted";
+    const sessionStateDir = join(wd, ".omx", "state", "sessions", sessionId);
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(
+      join(sessionStateDir, "ralph-state.json"),
+      JSON.stringify({
+        active: true,
+        mode: "ralph",
+        current_phase: "executing",
+        owner_omx_session_id: sessionId,
+      }, null, 2),
+      "utf-8",
+    );
+
+    try {
+      await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+        now: () => new Date("2026-05-09T08:00:00.000Z"),
+      });
+
+      const ralph = JSON.parse(
+        await readFile(join(sessionStateDir, "ralph-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(ralph.active, false);
+      assert.equal(ralph.current_phase, "cancelled");
+      assert.equal(ralph.completed_at, "2026-05-09T08:00:00.000Z");
+      assert.equal(ralph.interrupted_at, "2026-05-09T08:00:00.000Z");
+      assert.equal(ralph.stop_reason, "session_exit");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not cancel root mode state during session-scoped postLaunch cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-root-preserve-"));
+    const sessionId = "sess-postlaunch-root-preserve";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(
+      join(stateDir, "ralph-state.json"),
+      JSON.stringify({ active: true, mode: "ralph", current_phase: "executing" }, null, 2),
+      "utf-8",
+    );
+    await writeFile(
+      join(sessionStateDir, "ralplan-state.json"),
+      JSON.stringify({ active: true, mode: "ralplan", current_phase: "planning" }, null, 2),
+      "utf-8",
+    );
+
+    try {
+      await cleanupPostLaunchModeStateFiles(wd, sessionId);
+
+      const rootRalph = JSON.parse(
+        await readFile(join(stateDir, "ralph-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      const sessionRalplan = JSON.parse(
+        await readFile(join(sessionStateDir, "ralplan-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(rootRalph.active, true);
+      assert.equal(sessionRalplan.active, false);
+      assert.equal(sessionRalplan.current_phase, "cancelled");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("retries a transient parse failure before cancelling the rewritten mode state", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-mode-retry-"));
+    const sessionId = "sess-postlaunch-retry";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+    const statePath = join(sessionStateDir, "ralph-state.json");
+    const writes: Array<{ path: string; content: string }> = [];
+    const validState = JSON.stringify({ active: true, mode: "ralph" }, null, 2);
+    let reads = 0;
+
+    await mkdir(sessionStateDir, { recursive: true });
+
+    const mockReaddir = (async (dir: unknown, _options: unknown) => (
+      String(dir) === sessionStateDir ? ["ralph-state.json"] : []
+    )) as unknown as typeof fsReaddir;
+    const mockReadFile = (async (path: unknown, _options: unknown) => {
+        assert.equal(String(path), statePath);
+        reads += 1;
+        return reads === 1
+          ? '{\n  "active": true,\n  "mode": "ralph"'
+          : validState;
+      }) as unknown as typeof readFile;
+    const mockWriteFile = (async (path: unknown, content: unknown, _options: unknown) => {
+        writes.push({ path: String(path), content: String(content) });
+      }) as unknown as typeof writeFile;
+
+    const dependencies: Parameters<typeof cleanupPostLaunchModeStateFiles>[2] = {
+      readdir: mockReaddir,
+      readFile: mockReadFile,
+      writeFile: mockWriteFile,
+      sleep: async () => {},
+      now: () => new Date("2026-04-07T00:00:00.000Z"),
+    };
+
+    await cleanupPostLaunchModeStateFiles(wd, sessionId, dependencies);
+
+    assert.equal(reads, 2);
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0]?.path, statePath);
+    const persisted = JSON.parse(writes[0]?.content ?? "{}") as Record<string, unknown>;
+    assert.equal(persisted.active, false);
+    assert.equal(persisted.completed_at, "2026-04-07T00:00:00.000Z");
+  });
+
+  it("warns on structurally complete malformed JSON without aborting sibling cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-mode-malformed-"));
+    const sessionId = "sess-postlaunch-malformed";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+    const warnings: string[] = [];
+    const malformedState = '{\n  "active": true,\n}\n';
+
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(join(sessionStateDir, "ralph-state.json"), malformedState, "utf-8");
+    await writeFile(
+      join(sessionStateDir, "ultrawork-state.json"),
+      JSON.stringify({ active: true, mode: "ultrawork" }, null, 2),
+      "utf-8",
+    );
+
+    await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+      writeWarn: (line) => warnings.push(line),
+    });
+
+    const ultrawork = JSON.parse(
+      await readFile(join(sessionStateDir, "ultrawork-state.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    assert.equal(ultrawork.active, false);
+    assert.equal(typeof ultrawork.completed_at, "string");
+    const canonicalPath = join(stateDir, "skill-active-state.json");
+    if (existsSync(canonicalPath)) {
+      const canonical = JSON.parse(
+        await readFile(canonicalPath, "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(canonical.active, false);
+      assert.deepEqual(canonical.active_skills, []);
+    }
+    assert.equal(await readFile(join(sessionStateDir, "ralph-state.json"), "utf-8"), malformedState);
+    assert.equal(warnings.length, 1);
+    assert.match(warnings[0] ?? "", /skipped malformed mode state .*ralph-state\.json/);
+  });
+
+  it("reconciles root skill-active entries for the finished terminal session", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-root-skill-active-"));
+    const sessionId = "sess-terminal-autopilot";
+    const otherSessionId = "sess-other";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+
+    try {
+      await mkdir(sessionStateDir, { recursive: true });
+      await writeFile(
+        join(stateDir, "skill-active-state.json"),
+        JSON.stringify({
+          version: 1,
+          active: true,
+          skill: "autopilot",
+          phase: "ralph",
+          session_id: sessionId,
+          initialized_state_path: `.omx/state/sessions/${sessionId}/autopilot-state.json`,
+          active_skills: [
+            { skill: "autopilot", phase: "ralph", active: true, session_id: sessionId },
+            { skill: "team", phase: "running", active: true, session_id: otherSessionId },
+          ],
+        }, null, 2),
+        "utf-8",
+      );
+
+      await cleanupPostLaunchModeStateFiles(wd, sessionId);
+
+      const rootCanonical = JSON.parse(
+        await readFile(join(stateDir, "skill-active-state.json"), "utf-8"),
+      ) as { active?: boolean; active_skills?: Array<{ skill?: string; session_id?: string }> };
+      assert.equal(rootCanonical.active, true);
+      assert.deepEqual(rootCanonical.active_skills, [
+        { skill: "team", phase: "running", active: true, session_id: otherSessionId },
+      ]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves other-session active skills when session mode cleanup syncs before root scrub", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-mode-root-skill-active-"));
+    const sessionId = "sess-terminal-autopilot";
+    const otherSessionId = "sess-other-team";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+
+    try {
+      await mkdir(sessionStateDir, { recursive: true });
+      await writeFile(
+        join(stateDir, "skill-active-state.json"),
+        JSON.stringify({
+          version: 1,
+          active: true,
+          skill: "autopilot",
+          phase: "ralph",
+          session_id: sessionId,
+          initialized_state_path: `.omx/state/sessions/${sessionId}/autopilot-state.json`,
+          active_skills: [
+            { skill: "autopilot", phase: "ralph", active: true, session_id: sessionId },
+            { skill: "team", phase: "running", active: true, session_id: otherSessionId },
+          ],
+        }, null, 2),
+        "utf-8",
+      );
+      await writeFile(
+        join(sessionStateDir, "autopilot-state.json"),
+        JSON.stringify({ active: true, mode: "autopilot", current_phase: "ralph" }, null, 2),
+        "utf-8",
+      );
+
+      await cleanupPostLaunchModeStateFiles(wd, sessionId);
+
+      const autopilotState = JSON.parse(
+        await readFile(join(sessionStateDir, "autopilot-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(autopilotState.active, false);
+      assert.equal(autopilotState.current_phase, "cancelled");
+
+      const rootCanonical = JSON.parse(
+        await readFile(join(stateDir, "skill-active-state.json"), "utf-8"),
+      ) as { active?: boolean; skill?: string; phase?: string; active_skills?: Array<Record<string, unknown>> };
+      assert.equal(rootCanonical.active, true);
+      assert.equal(rootCanonical.skill, "team");
+      assert.equal(rootCanonical.phase, "running");
+      assert.deepEqual(rootCanonical.active_skills, [
+        { skill: "team", phase: "running", active: true, session_id: otherSessionId },
+      ]);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves review-pending Autopilot state across postLaunch compact cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-autopilot-review-pending-"));
+    const sessionId = "sess-autopilot-review-pending";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+
+    try {
+      await mkdir(sessionStateDir, { recursive: true });
+      await writeFile(
+        join(stateDir, "skill-active-state.json"),
+        JSON.stringify({
+          version: 1,
+          active: true,
+          skill: "autopilot",
+          phase: "code-review",
+          session_id: sessionId,
+          initialized_state_path: `.omx/state/sessions/${sessionId}/autopilot-state.json`,
+          active_skills: [
+            { skill: "autopilot", phase: "code-review", active: true, session_id: sessionId },
+          ],
+        }, null, 2),
+        "utf-8",
+      );
+      await writeFile(
+        join(sessionStateDir, "skill-active-state.json"),
+        JSON.stringify({
+          version: 1,
+          active: true,
+          skill: "autopilot",
+          phase: "code-review",
+          session_id: sessionId,
+          active_skills: [
+            { skill: "autopilot", phase: "code-review", active: true, session_id: sessionId },
+          ],
+        }, null, 2),
+        "utf-8",
+      );
+      await writeFile(
+        join(sessionStateDir, "autopilot-state.json"),
+        JSON.stringify({
+          active: true,
+          mode: "autopilot",
+          current_phase: "code-review",
+          iteration: 1,
+          review_cycle: 0,
+          state: {
+            phase_cycle: ["ralplan", "ralph", "code-review"],
+            handoff_artifacts: {
+              ralplan: ".omx/plans/prd-issue-2366.md",
+              ralph: { verification: ["npm test"], changed_files: ["src/cli/index.ts"] },
+              code_review: null,
+            },
+            review_verdict: null,
+            return_to_ralplan_reason: null,
+          },
+        }, null, 2),
+        "utf-8",
+      );
+
+      await cleanupPostLaunchModeStateFiles(wd, sessionId, {
+        now: () => new Date("2026-05-16T11:00:00.000Z"),
+      });
+
+      const autopilotState = JSON.parse(
+        await readFile(join(sessionStateDir, "autopilot-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(autopilotState.active, true);
+      assert.equal(autopilotState.current_phase, "code-review");
+      assert.equal(autopilotState.completed_at, undefined);
+      assert.equal((autopilotState.state as Record<string, unknown>)?.review_verdict, null);
+
+      const sessionSkill = JSON.parse(
+        await readFile(join(sessionStateDir, "skill-active-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(sessionSkill.active, true);
+      assert.equal(sessionSkill.skill, "autopilot");
+      assert.equal(sessionSkill.phase, "code-review");
+
+      const rootSkill = JSON.parse(
+        await readFile(join(stateDir, "skill-active-state.json"), "utf-8"),
+      ) as Record<string, unknown>;
+      assert.equal(rootSkill.active, true);
+      assert.equal(rootSkill.skill, "autopilot");
+      assert.equal(rootSkill.phase, "code-review");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("clears canonical skill-active entries during cleanup and hides them from HUD/overlay readers", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-postlaunch-skill-active-cleanup-"));
+    const sessionId = "sess-skill-active-cleanup";
+    const stateDir = join(wd, ".omx", "state");
+    const sessionStateDir = join(stateDir, "sessions", sessionId);
+
+    await mkdir(sessionStateDir, { recursive: true });
+    await writeFile(join(stateDir, "session.json"), JSON.stringify({ session_id: sessionId }), "utf-8");
+    await writeFile(
+      join(sessionStateDir, "skill-active-state.json"),
+      JSON.stringify({
+        version: 1,
+        active: true,
+        skill: "autoresearch",
+        phase: "running",
+        session_id: sessionId,
+        active_skills: [
+          { skill: "autoresearch", phase: "running", active: true, session_id: sessionId },
+        ],
+      }, null, 2),
+      "utf-8",
+    );
+
+    await cleanupPostLaunchModeStateFiles(wd, sessionId);
+
+    const canonical = JSON.parse(
+      await readFile(join(sessionStateDir, "skill-active-state.json"), "utf-8"),
+    ) as Record<string, unknown>;
+    assert.equal(canonical.active, false);
+    assert.equal(canonical.phase, "complete");
+    assert.deepEqual(canonical.active_skills, []);
+
+    const hudState = await readAllState(wd);
+    assert.equal(hudState.autoresearch, null);
+
+    const overlay = await generateOverlay(wd, sessionId);
+    assert.equal(overlay.includes("- autoresearch:"), false);
+  });
+});
+
+describe("watcher script path resolution", () => {
+  it("resolves packaged watcher entrypoints from dist/scripts", () => {
+    assert.equal(
+      resolveNotifyFallbackWatcherScript("/pkg"),
+      "/pkg/dist/scripts/notify-fallback-watcher.js",
+    );
+    assert.equal(
+      resolveHookDerivedWatcherScript("/pkg"),
+      "/pkg/dist/scripts/hook-derived-watcher.js",
+    );
+    assert.equal(
+      resolveNotifyHookScript("/pkg"),
+      "/pkg/dist/scripts/notify-hook.js",
+    );
+  });
+});
+
+describe("buildNotifyFallbackWatcherEnv", () => {
+  it("enables watcher authority and propagates CODEX_HOME override when requested", () => {
+    const env = buildNotifyFallbackWatcherEnv(
+      { HOME: "/tmp/home", OMX_HUD_AUTHORITY: "0", TMUX: "sock,1,0", TMUX_PANE: "%2" },
+      { codexHomeOverride: "/tmp/codex-home", omxRootOverride: "/tmp/omx-root", enableAuthority: true },
+    );
+    assert.equal(env.OMX_HUD_AUTHORITY, "1");
+    assert.equal(env.CODEX_HOME, "/tmp/codex-home");
+    assert.equal(env.OMX_ROOT, "/tmp/omx-root");
+    assert.equal(env.HOME, "/tmp/home");
+    assert.equal(env.TMUX, undefined);
+    assert.equal(env.TMUX_PANE, undefined);
+  });
+
+  it("disables watcher authority explicitly when not requested", () => {
+    const env = buildNotifyFallbackWatcherEnv(
+      { HOME: "/tmp/home", OMX_HUD_AUTHORITY: "1", TMUX: "sock,1,0", TMUX_PANE: "%3" },
+      { enableAuthority: false },
+    );
+    assert.equal(env.OMX_HUD_AUTHORITY, "0");
+    assert.equal(env.HOME, "/tmp/home");
+    assert.equal(env.TMUX, undefined);
+    assert.equal(env.TMUX_PANE, undefined);
+  });
+});
+
+describe("shouldEnableNotifyFallbackWatcher", () => {
+  it("keeps notify fallback enabled by default on non-Windows hosts", () => {
+    assert.equal(shouldEnableNotifyFallbackWatcher({}, "linux"), true);
+  });
+
+  it("disables notify fallback explicitly on non-Windows hosts", () => {
+    assert.equal(
+      shouldEnableNotifyFallbackWatcher({ OMX_NOTIFY_FALLBACK: "0" }, "linux"),
+      false,
+    );
+  });
+
+  it("disables notify fallback by default on win32", () => {
+    assert.equal(shouldEnableNotifyFallbackWatcher({}, "win32"), false);
+  });
+
+  it("allows explicit opt-in for notify fallback on win32", () => {
+    assert.equal(
+      shouldEnableNotifyFallbackWatcher({ OMX_NOTIFY_FALLBACK: "1" }, "win32"),
+      true,
+    );
+  });
+});
+
+describe("reapStaleNotifyFallbackWatcher", () => {
+  it("stops an existing watcher even when a later startup gate would skip relaunch", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-stale-notify-fallback-"));
+    try {
+      const pidPath = join(cwd, "notify-fallback.pid");
+      await writeFile(
+        pidPath,
+        JSON.stringify({ pid: 4321, started_at: "2026-04-05T00:00:00.000Z" }),
+        "utf-8",
+      );
+      const killed: Array<{ pid: number; signal?: NodeJS.Signals }> = [];
+
+      await reapStaleNotifyFallbackWatcher(pidPath, {
+        isWatcherProcess: () => true,
+        tryKillPid(pid, signal) {
+          killed.push({ pid, signal });
+          return true;
+        },
+      });
+
+      assert.deepEqual(killed, [{ pid: 4321, signal: "SIGTERM" }]);
+      assert.equal(shouldEnableNotifyFallbackWatcher({}, "win32"), false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores missing pid files", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-missing-notify-fallback-"));
+    try {
+      const pidPath = join(cwd, "notify-fallback.pid");
+      let killCalls = 0;
+
+      await reapStaleNotifyFallbackWatcher(pidPath, {
+        tryKillPid() {
+          killCalls += 1;
+          return true;
+        },
+      });
+
+      assert.equal(killCalls, 0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("suppresses ESRCH cleanup errors but warns on unexpected failures", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-esrch-notify-fallback-"));
+    try {
+      const pidPath = join(cwd, "notify-fallback.pid");
+      await writeFile(pidPath, JSON.stringify({ pid: 99 }), "utf-8");
+
+      const warnings: Array<{ message: unknown; meta: unknown }> = [];
+      await reapStaleNotifyFallbackWatcher(pidPath, {
+        readFile: async () => {
+          throw Object.assign(new Error("gone"), { code: "ESRCH" });
+        },
+        warn(message, meta) {
+          warnings.push({ message, meta });
+        },
+      });
+      assert.deepEqual(warnings, []);
+
+      const warned: Array<{ message: unknown; meta: unknown }> = [];
+      await reapStaleNotifyFallbackWatcher(pidPath, {
+        readFile: async (path, encoding) => readFile(path, encoding),
+        isWatcherProcess: () => true,
+        tryKillPid() {
+          throw new Error("permission denied");
+        },
+        warn(message, meta) {
+          warned.push({ message, meta });
+        },
+      });
+      assert.equal(warned.length, 1);
+      assert.equal(warned[0]?.message, "[omx] warning: failed to stop stale notify fallback watcher");
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("buildNotifyTempStartupMessages", () => {
+  it("always emits summary when temp mode is active", () => {
+    const result = buildNotifyTempStartupMessages(
+      {
+        active: true,
+        selectors: ["discord"],
+        canonicalSelectors: ["discord"],
+        warnings: [],
+        source: "cli",
+      },
+      true,
+    );
+    assert.deepEqual(result.infoLines, [
+      "notify temp: active | providers=discord | persistent-routing=bypassed",
+    ]);
+    assert.deepEqual(result.warningLines, []);
+  });
+
+  it("emits no-valid-provider warning when no provider is configured", () => {
+    const result = buildNotifyTempStartupMessages(
+      {
+        active: true,
+        selectors: [],
+        canonicalSelectors: [],
+        warnings: [
+          "notify temp: provider selectors imply temp mode (auto-activated)",
+        ],
+        source: "providers",
+      },
+      false,
+    );
+    assert.equal(
+      result.warningLines.includes(
+        "notify temp: no valid providers resolved; notifications skipped",
+      ),
+      true,
+    );
+  });
+});
+
+describe("resolveWorkerSparkModel", () => {
+  it("returns spark model string when --spark is present", () => {
+    assert.equal(
+      resolveWorkerSparkModel(["--spark", "--yolo"]),
+      expectedLowComplexityModel(),
+    );
+  });
+
+  it("returns spark model string when --madmax-spark is present", () => {
+    assert.equal(
+      resolveWorkerSparkModel(["--madmax-spark"]),
+      expectedLowComplexityModel(),
+    );
+  });
+
+  it("returns undefined when neither spark flag is present", () => {
+    assert.equal(
+      resolveWorkerSparkModel(["--madmax", "--yolo", "--model", "gpt-5"]),
+      undefined,
+    );
+  });
+
+  it("returns undefined for empty args", () => {
+    assert.equal(resolveWorkerSparkModel([]), undefined);
+  });
+
+  it("returns undefined for spark flags after --", () => {
+    assert.equal(resolveWorkerSparkModel(["--", "--spark"]), undefined);
+    assert.equal(resolveWorkerSparkModel(["--", "--madmax-spark"]), undefined);
+  });
+
+  it("reads low-complexity team model from config when codexHomeOverride is provided", async () => {
+    // Intentional legacy model fixture: verifies an explicit user override is routed to workers unchanged.
+    const codexHome = await mkdtemp(join(tmpdir(), "omx-codex-home-"));
+    try {
+      await writeFile(
+        join(codexHome, ".omx-config.json"),
+        JSON.stringify({ models: { team_low_complexity: "gpt-4.1-mini" } }),
+      );
+      assert.equal(
+        resolveWorkerSparkModel(["--spark"], codexHome),
+        "gpt-4.1-mini",
+      );
+    } finally {
+      await rm(codexHome, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveTeamWorkerLaunchArgsEnv (spark)", () => {
+  it("injects spark model as worker default when no explicit env model", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        undefined,
+        [],
+        true,
+        expectedLowComplexityModel(),
+      ),
+      `"--model" "${expectedLowComplexityModel()}"`,
+    );
+  });
+
+  it("explicit env model overrides spark default", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        "--model gpt-5",
+        [],
+        true,
+        expectedLowComplexityModel(),
+      ),
+      '"--model" "gpt-5"',
+    );
+  });
+
+  it("inherited leader model overrides spark default", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        undefined,
+        ["--model", "gpt-4.1"],
+        true,
+        expectedLowComplexityModel(),
+      ),
+      '"--model" "gpt-4.1"',
+    );
+  });
+});
+
+describe("commandOwnsLocalHelp", () => {
+  it("returns true for nested commands that render their own help output", () => {
+    for (const command of [
+      "adapt",
+      "agents-init",
+      "api",
+      "ask",
+      "question",
+      "autoresearch",
+      "deepinit",
+      "explore",
+      "hooks",
+      "hud",
+      "notepad",
+      "project-memory",
+      "ralph",
+      "resume",
+      "session",
+      "sparkshell",
+      "trace",
+      "code-intel",
+      "team",
+      "tmux-hook",
+    ]) {
+      assert.equal(
+        commandOwnsLocalHelp(command),
+        true,
+        `expected ${command} to own local help`,
+      );
+    }
+  });
+
+  it("returns false for top-level help-only commands", () => {
+    for (const command of ["help", "launch", "version", "update"]) {
+      assert.equal(
+        commandOwnsLocalHelp(command),
+        false,
+        `expected ${command} to use top-level help`,
+      );
+    }
+  });
+});
+
+describe("resolveCliInvocation", () => {
+  it("resolves api to api command", () => {
+    assert.deepEqual(
+      resolveCliInvocation(["api", "status"]),
+      {
+        command: "api",
+        launchArgs: [],
+      },
+    );
+  });
+
+  it("resolves explore to explore command", () => {
+    assert.deepEqual(
+      resolveCliInvocation(["explore", "--prompt", "find", "auth"]),
+      {
+        command: "explore",
+        launchArgs: [],
+      },
+    );
+  });
+
+  it("resolves ask to ask command", () => {
+    assert.deepEqual(resolveCliInvocation(["ask", "claude", "hello"]), {
+      command: "ask",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves question to question command", () => {
+    assert.deepEqual(resolveCliInvocation(["question", "--input", "{}"]), {
+      command: "question",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves autoresearch to autoresearch command", () => {
+    assert.deepEqual(resolveCliInvocation(["autoresearch", "missions/demo"]), {
+      command: "autoresearch",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves session to session command", () => {
+    assert.deepEqual(
+      resolveCliInvocation(["session", "search", "startup evidence"]),
+      {
+        command: "session",
+        launchArgs: [],
+      },
+    );
+  });
+
+  it("resolves resume to resume command and forwards trailing args", () => {
+    assert.deepEqual(resolveCliInvocation(["resume", "--last"]), {
+      command: "resume",
+      launchArgs: ["--last"],
+    });
+  });
+
+  it("resolves resume session id and prompt as forwarded args", () => {
+    assert.deepEqual(
+      resolveCliInvocation(["resume", "session-123", "continue here"]),
+      {
+        command: "resume",
+        launchArgs: ["session-123", "continue here"],
+      },
+    );
+  });
+
+  it("resolves exec to non-interactive launch passthrough and forwards trailing args", () => {
+    assert.deepEqual(
+      resolveCliInvocation(["exec", "--model", "gpt-5", "say hi"]),
+      {
+        command: "exec",
+        launchArgs: ["--model", "gpt-5", "say hi"],
+      },
+    );
+  });
+
+  it("resolves update to update command", () => {
+    assert.deepEqual(resolveCliInvocation(["update"]), {
+      command: "update",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves update channel flags and rejects invalid combinations", () => {
+    assert.equal(resolveUpdateChannelArg([]), "stable");
+    assert.equal(resolveUpdateChannelArg(["--stable"]), "stable");
+    assert.equal(resolveUpdateChannelArg(["--dev"]), "dev");
+    assert.throws(
+      () => resolveUpdateChannelArg(["--dev", "--stable"]),
+      /mutually exclusive/,
+    );
+    assert.throws(
+      () => resolveUpdateChannelArg(["--beta"]),
+      /Unknown omx update option: --beta/,
+    );
+  });
+
+  it("resolves hooks to hooks command", () => {
+    assert.deepEqual(resolveCliInvocation(["hooks"]), {
+      command: "hooks",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves agents-init to agents-init command", () => {
+    assert.deepEqual(resolveCliInvocation(["agents-init", "."]), {
+      command: "agents-init",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves deepinit to deepinit alias command", () => {
+    assert.deepEqual(resolveCliInvocation(["deepinit", "src"]), {
+      command: "deepinit",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves --help to the help command instead of launch", () => {
+    assert.deepEqual(resolveCliInvocation(["--help"]), {
+      command: "help",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves --version to the version command instead of launch", () => {
+    assert.deepEqual(resolveCliInvocation(["--version"]), {
+      command: "version",
+      launchArgs: [],
+    });
+  });
+
+  it("resolves -v to the version command instead of launch", () => {
+    assert.deepEqual(resolveCliInvocation(["-v"]), {
+      command: "version",
+      launchArgs: [],
+    });
+  });
+
+  it("keeps unknown long flags as launch passthrough args", () => {
+    assert.deepEqual(resolveCliInvocation(["--model", "gpt-5"]), {
+      command: "launch",
+      launchArgs: ["--model", "gpt-5"],
+    });
+  });
+
+  it("advertises the explicit update command in top-level help", () => {
+    assert.match(HELP, /omx update\s+Install the stable channel now, then refresh setup/);
+    assert.match(HELP, /omx update --stable\s+Install\/rollback to npm stable \(oh-my-codex@latest\), then refresh setup/);
+    assert.match(HELP, /omx update --dev\s+Install the upstream dev branch, then refresh setup/);
+  });
+
+  it("scopes Ralplan authority preflight in top-level help", () => {
+    assert.match(HELP, /omx ralplan\s+Adapted Ralplan authority support; preflight applies only when native role routing is unavailable\s+and adapted Ralplan authority is requested/);
+    assert.doesNotMatch(HELP, /Record validated role intents/);
+  });
+
+  it("advertises only the four supported root reasoning modes", () => {
+    assert.match(HELP, /omx reasoning Show or set model reasoning effort \(low\|medium\|high\|xhigh\)/);
+    assert.match(HELP, /--high\s+Launch Codex with high reasoning effort/);
+    assert.match(HELP, /--xhigh\s+Launch Codex with xhigh reasoning effort/);
+    assert.doesNotMatch(HELP, /--max/);
+    assert.doesNotMatch(HELP, /--ultra/);
+  });
+
+  it("advertises concise launch policy controls in top-level help", () => {
+    assert.match(HELP, /--direct\s+Launch the interactive leader directly/);
+    assert.match(HELP, /OMX_LAUNCH_POLICY=auto[\s\S]*Use the default policy/);
+    assert.match(HELP, /OMX_LAUNCH_POLICY=direct[\s\S]*Run without OMX tmux\/HUD management/);
+    assert.match(HELP, /OMX_LAUNCH_POLICY=tmux[\s\S]*Force OMX-managed detached tmux launch/);
+    assert.match(HELP, /OMX_LAUNCH_POLICY=detached-tmux[\s\S]*Force OMX-managed detached tmux launch/);
+    assert.match(HELP, /CLI policy flags \(--direct\/--tmux\) override OMX_LAUNCH_POLICY/);
+    assert.match(HELP, /Unset or empty OMX_LAUNCH_POLICY returns to auto\/default behavior/);
+    assert.match(HELP, /Config files are intentionally not used/);
+    assert.doesNotMatch(HELP, /OMX_LAUNCH_POLICY=direct\|tmux\|detached-tmux\|auto/);
+    assert.doesNotMatch(HELP, /OMX_LAUNCH_POLICY=direct omx --tmux --yolo/);
+  });
+});
+
+describe("resolveSetupInstallModeArg", () => {
+  it("maps explicit setup install mode flags", () => {
+    assert.equal(resolveSetupInstallModeArg(["--dry-run"]), undefined);
+    assert.equal(resolveSetupInstallModeArg(["--plugin"]), "plugin");
+    assert.equal(resolveSetupInstallModeArg(["--legacy"]), "legacy");
+    assert.equal(
+      resolveSetupInstallModeArg(["--install-mode", "legacy"]),
+      "legacy",
+    );
+    assert.equal(
+      resolveSetupInstallModeArg(["--install-mode=plugin"]),
+      "plugin",
+    );
+    assert.equal(
+      resolveSetupInstallModeArg(["--scope", "project", "--plugin"]),
+      "plugin",
+    );
+  });
+
+  it("rejects invalid setup install mode flags", () => {
+    assert.throws(
+      () => resolveSetupInstallModeArg(["--install-mode"]),
+      /Missing setup install mode value after --install-mode/,
+    );
+    assert.throws(
+      () => resolveSetupInstallModeArg(["--install-mode", "workspace"]),
+      /Invalid setup install mode: workspace/,
+    );
+    assert.throws(
+      () => resolveSetupInstallModeArg(["--plugin", "--legacy"]),
+      /Conflicting setup install mode flags/,
+    );
+    assert.throws(
+      () => resolveSetupInstallModeArg(["--plugin", "--install-mode", "legacy"]),
+      /Conflicting setup install mode flags/,
+    );
+    assert.throws(
+      () => resolveSetupInstallModeArg(["--legacy", "--install-mode=plugin"]),
+      /Conflicting setup install mode flags/,
+    );
+  });
+});
+
+
+describe("resolveSetupMcpModeArg", () => {
+  it("maps explicit setup MCP mode flags", () => {
+    assert.equal(resolveSetupMcpModeArg(["--dry-run"]), undefined);
+    assert.equal(resolveSetupMcpModeArg(["--no-mcp"]), "none");
+    assert.equal(resolveSetupMcpModeArg(["--with-mcp"]), "compat");
+    assert.equal(resolveSetupMcpModeArg(["--mcp", "none"]), "none");
+    assert.equal(resolveSetupMcpModeArg(["--mcp=compat"]), "compat");
+    assert.equal(resolveSetupMcpModeArg(["--scope", "project", "--mcp", "compat"]), "compat");
+  });
+
+  it("rejects invalid or conflicting setup MCP mode flags", () => {
+    assert.throws(
+      () => resolveSetupMcpModeArg(["--mcp"]),
+      /Missing setup MCP mode value after --mcp/,
+    );
+    assert.throws(
+      () => resolveSetupMcpModeArg(["--mcp", "full"]),
+      /Invalid setup MCP mode: full/,
+    );
+    assert.throws(
+      () => resolveSetupMcpModeArg(["--no-mcp", "--with-mcp"]),
+      /Conflicting setup MCP mode flags/,
+    );
+    assert.throws(
+      () => resolveSetupMcpModeArg(["--no-mcp", "--mcp=compat"]),
+      /Conflicting setup MCP mode flags/,
+    );
+  });
+});
+
+describe("resolveSetupTeamModeArg", () => {
+  it("maps explicit setup Team mode flags", () => {
+    assert.equal(resolveSetupTeamModeArg(["--dry-run"]), undefined);
+    assert.equal(resolveSetupTeamModeArg(["--disable-team"]), "disabled");
+    assert.equal(resolveSetupTeamModeArg(["--no-team"]), "disabled");
+    assert.equal(resolveSetupTeamModeArg(["--enable-team"]), "enabled");
+    assert.equal(resolveSetupTeamModeArg(["--team"]), "enabled");
+    assert.equal(resolveSetupTeamModeArg(["--team-mode", "disabled"]), "disabled");
+    assert.equal(resolveSetupTeamModeArg(["--team-mode=enabled"]), "enabled");
+    assert.equal(
+      resolveSetupTeamModeArg(["--scope", "project", "--team-mode", "disabled"]),
+      "disabled",
+    );
+  });
+
+  it("rejects invalid or conflicting setup Team mode flags", () => {
+    assert.throws(
+      () => resolveSetupTeamModeArg(["--team-mode"]),
+      /Missing setup Team mode value after --team-mode/,
+    );
+    assert.throws(
+      () => resolveSetupTeamModeArg(["--team-mode", "minimal"]),
+      /Invalid setup Team mode: minimal/,
+    );
+    assert.throws(
+      () => resolveSetupTeamModeArg(["--disable-team", "--enable-team"]),
+      /Conflicting setup Team mode flags/,
+    );
+    assert.throws(
+      () => resolveSetupTeamModeArg(["--team-mode=enabled", "--no-team"]),
+      /Conflicting setup Team mode flags/,
+    );
+  });
+});
+describe("resolveSetupAgentsMergePolicyArg", () => {
+  it("accepts only the explicit bare set and clear selectors", () => {
+    assert.deepEqual(resolveSetupAgentsMergePolicyArg([]), undefined);
+    assert.deepEqual(resolveSetupAgentsMergePolicyArg(["--merge-agents"]), { kind: "set", value: true });
+    assert.deepEqual(resolveSetupAgentsMergePolicyArg(["--no-merge-agents"]), { kind: "set", value: false });
+    assert.deepEqual(resolveSetupAgentsMergePolicyArg(["--clear-merge-agents-policy"]), { kind: "clear" });
+    assert.deepEqual(resolveSetupAgentsMergePolicyArg(["--merge-agents", "--merge-agents"]), { kind: "set", value: true });
+    assert.deepEqual(resolveSetupAgentsMergePolicyArg(["--clear-merge-agents-policy", "--clear-merge-agents-policy"]), { kind: "clear" });
+  });
+
+  it("rejects values, equals spellings, and conflicting policy selectors", () => {
+    for (const argv of [
+      ["--merge-agents=true"],
+      ["--no-merge-agents=false"],
+      ["--clear-merge-agents-policy=true"],
+      ["--merge-agents", "true"],
+      ["--no-merge-agents", "false"],
+    ]) {
+      assert.throws(() => resolveSetupAgentsMergePolicyArg(argv), /merge.*policy|merge-agents/i);
+    }
+    assert.throws(() => resolveSetupAgentsMergePolicyArg(["--merge-agents", "--no-merge-agents"]), /Conflicting.*merge.*policy/i);
+    assert.throws(() => resolveSetupAgentsMergePolicyArg(["--clear-merge-agents-policy", "--merge-agents"]), /Conflicting.*merge.*policy/i);
+  });
+});
+
+describe("resolveSetupScopeArg", () => {
+  it("returns undefined when scope is omitted", () => {
+    assert.equal(resolveSetupScopeArg(["--dry-run"]), undefined);
+  });
+
+  it("parses --scope <value> form", () => {
+    assert.equal(
+      resolveSetupScopeArg(["--dry-run", "--scope", "project"]),
+      "project",
+    );
+  });
+
+  it("parses --scope=<value> form", () => {
+    assert.equal(resolveSetupScopeArg(["--scope=project"]), "project");
+  });
+
+  it("throws on invalid scope value", () => {
+    assert.throws(
+      () => resolveSetupScopeArg(["--scope", "workspace"]),
+      /Invalid setup scope: workspace/,
+    );
+  });
+
+  it("throws when --scope value is missing", () => {
+    assert.throws(
+      () => resolveSetupScopeArg(["--scope"]),
+      /Missing setup scope value after --scope/,
+    );
+  });
+});
+describe("project launch scope helpers", () => {
+  it("reads persisted setup scope when valid", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(readPersistedSetupScope(wd), "project");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("reads persisted setup preferences when install mode is present", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "user", installMode: "plugin" }),
+      );
+      assert.deepEqual(readPersistedSetupPreferences(wd), {
+        scope: "user",
+        installMode: "plugin",
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("reads persisted setup Team mode when present", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project", teamMode: "disabled" }),
+      );
+      assert.deepEqual(readPersistedSetupPreferences(wd), {
+        scope: "project",
+        teamMode: "disabled",
+      });
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("ignores malformed persisted setup scope", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(join(wd, ".omx", "setup-scope.json"), "{not-json");
+      assert.equal(readPersistedSetupScope(wd), undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses project CODEX_HOME when persisted scope is project", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(resolveCodexHomeForLaunch(wd, {}), join(wd, ".codex"));
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses project CODEX_HOME when persisted scope is project even if HOME is unusable", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      const badHome = join(wd, "home-as-file");
+      await writeFile(badHome, "not-a-directory");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(resolveCodexHomeForLaunch(wd, { HOME: badHome }), join(wd, ".codex"));
+      assert.equal(
+        resolveCodexConfigPathForLaunch(wd, { HOME: badHome }),
+        join(wd, ".codex", "config.toml"),
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses project config.toml for launch repair when persisted scope is project", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(
+        resolveCodexConfigPathForLaunch(wd, {}),
+        join(wd, ".codex", "config.toml"),
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves explicit compat MCP during launch config repair", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(join(wd, ".codex"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project", mcpMode: "compat" }),
+      );
+      const configPath = join(wd, ".codex", "config.toml");
+      await mergeConfig(configPath, wd, {
+        includeFirstPartyMcp: true,
+        sharedMcpServers: [
+          {
+            name: "eslint",
+            command: "npx",
+            args: ["@eslint/mcp@latest"],
+            enabled: true,
+            startupTimeoutSec: 12,
+          },
+        ],
+        sharedMcpRegistrySource: join(wd, ".omx", "mcp-registry.json"),
+      });
+      const clean = await readFile(configPath, "utf-8");
+      assert.match(clean, /^\[mcp_servers\.omx_state\]$/m);
+      assert.match(clean, /oh-my-codex \(OMX\) Shared MCP Registry Sync/);
+      assert.match(clean, /^\[mcp_servers\.eslint\]$/m);
+
+      await writeFile(configPath, `${clean}\n[tui]\nstatus_line = ["git-branch"]\n`);
+      const repaired = await repairConfigIfNeeded(
+        configPath,
+        wd,
+        await resolveLaunchConfigRepairOptions(wd, configPath),
+      );
+      const repairedToml = await readFile(configPath, "utf-8");
+
+      assert.equal(repaired, true);
+      assert.match(repairedToml, /^\[mcp_servers\.omx_state\]$/m);
+      assert.match(repairedToml, /oh-my-codex \(OMX\) Shared MCP Registry Sync/);
+      assert.match(repairedToml, /^\[mcp_servers\.eslint\]$/m);
+      assert.equal((repairedToml.match(/^\[tui\]$/gm) ?? []).length, 1);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves existing compat MCP during launch repair without cwd-local preferences", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      const configPath = join(wd, "global-codex", "config.toml");
+      await mkdir(dirname(configPath), { recursive: true });
+      await mergeConfig(configPath, wd, { includeFirstPartyMcp: true });
+      const clean = await readFile(configPath, "utf-8");
+      assert.equal(existsSync(join(wd, ".omx", "setup-scope.json")), false);
+      assert.match(clean, /^\[mcp_servers\.omx_state\]$/m);
+
+      await writeFile(configPath, `${clean}\n[tui]\nstatus_line = ["git-branch"]\n`);
+      const repaired = await repairConfigIfNeeded(
+        configPath,
+        wd,
+        await resolveLaunchConfigRepairOptions(wd, configPath),
+      );
+      const repairedToml = await readFile(configPath, "utf-8");
+
+      assert.equal(repaired, true);
+      assert.match(repairedToml, /^\[mcp_servers\.omx_state\]$/m);
+      assert.equal((repairedToml.match(/^\[tui\]$/gm) ?? []).length, 1);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("marks only persisted project CODEX_HOME as project-local cleanup target", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(resolveProjectLocalCodexHomeForLaunch(wd, {}), join(wd, ".codex"));
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not mark explicit CODEX_HOME as project-local cleanup target", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(
+        resolveProjectLocalCodexHomeForLaunch(wd, {
+          CODEX_HOME: "/tmp/user-global-codex-home",
+        }),
+        undefined,
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("includes project Codex history artifacts in the runtime mirror for resume launches", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-resume-runtime-codex-home-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(join(projectCodexHome, "sessions", "2026", "06", "03"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      await writeFile(join(projectCodexHome, "config.toml"), 'model = "gpt-5.6-sol"\n');
+      await writeFile(join(projectCodexHome, "state_5.sqlite"), "state db placeholder");
+      await writeFile(join(projectCodexHome, "state_5.sqlite-wal"), "state db wal placeholder");
+      await writeFile(join(projectCodexHome, "logs_2.sqlite-shm"), "logs db shm placeholder");
+      await writeFile(
+        join(projectCodexHome, "sessions", "2026", "06", "03", "rollout-session-2712.jsonl"),
+        '{"type":"session_meta","payload":{"id":"session-2712"}}\n',
+      );
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-resume", {}, {
+        includeHistoryArtifacts: true,
+      });
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-resume");
+
+      assert.equal(prepared.codexHomeOverride, runtimeCodexHome);
+      assert.equal(prepared.sqliteHomeOverride, projectCodexHome);
+      assert.equal(existsSync(join(runtimeCodexHome, "state_5.sqlite")), true);
+      assert.equal(existsSync(join(runtimeCodexHome, "state_5.sqlite-wal")), true);
+      assert.equal(existsSync(join(runtimeCodexHome, "logs_2.sqlite-shm")), true);
+      assert.equal(
+        existsSync(join(runtimeCodexHome, "sessions", "2026", "06", "03", "rollout-session-2712.jsonl")),
+        true,
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("creates durable project Codex transcript links for project launches", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-links-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-history-links", {});
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-history-links");
+
+      assert.equal(prepared.codexHomeOverride, runtimeCodexHome);
+      assert.equal((await lstat(join(runtimeCodexHome, "sessions"))).isSymbolicLink(), true);
+      assert.equal((await lstat(join(runtimeCodexHome, "history.jsonl"))).isSymbolicLink(), true);
+      assert.equal((await lstat(join(runtimeCodexHome, "session_index.jsonl"))).isSymbolicLink(), true);
+      await writeFile(
+        join(runtimeCodexHome, "sessions", "linked-rollout.jsonl"),
+        '{"type":"session_meta"}\n',
+      );
+      await writeFile(join(runtimeCodexHome, "history.jsonl"), '{"session_id":"linked"}\n');
+      await writeFile(join(runtimeCodexHome, "session_index.jsonl"), '{"id":"linked"}\n');
+
+      await cleanupRuntimeCodexHome(
+        prepared.runtimeCodexHomeForCleanup,
+        prepared.projectLocalCodexHomeForCleanup,
+      );
+
+      assert.equal(
+        await readFile(join(projectCodexHome, "sessions", "linked-rollout.jsonl"), "utf-8"),
+        '{"type":"session_meta"}\n',
+      );
+      assert.equal(await readFile(join(projectCodexHome, "history.jsonl"), "utf-8"), '{"session_id":"linked"}\n');
+      assert.equal(await readFile(join(projectCodexHome, "session_index.jsonl"), "utf-8"), '{"id":"linked"}\n');
+      assert.equal(existsSync(runtimeCodexHome), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("materializes resolved history links and skips broken links", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-symlinks-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const targetSessions = join(wd, "project-sessions");
+      const nestedSessions = join(targetSessions, "nested");
+      const targetHistory = join(wd, "project-history.jsonl");
+      const outsideHistory = join(wd, "outside-history.jsonl");
+      await mkdir(sourceCodexHome, { recursive: true });
+      await mkdir(nestedSessions, { recursive: true });
+      await writeFile(join(nestedSessions, "rollout-linked.jsonl"), "linked-session\n");
+      await writeFile(outsideHistory, "must-not-follow\n");
+      await symlink(outsideHistory, join(nestedSessions, "nested-escape.jsonl"));
+      await writeFile(targetHistory, '{"session_id":"linked-session"}\n');
+      const sessionsMtime = new Date("2024-06-07T08:09:10Z");
+      chmodSync(targetSessions, 0o700);
+      chmodSync(nestedSessions, 0o700);
+      utimesSync(targetSessions, sessionsMtime, sessionsMtime);
+      await symlink(targetSessions, join(sourceCodexHome, "sessions"), "dir");
+      await symlink(targetHistory, join(sourceCodexHome, "history.jsonl"));
+      await symlink(join(wd, "missing-session-index.jsonl"), join(sourceCodexHome, "session_index.jsonl"));
+      const createSymlink: typeof symlink = async () => {
+        throw new Error("history symlink creation must not be used");
+      };
+
+      const runtimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-symlinks",
+        sourceCodexHome,
+        { includeHistoryArtifacts: true, createSymlink },
+      );
+
+      assert.equal((await stat(join(runtimeCodexHome, "sessions"))).isDirectory(), true);
+      assert.equal((await lstat(join(runtimeCodexHome, "sessions"))).isSymbolicLink(), false);
+      assert.equal((await stat(join(runtimeCodexHome, "sessions"))).mtime.toISOString(), sessionsMtime.toISOString());
+      if (process.platform !== "win32") {
+        assert.equal((await stat(join(runtimeCodexHome, "sessions"))).mode & 0o777, 0o700);
+        assert.equal((await stat(join(runtimeCodexHome, "sessions", "nested"))).mode & 0o777, 0o700);
+      }
+      assert.equal(
+        await readFile(join(runtimeCodexHome, "sessions", "nested", "rollout-linked.jsonl"), "utf-8"),
+        "linked-session\n",
+      );
+      assert.equal(existsSync(join(runtimeCodexHome, "sessions", "nested", "nested-escape.jsonl")), false);
+      assert.equal((await lstat(join(runtimeCodexHome, "history.jsonl"))).isSymbolicLink(), false);
+      assert.equal(await readFile(join(runtimeCodexHome, "history.jsonl"), "utf-8"), '{"session_id":"linked-session"}\n');
+      assert.equal(existsSync(join(runtimeCodexHome, "session_index.jsonl")), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("skips same-inode history content mutations during file publication", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-content-race-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const sourceHistory = join(wd, "source-history.jsonl");
+      await mkdir(sourceCodexHome, { recursive: true });
+      await writeFile(sourceHistory, "original\n");
+      await symlink(sourceHistory, join(sourceCodexHome, "history.jsonl"));
+      const originalStat = statSync(sourceHistory);
+      const runtimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-content-race",
+        sourceCodexHome,
+        {
+          includeHistoryArtifacts: true,
+          afterHistorySourceOpen: async (entryName, source) => {
+            if (entryName !== "history.jsonl") return;
+            await writeFile(source, "mutated!\n");
+            utimesSync(source, originalStat.atime, originalStat.mtime);
+          },
+        },
+      );
+      assert.equal(existsSync(join(runtimeCodexHome, "history.jsonl")), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("merges a symlinked primary history tree with an independent source", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-symlink-merge-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const primarySessions = join(wd, "primary-sessions");
+      const extraCodexHome = join(wd, "extra-codex-home");
+      await mkdir(sourceCodexHome, { recursive: true });
+      await mkdir(primarySessions, { recursive: true });
+      await mkdir(join(extraCodexHome, "sessions"), { recursive: true });
+      await writeFile(join(primarySessions, "rollout-primary.jsonl"), "primary-session\n");
+      await writeFile(join(extraCodexHome, "sessions", "rollout-extra.jsonl"), "extra-session\n");
+      chmodSync(primarySessions, 0o700);
+      chmodSync(join(extraCodexHome, "sessions"), 0o755);
+      await symlink(primarySessions, join(sourceCodexHome, "sessions"), "dir");
+
+      const runtimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-symlink-merge",
+        sourceCodexHome,
+        { includeHistoryArtifacts: true, extraHistoryCodexHomes: [extraCodexHome] },
+      );
+
+      assert.equal((await lstat(join(runtimeCodexHome, "sessions"))).isSymbolicLink(), false);
+      if (process.platform !== "win32") {
+        assert.equal((await stat(join(runtimeCodexHome, "sessions"))).mode & 0o777, 0o700);
+      }
+      assert.equal(
+        await readFile(join(runtimeCodexHome, "sessions", "rollout-primary.jsonl"), "utf-8"),
+        "primary-session\n",
+      );
+      assert.equal(
+        await readFile(join(runtimeCodexHome, "sessions", "rollout-extra.jsonl"), "utf-8"),
+        "extra-session\n",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("populates read-only history directories before restoring modes", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-read-only-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const sourceSessions = join(wd, "source-sessions");
+      const nestedSessions = join(sourceSessions, "nested");
+      const sourceMtime = new Date("2024-08-09T10:11:12Z");
+      const nestedMtime = new Date("2024-08-09T10:11:13Z");
+      await mkdir(nestedSessions, { recursive: true });
+      await writeFile(join(nestedSessions, "rollout.jsonl"), "read-only-session\n");
+      utimesSync(sourceSessions, sourceMtime, sourceMtime);
+      utimesSync(nestedSessions, nestedMtime, nestedMtime);
+      chmodSync(sourceSessions, 0o555);
+      chmodSync(nestedSessions, 0o500);
+      await mkdir(sourceCodexHome, { recursive: true });
+      await symlink(sourceSessions, join(sourceCodexHome, "sessions"), "dir");
+
+      const readOnlyRuntimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-read-only",
+        sourceCodexHome,
+        { includeHistoryArtifacts: true },
+      );
+
+      assert.equal(
+        await readFile(join(readOnlyRuntimeCodexHome, "sessions", "nested", "rollout.jsonl"), "utf-8"),
+        "read-only-session\n",
+      );
+      if (process.platform !== "win32") {
+        const copiedSessions = await stat(join(readOnlyRuntimeCodexHome, "sessions"));
+        const copiedNested = await stat(join(readOnlyRuntimeCodexHome, "sessions", "nested"));
+        assert.equal(copiedSessions.mode & 0o777, 0o555);
+        assert.equal(copiedNested.mode & 0o777, 0o500);
+        assert.equal(copiedSessions.mtime.toISOString(), sourceMtime.toISOString());
+        assert.equal(copiedNested.mtime.toISOString(), nestedMtime.toISOString());
+      }
+    } finally {
+      if (existsSync(join(wd, "source-sessions"))) chmodSync(join(wd, "source-sessions"), 0o700);
+      if (existsSync(join(wd, "source-sessions", "nested"))) chmodSync(join(wd, "source-sessions", "nested"), 0o700);
+      if (existsSync(join(wd, ".omx", "runtime", "codex-home"))) {
+        chmodSync(join(wd, ".omx", "runtime", "codex-home"), 0o700);
+      }
+      if (existsSync(join(wd, ".omx", "runtime", "codex-home", "session-history-read-only", "sessions"))) {
+        chmodSync(join(wd, ".omx", "runtime", "codex-home", "session-history-read-only", "sessions"), 0o700);
+      }
+      if (existsSync(join(wd, ".omx", "runtime", "codex-home", "session-history-read-only", "sessions", "nested"))) {
+        chmodSync(join(wd, ".omx", "runtime", "codex-home", "session-history-read-only", "sessions", "nested"), 0o700);
+      }
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("anchors cleanup locking in a writable resolved history target", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-writable-anchor-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      const resolvedSessions = join(projectCodexHome, "sessions-target");
+      const runtimeCodexHome = join(wd, "runtime-codex-home");
+      await mkdir(resolvedSessions, { recursive: true });
+      await mkdir(join(runtimeCodexHome, "sessions"), { recursive: true });
+      await writeFile(join(runtimeCodexHome, "sessions", "rollout.jsonl"), "read-only-root-safe\n");
+      await symlink(resolvedSessions, join(projectCodexHome, "sessions"), "dir");
+      chmodSync(projectCodexHome, 0o555);
+
+      await cleanupRuntimeCodexHome(runtimeCodexHome, projectCodexHome);
+
+      assert.equal(
+        await readFile(join(resolvedSessions, "rollout.jsonl"), "utf-8"),
+        "read-only-root-safe\n",
+      );
+    } finally {
+      if (existsSync(join(wd, ".codex"))) chmodSync(join(wd, ".codex"), 0o700);
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("skips an extra history home that disappears during preparation", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-disappearing-extra-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const sourceSessions = join(wd, "source-sessions");
+      const extraCodexHome = join(wd, "extra-codex-home");
+      await mkdir(sourceCodexHome, { recursive: true });
+      await mkdir(sourceSessions, { recursive: true });
+      await mkdir(join(extraCodexHome, "sessions"), { recursive: true });
+      await writeFile(join(sourceSessions, "rollout-primary.jsonl"), "primary-session\n");
+      await writeFile(join(extraCodexHome, "sessions", "rollout-extra.jsonl"), "extra-session\n");
+      await symlink(sourceSessions, join(sourceCodexHome, "sessions"), "dir");
+
+      const runtimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-disappearing-extra",
+        sourceCodexHome,
+        {
+          includeHistoryArtifacts: true,
+          extraHistoryCodexHomes: [extraCodexHome],
+          afterHistoryEntryValidation: async (entryName) => {
+            if (entryName === "sessions") await rm(join(extraCodexHome, "sessions"), { recursive: true, force: true });
+          },
+        },
+      );
+
+      assert.equal(
+        await readFile(join(runtimeCodexHome, "sessions", "rollout-primary.jsonl"), "utf-8"),
+        "primary-session\n",
+      );
+      assert.equal(existsSync(join(runtimeCodexHome, "sessions", "rollout-extra.jsonl")), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps group-only history readable and traversable by the destination owner", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-group-only-"));
+    let runtimeCodexHome: string | undefined;
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const sourceSessions = join(wd, "source-sessions");
+      await mkdir(sourceSessions, { recursive: true });
+      await writeFile(join(sourceSessions, "rollout.jsonl"), "group-only-session\n");
+      if (process.platform !== "win32") {
+        chownSync(sourceSessions, process.getuid!(), process.getgid!());
+        chownSync(join(sourceSessions, "rollout.jsonl"), process.getuid!(), process.getgid!());
+      }
+      chmodSync(join(sourceSessions, "rollout.jsonl"), 0o404);
+      chmodSync(sourceSessions, 0o505);
+      await mkdir(sourceCodexHome, { recursive: true });
+      await symlink(sourceSessions, join(sourceCodexHome, "sessions"), "dir");
+
+      runtimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-group-only",
+        sourceCodexHome,
+        { includeHistoryArtifacts: true },
+      );
+
+      assert.equal(
+        await readFile(join(runtimeCodexHome, "sessions", "rollout.jsonl"), "utf-8"),
+        "group-only-session\n",
+      );
+      if (process.platform !== "win32") {
+        assert.equal((await stat(join(runtimeCodexHome, "sessions"))).mode & 0o700, 0o500);
+        assert.equal((await stat(join(runtimeCodexHome, "sessions", "rollout.jsonl"))).mode & 0o700, 0o400);
+      }
+    } finally {
+      if (existsSync(join(wd, "source-sessions", "rollout.jsonl"))) chmodSync(join(wd, "source-sessions", "rollout.jsonl"), 0o600);
+      if (existsSync(join(wd, "source-sessions"))) chmodSync(join(wd, "source-sessions"), 0o700);
+      if (runtimeCodexHome && existsSync(join(runtimeCodexHome, "sessions"))) {
+        chmodSync(join(runtimeCodexHome, "sessions"), 0o700);
+        if (existsSync(join(runtimeCodexHome, "sessions", "rollout.jsonl"))) {
+          chmodSync(join(runtimeCodexHome, "sessions", "rollout.jsonl"), 0o600);
+        }
+      }
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("normalizes group-owned replacement modes for the new owner", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-owner-mode-"));
+    try {
+      const groupWritable = join(wd, "group-writable.jsonl");
+      const groupReadable = join(wd, "group-readable.jsonl");
+      await writeFile(groupWritable, "group-writable\n");
+      await writeFile(groupReadable, "group-readable\n");
+      chmodSync(groupWritable, 0o660);
+      chmodSync(groupReadable, 0o440);
+
+      const writableMode = historyDestinationMode(0o060);
+      const readableMode = historyDestinationMode(0o040);
+      assert.equal(writableMode & 0o700, 0o600);
+      assert.equal(readableMode & 0o700, 0o400);
+      chmodSync(groupWritable, writableMode);
+      chmodSync(groupReadable, readableMode);
+      await writeFile(groupWritable, "owner-can-append\n", { flag: "a" });
+      assert.match(await readFile(groupWritable, "utf-8"), /owner-can-append/);
+      assert.equal(await readFile(groupReadable, "utf-8"), "group-readable\n");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("skips cyclic durable history links without aborting preparation", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-cyclic-link-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      await mkdir(join(sourceCodexHome, "sessions"), { recursive: true });
+      await symlink("history.jsonl", join(sourceCodexHome, "history.jsonl"));
+
+      const runtimeCodexHome = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-cyclic-link",
+        sourceCodexHome,
+        { includeHistoryArtifacts: true },
+      );
+
+      assert.equal(existsSync(join(runtimeCodexHome, "history.jsonl")), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("rejects source swaps and replaces nested destination links safely", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-toctou-"));
+    try {
+      const sourceCodexHome = join(wd, "source-codex-home");
+      const sourceSessions = join(wd, "source-sessions");
+      const replacementSessions = join(wd, "replacement-sessions");
+      const outsideDestination = join(wd, "outside-destination.jsonl");
+      await mkdir(sourceCodexHome, { recursive: true });
+      await mkdir(sourceSessions, { recursive: true });
+      await mkdir(replacementSessions, { recursive: true });
+      await writeFile(join(sourceSessions, "rollout.jsonl"), "original\n");
+      await writeFile(join(replacementSessions, "rollout.jsonl"), "replacement\n");
+      await writeFile(outsideDestination, "must-remain\n");
+      await symlink(sourceSessions, join(sourceCodexHome, "sessions"), "dir");
+
+      const swappedSourceRuntime = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-source-swap",
+        sourceCodexHome,
+        {
+          includeHistoryArtifacts: true,
+          afterHistoryEntryValidation: async (entryName, source) => {
+            if (entryName !== "sessions") return;
+            await rm(source, { force: true });
+            await symlink(replacementSessions, source, "dir");
+          },
+        },
+      );
+      assert.equal(existsSync(join(swappedSourceRuntime, "sessions")), false);
+      assert.equal(existsSync(join(swappedSourceRuntime, "sessions", "rollout.jsonl")), false);
+
+      const destinationSourceHome = join(wd, "destination-source-home");
+      const destinationSessions = join(wd, "destination-sessions");
+      await mkdir(destinationSourceHome, { recursive: true });
+      await mkdir(destinationSessions, { recursive: true });
+      await writeFile(join(destinationSessions, "rollout.jsonl"), "destination-safe\n");
+      await symlink(destinationSessions, join(destinationSourceHome, "sessions"), "dir");
+      const safeDestinationRuntime = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-destination-swap",
+        destinationSourceHome,
+        {
+          includeHistoryArtifacts: true,
+          afterHistoryEntryValidation: async (entryName, _source, destination) => {
+            if (entryName !== "sessions") return;
+            await mkdir(destination, { recursive: true });
+            await symlink(outsideDestination, join(destination, "rollout.jsonl"));
+          },
+        },
+      );
+      assert.equal(await readFile(join(outsideDestination), "utf-8"), "must-remain\n");
+      assert.equal(
+        await readFile(join(safeDestinationRuntime, "sessions", "rollout.jsonl"), "utf-8"),
+        "destination-safe\n",
+      );
+      assert.equal((await lstat(join(safeDestinationRuntime, "sessions", "rollout.jsonl"))).isSymbolicLink(), false);
+
+      const emptyDestinationSourceHome = join(wd, "empty-destination-source-home");
+      const emptyDestinationSessions = join(wd, "empty-destination-sessions");
+      await mkdir(emptyDestinationSourceHome, { recursive: true });
+      await mkdir(emptyDestinationSessions, { recursive: true });
+      await writeFile(join(emptyDestinationSessions, "rollout.jsonl"), "empty-destination-safe\n");
+      await symlink(emptyDestinationSessions, join(emptyDestinationSourceHome, "sessions"), "dir");
+      const emptyDestinationRuntime = await prepareRuntimeCodexHomeForProjectLaunch(
+        wd,
+        "session-history-empty-destination-swap",
+        emptyDestinationSourceHome,
+        {
+          includeHistoryArtifacts: true,
+          afterHistoryEntryValidation: async (entryName, _source, destination) => {
+            if (entryName === "sessions") await mkdir(destination, { recursive: true });
+          },
+        },
+      );
+      assert.equal(
+        await readFile(join(emptyDestinationRuntime, "sessions", "rollout.jsonl"), "utf-8"),
+        "empty-destination-safe\n",
+      );
+
+      const stagedSourceHome = join(wd, "staged-source-home");
+      const stagedSessions = join(wd, "staged-sessions");
+      const outsideStageDirectory = join(wd, "outside-stage-directory");
+      await mkdir(stagedSourceHome, { recursive: true });
+      await mkdir(stagedSessions, { recursive: true });
+      await mkdir(outsideStageDirectory, { recursive: true });
+      await writeFile(join(stagedSessions, "rollout.jsonl"), "staged-safe\n");
+      await writeFile(join(outsideStageDirectory, "sentinel"), "must-remain\n");
+      await symlink(stagedSessions, join(stagedSourceHome, "sessions"), "dir");
+      await assert.rejects(
+        () => prepareRuntimeCodexHomeForProjectLaunch(
+          wd,
+          "session-history-staging-swap",
+          stagedSourceHome,
+          {
+            includeHistoryArtifacts: true,
+            afterHistoryEntryStage: async (entryName, temporary) => {
+              if (entryName !== "sessions") return;
+              await rm(temporary, { recursive: true, force: true });
+              await symlink(outsideStageDirectory, temporary, "dir");
+            },
+          },
+        ),
+        /history staging path is not a directory/,
+      );
+      assert.equal(await readFile(join(outsideStageDirectory, "sentinel"), "utf-8"), "must-remain\n");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("copies non-symlink runtime Codex transcript artifacts before cleanup", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-copyback-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-history-copyback", {});
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-history-copyback");
+      await rm(join(runtimeCodexHome, "sessions"), { recursive: true, force: true });
+      await rm(join(runtimeCodexHome, "history.jsonl"), { force: true });
+      await rm(join(runtimeCodexHome, "session_index.jsonl"), { force: true });
+      await mkdir(join(runtimeCodexHome, "sessions", "2026", "06", "16"), { recursive: true });
+      await writeFile(
+        join(runtimeCodexHome, "sessions", "2026", "06", "16", "rollout-session-2835.jsonl"),
+        '{"type":"session_meta","payload":{"id":"session-2835"}}\n',
+      );
+      await writeFile(join(runtimeCodexHome, "history.jsonl"), '{"session_id":"session-2835"}\n');
+      await writeFile(join(runtimeCodexHome, "session_index.jsonl"), '{"id":"session-2835"}\n');
+      await writeFile(join(runtimeCodexHome, "auth.json"), '{"token":"opaque"}\n');
+
+      await cleanupRuntimeCodexHome(
+        prepared.runtimeCodexHomeForCleanup,
+        prepared.projectLocalCodexHomeForCleanup,
+      );
+
+      assert.equal(
+        await readFile(join(projectCodexHome, "sessions", "2026", "06", "16", "rollout-session-2835.jsonl"), "utf-8"),
+        '{"type":"session_meta","payload":{"id":"session-2835"}}\n',
+      );
+      assert.equal(await readFile(join(projectCodexHome, "history.jsonl"), "utf-8"), '{"session_id":"session-2835"}\n');
+      assert.equal(await readFile(join(projectCodexHome, "session_index.jsonl"), "utf-8"), '{"id":"session-2835"}\n');
+      assert.equal(await readFile(join(projectCodexHome, "auth.json"), "utf-8"), '{"token":"opaque"}\n');
+      assert.equal(existsSync(runtimeCodexHome), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("persists materialized sessions through symlinked authorized roots", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-persist-symlink-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      const projectCodexHomeReal = join(wd, ".codex-real");
+      const projectSessions = join(projectCodexHomeReal, "sessions-target");
+      const runtimeCodexHome = join(wd, "runtime-codex-home");
+      await mkdir(projectSessions, { recursive: true });
+      await mkdir(join(runtimeCodexHome, "sessions", "2026"), { recursive: true });
+      await symlink(projectCodexHomeReal, projectCodexHome, "dir");
+      await symlink(projectSessions, join(projectCodexHomeReal, "sessions"), "dir");
+      await writeFile(join(runtimeCodexHome, "sessions", "2026", "rollout.jsonl"), "persisted-session\n");
+
+      await cleanupRuntimeCodexHome(runtimeCodexHome, projectCodexHome);
+
+      assert.equal(
+        await readFile(join(projectSessions, "2026", "rollout.jsonl"), "utf-8"),
+        "persisted-session\n",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not rewrite canonical history when runtime and project paths alias", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-self-copyback-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      const runtimeAlias = join(wd, "runtime-alias");
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(join(projectCodexHome, "history.jsonl"), '{"session_id":"existing"}\n');
+      await symlink(projectCodexHome, runtimeAlias, "dir");
+
+      await cleanupRuntimeCodexHome(runtimeAlias, projectCodexHome);
+
+      assert.equal(
+        await readFile(join(projectCodexHome, "history.jsonl"), "utf-8"),
+        '{"session_id":"existing"}\n',
+      );
+      assert.equal(existsSync(runtimeAlias), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("serializes concurrent JSONL cleanup appends without losing either source", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-concurrent-copyback-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      const runtimeOne = join(wd, "runtime-one");
+      const runtimeTwo = join(wd, "runtime-two");
+      await mkdir(runtimeOne, { recursive: true });
+      await mkdir(runtimeTwo, { recursive: true });
+      await writeFile(join(runtimeOne, "history.jsonl"), '{"session_id":"one"}\n');
+      await writeFile(join(runtimeTwo, "history.jsonl"), '{"session_id":"two"}\n');
+
+      await Promise.all([
+        cleanupRuntimeCodexHome(runtimeOne, projectCodexHome),
+        cleanupRuntimeCodexHome(runtimeTwo, projectCodexHome),
+      ]);
+
+      const persisted = await readFile(join(projectCodexHome, "history.jsonl"), "utf-8");
+      assert.match(persisted, /"session_id":"one"/);
+      assert.match(persisted, /"session_id":"two"/);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a live history lock through its stale age", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-lock-lease-"));
+    try {
+      const first = await acquireHistoryPersistenceLock(wd, { staleMs: 30, heartbeatMs: 5 });
+      let contenderAcquired = false;
+      const contender = acquireHistoryPersistenceLock(wd, { timeoutMs: 500, staleMs: 30, heartbeatMs: 5 }).then((lease) => {
+        contenderAcquired = true;
+        return lease;
+      });
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      assert.equal(contenderAcquired, false);
+      await releaseHistoryPersistenceLock(first);
+      const second = await contender;
+      await releaseHistoryPersistenceLock(second);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not let an old lock owner remove a replacement lock", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-lock-owner-"));
+    try {
+      const oldLease = await acquireHistoryPersistenceLock(wd);
+      await rm(oldLease.lockPath, { recursive: true, force: true });
+      const newLease = await acquireHistoryPersistenceLock(wd);
+      await releaseHistoryPersistenceLock(oldLease);
+      assert.equal((await lstat(newLease.lockPath)).isDirectory(), true);
+      await releaseHistoryPersistenceLock(newLease);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("fails closed when a heartbeat owner record is interposed", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-lock-heartbeat-"));
+    try {
+      const first = await acquireHistoryPersistenceLock(wd, { staleMs: 30, heartbeatMs: 5 });
+      const ownerPath = join(first.lockPath, "owner.json");
+      await writeFile(ownerPath, "{\"token\":");
+      utimesSync(ownerPath, new Date(Date.now() - 1_000), new Date(Date.now() - 1_000));
+      await assert.rejects(
+        () => acquireHistoryPersistenceLock(wd, { timeoutMs: 100, staleMs: 30, heartbeatMs: 5 }),
+        /timed out waiting for history persistence lock/,
+      );
+      await releaseHistoryPersistenceLock(first);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("reaps a stale lock only when process-start identity proves PID reuse", async () => {
+    if (process.platform === "win32") return;
+    const wd = await mkdtemp(join(tmpdir(), "omx-runtime-history-lock-pid-"));
+    try {
+      const lockPath = join(wd, ".omx-history.lock");
+      const ownerPath = join(lockPath, "owner.json");
+      await mkdir(lockPath, { mode: 0o700 });
+      await writeFile(ownerPath, JSON.stringify({ token: "old", pid: process.pid, startIdentity: "reused" }));
+      utimesSync(ownerPath, new Date(Date.now() - 1_000), new Date(Date.now() - 1_000));
+      const lease = await acquireHistoryPersistenceLock(wd, { staleMs: 30 });
+      await releaseHistoryPersistenceLock(lease);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses a session-scoped CODEX_HOME mirror for project launch config writes", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-runtime-codex-home-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      const configPath = join(projectCodexHome, "config.toml");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(join(projectCodexHome, "agents"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      const originalConfig = [
+        'model = "gpt-5.6-sol"',
+        "",
+        "[tui]",
+        'status_line = ["model-with-reasoning", "git-branch"]',
+        "",
+      ].join("\n");
+      await writeFile(configPath, originalConfig);
+      await writeFile(join(projectCodexHome, "agents", "planner.toml"), 'name = "planner"\n');
+      await writeFile(join(projectCodexHome, "hooks.json"), '{"hooks":{}}\n');
+      await writeFile(join(projectCodexHome, "state_5.sqlite"), "state db placeholder");
+      await writeFile(join(projectCodexHome, "state_5.sqlite-wal"), "state db wal placeholder");
+      await writeFile(join(projectCodexHome, "logs_2.sqlite-shm"), "logs db shm placeholder");
+      const beforeStat = await stat(configPath);
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-2033", {});
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-2033");
+
+      assert.equal(prepared.codexHomeOverride, runtimeCodexHome);
+      assert.equal(prepared.sqliteHomeOverride, projectCodexHome);
+      assert.equal(prepared.projectLocalCodexHomeForCleanup, projectCodexHome);
+      assert.equal(prepared.runtimeCodexHomeForCleanup, runtimeCodexHome);
+      assert.equal(await readFile(join(runtimeCodexHome, "config.toml"), "utf-8"), originalConfig);
+      assert.equal(
+        await readFile(join(runtimeCodexHome, "agents", "planner.toml"), "utf-8"),
+        'name = "planner"\n',
+      );
+      // GH #2470: hooks.json must NOT be mirrored into the runtime CODEX_HOME.
+      // Codex still loads the canonical project .codex/hooks.json as Project
+      // config; a runtime mirror would add a duplicate User config hook source.
+      assert.equal(existsSync(join(runtimeCodexHome, "hooks.json")), false);
+      assert.equal(existsSync(join(runtimeCodexHome, "state_5.sqlite")), false);
+      assert.equal(existsSync(join(runtimeCodexHome, "state_5.sqlite-wal")), false);
+      assert.equal(existsSync(join(runtimeCodexHome, "logs_2.sqlite-shm")), false);
+
+      await writeFile(
+        join(runtimeCodexHome, "config.toml"),
+        `${originalConfig}\n[tui.model_availability_nux]\n"gpt-5.6-sol" = 1\n`,
+      );
+
+      assert.equal(await readFile(configPath, "utf-8"), originalConfig);
+      assert.doesNotMatch(await readFile(configPath, "utf-8"), /model_availability_nux/);
+      assert.equal((await stat(configPath)).mtimeMs, beforeStat.mtimeMs);
+
+      await prepareCodexHomeForLaunch(wd, "session-2033-repeat", {});
+      assert.equal(await readFile(configPath, "utf-8"), originalConfig);
+      assert.equal((await stat(configPath)).mtimeMs, beforeStat.mtimeMs);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("persists project-scope Codex auth written into the runtime CODEX_HOME mirror", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-runtime-auth-home-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      await writeFile(join(projectCodexHome, "config.toml"), 'model = "gpt-5.6-sol"\n');
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-auth", {});
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-auth");
+      const opaqueAuthState = JSON.stringify({ token: "opaque-test-token" });
+      await writeFile(join(runtimeCodexHome, "auth.json"), opaqueAuthState);
+      await writeFile(join(runtimeCodexHome, "config.toml"), 'model = "gpt-5.6-sol"\n[tui.model_availability_nux]\n"gpt-5.6-sol" = 1\n');
+
+      await persistProjectLaunchRuntimeAuthState(
+        prepared.runtimeCodexHomeForCleanup,
+        prepared.projectLocalCodexHomeForCleanup,
+      );
+
+      assert.equal(await readFile(join(projectCodexHome, "auth.json"), "utf-8"), opaqueAuthState);
+      assert.equal(await readFile(join(projectCodexHome, "config.toml"), "utf-8"), 'model = "gpt-5.6-sol"\n');
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("project-scope launch registers native hooks exactly once and persists trust state (GH #2470)", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-issue-2470-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      const originalProjectConfig = [
+        'model = "gpt-5.6-sol"',
+        "",
+        "[features]",
+        "hooks = true",
+        "",
+        "# OMX-owned Codex hook trust state",
+        "# Trusts only setup-managed codex-native-hook.js wrappers.",
+        `[hooks.state."${join(projectCodexHome, "hooks.json")}:pre_tool_use:0:0"]`,
+        'trusted_hash = "sha256:project-hooks-trusted"',
+        "# End OMX-owned Codex hook trust state",
+        "",
+      ].join("\n");
+      await writeFile(join(projectCodexHome, "config.toml"), originalProjectConfig);
+      await writeFile(join(projectCodexHome, "hooks.json"), '{"hooks":{}}\n');
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-2470", {});
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-2470");
+
+      // 1. Hooks register exactly once: runtime CODEX_HOME holds no hooks.json
+      //    mirror, so Codex only sees the canonical project .codex/hooks.json.
+      assert.equal(prepared.codexHomeOverride, runtimeCodexHome);
+      assert.equal(existsSync(join(runtimeCodexHome, "hooks.json")), false);
+      assert.equal(existsSync(join(projectCodexHome, "hooks.json")), true);
+
+      // Simulate Codex writing workspace trust + a new hook trust ledger
+      // entry into the runtime config.toml during the session.
+      const runtimeConfigPath = join(runtimeCodexHome, "config.toml");
+      const runtimeConfigBefore = await readFile(runtimeConfigPath, "utf-8");
+      await writeFile(
+        runtimeConfigPath,
+        [
+          runtimeConfigBefore.replace(/\n+$/, ""),
+          "",
+          `[projects."${wd}"]`,
+          'trust_level = "trusted"',
+          "",
+          "[tui.model_availability_nux]",
+          '"gpt-5.6-sol" = 1',
+          "",
+        ].join("\n"),
+      );
+
+      // 2. Workspace trust + ephemeral runtime state are persisted to the
+      //    project config.toml in a marker-fenced block; NUX counters and
+      //    other runtime-only writes are NOT leaked back to the project.
+      await persistProjectLaunchRuntimeProjectTrustState(
+        prepared.runtimeCodexHomeForCleanup,
+        prepared.projectLocalCodexHomeForCleanup,
+      );
+
+      const persistedProjectConfig = await readFile(
+        join(projectCodexHome, "config.toml"),
+        "utf-8",
+      );
+      assert.ok(
+        persistedProjectConfig.includes(
+          "# OMX-synced Codex project trust state",
+        ),
+        "expected synced-trust marker block in project config.toml",
+      );
+      assert.ok(
+        persistedProjectConfig.includes(`[projects."${wd}"]`),
+        "expected workspace trust entry to be persisted to project config.toml",
+      );
+      assert.ok(
+        persistedProjectConfig.includes('trust_level = "trusted"'),
+        "expected trust_level to be persisted to project config.toml",
+      );
+      assert.doesNotMatch(
+        persistedProjectConfig,
+        /model_availability_nux/,
+        "NUX counters must not leak into durable project config.toml",
+      );
+      const projectHookTrustHeader =
+        `[hooks.state."${join(projectCodexHome, "hooks.json")}:pre_tool_use:0:0"]`;
+      assert.ok(
+        persistedProjectConfig.includes(projectHookTrustHeader),
+        "setup-owned project hook trust state must remain intact",
+      );
+      assert.equal(
+        countMatches(
+          persistedProjectConfig,
+          new RegExp(`^${escapeRegExp(projectHookTrustHeader)}$`, "gm"),
+        ),
+        1,
+        "runtime trust sync must not duplicate setup-owned hook trust state",
+      );
+      assert.doesNotThrow(() => TOML.parse(persistedProjectConfig));
+
+      // 3. On a subsequent launch, the runtime mirror carries the persisted
+      //    project trust state forward — so Codex finds the workspace as
+      //    already-trusted and never re-prompts.
+      await rm(runtimeCodexHome, { recursive: true, force: true });
+      await prepareCodexHomeForLaunch(wd, "session-2470-repeat", {});
+      const nextRuntimeCodexHome = runtimeCodexHomePath(wd, "session-2470-repeat");
+      const nextRuntimeConfig = await readFile(
+        join(nextRuntimeCodexHome, "config.toml"),
+        "utf-8",
+      );
+      assert.ok(
+        nextRuntimeConfig.includes(`[projects."${wd}"]`),
+        "next launch must inherit the persisted workspace trust entry",
+      );
+      assert.equal(
+        countMatches(
+          nextRuntimeConfig,
+          new RegExp(`^${escapeRegExp(projectHookTrustHeader)}$`, "gm"),
+        ),
+        1,
+        "next runtime config must remain parseable without duplicate hook trust tables",
+      );
+      assert.doesNotThrow(() => TOML.parse(nextRuntimeConfig));
+      assert.equal(existsSync(join(nextRuntimeCodexHome, "hooks.json")), false);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("repairs duplicate project hook trust state before relaunching project-scope Codex home (GH #2401)", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-issue-2401-relaunch-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      const projectConfigPath = join(projectCodexHome, "config.toml");
+      const projectHooksPath = join(projectCodexHome, "hooks.json");
+      const projectHookTrustHeader =
+        `[hooks.state."${projectHooksPath}:post_compact:0:0"]`;
+      const escapedProjectHookTrustHeader = escapeRegExp(projectHookTrustHeader);
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      await writeFile(projectHooksPath, '{"hooks":{}}\n');
+      await writeFile(
+        projectConfigPath,
+        [
+          'model = "gpt-5.6-sol"',
+          "",
+          "[features]",
+          "hooks = true",
+          "",
+          "# OMX-owned Codex hook trust state",
+          "# Trusts only setup-managed native hook wrappers.",
+          projectHookTrustHeader,
+          'trusted_hash = "sha256:setup-owned"',
+          "# End OMX-owned Codex hook trust state",
+          "",
+          "# User-owned project trust source must remain external during launch repair.",
+          `[projects."${wd}"] # retained external ownership`,
+          'trust_level = "trusted"',
+          "",
+          "# OMX-synced Codex project trust state (from runtime CODEX_HOME)",
+          `[projects."${wd}"]`,
+          'trust_level = "trusted"',
+          "",
+          projectHookTrustHeader,
+          'trusted_hash = "sha256:setup-owned"',
+          "",
+          "# End OMX-synced Codex project trust state",
+          "",
+        ].join("\n"),
+      );
+
+      assert.throws(() => TOML.parse(readFileSync(projectConfigPath, "utf-8")));
+
+      await prepareCodexHomeForLaunch(wd, "session-relaunch", {});
+
+      const repairedProjectConfig = await readFile(projectConfigPath, "utf-8");
+      const runtimeConfig = await readFile(
+        join(runtimeCodexHomePath(wd, "session-relaunch"), "config.toml"),
+        "utf-8",
+      );
+
+      assert.doesNotThrow(() => TOML.parse(repairedProjectConfig));
+      assert.doesNotThrow(() => TOML.parse(runtimeConfig));
+      assert.equal(
+        countMatches(
+          repairedProjectConfig,
+          new RegExp(`^${escapedProjectHookTrustHeader}$`, "gm"),
+        ),
+        1,
+      );
+      assert.equal(
+        countMatches(runtimeConfig, new RegExp(`^${escapedProjectHookTrustHeader}$`, "gm")),
+        1,
+      );
+      assert.ok(runtimeConfig.includes(`[projects."${wd}"]`));
+      assert.ok(repairedProjectConfig.includes(`[projects."${wd}"]`));
+      assert.match(repairedProjectConfig, /User-owned project trust source must remain external/);
+      assert.match(repairedProjectConfig, new RegExp(`^${escapeRegExp(`[projects."${wd}"]`)} # retained external ownership$`, "m"));
+      assert.equal(
+        countMatches(repairedProjectConfig, new RegExp(`^${escapeRegExp(`[projects."${wd}"]`)}(?:\\s|$)`, "gm")),
+        1,
+        "launch repair must remove only the marker-owned duplicate before the runtime mirror is written",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps setup-owned hook trust state targeted at the project hooks path (GH #2470)", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-runtime-hook-trust-"));
+    try {
+      const projectCodexHome = join(wd, ".codex");
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      await writeFile(join(projectCodexHome, "hooks.json"), '{"hooks":{}}\n');
+      const projectHookTrustHeader =
+        `[hooks.state."${join(projectCodexHome, "hooks.json")}:pre_tool_use:0:0"]`;
+      await writeFile(
+        join(projectCodexHome, "config.toml"),
+        [
+          "[features]",
+          "hooks = true",
+          "",
+          "# OMX-owned Codex hook trust state",
+          "# Trusts only setup-managed codex-native-hook.js wrappers.",
+          projectHookTrustHeader,
+          'trusted_hash = "sha256:abc"',
+          "# End OMX-owned Codex hook trust state",
+          "",
+        ].join("\n"),
+      );
+
+      await prepareCodexHomeForLaunch(wd, "session-trust", {});
+      const runtimeCodexHome = runtimeCodexHomePath(wd, "session-trust");
+      const runtimeConfig = await readFile(join(runtimeCodexHome, "config.toml"), "utf-8");
+
+      // Runtime CODEX_HOME no longer holds a hooks.json mirror, so the trust
+      // block must continue pointing at the canonical project hooks.json path.
+      assert.equal(existsSync(join(runtimeCodexHome, "hooks.json")), false);
+      assert.ok(
+        runtimeConfig.includes(projectHookTrustHeader),
+        `expected runtime config.toml to keep ${projectHookTrustHeader}`,
+      );
+      assert.doesNotMatch(
+        runtimeConfig,
+        new RegExp(join(runtimeCodexHome, "hooks.json").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses boxed runtime root for project-scope CODEX_HOME mirrors", async () => {
+    const source = await mkdtemp(join(tmpdir(), "omx-launch-boxed-source-"));
+    const boxedRoot = await mkdtemp(join(tmpdir(), "omx-launch-boxed-root-"));
+    const prevOmxRoot = process.env.OMX_ROOT;
+    try {
+      process.env.OMX_ROOT = boxedRoot;
+      const projectCodexHome = join(source, ".codex");
+      await mkdir(join(source, ".omx"), { recursive: true });
+      await mkdir(projectCodexHome, { recursive: true });
+      await writeFile(
+        join(source, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      await writeFile(join(projectCodexHome, "config.toml"), 'model = "gpt-5.6-sol"\n');
+
+      const prepared = await prepareCodexHomeForLaunch(source, "session-boxed", {});
+      const runtimeCodexHome = runtimeCodexHomePath(source, "session-boxed");
+
+      assert.equal(
+        runtimeCodexHome,
+        join(boxedRoot, ".omx", "runtime", "codex-home", "session-boxed"),
+      );
+      assert.equal(prepared.codexHomeOverride, runtimeCodexHome);
+      assert.equal(prepared.runtimeCodexHomeForCleanup, runtimeCodexHome);
+      assert.equal(await readFile(join(runtimeCodexHome, "config.toml"), "utf-8"), 'model = "gpt-5.6-sol"\n');
+    } finally {
+      if (typeof prevOmxRoot === "string") process.env.OMX_ROOT = prevOmxRoot;
+      else delete process.env.OMX_ROOT;
+      await rm(source, { recursive: true, force: true });
+      await rm(boxedRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps explicit CODEX_HOME persistent instead of creating a runtime mirror", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-runtime-codex-home-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-explicit", {
+        CODEX_HOME: "/tmp/explicit-codex-home",
+      });
+
+      assert.equal(prepared.codexHomeOverride, "/tmp/explicit-codex-home");
+      assert.equal(prepared.sqliteHomeOverride, undefined);
+      assert.equal(prepared.projectLocalCodexHomeForCleanup, undefined);
+      assert.equal(prepared.runtimeCodexHomeForCleanup, undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("respects explicit CODEX_SQLITE_HOME for project-scope launches", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-sqlite-home-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await mkdir(join(wd, ".codex"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      await writeFile(join(wd, ".codex", "config.toml"), 'model = "gpt-5.6-sol"\n');
+
+      const prepared = await prepareCodexHomeForLaunch(wd, "session-explicit-sqlite", {
+        [CODEX_SQLITE_HOME_ENV]: "/tmp/explicit-sqlite-home",
+      });
+
+      assert.equal(prepared.codexHomeOverride, runtimeCodexHomePath(wd, "session-explicit-sqlite"));
+      assert.equal(prepared.sqliteHomeOverride, undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps explicit CODEX_HOME override from env", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(
+        resolveCodexHomeForLaunch(wd, {
+          CODEX_HOME: "/tmp/explicit-codex-home",
+        }),
+        "/tmp/explicit-codex-home",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("uses explicit CODEX_HOME config.toml for launch repair overrides", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      assert.equal(
+        resolveCodexConfigPathForLaunch(wd, {
+          CODEX_HOME: "/tmp/explicit-codex-home",
+        }),
+        "/tmp/explicit-codex-home/config.toml",
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('migrates legacy "project-local" persisted scope to "project"', async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project-local" }),
+      );
+      assert.equal(readPersistedSetupScope(wd), "project");
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it('resolves CODEX_HOME for legacy "project-local" persisted scope', async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project-local" }),
+      );
+      assert.equal(resolveCodexHomeForLaunch(wd, {}), join(wd, ".codex"));
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+  it("walks upward to find a project-scoped setup for launch resolution", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      const nested = join(wd, "packages", "app", "src");
+      await mkdir(nested, { recursive: true });
+      assert.equal(resolveCodexHomeForLaunch(nested, {}), join(wd, ".codex"));
+      assert.equal(
+        resolveCodexConfigPathForLaunch(nested, {}),
+        join(wd, ".codex", "config.toml"),
+      );
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not redirect a launch outside any setup root into project CODEX_HOME", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "project" }),
+      );
+      const outside = join(wd, "..", `outside-${Date.now()}`);
+      await mkdir(outside, { recursive: true });
+      assert.equal(resolveCodexHomeForLaunch(outside, {}), undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps a user-scope setup on the user config when launching from a subdirectory", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-launch-scope-"));
+    try {
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(
+        join(wd, ".omx", "setup-scope.json"),
+        JSON.stringify({ scope: "user" }),
+      );
+      const nested = join(wd, "sub");
+      await mkdir(nested, { recursive: true });
+      assert.equal(resolveCodexHomeForLaunch(nested, {}), undefined);
+      assert.equal(resolveProjectLocalCodexHomeForLaunch(nested, {}), undefined);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("pointer launch aborts", () => {
+  it("does not launch, tag, or retain a runtime home when a pointer lock is held", async () => {
+    const wd = await mkdtemp(join(tmpdir(), "omx-pointer-lock-launch-"));
+    try {
+      const binDir = join(wd, "bin");
+      const codexLog = join(wd, "codex.log");
+      const tmuxLog = join(wd, "tmux.log");
+      const lockPath = join(wd, ".omx", "state", "session.json.lock");
+      const ownerPath = join(lockPath, "owner.json");
+      const ownerContents = "{malformed-held-lock\n";
+      await mkdir(binDir, { recursive: true });
+      await mkdir(lockPath, { recursive: true });
+      await writeFile(join(wd, ".omx", "setup-scope.json"), JSON.stringify({ scope: "project" }));
+      await writeFile(ownerPath, ownerContents);
+      await writeFile(
+        join(binDir, "codex"),
+        `#!/bin/sh\nprintf 'spawned\\n' >> ${JSON.stringify(codexLog)}\n`,
+      );
+      await writeFile(
+        join(binDir, "tmux"),
+        `#!/bin/sh\ncase "$1" in set-option|display-message) printf '%s\\n' "$*" >> ${JSON.stringify(tmuxLog)} ;; esac\n`,
+      );
+      await chmod(join(binDir, "codex"), 0o755);
+      await chmod(join(binDir, "tmux"), 0o755);
+
+      const { spawnSync } = await import("node:child_process");
+      const result = spawnSync(process.execPath, [join(repoRoot, "dist", "cli", "omx.js"), "launch", "--direct"], {
+        cwd: wd,
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          HOME: join(wd, "home"),
+          PATH: `${binDir}${delimiter}/usr/bin:/bin`,
+          CODEX_HOME: "",
+          OMX_ROOT: "",
+          OMX_STATE_ROOT: "",
+          OMX_TEAM_STATE_ROOT: "",
+          OMX_SESSION_ID: "",
+          OMX_MCP_WORKDIR_ROOTS: "",
+          OMX_AUTO_UPDATE: "0",
+          OMX_HOOK_DERIVED_SIGNALS: "0",
+          OMX_NOTIFY_FALLBACK: "0",
+          TMUX: "test-socket,1,1",
+          TMUX_PANE: "%1",
+        },
+      });
+
+      assert.equal(result.status, 1, result.stderr || result.stdout);
+      assert.match(result.stderr, /session_pointer_lock_recovery_required/);
+      assert.equal(existsSync(codexLog), false);
+      assert.equal(existsSync(tmuxLog), false);
+      assert.equal(await readFile(ownerPath, "utf-8"), ownerContents);
+      assert.equal(existsSync(join(wd, ".omx", "state", "sessions")), false);
+      const runtimeRoot = join(wd, ".omx", "runtime", "codex-home");
+      assert.deepEqual(existsSync(runtimeRoot) ? await fsReaddir(runtimeRoot) : [], []);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("does not exec, tag, or retain a runtime home when pointer context root resolution is rejected", async () => {
+    const allowedRoot = await mkdtemp(join(tmpdir(), "omx-pointer-allowed-root-"));
+    const wd = await mkdtemp(join(tmpdir(), "omx-pointer-root-exec-"));
+    try {
+      const binDir = join(wd, "bin");
+      const codexLog = join(wd, "codex.log");
+      const tmuxLog = join(wd, "tmux.log");
+      await mkdir(binDir, { recursive: true });
+      await mkdir(join(wd, ".omx"), { recursive: true });
+      await writeFile(join(wd, ".omx", "setup-scope.json"), JSON.stringify({ scope: "project" }));
+      await writeFile(
+        join(binDir, "codex"),
+        `#!/bin/sh\nprintf 'spawned\\n' >> ${JSON.stringify(codexLog)}\n`,
+      );
+      await writeFile(
+        join(binDir, "tmux"),
+        `#!/bin/sh\ncase "$1" in set-option|display-message) printf '%s\\n' "$*" >> ${JSON.stringify(tmuxLog)} ;; esac\n`,
+      );
+      await chmod(join(binDir, "codex"), 0o755);
+      await chmod(join(binDir, "tmux"), 0o755);
+
+      const { spawnSync } = await import("node:child_process");
+      const result = spawnSync(process.execPath, [join(repoRoot, "dist", "cli", "omx.js"), "exec", "echo", "blocked"], {
+        cwd: wd,
+        encoding: "utf-8",
+        env: {
+          ...process.env,
+          HOME: join(wd, "home"),
+          PATH: `${binDir}${delimiter}/usr/bin:/bin`,
+          CODEX_HOME: "",
+          OMX_ROOT: "",
+          OMX_STATE_ROOT: "",
+          OMX_TEAM_STATE_ROOT: "",
+          OMX_SESSION_ID: "",
+          OMX_AUTO_UPDATE: "0",
+          OMX_HOOK_DERIVED_SIGNALS: "0",
+          OMX_NOTIFY_FALLBACK: "0",
+          OMX_MCP_WORKDIR_ROOTS: allowedRoot,
+          TMUX: "test-socket,1,1",
+          TMUX_PANE: "%1",
+        },
+      });
+
+      assert.equal(result.status, 1, result.stderr || result.stdout);
+      assert.match(result.stderr, /Unable to establish launch directory capability/);
+      assert.equal(existsSync(codexLog), false);
+      assert.equal(existsSync(tmuxLog), false);
+      assert.equal(existsSync(join(wd, ".omx", "state", "sessions")), false);
+      const runtimeRoot = join(wd, ".omx", "runtime", "codex-home");
+      assert.deepEqual(existsSync(runtimeRoot) ? await fsReaddir(runtimeRoot) : [], []);
+    } finally {
+      await rm(wd, { recursive: true, force: true });
+      await rm(allowedRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("resolveCodexLaunchPolicy", () => {
+  it("uses detached tmux on macOS when outside tmux and tmux is available", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy({}, "darwin", true, false, true, true),
+      "detached-tmux",
+    );
+  });
+
+  it("uses tmux-aware launch path when already inside tmux", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        { TMUX: "/tmp/tmux-1000/default,123,0" },
+        "darwin",
+        true,
+      ),
+      "inside-tmux",
+    );
+  });
+
+  it("uses tmux-aware launch path when already inside tmux on native Windows", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        { TMUX: "psmux-session" },
+        "win32",
+        true,
+        true,
+      ),
+      "inside-tmux",
+    );
+  });
+
+  it("uses detached tmux on non-macOS hosts when outside tmux and tmux is available", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy({}, "linux", true, false, true, true),
+      "detached-tmux",
+    );
+  });
+
+  it("launches directly on native Windows even when tmux is available", () => {
+    assert.equal(resolveCodexLaunchPolicy({}, "win32", true, true), "direct");
+  });
+
+  it("does not force direct launch for MSYS or Git Bash on win32", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        { MSYSTEM: "MINGW64" },
+        "win32",
+        true,
+        false,
+        true,
+        true,
+      ),
+      "direct",
+    );
+  });
+
+  it("honors explicit detached tmux launch requests when tmux is available", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        {},
+        "linux",
+        true,
+        false,
+        true,
+        true,
+        "detached-tmux",
+      ),
+      "detached-tmux",
+    );
+  });
+
+  it("honors explicit direct launch requests outside tmux", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        {},
+        "linux",
+        true,
+        false,
+        true,
+        true,
+        "direct",
+      ),
+      "direct",
+    );
+  });
+
+  it("honors explicit direct launch requests inside tmux", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        { TMUX: "/tmp/tmux-1000/default,123,0" },
+        "linux",
+        true,
+        false,
+        true,
+        true,
+        "direct",
+      ),
+      "direct",
+    );
+  });
+
+  it("keeps explicit tmux policy tmux-aware inside tmux", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        { TMUX: "/tmp/tmux-1000/default,123,0" },
+        "linux",
+        true,
+        false,
+        true,
+        true,
+        "detached-tmux",
+      ),
+      "inside-tmux",
+    );
+  });
+
+  it("falls back directly for explicit tmux requests when tmux is unavailable", () => {
+    assert.equal(
+      resolveCodexLaunchPolicy(
+        {},
+        "linux",
+        false,
+        false,
+        true,
+        true,
+        "detached-tmux",
+      ),
+      "direct",
+    );
+  });
+
+  it("launches directly when stdin is not a tty outside tmux", () => {
+    assert.equal(resolveCodexLaunchPolicy({}, "linux", true, false, false, true), "direct");
+  });
+
+  it("launches directly when stdout is not a tty outside tmux", () => {
+    assert.equal(resolveCodexLaunchPolicy({}, "linux", true, false, true, false), "direct");
+  });
+
+  it("launches directly when tmux is unavailable outside tmux", () => {
+    assert.equal(resolveCodexLaunchPolicy({}, "linux", false), "direct");
+  });
+
+  it("launches directly on native Windows when tmux is unavailable", () => {
+    assert.equal(resolveCodexLaunchPolicy({}, "win32", false, true), "direct");
+  });
+});
+
+describe("resolveBackgroundHelperLaunchMode", () => {
+  it("uses the hidden Windows MSYS bootstrap for win32 Git Bash", () => {
+    assert.equal(
+      resolveBackgroundHelperLaunchMode({ MSYSTEM: "MINGW64" }, "win32"),
+      "windows-msys-bootstrap",
+    );
+  });
+
+  it("spawns helpers directly on native win32", () => {
+    assert.equal(resolveBackgroundHelperLaunchMode({}, "win32"), "direct-detached");
+  });
+
+  it("spawns helpers directly on non-Windows platforms", () => {
+    assert.equal(
+      resolveBackgroundHelperLaunchMode({ MSYSTEM: "MINGW64" }, "linux"),
+      "direct-detached",
+    );
+  });
+});
+
+describe("shouldDetachBackgroundHelper", () => {
+  it("keeps the long-running helper detached under win32 Git Bash", () => {
+    assert.equal(
+      shouldDetachBackgroundHelper({ MSYSTEM: "MINGW64" }, "win32"),
+      true,
+    );
+  });
+
+  it("keeps detached helpers on native win32", () => {
+    assert.equal(shouldDetachBackgroundHelper({}, "win32"), true);
+  });
+
+  it("keeps detached helpers on non-Windows platforms", () => {
+    assert.equal(
+      shouldDetachBackgroundHelper({ MSYSTEM: "MINGW64" }, "linux"),
+      true,
+    );
+  });
+});
+
+describe("classifyCodexExecFailure", () => {
+  it("classifies child process exit status as codex exit", () => {
+    const err = Object.assign(new Error("codex exited 9"), { status: 9 });
+    const classified = classifyCodexExecFailure(err);
+    assert.equal(classified.kind, "exit");
+    assert.equal(classified.exitCode, 9);
+  });
+
+  it("classifies signal termination as codex exit and maps to signal-based exit code", () => {
+    const err = Object.assign(new Error("terminated"), {
+      status: null,
+      signal: "SIGTERM" as NodeJS.Signals,
+    });
+    const classified = classifyCodexExecFailure(err);
+    assert.equal(classified.kind, "exit");
+    assert.equal(classified.signal, "SIGTERM");
+    assert.equal(classified.exitCode, resolveSignalExitCode("SIGTERM"));
+  });
+
+  it("classifies ENOENT as launch error", () => {
+    const err = Object.assign(new Error("spawn codex ENOENT"), {
+      code: "ENOENT",
+    });
+    const classified = classifyCodexExecFailure(err);
+    assert.equal(classified.kind, "launch-error");
+    assert.equal(classified.code, "ENOENT");
+  });
+});
+
+describe("tmux HUD pane helpers", () => {
+  it("findHudWatchPaneIds detects stale HUD watch panes and excludes current pane", () => {
+    const panes = parseTmuxPaneSnapshot(
+      [
+        "%1\tzsh\tzsh",
+        "%2\tnode\tnode /tmp/bin/omx.js hud --watch",
+        "%3\tnode\tnode /tmp/bin/omx.js hud --watch",
+        "%4\tcodex\tcodex --model gpt-5",
+      ].join("\n"),
+    );
+    assert.deepEqual(findHudWatchPaneIds(panes, "%2"), ["%3"]);
+  });
+
+  it("buildHudPaneCleanupTargets de-dupes pane ids and includes created pane", () => {
+    assert.deepEqual(
+      buildHudPaneCleanupTargets(["%3", "%3", "invalid"], "%4"),
+      ["%3", "%4"],
+    );
+  });
+
+  it("buildHudPaneCleanupTargets excludes leader pane from existing ids", () => {
+    // %5 is the leader pane — it must not be included even if findHudWatchPaneIds let it through.
+    assert.deepEqual(buildHudPaneCleanupTargets(["%3", "%5"], "%4", "%5"), [
+      "%3",
+      "%4",
+    ]);
+  });
+
+  it("buildHudPaneCleanupTargets excludes leader pane even when it matches the created HUD pane id", () => {
+    // Defensive edge case: if createHudWatchPane somehow returned the leader pane id, guard protects it.
+    assert.deepEqual(buildHudPaneCleanupTargets(["%3"], "%5", "%5"), ["%3"]);
+  });
+
+  it("buildHudPaneCleanupTargets is a no-op guard when leaderPaneId is absent", () => {
+    assert.deepEqual(buildHudPaneCleanupTargets(["%3"], "%4"), ["%3", "%4"]);
+  });
+
+  it("listCurrentWindowHudPaneIds excludes snapshots without complete current ownership", () => {
+    const calls: string[][] = [];
+    const panes = listCurrentWindowHudPaneIds("%1", (args) => {
+      calls.push(args);
+      if (args.at(-1) === "#{pane_id}") return "%1\n%2\n";
+      return [
+        "%1\x1fcodex\x1f0\x1f0\x1f100\x1f40\x1f39\x1f100\x1f40\x1fcodex\x1f/repo\x1f0\x1f101",
+        "%2\x1fnode\x1f0\x1f40\x1f100\x1f3\x1f42\x1f100\x1f43\x1fexec env OMX_TMUX_HUD_OWNER=1 OMX_TMUX_HUD_LEADER_PANE='%1' node /tmp/bin/dist/cli/omx.js hud --watch\x1f/repo\x1f0\x1f202",
+      ].join("\n");
+    });
+
+    assert.deepEqual(panes, []);
+    assert.deepEqual(calls[0], ["list-panes", "-t", "%1", "-F", "#{pane_id}"]);
+    assert.deepEqual(calls[1], [
+      "list-panes",
+      "-t",
+      "%1",
+      "-F",
+      [
+        "#{pane_id}",
+        "#{pane_current_command}",
+        "#{pane_left}",
+        "#{pane_top}",
+        "#{pane_width}",
+        "#{pane_height}",
+        "#{pane_bottom}",
+        "#{window_width}",
+        "#{window_height}",
+        "#{pane_start_command}",
+        "#{pane_current_path}",
+        "#{pane_dead}",
+        "#{pane_pid}",
+      ].join("\x1f"),
+    ]);
+  });
+
+  it("createHudWatchPane rejects an incomplete synthetic source incarnation", () => {
+    const calls: string[][] = [];
+    const options = new Map<string, string>();
+    let splitCreated = false;
+    let splitMarker = "";
+    const paneId = createSharedHudWatchPane(
+      "/repo",
+      "node /repo/dist/cli/omx.js hud --watch",
+      { heightLines: 3, targetPaneId: "%1" },
+      (args) => {
+        calls.push(args);
+        if (args[0] === "display-message") {
+          const format = args.at(-1);
+          if (format === "#{pane_id}\t#{pane_dead}\t#{pane_pid}\t#{session_id}\t#{window_id}") {
+            return "%1\t0\t101\t$7\t@1";
+          }
+          if (format === "#{session_id}\t#{window_id}") return "$7\t@1";
+        }
+        if (args[0] === "list-panes") {
+          const format = args.at(-1);
+          const panes = splitCreated ? ["%1", "%2"] : ["%1"];
+          if (format === "#{pane_id}") return `${panes.join("\n")}\n`;
+          if (format === "#{pane_id}\t#{pane_start_command}") {
+            return [
+              "%1\tcodex",
+              `%2\tOMX_TMUX_SPLIT_OPERATION_MARKER='${splitMarker}'; export OMX_TMUX_SPLIT_OPERATION_MARKER; exec env OMX_TMUX_HUD_OWNER=1 OMX_TMUX_HUD_LEADER_PANE='%1' node /repo/dist/cli/omx.js hud --watch`,
+            ].join("\n");
+          }
+          if (format === "#{pane_id}\t#{pane_dead}\t#{pane_pid}") {
+            return "%1\t0\t101\n%2\t0\t202\n";
+          }
+        }
+        if (args[0] === "set-option") {
+          options.set(args[2]!, args[3]!);
+          return "";
+        }
+        if (args[0] === "show-options") return `${options.get(args.at(-1)!) ?? ""}\n`;
+        if (args[0] === "if-shell") {
+          assert.equal(args[1], "-F");
+          assert.equal(args[2], "-t");
+          assert.equal(args[3], "%1");
+          assert.match(args[4]!, /#\{pane_id\},%1/);
+          assert.match(args[4]!, /#\{pane_pid\},101/);
+          assert.match(args[4]!, /#\{session_id\},\$1/);
+          assert.match(args[4]!, /#\{window_id\},@1/);
+          splitCreated = true;
+          const marker = /OMX_TMUX_SPLIT_OPERATION_MARKER='([\w-]+)'/.exec(args[5]!);
+          const receipt = /display-message -p (__omx_hud_split_[\w-]+)/.exec(args[5]!);
+          assert.ok(marker, "guarded split must bind an operation marker");
+          assert.ok(receipt, "guarded split must emit an exact receipt");
+          splitMarker = marker[1]!;
+          return `${receipt[1]}\n`;
+        }
+        throw new Error(`unexpected tmux command: ${args.join(" ")}`);
+      },
+    );
+
+    assert.equal(paneId, null);
+    assert.equal(calls.some((args) => args[0] === "if-shell"), false);
+  });
+});
+
+describe("detached tmux new-session sequencing", () => {
+  it("buildDetachedSessionBootstrapSteps uses shared HUD height and split-capture ordering", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      "--model gpt-5",
+      "/tmp/codex-home",
+      '{"active":true}',
+      false,
+      "omx-session-test",
+    );
+    assert.deepEqual(
+      steps.map((step) => step.name),
+      ["new-session", "tag-session", "split-and-capture-hud-pane"],
+    );
+    const splitStep = steps.find((step) => step.name === "split-and-capture-hud-pane");
+    assert.ok(splitStep);
+    assert.equal(splitStep.args[3], String(HUD_TMUX_HEIGHT_LINES));
+    assert.equal(splitStep.args[6], "omx-demo");
+    assert.equal(splitStep.args.includes("-P"), true);
+    assert.equal(splitStep.args.includes("#{pane_id}"), true);
+    assert.equal(steps[0]?.args.includes("-e"), true);
+    assert.equal(steps[0]?.args.includes("OMX_SESSION_ID=omx-session-test"), true);
+    assert.equal(
+      steps[0]?.args.includes('OMX_NOTIFY_TEMP_CONTRACT={\"active\":true}'),
+      true,
+    );
+  });
+
+  it("buildDetachedSessionBootstrapSteps forwards temp contract env to detached tmux session", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      '{"active":true,"canonicalSelectors":["discord"]}',
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(
+      newSession!.args.includes("-e") &&
+        newSession!.args.some((arg) =>
+          arg.startsWith("OMX_NOTIFY_TEMP_CONTRACT="),
+        ),
+      true,
+    );
+  });
+
+  it("buildDetachedSessionBootstrapSteps forwards OMX_SESSION_ID to detached tmux session", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'env' 'OMX_SESSION_ID=sess-detached-managed' 'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    const tagSession = steps.find((step) => step.name === "tag-session");
+    assert.ok(newSession);
+    assert.ok(tagSession);
+    assert.equal(
+      newSession!.args.includes("-e") &&
+        newSession!.args.some((arg) => arg === "OMX_SESSION_ID=sess-detached-managed"),
+      true,
+    );
+    assert.equal(newSession!.args.some((arg) => arg === "OMX_TMUX_HUD_OWNER=1"), true);
+    assert.deepEqual(tagSession!.args, [
+      "set-option",
+      "-t",
+      "omx-demo",
+      "@omx_instance_id",
+      "sess-detached-managed",
+    ]);
+  });
+
+  it("buildDetachedSessionBootstrapSteps forwards inherited leader model separately from worker launch args", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'env' 'OMX_SESSION_ID=sess-detached-managed' 'codex' '--model' 'gpt-5.6-terra'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      "--dangerously-bypass-approvals-and-sandbox --model gpt-5.6-terra",
+      "/tmp/project/.codex",
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      undefined,
+      process.env,
+      undefined,
+      undefined,
+      "gpt-5.6-terra",
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(
+      newSession!.args.includes("-e") &&
+        newSession!.args.some((arg) => arg === "OMX_TEAM_WORKER_INHERITED_MODEL=gpt-5.6-terra"),
+      true,
+    );
+  });
+
+  it("buildDetachedSessionBootstrapSteps forwards CODEX_HOME override to detached tmux session", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      "/tmp/project/.codex",
+      null,
+      false,
+      "sess-detached-managed",
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(
+      newSession!.args.includes("-e") &&
+        newSession!.args.some((arg) => arg === "CODEX_HOME=/tmp/project/.codex"),
+      true,
+    );
+  });
+
+  it("buildDetachedSessionBootstrapSteps forwards CODEX_SQLITE_HOME override to detached tmux session", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      "/tmp/project/.omx/runtime/codex-home/session-1",
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      undefined,
+      {},
+      "/tmp/project/.codex",
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(
+      newSession!.args.includes("-e") &&
+        newSession!.args.some((arg) => arg === `${CODEX_SQLITE_HOME_ENV}=/tmp/project/.codex`),
+      true,
+    );
+  });
+
+  it("buildDetachedSessionBootstrapSteps forwards OMX_ROOT override to detached tmux session", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      "/tmp/omx-root",
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(
+      newSession!.args.includes("-e") &&
+        newSession!.args.some((arg) => arg === "OMX_ROOT=/tmp/omx-root"),
+      true,
+    );
+  });
+
+  it("clears unverified boxed env from detached tmux sessions", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/boxed-runtime",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      "/tmp/boxed-runtime",
+      {
+        OMXBOX_ACTIVE: "1",
+        OMX_SOURCE_CWD: "/tmp/source-project",
+        OMX_STATE_ROOT: "/tmp/boxed-state-root",
+      },
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_ROOT=/tmp/boxed-runtime"), false);
+    assert.equal(
+      newSession.args.some((arg) => arg === "OMX_STATE_ROOT=/tmp/boxed-state-root"),
+      false,
+    );
+    assert.equal(newSession.args.some((arg) => arg === "OMX_TMUX_HUD_OWNER=1"), true);
+    assert.equal(newSession.args.some((arg) => arg === "OMXBOX_ACTIVE=1"), false);
+    assert.equal(
+      newSession.args.some((arg) => arg === "OMX_SOURCE_CWD=/tmp/source-project"),
+      false,
+    );
+  });
+
+
+
+  it("buildDetachedSessionBootstrapSteps preserves OMX_STATE_ROOT identity when no root override is explicit", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      "/tmp/state-root",
+      { OMX_STATE_ROOT: "/tmp/state-root" },
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_STATE_ROOT=/tmp/state-root"), true);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_ROOT=/tmp/state-root"), false);
+  });
+
+  it("buildDetachedSessionBootstrapSteps preserves OMX_ROOT precedence over OMX_STATE_ROOT", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      "/tmp/root-from-omx-root",
+      { OMX_STATE_ROOT: "/tmp/state-root-should-not-win" },
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_ROOT=/tmp/root-from-omx-root"), true);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_STATE_ROOT=/tmp/state-root-should-not-win"), false);
+  });
+
+
+  it("buildDetachedSessionBootstrapSteps preserves OMX_TEAM_STATE_ROOT over explicit root env", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      "/tmp/root-from-omx-root",
+      { OMX_ROOT: "/tmp/root-from-omx-root", OMX_TEAM_STATE_ROOT: "/tmp/team-state-root" },
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_TEAM_STATE_ROOT=/tmp/team-state-root"), true);
+    assert.equal(newSession.args.some((arg) => arg === "OMX_ROOT=/tmp/root-from-omx-root"), false);
+  });
+
+  it("serializes custom parent env for the interactive detached tmux leader without logging values in tmux args", () => {
+    const envFilePath = "/tmp/omx-runtime/tmux-env/sess.env";
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      undefined,
+      { CUSTOM_LLM_API_KEY: "fake-provider-key", IS_GAJAE_SLOP_GENERATOR: "1" },
+      undefined,
+      envFilePath,
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    const argsText = newSession.args.join("\n");
+    assert.match(argsText, new RegExp(envFilePath.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+    assert.doesNotMatch(argsText, /fake-provider-key/);
+    assert.doesNotMatch(argsText, /CUSTOM_LLM_API_KEY=/);
+
+    const envScript = serializeDetachedSessionParentEnv({
+      CUSTOM_LLM_API_KEY: "fake-provider-key",
+      IS_GAJAE_SLOP_GENERATOR: "1",
+      "not-a-shell-name": "ignored",
+    });
+    assert.match(envScript, /export CUSTOM_LLM_API_KEY='fake-provider-key'/);
+    assert.match(envScript, /export IS_GAJAE_SLOP_GENERATOR='1'/);
+    assert.doesNotMatch(envScript, /not-a-shell-name/);
+  });
+
+  it("omits only tmux-owned pane metadata from the detached session env", () => {
+    const envScript = serializeDetachedSessionParentEnv({
+      CUSTOM_LLM_API_KEY: "fake-provider-key",
+      TERM: "xterm-256color",
+      TERM_PROGRAM: "",
+      TERM_PROGRAM_VERSION: undefined,
+      TERMINFO: "/tmp/outer-terminfo",
+      TERMINFO_DIRS: "/tmp/outer-terminfo-dirs",
+      TERMCAP: "outer-termcap",
+      COLORTERM: "truecolor",
+      TMUX: "",
+      TMUX_PANE: undefined,
+      COLUMNS: "200",
+      LINES: "",
+    });
+
+    assert.match(envScript, /export CUSTOM_LLM_API_KEY='fake-provider-key'/);
+    assert.match(envScript, /export COLORTERM='truecolor'/);
+    assert.match(envScript, /export TERMINFO='\/tmp\/outer-terminfo'/);
+    assert.match(envScript, /export TERMINFO_DIRS='\/tmp\/outer-terminfo-dirs'/);
+    assert.match(envScript, /export TERMCAP='outer-termcap'/);
+    assert.doesNotMatch(envScript, /^unset\b/m);
+    for (const key of [
+      "TERM",
+      "TERM_PROGRAM",
+      "TERM_PROGRAM_VERSION",
+      "TMUX",
+      "TMUX_PANE",
+      "COLUMNS",
+      "LINES",
+    ]) {
+      assert.doesNotMatch(envScript, new RegExp(`^export ${key}=`, "m"));
+    }
+  });
+
+  it("round-trips shell-sensitive detached parent env values without evaluating them", { skip: process.platform === "win32" }, async () => {
+    const shellSensitiveValue = "literal ' quote $HOME $(printf injected) `printf injected`; \\ slash\nsecond line";
+    const envScript = serializeDetachedSessionParentEnv({
+      CUSTOM_LLM_API_KEY: shellSensitiveValue,
+      EMPTY_PROVIDER_KEY: "",
+    });
+    const result = (await import("node:child_process")).spawnSync(
+      "/bin/sh",
+      ["-c", `${envScript}printf '%s\\n<%s>\\n' "$CUSTOM_LLM_API_KEY" "$EMPTY_PROVIDER_KEY"`],
+      { encoding: "utf-8", env: { HOME: "/should-not-expand" } },
+    );
+
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout, `${shellSensitiveValue}\n<>\n`);
+  });
+
+  it("creates a repo-local omx command shim for launched Codex sessions", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-"));
+    try {
+      const shimDir = ensureOmxRuntimeCommandShim(
+        cwd,
+        "/repo/dist/cli/omx.js",
+        "/usr/local/bin/node",
+      );
+      const shimPath = omxRuntimeCommandShimPath(cwd);
+
+      assert.equal(shimDir, dirname(shimPath));
+      assert.equal(existsSync(shimPath), true);
+      assert.equal(await readFile(shimPath, "utf-8"), [
+        "#!/bin/sh",
+        `exec '/usr/local/bin/node' '/repo/dist/cli/omx.js' "$@"`,
+        "",
+      ].join("\n"));
+      assert.equal((await stat(shimPath)).mode & 0o700, 0o700);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("prepends the repo-local omx shim before global PATH entries", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-env-"));
+    try {
+      const env = prependOmxRuntimeCommandShimToEnv(
+        cwd,
+        {
+          PATH: "/opt/homebrew/bin:/usr/bin",
+          OMX_ENTRY_PATH: "/opt/homebrew/lib/node_modules/oh-my-codex/dist/cli/omx.js",
+        },
+        "/repo/dist/cli/omx.js",
+        "/usr/local/bin/node",
+      );
+      const shimDir = dirname(omxRuntimeCommandShimPath(cwd));
+
+      assert.equal(env.PATH, `${shimDir}${delimiter}/opt/homebrew/bin:/usr/bin`);
+      assert.equal(env.OMX_ENTRY_PATH, "/repo/dist/cli/omx.js");
+      assert.equal(env.OMX_STARTUP_CWD, cwd);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("executes the repo-local omx shim before a stale global omx with misleading success output", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-exec-"));
+    try {
+      const fakeGlobalBin = join(cwd, "fake-global-bin");
+      const fakeLocalBin = join(cwd, "fake local's $() ; bin");
+      await mkdir(fakeGlobalBin);
+      await mkdir(fakeLocalBin);
+      const globalMarker = join(cwd, "GLOBAL_CALLED");
+      const localMarker = join(cwd, "LOCAL_CALLED");
+      const fakeGlobalOmx = join(fakeGlobalBin, "omx");
+      const fakeNode = join(fakeLocalBin, "node runner");
+      const localOmxEntry = join(fakeLocalBin, "omx entry's $() ;.js");
+
+      await writeFile(fakeGlobalOmx, `#!/bin/sh
+printf 'global-called\\n' > "${globalMarker}"
+printf '{"success":true,"source":"global"}\\n'
+exit 0
+`);
+      await chmod(fakeGlobalOmx, 0o755);
+      await writeFile(fakeNode, `#!/bin/sh
+printf '%s\\n' "$@" > "${localMarker}"
+printf '{"success":true,"source":"local"}\\n'
+exit 0
+`);
+      await chmod(fakeNode, 0o755);
+
+      const env = prependOmxRuntimeCommandShimToEnv(
+        cwd,
+        { PATH: `${fakeGlobalBin}${delimiter}/usr/bin:/bin` },
+        localOmxEntry,
+        fakeNode,
+      );
+      const { execFileSync } = await import("node:child_process");
+      const output = execFileSync("omx", ["team", "status", "hud-check"], {
+        cwd,
+        env,
+        encoding: "utf-8",
+      });
+
+      assert.match(output, /"source":"local"/);
+      assert.equal(existsSync(globalMarker), false);
+      assert.deepEqual((await readFile(localMarker, "utf-8")).trim().split("\n"), [
+        localOmxEntry,
+        "team",
+        "status",
+        "hud-check",
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("overwrites stale runtime shim contents and permissions", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-stale-"));
+    try {
+      const shimPath = omxRuntimeCommandShimPath(cwd);
+      await mkdir(dirname(shimPath), { recursive: true });
+      await writeFile(shimPath, "#!/bin/sh\necho stale-global\n");
+      await chmod(shimPath, 0o600);
+
+      ensureOmxRuntimeCommandShim(cwd, "/repo/dist/cli/omx.js", "/usr/local/bin/node");
+
+      assert.equal(await readFile(shimPath, "utf-8"), [
+        "#!/bin/sh",
+        `exec '/usr/local/bin/node' '/repo/dist/cli/omx.js' "$@"`,
+        "",
+      ].join("\n"));
+      assert.equal((await stat(shimPath)).mode & 0o777, 0o700);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("replaces a stale runtime shim symlink without following it", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-symlink-"));
+    try {
+      if (process.platform === "win32") return;
+      const shimPath = omxRuntimeCommandShimPath(cwd);
+      const externalTarget = join(cwd, "outside-target");
+      await mkdir(dirname(shimPath), { recursive: true });
+      await writeFile(externalTarget, "do not overwrite\n");
+      await symlink(externalTarget, shimPath);
+
+      ensureOmxRuntimeCommandShim(cwd, "/repo/dist/cli/omx.js", "/usr/local/bin/node");
+
+      assert.equal(await readFile(externalTarget, "utf-8"), "do not overwrite\n");
+      assert.equal((await lstat(shimPath)).isSymbolicLink(), false);
+      assert.match(await readFile(shimPath, "utf-8"), /\/repo\/dist\/cli\/omx\.js/);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("throws when the runtime shim bin path is not a directory", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-file-"));
+    try {
+      const shimPath = omxRuntimeCommandShimPath(cwd);
+      await mkdir(dirname(dirname(shimPath)), { recursive: true });
+      await writeFile(dirname(shimPath), "not a directory\n");
+
+      assert.throws(
+        () => ensureOmxRuntimeCommandShim(cwd, "/repo/dist/cli/omx.js", "/usr/local/bin/node"),
+        /not a directory/,
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("creates a Windows omx.cmd runtime shim with cmd batch content on win32", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-win-"));
+    try {
+      const shimDir = ensureOmxRuntimeCommandShim(
+        cwd,
+        "C:\\repo\\dist\\cli\\omx.js",
+        "C:\\Program Files\\nodejs\\node.exe",
+        "win32",
+      );
+      const shimPath = omxRuntimeCommandShimPath(cwd, "win32");
+
+      assert.equal(shimDir, dirname(shimPath));
+      assert.equal(shimPath.endsWith("omx.cmd"), true);
+      assert.equal(existsSync(shimPath), true);
+      assert.equal(await readFile(shimPath, "utf-8"), [
+        "@echo off",
+        `"C:\\Program Files\\nodejs\\node.exe" "C:\\repo\\dist\\cli\\omx.js" %*`,
+        "",
+      ].join("\r\n"));
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("preserves an inherited Windows Path key when prepending the shim dir", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-winpath-"));
+    try {
+      const env = prependOmxRuntimeCommandShimToEnv(
+        cwd,
+        { Path: "C:\\Windows\\System32;C:\\Windows" },
+        "C:\\repo\\dist\\cli\\omx.js",
+        "C:\\Program Files\\nodejs\\node.exe",
+        "win32",
+      );
+      const shimDir = dirname(omxRuntimeCommandShimPath(cwd, "win32"));
+
+      assert.equal(env.Path, `${shimDir};C:\\Windows\\System32;C:\\Windows`);
+      assert.equal(env.PATH, undefined);
+      assert.equal(env.OMX_ENTRY_PATH, "C:\\repo\\dist\\cli\\omx.js");
+      assert.equal(env.OMX_STARTUP_CWD, cwd);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("collapses duplicate Windows PATH/Path variants to a single Path key", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-windup-"));
+    try {
+      const env = prependOmxRuntimeCommandShimToEnv(
+        cwd,
+        { PATH: "", Path: "C:\\Windows\\System32" },
+        "C:\\repo\\dist\\cli\\omx.js",
+        "C:\\Program Files\\nodejs\\node.exe",
+        "win32",
+      );
+      const shimDir = dirname(omxRuntimeCommandShimPath(cwd, "win32"));
+      const pathKeys = Object.keys(env).filter(
+        (key) => key.toLowerCase() === "path",
+      );
+
+      assert.deepEqual(pathKeys, ["Path"]);
+      assert.equal(env.Path, `${shimDir};C:\\Windows\\System32`);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("seeds a Windows Path entry from the shim dir when none is inherited", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-runtime-command-shim-winempty-"));
+    try {
+      const env = prependOmxRuntimeCommandShimToEnv(
+        cwd,
+        {},
+        "C:\\repo\\dist\\cli\\omx.js",
+        "C:\\Program Files\\nodejs\\node.exe",
+        "win32",
+      );
+      const shimDir = dirname(omxRuntimeCommandShimPath(cwd, "win32"));
+
+      assert.equal(env.Path, shimDir);
+      assert.equal(env.PATH, undefined);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("keeps detached tmux bootstrap bounded when no interactive parent env file is requested", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo",
+      "/tmp/project",
+      "'codex' '--model' 'gpt-5'",
+      "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null,
+      undefined,
+      null,
+      false,
+      "sess-detached-managed",
+      undefined,
+      undefined,
+      undefined,
+      { CUSTOM_LLM_API_KEY: "fake-provider-key" },
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    const argsText = newSession.args.join("\n");
+    assert.doesNotMatch(argsText, /CUSTOM_LLM_API_KEY/);
+    assert.doesNotMatch(argsText, /fake-provider-key/);
+  });
+
+  it("runCodex cleans only same-session same-leader HUD panes before launch", async () => {
+    const source = await readFile(join(repoRoot, "src", "cli", "index.ts"), "utf8");
+    assert.match(
+      source,
+      /const staleHudPaneIds = currentPaneId\s*\? listHudWatchPaneIdsInCurrentWindow\(currentPaneId, \{ sessionId, leaderPaneId: currentPaneId \}\)\s*: \[\];/,
+    );
+    assert.match(source, /const \[keeperHudPaneId, \.\.\.duplicateHudPaneIds\] = staleHudPaneIds;/);
+    assert.match(source, /for \(const paneId of duplicateHudPaneIds\) \{\s*killTmuxPane\(paneId\);\s*\}/);
+    assert.match(source, /if \(keeperHudPaneId\) \{\s*hudPaneId = keeperHudPaneId;/);
+    assert.doesNotMatch(
+      source,
+      /const staleHudPaneIds = listHudWatchPaneIdsInCurrentWindow\(currentPaneId, \{ leaderPaneId: currentPaneId \}\);/,
+    );
+  });
+
+  it("runCodex skips launch-time HUD cleanup when TMUX_PANE is unavailable", async () => {
+    const source = await readFile(join(repoRoot, "src", "cli", "index.ts"), "utf8");
+    assert.match(
+      source,
+      /const staleHudPaneIds = currentPaneId\s*\? listHudWatchPaneIdsInCurrentWindow\(currentPaneId, \{ sessionId, leaderPaneId: currentPaneId \}\)\s*: \[\];/,
+    );
+  });
+
+  it("runCodex builds inside-tmux HUD command through explicit runtime-root resolver", async () => {
+    const source = await readFile(join(repoRoot, 'src', 'cli', 'index.ts'), 'utf-8');
+    assert.match(source, /const hudRuntimeRoot: HudRuntimeRootForLaunch = runtimeContext\s*\? \{ omxRoot: runtimeContext\.omxRoot, rootSource: 'omx-root-env' \}\s*: resolveHudRuntimeRootForLaunch\(cwd, process\.env\);/);
+    assert.match(
+      source,
+      /const hudRuntimeEnv = launchOwnedControlPlane\s*\? Object\.fromEntries\([\s\S]*?\)\s*:\s*\{\s*\.\.\.buildHudRuntimeEnv\(/,
+    );
+    assert.match(source, /const restoreInsideTmuxControlPlane = insideTmuxControlPlane\s*\? applyLaunchOwnedControlPlane\(insideTmuxControlPlane\)/);
+    assert.match(source, /const restoreInsideTmuxControlPlane[\s\S]*?launch = await preLaunch/);
+    assert.match(source, /\.\.\.runtimeEnvOverlay,\s*\.\.\.launchOwnedControlPlaneEnv/);
+    assert.match(
+      source,
+      /buildTmuxPaneCommand\("env",\s*\[\.\.\.hudEnvArgs,\s*"node",\s*omxBin,\s*"hud",\s*"--watch"\]\)/,
+    );
+  });
+
+  it("runCodex registers a HUD resize hook immediately for inside-tmux launches", async () => {
+    const source = await readFile(join(repoRoot, 'src', 'cli', 'index.ts'), 'utf-8');
+    assert.match(
+      source,
+      /registerInsideTmuxHudResizeHook\(\{\s*hudPaneId,\s*currentPaneId,\s*cwd,\s*sessionId,\s*omxRootOverride: selectedOmxRootOverride,\s*baseEnv: runtimeHookEnv,\s*\}\)/,
+    );
+    assert.match(
+      source,
+      /if \(currentPaneId\) \{\s*unregisterHudResizeHook\(currentPaneId\);\s*\}/,
+    );
+  });
+
+  it("buildInsideTmuxHudHookEnv tags hook commands with session, owner, leader, and local root", () => {
+    const env = buildInsideTmuxHudHookEnv(
+      { PATH: "/bin" },
+      "sess-a",
+      "%leader",
+      "/repo",
+    );
+
+    assert.equal(env.PATH, "/bin");
+    assert.equal(env.OMX_SESSION_ID, "sess-a");
+    assert.equal(env.OMX_TMUX_HUD_OWNER, "1");
+    assert.equal(env.OMX_TMUX_HUD_LEADER_PANE, "%leader");
+    assert.equal(env.OMX_ROOT, "/repo");
+  });
+
+  it("registerInsideTmuxHudResizeHook forwards cwd and env to hook registration", () => {
+    const calls: Array<{
+      hudPaneId: string;
+      leaderPaneId: string | undefined;
+      heightLines: number;
+      cwd?: string;
+      env?: NodeJS.ProcessEnv;
+    }> = [];
+
+    const result = registerInsideTmuxHudResizeHook({
+      hudPaneId: "%hud",
+      currentPaneId: "%leader",
+      cwd: "/repo",
+      sessionId: "sess-a",
+      omxRootOverride: "/repo",
+      baseEnv: { PATH: "/bin" },
+      register: (hudPaneId, leaderPaneId, heightLines, options) => {
+        calls.push({ hudPaneId, leaderPaneId, heightLines, cwd: options?.cwd, env: options?.env });
+        return true;
+      },
+    });
+
+    assert.equal(result, true);
+    assert.deepEqual(calls, [{
+      hudPaneId: "%hud",
+      leaderPaneId: "%leader",
+      heightLines: HUD_TMUX_HEIGHT_LINES,
+      cwd: "/repo",
+      env: {
+        PATH: "/bin",
+        OMX_SESSION_ID: "sess-a",
+        OMX_TMUX_HUD_OWNER: "1",
+        OMX_TMUX_HUD_LEADER_PANE: "%leader",
+        OMX_ROOT: "/repo",
+      },
+    }]);
+    assert.equal(registerInsideTmuxHudResizeHook({
+      hudPaneId: null,
+      currentPaneId: "%leader",
+      cwd: "/repo",
+      sessionId: "sess-a",
+      register: () => {
+        throw new Error("should not register without a HUD pane");
+      },
+    }), false);
+  });
+
+  it("buildDetachedHudHookEnv preserves tmux targeting and local launcher identity", () => {
+    const env = buildDetachedHudHookEnv(
+      { PATH: "/bin" },
+      "sess-a",
+      "%leader",
+      "/tmp/tmux.sock,123,7",
+      "/repo/dist/cli/omx.js",
+      "/repo",
+    );
+
+    assert.equal(env.PATH, "/bin");
+    assert.equal(env.TMUX, "/tmp/tmux.sock,123,7");
+    assert.equal(env.TMUX_PANE, "%leader");
+    assert.equal(env.OMX_SESSION_ID, "sess-a");
+    assert.equal(env.OMX_TMUX_HUD_OWNER, "1");
+    assert.equal(env.OMX_ROOT, "/repo");
+    assert.equal(env.OMX_ENTRY_PATH, "/repo/dist/cli/omx.js");
+  });
+
+  describe("detached HUD deferred mutation guard", () => {
+    const leader = {
+      paneId: "%11",
+      panePid: 1100,
+      sessionName: "omx-detached",
+      sessionId: "$1",
+      sessionCreated: "1700000000",
+      windowId: "@1",
+      windowIndex: "0",
+      ownerId: "instance-1",
+    };
+    const hud = {
+      paneId: "%77",
+      panePid: 7700,
+      sessionName: "omx-detached",
+      sessionId: "$1",
+      sessionCreated: "1700000000",
+      windowId: "@1",
+      operationMarker: "operation-1",
+    };
+
+    it("throws fail-closed when a deferred HUD payload has format escapes but no resize sink", () => {
+      const sinkFree = ["run-shell", "-b",
+        "tmux list-panes -a -F '#{pane_id}\t#{pane_dead}\t#{pane_pid}' >/dev/null 2>&1 || true"];
+      assert.throws(
+        () => guardDetachedHudDeferredMutation(leader, hud, sinkFree),
+        /detached deferred HUD mutation lacks a recognized resize sink/,
+      );
+    });
+
+    it("guards immediate and delayed resize sinks as bare tmux command-list commands", () => {
+      const args = buildRegisterResizeHookArgs("omx-detached:0", "omx_resize_detached", "%77", 2, 7700, "instance-1");
+      const guarded = guardDetachedHudDeferredMutation(leader, hud, args);
+      const hookCommand = guarded.at(-1)!;
+
+      assert.match(hookCommand, /resize-pane -t %77 -y 2 ; display-message/);
+      assert.doesNotMatch(hookCommand, /tmux resize-pane -t %77 -y 2 ; display-message/);
+      assert.match(hookCommand, /tmux if-shell -F/);
+      assert.match(hookCommand, /##\{pane_id\}/);
+      assert.equal(countMatches(hookCommand, /tmux if-shell -F/g), 2);
+      assert.equal(countMatches(hookCommand, /run-shell -b/g), 1);
+    });
+
+    it("escapes injected authority conditions so they survive the outer run-shell format pass", () => {
+      const args = buildRegisterResizeHookArgs("omx-detached:0", "omx_resize_detached", "%77", 2, 7700, "instance-1");
+      const hookCommand = guardDetachedHudDeferredMutation(leader, hud, args).at(-1)!;
+
+      // run-shell applies exactly one outer tmux format pass to the stored payload.
+      // Unescaped, tmux pre-expands these conditions against the hook's own pane and
+      // collapses them to constants, denying the resize before the sink is parsed.
+      for (const condition of [
+        "##{==:##{pane_id},%11}",
+        "##{==:##{pane_pid},1100}",
+        "##{==:##{@omx_instance_id},instance-1}",
+        "##{==:##{pane_id},%77}",
+        "##{m:*OMX_DETACHED_HUD_OPERATION=operation-1*,##{pane_start_command}}",
+      ]) {
+        assert.ok(hookCommand.includes(condition), `stored payload must escape ${condition}`);
+      }
+      assert.doesNotMatch(hookCommand, /(^|[^#])#\{==:#\{pane_id\},%77\}/);
+      assert.doesNotMatch(hookCommand, /(^|[^#])#\{&&:/);
+    });
+  });
+
+  it("registerDetachedHudLayoutReconcileHook reads TMUX from the detached leader pane before registering", () => {
+    const calls: Array<{
+      hudPaneId: string;
+      leaderPaneId: string | undefined;
+      heightLines: number;
+      cwd?: string;
+      env?: NodeJS.ProcessEnv;
+    }> = [];
+    const readTargets: string[] = [];
+
+    const result = registerDetachedHudLayoutReconcileHook({
+      hudPaneId: "%hud",
+      detachedLeaderPaneId: "%leader",
+      cwd: "/repo",
+      sessionId: "sess-a",
+      omxBin: "/repo/dist/cli/omx.js",
+      omxRootOverride: "/repo",
+      baseEnv: { PATH: "/bin" },
+      readTmuxEnvValue: (targetPaneId) => {
+        readTargets.push(targetPaneId);
+        return "/tmp/tmux.sock,123,7";
+      },
+      register: (hudPaneId, leaderPaneId, heightLines, options) => {
+        calls.push({ hudPaneId, leaderPaneId, heightLines, cwd: options?.cwd, env: options?.env });
+        return true;
+      },
+    });
+
+    assert.equal(result, true);
+    assert.deepEqual(readTargets, ["%leader"]);
+    assert.deepEqual(calls, [{
+      hudPaneId: "%hud",
+      leaderPaneId: "%leader",
+      heightLines: HUD_TMUX_HEIGHT_LINES,
+      cwd: "/repo",
+      env: {
+        PATH: "/bin",
+        TMUX: "/tmp/tmux.sock,123,7",
+        TMUX_PANE: "%leader",
+        OMX_SESSION_ID: "sess-a",
+        OMX_TMUX_HUD_OWNER: "1",
+        OMX_ROOT: "/repo",
+        OMX_ENTRY_PATH: "/repo/dist/cli/omx.js",
+      },
+    }]);
+    assert.equal(registerDetachedHudLayoutReconcileHook({
+      hudPaneId: "%hud",
+      detachedLeaderPaneId: "%leader",
+      cwd: "/repo",
+      sessionId: "sess-a",
+      omxBin: "/repo/dist/cli/omx.js",
+      readTmuxEnvValue: () => undefined,
+      register: () => {
+        throw new Error("should not register without TMUX");
+      },
+    }), false);
+  });
+
+  it("buildDetachedSessionBootstrapSteps starts native Windows with the persistent internal leader", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo", "C:/project", buildWindowsDetachedChildCommand("codex", ["--model", "gpt-5"]),
+      "'node' 'omx.js' 'hud' '--watch'", null, undefined, null, true, "omx-session-123",
+      "C:/project/.codex", "C:/project/.omx/runtime/codex-home/omx-session-123", undefined,
+      process.env, undefined, undefined, undefined,
+      "C:/project/.omx/runtime/detached-release/omx-session-123.release",
+      "C:/project/dist/cli/omx.js",
+    );
+    const leaderCmd = steps[0]?.args.at(-1);
+    assert.equal(typeof leaderCmd, "string");
+    assert.match(leaderCmd!, /powershell\.exe -NoLogo -NoProfile -NonInteractive -Command/);
+    assert.match(leaderCmd!, /__detached-session-leader/);
+    assert.doesNotMatch(leaderCmd!, /__detached-post-launch|Test-Path -LiteralPath/);
+  });
+
+  it("buildDetachedSessionBootstrapSteps gives the POSIX leader persistent lifecycle ownership", () => {
+    const releaseMarkerPath = "/tmp/project/.omx/runtime/detached-release/omx-session-123.release";
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo", "/tmp/project", "'codex' '--model' 'gpt-5'", "'node' '/tmp/omx.js' 'hud' '--watch'",
+      null, "/tmp/codex-home", null, false, "omx-session-123", "/tmp/project/.codex-project",
+      "/tmp/project/.omx/runtime/codex-home/omx-session-123", undefined, process.env, undefined,
+      undefined, undefined, releaseMarkerPath,
+    );
+    const leaderCmd = steps[0]?.args.at(-1);
+    assert.equal(typeof leaderCmd, "string");
+    assert.match(leaderCmd!, /^\/bin\/sh -c '/);
+    assert.match(leaderCmd!, /__detached-session-leader/);
+    assert.doesNotMatch(leaderCmd!, /__detached-post-launch|omx_codex_pid|while \[ ! -f/);
+  });
+
+  it("keeps capability data out of the detached leader command payload", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-demo", "/tmp/project", "codex", "hud", null, undefined, null, false,
+      "omx-session-123", undefined, undefined, undefined, process.env,
+    );
+    const leaderCmd = steps[0]?.args.at(-1) ?? "";
+    assert.match(leaderCmd, /__detached-session-leader/);
+    assert.doesNotMatch(leaderCmd, /launch_lineage_token|directoryIdentity|FileHandle/);
+  });
+
+
+  it("withTmuxExtendedKeys enables tmux extended keys during codex launch and restores them afterwards", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-lease-wrapper-"));
+    const calls: string[][] = [];
+    const result = withTmuxExtendedKeys(
+      cwd,
+      () => {
+        calls.push(["run"]);
+        return "ok";
+      },
+      (_file, args) => {
+        calls.push([...args]);
+        if (args[0] === "show-options") return "off\n";
+        return "";
+      },
+    );
+    await rm(cwd, { recursive: true, force: true });
+
+    assert.equal(result, "ok");
+    assert.deepEqual(calls, [
+      ["display-message", "-p", "#{socket_path}"],
+      ["show-options", "-sv", "extended-keys"],
+      ["set-option", "-sq", "extended-keys", "always"],
+      ["run"],
+      ["set-option", "-sq", "extended-keys", "off"],
+    ]);
+  });
+
+  it("acquireTmuxExtendedKeysLease can bind lease liveness to a long-lived owner pid", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-lease-owner-pid-"));
+    try {
+      const execStub = (_file: string, args: readonly string[]) => {
+        if (args[0] === "display-message") return "/tmp/tmux-owner-pid.sock\n";
+        if (args[0] === "show-options") return "off\n";
+        return "";
+      };
+
+      const lease = acquireTmuxExtendedKeysLease(cwd, execStub, 12345);
+
+      assert.match(lease ?? "", /^\/tmp\/tmux-owner-pid\.sock\t12345-/);
+      if (lease) releaseTmuxExtendedKeysLease(cwd, lease, execStub);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("overlapping tmux extended-keys leases restore only after the last holder exits", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-lease-overlap-"));
+    const calls: string[][] = [];
+    const execStub = (_file: string, args: readonly string[]) => {
+      calls.push([...args]);
+      if (args[0] === "display-message") return "/tmp/tmux-test.sock\n";
+      if (args[0] === "show-options") return "off\n";
+      return "";
+    };
+
+    const leaseA = acquireTmuxExtendedKeysLease(cwd, execStub);
+    const leaseB = acquireTmuxExtendedKeysLease(cwd, execStub);
+
+    assert.equal(typeof leaseA, "string");
+    assert.equal(typeof leaseB, "string");
+
+    releaseTmuxExtendedKeysLease(cwd, leaseA!, execStub);
+
+    const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+    const leaseFilesAfterFirstRelease = await readFile(
+      join(leaseDir, "tmp-tmux-test-sock.json"),
+      "utf-8",
+    );
+    assert.match(leaseFilesAfterFirstRelease, /holders/);
+
+    releaseTmuxExtendedKeysLease(cwd, leaseB!, execStub);
+
+    await assert.rejects(
+      readFile(join(leaseDir, "tmp-tmux-test-sock.json"), "utf-8"),
+      /ENOENT/,
+    );
+    await rm(cwd, { recursive: true, force: true });
+
+    assert.deepEqual(calls, [
+      ["display-message", "-p", "#{socket_path}"],
+      ["show-options", "-sv", "extended-keys"],
+      ["set-option", "-sq", "extended-keys", "always"],
+      ["display-message", "-p", "#{socket_path}"],
+      ["set-option", "-sq", "extended-keys", "off"],
+    ]);
+  });
+
+  it("withTmuxExtendedKeys degrades cleanly when tmux option probing fails", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-lease-fail-"));
+    const calls: string[][] = [];
+    const result = withTmuxExtendedKeys(
+      cwd,
+      () => {
+        calls.push(["run"]);
+        return "ok";
+      },
+      (_file, args) => {
+        calls.push([...args]);
+        if (args[0] === "show-options") throw new Error("tmux unavailable");
+        return "";
+      },
+    );
+    await rm(cwd, { recursive: true, force: true });
+
+    assert.equal(result, "ok");
+    assert.deepEqual(calls, [
+      ["display-message", "-p", "#{socket_path}"],
+      ["show-options", "-sv", "extended-keys"],
+      ["run"],
+    ]);
+  });
+
+  it("withTmuxExtendedKeys ignores tmux versions without the extended-keys option", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-lease-unsupported-"));
+    const calls: string[][] = [];
+    const stderrWrite = mock.method(process.stderr, "write", () => true);
+    try {
+      const result = withTmuxExtendedKeys(
+        cwd,
+        () => {
+          calls.push(["run"]);
+          return "ok";
+        },
+        (_file, args) => {
+          calls.push([...args]);
+          if (args[0] === "display-message") return "/tmp/tmux-3-0.sock\n";
+          if (args[0] === "show-options") {
+            throw Object.assign(new Error("Command failed: tmux show-options -sv extended-keys"), {
+              status: 1,
+              stderr: Buffer.from("invalid option: extended-keys\n"),
+              stdout: Buffer.from(""),
+            });
+          }
+          return "";
+        },
+      );
+
+      assert.equal(result, "ok");
+      assert.deepEqual(calls, [
+        ["display-message", "-p", "#{socket_path}"],
+        ["show-options", "-sv", "extended-keys"],
+        ["run"],
+      ]);
+      assert.equal(stderrWrite.mock.callCount(), 0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("acquireTmuxExtendedKeysLease returns no lease when extended-keys is unsupported", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-acquire-unsupported-"));
+    const calls: string[][] = [];
+    const stderrWrite = mock.method(process.stderr, "write", () => true);
+    try {
+      const lease = acquireTmuxExtendedKeysLease(cwd, (_file, args) => {
+        calls.push([...args]);
+        if (args[0] === "display-message") return "/tmp/tmux-3-0.sock\n";
+        if (args[0] === "show-options") {
+          throw Object.assign(new Error("Command failed: tmux show-options -sv extended-keys"), {
+            status: 1,
+            stderr: Buffer.from("invalid option: extended-keys\n"),
+            stdout: Buffer.from(""),
+          });
+        }
+        return "";
+      });
+
+      assert.equal(lease, null);
+      assert.deepEqual(calls, [
+        ["display-message", "-p", "#{socket_path}"],
+        ["show-options", "-sv", "extended-keys"],
+      ]);
+      assert.equal(stderrWrite.mock.callCount(), 0);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reapStaleNotifyFallbackWatcher skips kill when process identity does not match a watcher", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-reap-pid-identity-"));
+    const pidPath = join(cwd, "watcher.pid");
+    await writeFile(pidPath, JSON.stringify({ pid: 99999, started_at: new Date().toISOString() }));
+
+    const killed: number[] = [];
+    await reapStaleNotifyFallbackWatcher(pidPath, {
+      isWatcherProcess: () => false,
+      tryKillPid: (pid) => { killed.push(pid); return true; },
+    });
+
+    assert.equal(killed.length, 0, "should not kill a process that is not a watcher");
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("reapStaleNotifyFallbackWatcher sends SIGTERM only after confirming watcher identity", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-reap-pid-confirmed-"));
+    const pidPath = join(cwd, "watcher.pid");
+    await writeFile(pidPath, JSON.stringify({ pid: 12345, started_at: "2026-04-05T00:00:00.000Z" }));
+
+    const killed: number[] = [];
+    await reapStaleNotifyFallbackWatcher(pidPath, {
+      isWatcherProcess: () => true,
+      tryKillPid: (pid) => { killed.push(pid); return true; },
+    });
+
+    assert.deepEqual(killed, [12345], "should SIGTERM the verified watcher process");
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("reapStaleNotifyFallbackWatcher skips recently started watcher records to avoid respawn loops", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-reap-pid-recent-"));
+    const pidPath = join(cwd, "watcher.pid");
+    await writeFile(pidPath, JSON.stringify({ pid: 24680, started_at: "2026-05-15T00:00:00.000Z" }));
+
+    const killed: number[] = [];
+    const result = await reapStaleNotifyFallbackWatcher(pidPath, {
+      isWatcherProcess: () => true,
+      nowMs: () => Date.parse("2026-05-15T00:00:03.000Z"),
+      reapGraceMs: 5000,
+      tryKillPid: (pid) => { killed.push(pid); return true; },
+    });
+
+    assert.equal(result, "recent_active");
+    assert.equal(killed.length, 0, "should not kill a watcher still inside the startup grace window");
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("reuses legacy plain-text PID parsing without widening stale reap semantics across PID reuse", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-reap-legacy-pid-"));
+    try {
+      const pidPath = join(cwd, "watcher.pid");
+      await writeFile(pidPath, "12345\n", "utf-8");
+
+      const observed: number[] = [];
+      await reapStaleNotifyFallbackWatcher(pidPath, {
+        isWatcherProcess(pid) {
+          observed.push(pid);
+          return false;
+        },
+        tryKillPid: (pid) => {
+          observed.push(pid);
+          return true;
+        },
+      });
+
+      assert.deepEqual(
+        observed,
+        [12345],
+        "legacy plain-text PID files should still identity-check reused PIDs before any kill",
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("reaps watcher-record PIDs only after the record path confirms watcher identity across PID reuse", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-reap-record-pid-"));
+    try {
+      const pidPath = join(cwd, "watcher.pid");
+      await writeFile(
+        pidPath,
+        JSON.stringify({ pid: 54321, started_at: "2026-04-05T00:00:00.000Z" }),
+        "utf-8",
+      );
+
+      const observed: Array<{ step: "identity" | "kill"; pid: number }> = [];
+      await reapStaleNotifyFallbackWatcher(pidPath, {
+        isWatcherProcess(pid) {
+          observed.push({ step: "identity", pid });
+          return true;
+        },
+        tryKillPid(pid) {
+          observed.push({ step: "kill", pid });
+          return true;
+        },
+      });
+
+      assert.deepEqual(observed, [
+        { step: "identity", pid: 54321 },
+        { step: "kill", pid: 54321 },
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("acquireTmuxExtendedKeysLease recovers from a stale lock left by a crashed process", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-stale-lock-"));
+    const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+    const lockDir = join(leaseDir, "tmp-stale-sock.lock");
+
+    mkdirSync(lockDir, { recursive: true });
+    const staleTime = new Date(Date.now() - 60_000);
+    utimesSync(lockDir, staleTime, staleTime);
+
+    const calls: string[][] = [];
+    const execStub = (_file: string, args: readonly string[]): string => {
+      calls.push([...args]);
+      if (args[0] === "display-message") return "/tmp/stale-sock";
+      return "";
+    };
+
+    const lease = acquireTmuxExtendedKeysLease(cwd, execStub);
+
+    assert.equal(typeof lease, "string", "lease should succeed after stale lock recovery");
+    assert.ok(!existsSync(lockDir), "stale lock directory should be removed");
+
+    if (lease) releaseTmuxExtendedKeysLease(cwd, lease, execStub);
+    await rm(cwd, { recursive: true, force: true });
+  });
+
+  it("acquireTmuxExtendedKeysLease reaps dead holders and restores before taking a new lease", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-dead-holder-acquire-"));
+    try {
+      const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+      const leasePath = join(leaseDir, "tmp-stale-holder-sock.json");
+      await mkdir(leaseDir, { recursive: true });
+      await writeFile(
+        leasePath,
+        JSON.stringify({
+          originalMode: "off",
+          holders: ["2147483647-stale-holder"],
+        }),
+        "utf-8",
+      );
+
+      const calls: string[][] = [];
+      const execStub = (_file: string, args: readonly string[]): string => {
+        calls.push([...args]);
+        if (args[0] === "display-message") return "/tmp/stale-holder.sock\n";
+        if (args[0] === "show-options") return "off\n";
+        return "";
+      };
+
+      const lease = acquireTmuxExtendedKeysLease(cwd, execStub);
+
+      assert.equal(typeof lease, "string");
+      const persisted = JSON.parse(await readFile(leasePath, "utf-8")) as {
+        holders: Array<string | { id?: string; pid?: number; linuxStartTicks?: number }>;
+      };
+      assert.equal(persisted.holders.length, 1);
+      const holder = persisted.holders[0];
+      const holderId = typeof holder === "string" ? holder : holder?.id ?? "";
+      assert.match(holderId, new RegExp(`^${process.pid}-`));
+      assert.equal(typeof holder === "object" ? holder.pid : process.pid, process.pid);
+      assert.doesNotMatch(JSON.stringify(persisted), /2147483647-stale-holder/);
+
+      if (lease) releaseTmuxExtendedKeysLease(cwd, lease, execStub);
+
+      assert.deepEqual(calls, [
+        ["display-message", "-p", "#{socket_path}"],
+        ["set-option", "-sq", "extended-keys", "off"],
+        ["show-options", "-sv", "extended-keys"],
+        ["set-option", "-sq", "extended-keys", "always"],
+        ["set-option", "-sq", "extended-keys", "off"],
+      ]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("releaseTmuxExtendedKeysLease preserves live legacy string holders", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-live-legacy-holder-"));
+    try {
+      const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+      const leasePath = join(leaseDir, "tmp-live-legacy-sock.json");
+      const legacyHolder = `${process.pid}-legacy-holder`;
+      await mkdir(leaseDir, { recursive: true });
+      await writeFile(
+        leasePath,
+        JSON.stringify({
+          originalMode: "off",
+          holders: [legacyHolder],
+        }),
+        "utf-8",
+      );
+
+      const calls: string[][] = [];
+      const execStub = (_file: string, args: readonly string[]): string => {
+        calls.push([...args]);
+        return "";
+      };
+
+      releaseTmuxExtendedKeysLease(
+        cwd,
+        "/tmp/live-legacy.sock\tmissing-holder",
+        execStub,
+      );
+
+      const persisted = JSON.parse(await readFile(leasePath, "utf-8")) as {
+        holders: string[];
+      };
+      assert.deepEqual(persisted.holders, [legacyHolder]);
+      assert.deepEqual(
+        calls,
+        [],
+        "live legacy string holders should not be restored away",
+      );
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("acquireTmuxExtendedKeysLease reaps Linux PID-reuse identity mismatches", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-pid-reuse-holder-"));
+    try {
+      const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+      const leasePath = join(leaseDir, "tmp-pid-reuse-sock.json");
+      await mkdir(leaseDir, { recursive: true });
+      await writeFile(
+        leasePath,
+        JSON.stringify({
+          originalMode: "off",
+          holders: [{
+            id: `${process.pid}-reused-holder`,
+            pid: process.pid,
+            platform: "linux",
+            linuxStartTicks: -1,
+          }],
+        }),
+        "utf-8",
+      );
+
+      const calls: string[][] = [];
+      const execStub = (_file: string, args: readonly string[]): string => {
+        calls.push([...args]);
+        if (args[0] === "display-message") return "/tmp/pid-reuse.sock\n";
+        if (args[0] === "show-options") return "off\n";
+        return "";
+      };
+
+      const lease = acquireTmuxExtendedKeysLease(cwd, execStub);
+
+      assert.equal(typeof lease, "string");
+      const persisted = JSON.parse(await readFile(leasePath, "utf-8")) as {
+        holders: Array<string | { id?: string; pid?: number }>;
+      };
+      const holderIds = persisted.holders.map((holder) =>
+        typeof holder === "string" ? holder : holder.id ?? "",
+      );
+      if (process.platform === "linux") {
+        assert.equal(persisted.holders.length, 1);
+        assert.match(holderIds[0] ?? "", new RegExp(`^${process.pid}-`));
+        assert.doesNotMatch(JSON.stringify(persisted), /reused-holder/);
+        assert.deepEqual(calls, [
+          ["display-message", "-p", "#{socket_path}"],
+          ["set-option", "-sq", "extended-keys", "off"],
+          ["show-options", "-sv", "extended-keys"],
+          ["set-option", "-sq", "extended-keys", "always"],
+        ]);
+      } else {
+        assert.ok(holderIds.includes(`${process.pid}-reused-holder`));
+      }
+
+      if (lease) releaseTmuxExtendedKeysLease(cwd, lease, execStub);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it("releaseTmuxExtendedKeysLease restores when all remaining holders are dead", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "omx-tmux-dead-holder-release-"));
+    try {
+      const leaseDir = join(cwd, ".omx", "state", "tmux-extended-keys");
+      const leasePath = join(leaseDir, "tmp-dead-release-sock.json");
+      await mkdir(leaseDir, { recursive: true });
+      await writeFile(
+        leasePath,
+        JSON.stringify({
+          originalMode: "off",
+          holders: ["2147483647-stale-holder"],
+        }),
+        "utf-8",
+      );
+
+      const calls: string[][] = [];
+      const execStub = (_file: string, args: readonly string[]): string => {
+        calls.push([...args]);
+        return "";
+      };
+
+      releaseTmuxExtendedKeysLease(cwd, "/tmp/dead-release.sock\tmissing-holder", execStub);
+
+      assert.ok(!existsSync(leasePath), "stale-only lease file should be removed");
+      assert.deepEqual(calls, [["set-option", "-sq", "extended-keys", "off"]]);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+    it("buildDetachedSessionFinalizeSteps keeps schedule after split-capture and before attach", () => {
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      true,
+      false,
+      true,
+      "%leader",
+    );
+    const names = steps.map((step) => step.name);
+    const attachedIndex = names.indexOf("register-client-attached-reconcile");
+    const scheduleIndex = names.indexOf("schedule-delayed-resize");
+    const attachIndex = names.indexOf("attach-session");
+    assert.equal(attachedIndex >= 0, true);
+    assert.equal(scheduleIndex > attachedIndex, true);
+    assert.equal(scheduleIndex >= 0, true);
+    assert.equal(attachIndex > scheduleIndex, true);
+    assert.equal(names.includes("register-resize-hook"), true);
+    assert.equal(names.includes("reconcile-hud-resize"), true);
+    assert.equal(DETACHED_TMUX_HISTORY_LIMIT, 5000);
+    const historyHook = steps.find((step) => step.name === "register-detached-history-prune-hook");
+    assert.ok(historyHook);
+    assert.deepEqual(historyHook.args.slice(0, 3), ["set-hook", "-t", "omx-demo"]);
+    assert.match(historyHook.args[3] || "", /^client-detached\[[0-9]+\]$/);
+    assert.equal(
+      historyHook.args[4],
+      `if-shell -F '#{==:#{session_attached},0}' 'run-shell -b "tmux clear-history -t %leader >/dev/null 2>&1 || true"'`,
+    );
+  });
+
+  it("detached history prune hook tolerates a dead leader pane", () => {
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      true,
+      false,
+      true,
+      "%leader",
+    );
+    const historyHook = steps.find((step) => step.name === "register-detached-history-prune-hook");
+    assert.ok(historyHook);
+    const hookCommand = historyHook.args[4] || "";
+    assert.match(hookCommand, /run-shell -b/);
+    assert.match(hookCommand, />\/dev\/null 2>&1 \|\| true/);
+  });
+
+  it("buildDetachedSessionFinalizeSteps skips attach for Hermes MCP bridge launches", () => {
+    assert.equal(shouldAttachDetachedTmuxSession({ OMX_HERMES_MCP_BRIDGE: "1" }), false);
+    assert.equal(shouldAttachDetachedTmuxSession({}), true);
+
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      true,
+      false,
+      shouldAttachDetachedTmuxSession({ OMX_HERMES_MCP_BRIDGE: "1" }),
+    );
+
+    assert.equal(steps.some((step) => step.name === "attach-session"), false);
+    assert.equal(steps.some((step) => step.name === "register-resize-hook"), true);
+    assert.equal(steps.some((step) => step.name === "set-mouse"), true);
+  });
+
+  it("buildDetachedSessionFinalizeSteps uses quiet best-effort tmux resize commands", () => {
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      false,
+    );
+    const registerHook = steps.find(
+      (step) => step.name === "register-resize-hook",
+    );
+    const schedule = steps.find(
+      (step) => step.name === "schedule-delayed-resize",
+    );
+    const reconcile = steps.find(
+      (step) => step.name === "reconcile-hud-resize",
+    );
+
+    assert.match(registerHook?.args[4] ?? "", />\/dev\/null 2>&1 \|\| true/);
+    assert.match(
+      registerHook?.args[4] ?? "",
+      new RegExp(`-y ${HUD_TMUX_HEIGHT_LINES}\\b`),
+    );
+    assert.match(schedule?.args[2] ?? "", />\/dev\/null 2>&1 \|\| true/);
+    assert.match(
+      schedule?.args[2] ?? "",
+      new RegExp(`-y ${HUD_TMUX_HEIGHT_LINES}\\b`),
+    );
+    assert.match(
+      (reconcile?.args ?? []).join(" "),
+      />\/dev\/null 2>&1 \|\| true/,
+    );
+    assert.match(
+      (reconcile?.args ?? []).join(" "),
+      new RegExp(`-y ${HUD_TMUX_HEIGHT_LINES}\\b`),
+    );
+  });
+
+  it("buildDetachedSessionFinalizeSteps skips detached resize hooks on native Windows", () => {
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      true,
+      true,
+    );
+    assert.deepEqual(
+      steps.map((step) => step.name),
+      ["set-mouse", "sanitize-copy-mode-style", "attach-session"],
+    );
+  });
+
+  it("buildDetachedSessionFinalizeSteps sanitizes copy-mode styling before attach when mouse mode is enabled", () => {
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      true,
+    );
+    assert.equal(
+      steps.findIndex((step) => step.name === "sanitize-copy-mode-style")
+      > steps.findIndex((step) => step.name === "set-mouse"),
+      true,
+    );
+    assert.equal(
+      steps.findIndex((step) => step.name === "attach-session")
+      > steps.findIndex((step) => step.name === "sanitize-copy-mode-style"),
+      true,
+    );
+  });
+
+  it("buildDetachedSessionFinalizeSteps never appends server-global terminal-overrides", () => {
+    const steps = buildDetachedSessionFinalizeSteps(
+      "omx-demo",
+      "%12",
+      "3",
+      true,
+    );
+    assert.equal(
+      steps.some((step) => step.name === "set-wsl-xt"),
+      false,
+    );
+    assert.equal(
+      steps.some((step) => step.args.includes("terminal-overrides")),
+      false,
+    );
+  });
+
+  it("buildDetachedSessionRollbackSteps unregisters hooks before killing session", () => {
+    const steps = buildDetachedSessionRollbackSteps(
+      "omx-demo",
+      "omx-demo:0",
+      "omx_resize_launch_demo_0_12",
+      "omx_attached_launch_demo_0_12",
+    );
+    assert.deepEqual(
+      steps.map((step) => step.name),
+      [
+        "unregister-client-attached-reconcile",
+        "unregister-resize-hook",
+        "kill-session",
+      ],
+    );
+    assert.equal(steps[0]?.args[0], "set-hook");
+    assert.equal(steps[0]?.args[1], "-u");
+    assert.equal(steps[0]?.args[2], "-t");
+    assert.equal(steps[0]?.args[3], "omx-demo:0");
+    assert.match(steps[0]?.args[4] ?? "", /^client-attached\[\d+\]$/);
+    assert.match(steps[1]?.args[4] ?? "", /^client-resized\[\d+\]$/);
+    assert.doesNotMatch(steps[1]?.args.join(" ") ?? "", /window-resized/);
+    assert.deepEqual(steps[2]?.args, ["kill-session", "-t", "omx-demo"]);
+  });
+
+  it("buildDetachedSessionRollbackSteps only kills session when no hook metadata exists", () => {
+    const steps = buildDetachedSessionRollbackSteps(
+      "omx-demo",
+      null,
+      null,
+      null,
+    );
+    assert.deepEqual(
+      steps.map((step) => step.name),
+      ["kill-session"],
+    );
+  });
+});
+
+describe("buildTmuxShellCommand", () => {
+  it("preserves quoted config values for tmux shell-command execution", () => {
+    assert.equal(
+      buildTmuxShellCommand("codex", [
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+      ]),
+      `'codex' '--dangerously-bypass-approvals-and-sandbox' '-c' 'model_reasoning_effort="xhigh"'`,
+    );
+  });
+});
+
+describe("buildTmuxPaneCommand", () => {
+  it("wraps command with zsh without sourcing rc files by default", () => {
+    const result = buildTmuxPaneCommand(
+      "codex",
+      ["--model", "gpt-5"],
+      "/usr/bin/zsh",
+      {},
+    );
+    assert.ok(
+      result.startsWith("'/usr/bin/zsh' -c "),
+      "should start with zsh non-login shell to preserve tmux cwd",
+    );
+    assert.ok(!result.includes(" -lc "), "should not use a login shell");
+    assert.ok(!result.includes("source ~/.zshrc"), "should not source .zshrc by default");
+    assert.ok(result.includes("exec "), "should exec the command");
+  });
+
+  it("keeps Homebrew zsh instead of downgrading to /bin/sh", () => {
+    const result = buildTmuxPaneCommand(
+      "codex",
+      ["--model", "gpt-5"],
+      "/opt/homebrew/bin/zsh",
+      {},
+    );
+    assert.ok(
+      result.startsWith("'/opt/homebrew/bin/zsh' -c "),
+      "should preserve Homebrew zsh when SHELL points to it",
+    );
+    assert.ok(
+      !result.startsWith("'/bin/sh' -c "),
+      "should not fall back to /bin/sh for supported Homebrew zsh",
+    );
+    assert.ok(!result.includes("source ~/.zshrc"), "should not source .zshrc by default");
+  });
+
+  it("keeps MacPorts zsh instead of downgrading to /bin/sh", () => {
+    const result = buildTmuxPaneCommand(
+      "codex",
+      ["--model", "gpt-5"],
+      "/opt/local/bin/zsh",
+      {},
+    );
+    assert.ok(
+      result.startsWith("'/opt/local/bin/zsh' -c "),
+      "should preserve MacPorts zsh when SHELL points to it",
+    );
+    assert.ok(
+      !result.startsWith("'/bin/sh' -c "),
+      "should not fall back to /bin/sh for supported MacPorts zsh",
+    );
+    assert.ok(!result.includes("source ~/.zshrc"), "should not source .zshrc by default");
+  });
+
+  it("prevents issue #2282 bash rc fan-out by default", () => {
+    const result = buildTmuxPaneCommand("codex", [], "/bin/bash", {});
+    assert.ok(
+      result.startsWith("'/bin/bash' -c "),
+      "should start with bash non-login shell to preserve tmux cwd",
+    );
+    assert.ok(!result.includes(" -lc "), "should not use a login shell");
+    assert.ok(!result.includes("source ~/.bashrc"), "should not source .bashrc by default");
+    assert.ok(result.includes("exec "), "should exec the command");
+  });
+
+  it("sources zsh and bash rc files only when explicitly opted in", () => {
+    assert.equal(shouldSourceTmuxPaneShellRc({}), false);
+    assert.equal(shouldSourceTmuxPaneShellRc({ OMX_TMUX_SOURCE_SHELL_RC: "1" }), true);
+    assert.ok(
+      buildTmuxPaneCommand("codex", [], "/usr/bin/zsh", { OMX_TMUX_SOURCE_SHELL_RC: "1" }).includes("source ~/.zshrc"),
+      "opt-in zsh launches may source .zshrc",
+    );
+    assert.ok(
+      buildTmuxPaneCommand("codex", [], "/bin/bash", { OMX_TMUX_SOURCE_SHELL_RC: "1" }).includes("source ~/.bashrc"),
+      "opt-in bash launches may source .bashrc",
+    );
+  });
+
+  it("skips rc sourcing for unknown shells without using a login shell", () => {
+    const result = buildTmuxPaneCommand("codex", [], "/bin/fish");
+    assert.ok(
+      result.startsWith("'/bin/fish' -c "),
+      "should start with fish non-login shell",
+    );
+    assert.ok(!result.includes(" -lc "), "should not use a login shell");
+    assert.ok(!result.includes("source"), "should not source any rc file");
+    assert.ok(result.includes("exec "), "should exec the command");
+  });
+
+  it("falls back to /bin/sh without using a login shell when shell path is empty", () => {
+    const result = buildTmuxPaneCommand("codex", [], "");
+    assert.ok(
+      result.startsWith("'/bin/sh' -c "),
+      "should fall back to /bin/sh",
+    );
+    assert.ok(!result.includes(" -lc "), "should not use a login shell");
+  });
+});
+
+describe("buildWindowsPromptCommand", () => {
+  it("encodes detached Windows commands for safe PowerShell prompt injection", () => {
+    const result = buildWindowsPromptCommand("codex", [
+      "--dangerously-bypass-approvals-and-sandbox",
+      "-c",
+      'model_reasoning_effort="high"',
+      "it's",
+    ]);
+    const prefix = "powershell.exe -NoLogo -NoExit -EncodedCommand ";
+    assert.ok(result.startsWith(prefix));
+    const payload = result.slice(prefix.length);
+    const decoded = Buffer.from(payload, "base64").toString("utf16le");
+    assert.equal(
+      decoded,
+      "$ErrorActionPreference = 'Stop'; & { & 'codex' '--dangerously-bypass-approvals-and-sandbox' '-c' 'model_reasoning_effort=\"high\"' 'it''s' }",
+    );
+  });
+});
+
+describe("buildWindowsDetachedChildCommand", () => {
+  it("exits with the Codex child status instead of retaining an interactive shell", () => {
+    const result = buildWindowsDetachedChildCommand("codex", ["--model", "gpt-5"]);
+    const prefix = "powershell.exe -NoLogo -NoProfile -NonInteractive -EncodedCommand ";
+    assert.ok(result.startsWith(prefix));
+    assert.doesNotMatch(result, /-NoExit/);
+    assert.equal(
+      Buffer.from(result.slice(prefix.length), "base64").toString("utf16le"),
+      "$ErrorActionPreference = 'Stop'; & 'codex' '--model' 'gpt-5'; exit $LASTEXITCODE",
+    );
+  });
+});
+
+describe("Windows detached leader environment", () => {
+  it("serializes inherited parent values into the detached Windows leader command", () => {
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-test", "C:/project", "codex", "hud", null, undefined, null, true, "session-1",
+      undefined, undefined, undefined, {
+        PATH: "C:/runtime-shim;C:/parent/bin",
+        CUSTOM_VALUE: "retained",
+        CODEX_HOME: "C:/project/.codex-runtime",
+        CODEX_SQLITE_HOME: "C:/project/.codex-sqlite",
+        OMX_ROOT: "C:/project/.omx-run",
+        OMX_CODEX_LAUNCH_ID: "launch-id",
+        OMX_NOTIFY_TEMP_CONTRACT: "{\"active\":true}",
+        OMX_TEAM_WORKER_LAUNCH_ARGS: "[\"--model\",\"gpt-5\"]",
+        TMUX: "foreign",
+        TMUX_PANE: "%9",
+        TERM: "xterm-256color",
+      },
+    );
+    const command = steps[0]?.args.at(-1) ?? "";
+    const encodedPayload = command.match(/__detached-session-leader ''([^']+)''/)?.[1];
+    assert.ok(encodedPayload);
+    const payload = JSON.parse(Buffer.from(encodedPayload!, "base64url").toString("utf8"));
+    assert.deepEqual(payload.parentEnv, {
+      CODEX_HOME: "C:/project/.codex-runtime",
+      CODEX_SQLITE_HOME: "C:/project/.codex-sqlite",
+      CUSTOM_VALUE: "retained",
+      OMX_CODEX_LAUNCH_ID: "launch-id",
+      OMX_NOTIFY_TEMP_CONTRACT: "{\"active\":true}",
+      OMX_TEAM_WORKER_LAUNCH_ARGS: "[\"--model\",\"gpt-5\"]",
+      PATH: "C:/runtime-shim;C:/parent/bin",
+    });
+  });
+});
+
+describe("buildTmuxSessionName", () => {
+  it("uses detached fallback quietly outside git repos", () => {
+    const name = buildTmuxSessionName(
+      "/tmp/My Repo",
+      "omx-1770992424158-abc123",
+    );
+    assert.equal(name, "omx-my-repo-detached-1770992424158-abc123");
+  });
+
+  it("sanitizes invalid characters", () => {
+    const name = buildTmuxSessionName("/tmp/@#$", "omx-+++");
+    assert.match(
+      name,
+      /^omx-(unknown|[a-z0-9-]+)-[a-z0-9-]+-(unknown|[a-z0-9-]+)$/,
+    );
+    assert.equal(name.includes("_"), false);
+    assert.equal(name.includes(" "), false);
+  });
+
+  it("includes repo name when cwd is inside .omx-worktrees", () => {
+    const name = buildTmuxSessionName(
+      "/home/user/my-repo.omx-worktrees/launch-feature-x",
+      "omx-123-abc",
+    );
+    assert.match(name, /^omx-my-repo-launch-feature-x-/);
+  });
+
+  it("includes repo name for detached worktree paths", () => {
+    const name = buildTmuxSessionName(
+      "/projects/cool-project.omx-worktrees/launch-detached",
+      "omx-456-def",
+    );
+    assert.match(name, /^omx-cool-project-launch-detached-/);
+  });
+
+  it("includes repo name when cwd is inside .omx/worktrees", () => {
+    const name = buildTmuxSessionName(
+      "/home/user/my-repo/.omx/worktrees/autoresearch-demo",
+      "omx-789-ghi",
+    );
+    assert.match(name, /^omx-my-repo-autoresearch-demo-/);
+  });
+});
+
+describe("buildDetachedTmuxSessionName", () => {
+  it("reuses the OMX session id for the detached tmux session name", () => {
+    const sessionName = buildDetachedTmuxSessionName(
+      "/tmp/My Repo",
+      "omx-1770992424158-abc123",
+    );
+    assert.equal(sessionName, "omx-my-repo-detached-1770992424158-abc123");
+  });
+});
+
+describe("native Windows psmux-compatible tmux resolution", () => {
+  it("resolveNativeSessionName uses the shared tmux-aware resolver for current session lookup", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    const originalPath = process.env.PATH;
+    const originalPathext = process.env.PATHEXT;
+    const wd = await mkdtemp(join(tmpdir(), "omx-psmux-native-session-"));
+    const fakeBin = join(wd, "bin");
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+
+    try {
+      await mkdir(fakeBin, { recursive: true });
+      await writeFile(
+        join(fakeBin, "psmux.exe"),
+        `#!/bin/sh
+if [ "$1" = "display-message" ] && [ "$2" = "-p" ] && [ "$3" = "-t" ] && [ "$4" = "%7" ] && [ "$5" = "#S" ]; then
+  printf 'psmux-session\\n'
+  exit 0
+fi
+printf 'unexpected:%s\\n' "$*" >&2
+exit 1
+`,
+      );
+      await chmod(join(fakeBin, "psmux.exe"), 0o755);
+      process.env.PATH = fakeBin;
+      process.env.PATHEXT = ".EXE";
+      const sessionName = resolveNativeSessionName("/tmp/repo", "omx-abc123", {
+        ...process.env,
+        TMUX: "1",
+        TMUX_PANE: "%7",
+      });
+      assert.equal(sessionName, "psmux-session");
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.PATHEXT = originalPathext;
+      if (originalPlatform) Object.defineProperty(process, "platform", originalPlatform);
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+
+  it("detectDetachedSessionWindowIndex uses the shared tmux-aware resolver on native Windows", async () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(process, "platform");
+    const originalPath = process.env.PATH;
+    const originalPathext = process.env.PATHEXT;
+    const wd = await mkdtemp(join(tmpdir(), "omx-psmux-window-index-"));
+    const fakeBin = join(wd, "bin");
+    Object.defineProperty(process, "platform", { value: "win32", configurable: true });
+
+    try {
+      await mkdir(fakeBin, { recursive: true });
+      await writeFile(
+        join(fakeBin, "psmux.exe"),
+        `#!/bin/sh
+if [ "$1" = "display-message" ] && [ "$2" = "-p" ] && [ "$3" = "-t" ] && [ "$4" = "omx-demo" ] && [ "$5" = "#{window_index}" ]; then
+  printf '3\\n'
+  exit 0
+fi
+printf 'unexpected:%s\\n' "$*" >&2
+exit 1
+`,
+      );
+      await chmod(join(fakeBin, "psmux.exe"), 0o755);
+      process.env.PATH = fakeBin;
+      process.env.PATHEXT = ".EXE";
+      assert.equal(detectDetachedSessionWindowIndex("omx-demo"), "3");
+    } finally {
+      process.env.PATH = originalPath;
+      process.env.PATHEXT = originalPathext;
+      if (originalPlatform) Object.defineProperty(process, "platform", originalPlatform);
+      await rm(wd, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("worktree dependency bootstrap helpers", () => {
+  it("returns an explicit warning when reusable worktree dependencies are unavailable", () => {
+    const result = ensureReusableNodeModules("/tmp/non-worktree", {
+      gitRunner: () => ({ status: 1, stdout: "", stderr: "not a worktree" }) as any,
+    });
+    assert.equal(result.strategy, "missing");
+    assert.match(String(result.warning || ""), /No reusable parent-repo node_modules was found/);
+  });
+});
+
+describe("team worker launch arg inheritance helpers", () => {
+  it("collectInheritableTeamWorkerArgs extracts bypass, reasoning, and model overrides", () => {
+    assert.deepEqual(
+      collectInheritableTeamWorkerArgs([
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+        "--model",
+        "gpt-5",
+      ]),
+      [
+        "--dangerously-bypass-approvals-and-sandbox",
+        "-c",
+        'model_reasoning_effort="xhigh"',
+        "--model",
+        "gpt-5",
+      ],
+    );
+  });
+
+  it("collectInheritableTeamWorkerArgs supports --model=<value> syntax", () => {
+    assert.deepEqual(
+      collectInheritableTeamWorkerArgs(["--model=gpt-5.6-terra"]),
+      ["--model", "gpt-5.6-terra"],
+    );
+  });
+
+
+  it("collectInheritableTeamWorkerArgs preserves only safe model_provider config overrides", () => {
+    assert.deepEqual(
+      collectInheritableTeamWorkerArgs([
+        "-c",
+        'sandbox_mode="danger-full-access"',
+        "-c",
+        'model_provider="cheapRouter"',
+        "--model",
+        "gpt-5.6-sol",
+      ]),
+      ["-c", 'model_provider="cheapRouter"', "--model", "gpt-5.6-sol"],
+    );
+  });
+
+  it("resolveTeamWorkerLaunchArgsEnv merges and normalizes with de-dupe + last reasoning/model wins", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        '--dangerously-bypass-approvals-and-sandbox -c model_reasoning_effort="high" --model old-a --no-alt-screen --model=old-b',
+        [
+          "-c",
+          'model_reasoning_effort="xhigh"',
+          "--dangerously-bypass-approvals-and-sandbox",
+          "--model",
+          "gpt-5",
+        ],
+        true,
+      ),
+      '"--no-alt-screen" "--dangerously-bypass-approvals-and-sandbox" "-c" "model_reasoning_effort=\\"xhigh\\"" "--model" "old-b"',
+    );
+  });
+
+  it("resolveTeamWorkerLaunchArgsEnv can opt out of leader inheritance", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        "--no-alt-screen",
+        [
+          "--dangerously-bypass-approvals-and-sandbox",
+          "-c",
+          'model_reasoning_effort="xhigh"',
+        ],
+        false,
+      ),
+      '"--no-alt-screen"',
+    );
+  });
+
+  it("resolveTeamWorkerLaunchArgsEnv uses inherited model when env model is absent", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        "--no-alt-screen",
+        ["--model=gpt-5.6-terra"],
+        true,
+      ),
+      '"--no-alt-screen" "--model" "gpt-5.6-terra"',
+    );
+  });
+
+  it("resolveTeamWorkerLaunchArgsEnv uses frontier default model when env and inherited models are absent", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        "--no-alt-screen",
+        ["--dangerously-bypass-approvals-and-sandbox"],
+        true,
+        DEFAULT_FRONTIER_MODEL,
+      ),
+      `"--no-alt-screen" "--dangerously-bypass-approvals-and-sandbox" "--model" "${DEFAULT_FRONTIER_MODEL}"`,
+    );
+  });
+
+  it("resolveTeamWorkerLaunchArgsEnv keeps exactly one final model with precedence env > inherited > default", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        "--model env-model --model=env-model-final",
+        ["--model", "inherited-model"],
+        true,
+        "fallback-model",
+      ),
+      '"--model" "env-model-final"',
+    );
+  });
+
+  it("resolveTeamWorkerLaunchArgsEnv prefers inherited model over default when env model is absent", () => {
+    assert.equal(
+      resolveTeamWorkerLaunchArgsEnv(
+        "--no-alt-screen",
+        ["--model", "inherited-model"],
+        true,
+        "fallback-model",
+      ),
+      '"--no-alt-screen" "--model" "inherited-model"',
+
+    );
+  });
+});
+
+describe("team worker launch argument environment serialization", () => {
+  it("round-trips quoted, empty, and literal args while direct policy suppresses inherited bypass", () => {
+    const raw = resolveTeamWorkerLaunchArgsEnv(
+      '"" "two words" $VAR --sandbox=workspace-write',
+      [
+        "--dangerously-bypass-approvals-and-sandbox",
+        "--model", "leader-model",
+      ],
+      true,
+    );
+    assert.ok(raw);
+    assert.deepEqual(splitWorkerLaunchArgs(raw ?? undefined), [
+      '',
+      'two words',
+      '$VAR',
+      '--sandbox', 'workspace-write',
+      '--model', 'leader-model',
+    ]);
+  });
+
+  it("round-trips Windows paths, including terminal backslashes, through the environment", () => {
+    const path = "C:\\Users\\alice\\file.txt";
+    const terminalPath = "C:\\Users\\alice\\";
+    const raw = resolveTeamWorkerLaunchArgsEnv(
+      [
+        "--add-dir", path,
+        "--add-dir", `"${path}"`,
+        "--add-dir", `'${terminalPath}'`,
+      ].join(" "),
+      [],
+      false,
+    );
+
+    assert.deepEqual(splitWorkerLaunchArgs(raw ?? undefined), [
+      "--add-dir", path,
+      "--add-dir", path,
+      "--add-dir", terminalPath,
+    ]);
+  });
+
+  it("honors the inheritance gate and rejects an explicitly mixed source before transport", () => {
+    const noInheritance = resolveTeamWorkerLaunchArgsEnv(
+      '--ask-for-approval=on-request',
+      ["--dangerously-bypass-approvals-and-sandbox", "--model", "leader-model"],
+      false,
+    );
+    assert.deepEqual(splitWorkerLaunchArgs(noInheritance ?? undefined), [
+      '--ask-for-approval', 'on-request',
+    ]);
+    assert.throws(
+      () => resolveTeamWorkerLaunchArgsEnv(
+        '--dangerously-bypass-approvals-and-sandbox --sandbox workspace-write',
+        [],
+      ),
+      /Invalid OMX_TEAM_WORKER_LAUNCH_ARGS: bypass cannot be combined with direct approval or sandbox policy/,
+    );
+  });
+});
+
+describe("readTopLevelTomlString", () => {
+  it("reads a top-level string value", () => {
+    const value = readTopLevelTomlString(
+      'model_reasoning_effort = "high"\n[mcp_servers.test]\nmodel_reasoning_effort = "low"\n',
+      "model_reasoning_effort",
+    );
+    assert.equal(value, "high");
+  });
+
+  it("ignores table-local values", () => {
+    const value = readTopLevelTomlString(
+      '[mcp_servers.test]\nmodel_reasoning_effort = "xhigh"\n',
+      "model_reasoning_effort",
+    );
+    assert.equal(value, null);
+  });
+});
+
+describe("injectModelInstructionsBypassArgs", () => {
+  it("appends model_instructions_file override by default", () => {
+    const args = injectModelInstructionsBypassArgs(
+      "/tmp/my-project",
+      ["--model", "gpt-5"],
+      {},
+    );
+    assert.deepEqual(args, [
+      "--model",
+      "gpt-5",
+      "-c",
+      'model_instructions_file="/tmp/my-project/AGENTS.md"',
+    ]);
+  });
+
+  it("inserts model instructions before the end-of-options marker", () => {
+    const args = injectModelInstructionsBypassArgs(
+      "/tmp/my-project",
+      ["--", "--spark", "literal"],
+      {},
+    );
+    assert.deepEqual(args, [
+      "-c",
+      'model_instructions_file="/tmp/my-project/AGENTS.md"',
+      "--",
+      "--spark",
+      "literal",
+    ]);
+  });
+
+  it("does not treat a post-marker model instructions token as an OMX override", () => {
+    const args = injectModelInstructionsBypassArgs(
+      "/tmp/my-project",
+      ["--", "-c", 'model_instructions_file="/tmp/literal.md"'],
+      {},
+    );
+    assert.deepEqual(args, [
+      "-c",
+      'model_instructions_file="/tmp/my-project/AGENTS.md"',
+      "--",
+      "-c",
+      'model_instructions_file="/tmp/literal.md"',
+    ]);
+  });
+
+  it("does not append when bypass is disabled via env", () => {
+    const args = injectModelInstructionsBypassArgs(
+      "/tmp/my-project",
+      ["--model", "gpt-5"],
+      { OMX_BYPASS_DEFAULT_SYSTEM_PROMPT: "0" },
+    );
+    assert.deepEqual(args, ["--model", "gpt-5"]);
+  });
+
+  it("does not append when model_instructions_file is already set", () => {
+    const args = injectModelInstructionsBypassArgs(
+      "/tmp/my-project",
+      ["-c", 'model_instructions_file="/tmp/custom.md"'],
+      {},
+    );
+    assert.deepEqual(args, ["-c", 'model_instructions_file="/tmp/custom.md"']);
+  });
+
+  it("respects OMX_MODEL_INSTRUCTIONS_FILE env override", () => {
+    const args = injectModelInstructionsBypassArgs("/tmp/my-project", [], {
+      OMX_MODEL_INSTRUCTIONS_FILE: "/tmp/alt instructions.md",
+    });
+    assert.deepEqual(args, [
+      "-c",
+      'model_instructions_file="/tmp/alt instructions.md"',
+    ]);
+  });
+
+  it("uses session-scoped default model_instructions_file when provided", () => {
+    const args = injectModelInstructionsBypassArgs(
+      "/tmp/my-project",
+      ["--model", "gpt-5"],
+      {},
+      "/tmp/my-project/.omx/state/sessions/session-1/AGENTS.md",
+    );
+    assert.deepEqual(args, [
+      "--model",
+      "gpt-5",
+      "-c",
+      'model_instructions_file="/tmp/my-project/.omx/state/sessions/session-1/AGENTS.md"',
+    ]);
+  });
+});
+
+describe("upsertTopLevelTomlString", () => {
+  it("replaces an existing top-level key", () => {
+    const updated = upsertTopLevelTomlString(
+      'model_reasoning_effort = "low"\n[tui]\nstatus_line = []\n',
+      "model_reasoning_effort",
+      "high",
+    );
+    assert.match(updated, /^model_reasoning_effort = "high"$/m);
+    assert.doesNotMatch(updated, /^model_reasoning_effort = "low"$/m);
+  });
+
+  it("inserts before the first table when key is missing", () => {
+    const updated = upsertTopLevelTomlString(
+      "[tui]\nstatus_line = []\n",
+      "model_reasoning_effort",
+      "xhigh",
+    );
+    assert.equal(
+      updated,
+      'model_reasoning_effort = "xhigh"\n[tui]\nstatus_line = []\n',
+    );
+  });
+});
+
+describe("isExistingTmuxWindowTooCrampedForLaunchHud (#2754)", () => {
+  it("skips the launch-time HUD split for cramped existing tmux windows", () => {
+    // The reported repro: a 160x41 existing tmux window where forcing the HUD
+    // split dropped the Codex TUI to 38 rows and became unreadable.
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(41), true);
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(38), true);
+    assert.equal(
+      isExistingTmuxWindowTooCrampedForLaunchHud(HUD_TMUX_MIN_LAUNCH_WINDOW_HEIGHT_LINES - 1),
+      true,
+    );
+  });
+
+  it("keeps default HUD behavior for normal-height existing tmux windows", () => {
+    assert.equal(
+      isExistingTmuxWindowTooCrampedForLaunchHud(HUD_TMUX_MIN_LAUNCH_WINDOW_HEIGHT_LINES),
+      false,
+    );
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(50), false);
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(120), false);
+  });
+
+  it("creates the HUD when the window height is unknown or invalid", () => {
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(null), false);
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(undefined), false);
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(0), false);
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(Number.NaN), false);
+  });
+
+  it("honors an explicit minimum-height override", () => {
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(41, 40), false);
+    assert.equal(isExistingTmuxWindowTooCrampedForLaunchHud(39, 40), true);
+  });
+});
+
+describe("detached control-plane binding", () => {
+  it("bounds inside-tmux lifecycle propagation to the finite launch-owned control plane", async () => {
+    const source = await readFile(join(repoRoot, "src", "cli", "index.ts"), "utf8");
+    assert.match(source, /if \(launchPolicy === "inside-tmux"\) \{[\s\S]*?buildDetachedLaunchControlPlane\(/);
+    assert.match(source, /const restoreInsideTmuxControlPlane = insideTmuxControlPlane\s*\? applyLaunchOwnedControlPlane\(insideTmuxControlPlane\)/);
+    assert.match(source, /const codexBaseEnv = prependOmxRuntimeCommandShimToEnv\([\s\S]*?\.\.\.launchOwnedControlPlaneEnv/);
+    assert.match(source, /const runtimeHookEnv = launchOwnedControlPlane\s*\?[\s\S]*?\.\.\.launchOwnedControlPlaneEnv/);
+  });
+
+  it("emits one stable assignment for every managed key and clears poisoned identity", () => {
+    const env: NodeJS.ProcessEnv = {
+      OMX_ROOT: "",
+      OMX_STATE_ROOT: "",
+      OMX_TEAM_STATE_ROOT: "",
+      OMX_RUNS_DIR: "/foreign/runs",
+      OMX_TEAM_LEADER_CWD: "/foreign",
+      OMX_TEAM_WORKER: "foreign/worker-1",
+      OMX_TEAM_INTERNAL_WORKER: "foreign/worker-1",
+    };
+    const controlPlane = buildDetachedLaunchControlPlane({ cwd: "/tmp/project", sessionId: "sess-binding", env });
+    assert.deepEqual([...controlPlane.keys], [...DETACHED_LAUNCH_CONTROL_PLANE_KEYS]);
+    assert.deepEqual(Object.keys(controlPlane.values), [...DETACHED_LAUNCH_CONTROL_PLANE_KEYS]);
+    assert.equal(controlPlane.values.OMX_SESSION_ID, "sess-binding");
+    assert.equal(controlPlane.values.OMX_TMUX_HUD_OWNER, "1");
+    for (const key of [
+      "CODEX_SESSION_ID", "SESSION_ID", "OMX_TMUX_HUD_LEADER_PANE", "OMX_ROOT", "OMX_STATE_ROOT",
+      "OMX_TEAM_STATE_ROOT", "OMXBOX_ACTIVE", "OMX_SOURCE_CWD", "OMX_MADMAX_DETACHED_CONTEXT", "OMX_RUNS_DIR",
+      "OMX_TEAM_LEADER_CWD", "OMX_TEAM_WORKER", "OMX_TEAM_INTERNAL_WORKER",
+    ] as const) assert.equal(controlPlane.values[key], "", `${key} must be cleared`);
+
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-binding", "/tmp/project", "codex", "hud", null, undefined, null, false, "sess-binding",
+      undefined, undefined, undefined, env, undefined, undefined, undefined, undefined, undefined, undefined, controlPlane,
+    );
+    const newSession = steps.find((step) => step.name === "new-session");
+    assert.ok(newSession);
+    const managedAssignments = newSession.args.filter((arg) =>
+      DETACHED_LAUNCH_CONTROL_PLANE_KEYS.some((key) => arg.startsWith(`${key}=`)),
+    );
+    assert.equal(managedAssignments.length, DETACHED_LAUNCH_CONTROL_PLANE_KEYS.length);
+    assert.deepEqual(
+      managedAssignments.map((assignment) => assignment.slice(0, assignment.indexOf("="))),
+      [...DETACHED_LAUNCH_CONTROL_PLANE_KEYS],
+    );
+  });
+
+  it("preserves selected explicit roots and valid Madmax runs identity", () => {
+    const explicit = buildDetachedLaunchControlPlane({
+      cwd: "/tmp/project", sessionId: "sess-explicit",
+      env: { OMX_ROOT: "/tmp/selected-root", OMX_STATE_ROOT: "/tmp/stale-state" },
+    });
+    assert.equal(explicit.values.OMX_ROOT, "/tmp/selected-root");
+    assert.equal(explicit.values.OMX_STATE_ROOT, "");
+    assert.equal(explicit.values.OMX_RUNS_DIR, "");
+
+    const madmax = buildDetachedLaunchControlPlane({
+      cwd: "/tmp/project", sessionId: "sess-madmax",
+      omxRootOverride: "/tmp/run-root",
+      verifiedMadmaxContext: {
+        root: "/tmp/run-root",
+        sourceCwd: "/tmp/project",
+        context: "ctx-madmax",
+        runsRoot: "/tmp/outer-runs",
+      },
+      env: {
+        OMX_ROOT: "/tmp/run-root", OMXBOX_ACTIVE: "1", OMX_SOURCE_CWD: "/tmp/project",
+        OMX_MADMAX_DETACHED_CONTEXT: "ctx-madmax", OMX_RUNS_DIR: "/tmp/outer-runs",
+      },
+    });
+    assert.deepEqual(
+      [madmax.values.OMX_ROOT, madmax.values.OMXBOX_ACTIVE, madmax.values.OMX_SOURCE_CWD,
+        madmax.values.OMX_MADMAX_DETACHED_CONTEXT, madmax.values.OMX_RUNS_DIR],
+      ["/tmp/run-root", "1", "/tmp/project", "ctx-madmax", "/tmp/outer-runs"],
+    );
+    const poisoned = buildDetachedLaunchControlPlane({
+      cwd: "/tmp/project", sessionId: "sess-poisoned", omxRootOverride: "/foreign/root",
+      env: {
+        OMX_ROOT: "/foreign/root", OMXBOX_ACTIVE: "1", OMX_SOURCE_CWD: "/foreign/source",
+        OMX_MADMAX_DETACHED_CONTEXT: "poisoned-context", OMX_RUNS_DIR: "/foreign/runs",
+      },
+    });
+    assert.deepEqual(
+      [poisoned.values.OMX_ROOT, poisoned.values.OMX_SOURCE_CWD,
+        poisoned.values.OMX_MADMAX_DETACHED_CONTEXT, poisoned.values.OMX_RUNS_DIR],
+      ["", "", "", ""],
+    );
+
+  });
+  it("preserves an explicit team root while clearing unverified boxed lineage and worker tuple", () => {
+    const cases = [
+      {
+        name: "boxed guard without worker tuple",
+        env: {
+          OMX_TEAM_STATE_ROOT: "/tmp/explicit-team-root",
+          OMX_ROOT: "/tmp/poison-root",
+          OMX_STATE_ROOT: "/tmp/poison-state-root",
+          OMXBOX_ACTIVE: "1",
+          OMX_SOURCE_CWD: "/tmp/poison-source",
+          OMX_MADMAX_DETACHED_CONTEXT: "poison-context",
+          OMX_RUNS_DIR: "/tmp/poison-runs",
+        },
+      },
+      {
+        name: "boxed guard with poisoned worker tuple",
+        env: {
+          OMX_TEAM_STATE_ROOT: "/tmp/explicit-team-root",
+          OMX_ROOT: "/tmp/poison-root",
+          OMX_STATE_ROOT: "/tmp/poison-state-root",
+          OMXBOX_ACTIVE: "1",
+          OMX_SOURCE_CWD: "/tmp/poison-source",
+          OMX_MADMAX_DETACHED_CONTEXT: "poison-context",
+          OMX_RUNS_DIR: "/tmp/poison-runs",
+          OMX_TEAM_LEADER_CWD: "/tmp/poison-leader",
+          OMX_TEAM_WORKER: "poison-team/worker-1",
+          OMX_TEAM_INTERNAL_WORKER: "poison-team/worker-2",
+        },
+      },
+    ] as const;
+
+    for (const testCase of cases) {
+      const controlPlane = buildDetachedLaunchControlPlane({
+        cwd: "/tmp/project",
+        sessionId: `sess-${testCase.name.replaceAll(" ", "-")}`,
+        env: testCase.env,
+      });
+      assert.equal(controlPlane.values.OMX_TEAM_STATE_ROOT, "/tmp/explicit-team-root", testCase.name);
+      for (const key of [
+        "OMX_ROOT", "OMX_STATE_ROOT", "OMXBOX_ACTIVE", "OMX_SOURCE_CWD",
+        "OMX_MADMAX_DETACHED_CONTEXT", "OMX_RUNS_DIR", "OMX_TEAM_LEADER_CWD",
+        "OMX_TEAM_WORKER", "OMX_TEAM_INTERNAL_WORKER",
+      ] as const) {
+        assert.equal(controlPlane.values[key], "", `${testCase.name}: ${key} must be cleared`);
+      }
+    }
+  });
+
+  it("keeps unrelated parent configuration while filtering exact managed replay names", () => {
+    const serialized = serializeDetachedSessionParentEnv({
+      OMX_ROOT: "/foreign/root", omx_root: "/foreign/mixed-case-root",
+      OMX_TEAM_WORKER: "foreign/worker", Omx_Notify_Fallback: "1",
+      PROVIDER_SENTINEL: "provider-value", Path: "/system/path",
+    });
+    assert.doesNotMatch(serialized, /export OMX_ROOT=/);
+    assert.doesNotMatch(serialized, /export OMX_TEAM_WORKER=/);
+    assert.match(serialized, /export omx_root='/);
+    assert.match(serialized, /export PROVIDER_SENTINEL='provider-value'/);
+    assert.match(serialized, /export Path='\/system\/path'/);
+    assert.match(serialized, /export Omx_Notify_Fallback='1'/);
+  });
+  it("filters every managed Windows case variant while preserving unrelated configuration", () => {
+    const env: NodeJS.ProcessEnv = {
+      oMx_RoOt: "/foreign/root",
+      OmX_TeAm_WorkEr: "foreign/worker",
+      OMX_PROVIDER_URL: "https://provider.invalid",
+      Path: "/system/path",
+      Omx_Notify_Fallback: "1",
+    };
+    const steps = buildDetachedSessionBootstrapSteps(
+      "omx-windows-binding", "/tmp/project", "codex", "hud", null, undefined, null, true, "sess-windows",
+      undefined, undefined, undefined, env,
+    );
+    const command = steps[0]?.args.at(-1) ?? "";
+    const encoded = /__detached-session-leader [^A-Za-z0-9_-]*([A-Za-z0-9_-]{40,})/.exec(command)?.[1];
+    assert.ok(encoded);
+    const payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")) as {
+      parentEnv?: Record<string, string>;
+    };
+    assert.equal(payload.parentEnv?.oMx_RoOt, undefined);
+    assert.equal(payload.parentEnv?.OmX_TeAm_WorkEr, undefined);
+    assert.equal(payload.parentEnv?.OMX_PROVIDER_URL, "https://provider.invalid");
+    assert.equal(payload.parentEnv?.Path, "/system/path");
+    assert.equal(payload.parentEnv?.Omx_Notify_Fallback, "1");
+  });
+});
+
+describe("resolveDetachedTmuxHistoryLimit (#3611)", () => {
+  it("defaults to a scrollback size that holds a real transcript", () => {
+    assert.equal(resolveDetachedTmuxHistoryLimit({}), DETACHED_TMUX_HISTORY_LIMIT);
+    assert.equal(DETACHED_TMUX_HISTORY_LIMIT >= 5000, true);
+  });
+
+  it("honors a valid operator override", () => {
+    assert.equal(resolveDetachedTmuxHistoryLimit({ OMX_TMUX_HISTORY_LIMIT: "12000" }), 12000);
+    assert.equal(resolveDetachedTmuxHistoryLimit({ OMX_TMUX_HISTORY_LIMIT: " 9000 " }), 9000);
+  });
+
+  it("clamps overrides into the supported range", () => {
+    assert.equal(
+      resolveDetachedTmuxHistoryLimit({ OMX_TMUX_HISTORY_LIMIT: "0" }),
+      DETACHED_TMUX_HISTORY_LIMIT_MIN,
+    );
+    assert.equal(
+      resolveDetachedTmuxHistoryLimit({ OMX_TMUX_HISTORY_LIMIT: "99999999" }),
+      DETACHED_TMUX_HISTORY_LIMIT_MAX,
+    );
+  });
+
+  it("falls back to the default for unusable overrides instead of shrinking scrollback", () => {
+    for (const raw of ["", "abc", "-1", "1e4", "1_000", "500.5"]) {
+      assert.equal(
+        resolveDetachedTmuxHistoryLimit({ OMX_TMUX_HISTORY_LIMIT: raw }),
+        DETACHED_TMUX_HISTORY_LIMIT,
+        `expected default for ${JSON.stringify(raw)}`,
+      );
+    }
+  });
+});

@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Skills - oh-my-codex Docs</title>
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <header>
+      <nav class="container nav" aria-label="Primary">
+        <a class="brand" href="./index.html">oh-my-codex</a>
+        <a href="./index.html">Home</a>
+        <a href="./getting-started.html">Getting Started</a>
+        <a href="./agents.html">Agents</a>
+        <a class="active" href="./skills.html">Skills</a>
+        <a href="./integrations.html">Integrations</a>
+      </nav>
+    </header>
+
+    <main class="container">
+      <h1>Skills Reference</h1>
+      <p class="muted">All skills with category grouping and <code>$name</code> usage syntax.</p>
+
+      <h2>Canonical Workflow</h2>
+      <p><code>$autopilot</code> is the first-class canonical orchestrator. Its defining default chain is <code>$deep-interview -&gt; $ralplan -&gt; $ultragoal</code>. Each stage is also independently invocable when its input contract is already satisfied.</p>
+      <ol>
+        <li><code>$deep-interview</code> - clarify intent, boundaries, and non-goals when the task is still fuzzy.</li>
+        <li><code>$ralplan</code> - approve the plan and tradeoffs before execution; completion/skipping requires recorded Architect review evidence followed by Critic review evidence, not just PRD/test-spec files.</li>
+        <li><code>$ultragoal</code> - execute and verify through durable goal/ledger checkpoints; launch <code>$team</code> only when parallel lanes are warranted.</li>
+        <li><code>$code-review</code> then <code>$ultraqa</code> - finish with merge-readiness and adversarial QA gates.</li>
+      </ol>
+
+      <h2>Execution Modes</h2>
+      <ul>
+        <li><code>$autopilot</code> - supervised end-to-end orchestration through <code>$deep-interview -&gt; $ralplan -&gt; $ultragoal</code></li>
+        <li><code>$team</code> - coordinated multi-agent execution for the approved plan</li>
+        <li><code>$ultragoal</code> - durable multi-goal planning and execution over <code>.omx/ultragoal</code> artifacts plus Codex goal handoff</li>
+        <li><code>$visual-ralph</code> - measured visual-reference loop; <em>Removed in OMX 0.21:</em> <code>$visual-verdict</code></li>
+        <li><code>$ultraqa</code> - test/verify/fix loop</li>
+        <li><em>Removed in OMX 0.21:</em> <code>$ralph</code>, <code>$ultrawork</code>, <code>$pipeline</code> (sunset stubs for one release)</li>
+      </ul>
+
+      <h2>Planning & Clarification</h2>
+      <ul>
+        <li><code>$deep-interview</code> - requirements clarification before planning or execution</li>
+        <li><code>$ralplan</code> - planner/architect/critic consensus planning with durable Architect→Critic approval evidence before execution handoff</li>
+        <li><code>$plan</code> - supporting strategic planning when you are not using the canonical path</li>
+        <li><code>$best-practice-research</code> - bounded official/upstream best-practice evidence wrapper when current external guidance affects correctness</li>
+        <li><code>$deep-interview</code> is the independent, resumable Socratic requirements stage before <code>$ralplan</code>; it is not an alias for <code>$plan --interview</code>.</li>
+        <li><em>Removed in OMX 0.21:</em> <code>$prometheus-strict</code> (sunset stub; use <code>$plan</code>).</li>
+      </ul>
+
+      <h2>Research and Planning Boundaries</h2>
+      <ul>
+        <li><code>$best-practice-research</code> is the ordinary pre-planning wrapper for external official docs, upstream references, standards, release notes, and best-practice checks. It produces cited evidence for a caller; it is not the architecture plan.</li>
+        <li><code>$autoresearch</code> is for a bounded validator-gated research deliverable or artifact. Use it when the research output itself must pass an explicit evaluator before the loop can finish.</li>
+        <li><em>Removed in OMX 0.21:</em> <code>$autoresearch-goal</code> (sunset stub; use <code>$autoresearch</code>)</li>
+        <li><code>$plan</code> is where architecture and implementation planning are synthesized from requirements and prior evidence. Autoresearch findings gathered before planning should feed into <code>$plan</code> as evidence, not appear as a final architecture component unless the user explicitly asks for ongoing research automation.</li>
+      </ul>
+
+      <h2>Agent Shortcuts</h2>
+      <ul>
+        <li><code>$analyze</code> - read-only deep analysis with ranked synthesis</li>
+        <li><code>$code-review</code> - merge-readiness review</li>
+        <li><code>$design</code> - maintain repo-local <code>DESIGN.md</code></li>
+        <li><code>$visual-ralph</code> - measured visual-reference implementation loop</li>
+        <li><code>$git-master</code> - alias for the git workflow surface</li>
+        <li><em>Removed in OMX 0.21:</em> <code>$deepsearch</code> (use <code>$analyze</code>), <code>$tdd</code>, <code>$build-fix</code>, <code>$security-review</code> and <code>$review</code> (use <code>$code-review</code>)</li>
+      </ul>
+
+      <h2>Utilities</h2>
+      <ul>
+        <li><code>$cancel</code>, <code>$doctor</code></li>
+        <li><code>$skill</code></li>
+        <li><code>$hud</code>, <code>$omx-setup</code>, <code>$configure-notifications</code></li>
+        <li><code>$worker</code> (internal) - team worker protocol / lifecycle</li>
+        <li><code>$ai-slop-cleaner</code> - Run an anti-slop cleanup/refactor/deslop workflow</li>
+        <li><code>$ask</code> - Ask a local external advisor CLI (Claude or Gemini) and capture a reusable artifact</li>
+        <li><code>$performance-goal</code> - Run an evaluator-gated performance optimization workflow over Codex goal mode with durable OMX artifacts and safe goal handoffs.</li>
+        <li><code>$wiki</code> - Persistent markdown project wiki stored under repository omx_wiki with keyword search and lifecycle capture</li>
+        <li><em>Removed in OMX 0.21:</em> <code>$help</code> (use <code>$omx-setup</code>), <code>$note</code>, <code>$trace</code>, <code>$ralph-init</code> (use <code>$ultragoal</code>)</li>
+      </ul>
+
+      <h2>Usage Examples</h2>
+      <pre><code>$deep-interview "clarify the auth change"
+$ralplan "approve the auth plan and review tradeoffs"
+$ultragoal "carry the approved plan to completion"
+$team 3:executor "execute the active Ultragoal story in parallel"
+$best-practice-research "find current official best practices for this API"
+$code-review "review current branch"
+$doctor</code></pre>
+
+      <h2>Visual Verdict Guidance</h2>
+      <ul>
+        <li>Use for visual tasks with reference image(s) + generated screenshot.</li>
+        <li>Pass threshold target: <strong>90+</strong>.</li>
+        <li>Use pixel diff / pixelmatch overlays only as secondary debugging support.</li>
+      </ul>
+    </main>
+
+    <footer>
+      <div class="container"><span class="muted">Browse available skills with <code>/skill</code> in Codex CLI.</span></div>
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,1235 @@
+import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import assert from 'node:assert/strict';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import fs, { existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { syncBuiltinESMExports } from 'node:module';
+import { tmpdir } from 'node:os';
+import { basename, join, relative } from 'node:path';
+import {
+  decodeApprovedExecutionQuotedValue,
+  isPlanningComplete,
+  readApprovedExecutionLaunchHint,
+  readApprovedExecutionLaunchHintOutcome,
+  readLatestPlanningArtifacts,
+  readPlanningArtifacts,
+  readTeamDagArtifactResolution,
+} from '../artifacts.js';
+import { readTeamDagHandoffForLatestPlan } from '../../team/dag-schema.js';
+
+let tempDir: string;
+
+function encodeApprovedExecutionTask(task: string, quote: 'single' | 'double'): string {
+  return quote === 'single'
+    ? `'${task.replace(/'/g, "\\'")}'`
+    : `"${task.replace(/"/g, '\\"')}"`;
+}
+
+function computeGitBlobSha1(content: string): string {
+  const buffer = Buffer.from(content, 'utf-8');
+  const header = Buffer.from(`blob ${buffer.length}\0`, 'utf-8');
+  return createHash('sha1').update(header).update(buffer).digest('hex');
+}
+
+function relativeToRepo(path: string): string {
+  return relative(tempDir, path).replaceAll('\\', '/');
+}
+
+function canonicalContextPackRelativePath(slug: string): string {
+  return `.omx/context/context-20260507T120000Z-${slug}.json`;
+}
+
+function buildContextPackOutcome(relativePackPath: string): string {
+  return [
+    '## Context Pack Outcome',
+    '',
+    `- pack: created \`${relativePackPath}\``,
+  ].join('\n');
+}
+
+async function writeContextPack(
+  slug: string,
+  prdPath: string,
+  testSpecPath: string,
+  roles: string[],
+): Promise<string> {
+  const contextDir = join(tempDir, '.omx', 'context');
+  await mkdir(contextDir, { recursive: true });
+  const packPath = join(tempDir, canonicalContextPackRelativePath(slug));
+  const prdContent = await readFile(prdPath, 'utf-8');
+  const testSpecContent = await readFile(testSpecPath, 'utf-8');
+  await writeFile(packPath, JSON.stringify({
+    slug,
+    basis: {
+      prd: {
+        path: relativeToRepo(prdPath),
+        sha1: computeGitBlobSha1(prdContent),
+      },
+      testSpecs: [{
+        path: relativeToRepo(testSpecPath),
+        sha1: computeGitBlobSha1(testSpecContent),
+      }],
+    },
+    entries: roles.map((role, index) => ({
+      path: `src/${role}-${index}.ts`,
+      roles: [role],
+    })),
+  }, null, 2));
+  return packPath;
+}
+
+async function writeContextPackWithEntries(
+  slug: string,
+  prdPath: string,
+  testSpecPath: string,
+  entries: Array<{
+    path: string;
+    roles: string[];
+    label?: unknown;
+    tags?: unknown;
+    selector?: unknown;
+    relationPath?: unknown;
+  }>,
+): Promise<string> {
+  const contextDir = join(tempDir, '.omx', 'context');
+  await mkdir(contextDir, { recursive: true });
+  const packPath = join(tempDir, canonicalContextPackRelativePath(slug));
+  const prdContent = await readFile(prdPath, 'utf-8');
+  const testSpecContent = await readFile(testSpecPath, 'utf-8');
+  await writeFile(packPath, JSON.stringify({
+    slug,
+    basis: {
+      prd: {
+        path: relativeToRepo(prdPath),
+        sha1: computeGitBlobSha1(prdContent),
+      },
+      testSpecs: [{
+        path: relativeToRepo(testSpecPath),
+        sha1: computeGitBlobSha1(testSpecContent),
+      }],
+    },
+    entries,
+  }, null, 2));
+  return packPath;
+}
+
+async function setup(): Promise<void> {
+  tempDir = await mkdtemp(join(tmpdir(), 'omx-planning-artifacts-'));
+}
+
+async function cleanup(): Promise<void> {
+  if (tempDir && existsSync(tempDir)) {
+    await rm(tempDir, { recursive: true, force: true });
+  }
+}
+
+describe('planning artifacts', () => {
+  beforeEach(async () => { await setup(); });
+  afterEach(async () => {
+    mock.restoreAll();
+    syncBuiltinESMExports();
+    await cleanup();
+  });
+
+  it('round-trips single-quoted approved execution tasks with only escaped apostrophes normalized', () => {
+    const task = String.raw`Fix Bob's regression in C:\\tmp`;
+    assert.equal(
+      decodeApprovedExecutionQuotedValue(encodeApprovedExecutionTask(task, 'single')),
+      task,
+    );
+  });
+
+  it('round-trips double-quoted approved execution tasks without applying JSON escapes', () => {
+    const task = String.raw`Use C:\tmp and keep \n literal plus "quotes"`;
+    assert.equal(
+      decodeApprovedExecutionQuotedValue(encodeApprovedExecutionTask(task, 'double')),
+      task,
+    );
+    const literalEscapeTask = String.raw`Keep \t and \u1234 literal`;
+    assert.equal(
+      decodeApprovedExecutionQuotedValue(encodeApprovedExecutionTask(literalEscapeTask, 'double')),
+      literalEscapeTask,
+    );
+  });
+
+  it('requires both PRD and test spec for planning completion', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-issue-827.md'), '# PRD\n');
+
+    const artifacts = readPlanningArtifacts(tempDir);
+    assert.equal(isPlanningComplete(artifacts), false);
+    assert.equal(artifacts.prdPaths.length, 1);
+    assert.equal(artifacts.testSpecPaths.length, 0);
+  });
+
+
+  it('resolves matching Team DAG sidecar before markdown handoff', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-repo-aware.md'),
+      '# PRD\n\n## Team DAG Handoff\n```json\n{"source":"markdown"}\n```\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-repo-aware.md'), '# Test Spec\n');
+    await writeFile(join(plansDir, 'team-dag-repo-aware.json'), '{"source":"sidecar"}\n');
+
+    const resolution = readTeamDagArtifactResolution(tempDir);
+
+    assert.equal(resolution.source, 'json-sidecar');
+    assert.equal(resolution.planSlug, 'repo-aware');
+    assert.equal(resolution.artifactPath, join(plansDir, 'team-dag-repo-aware.json'));
+    assert.equal(resolution.content, '{"source":"sidecar"}\n');
+    assert.deepEqual(resolution.warnings, []);
+  });
+
+  it('falls back to embedded Team DAG handoff when sidecar is absent', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-repo-aware.md'),
+      '# PRD\n\n## Team DAG Handoff\n```json\n{"nodes":[]}\n```\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-repo-aware.md'), '# Test Spec\n');
+
+    const resolution = readTeamDagArtifactResolution(tempDir);
+
+    assert.equal(resolution.source, 'markdown-handoff');
+    assert.equal(resolution.planSlug, 'repo-aware');
+    assert.equal(resolution.content, '{"nodes":[]}');
+    assert.equal(resolution.artifactPath, undefined);
+  });
+
+  it('returns none for Team DAG resolution when planning is incomplete', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-repo-aware.md'), '# PRD\n');
+
+    const resolution = readTeamDagArtifactResolution(tempDir);
+
+    assert.equal(resolution.source, 'none');
+    assert.equal(resolution.prdPath, null);
+    assert.equal(resolution.planSlug, null);
+    assert.deepEqual(resolution.warnings, ['planning_incomplete']);
+  });
+
+
+  it('does not approve latest PRD launch hints without a matching test spec slug', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-alpha.md'), '# Alpha\n\nLaunch via omx team 2:executor "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-other.md'), '# Other Test Spec\n');
+
+    assert.equal(readApprovedExecutionLaunchHint(tempDir, 'team'), null);
+  });
+
+  it('does not resolve Team DAG artifacts without a matching test spec slug', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-repo-aware.md'), '# PRD\n');
+    await writeFile(join(plansDir, 'test-spec-other.md'), '# Other Test Spec\n');
+    await writeFile(join(plansDir, 'team-dag-repo-aware.json'), '{"source":"sidecar"}\n');
+
+    const resolution = readTeamDagArtifactResolution(tempDir);
+
+    assert.equal(resolution.source, 'none');
+    assert.equal(resolution.planSlug, 'repo-aware');
+    assert.deepEqual(resolution.warnings, ['missing_matching_test_spec']);
+  });
+
+  it('prefers timestamped PRD/test-spec pairs while keeping legacy artifacts compatible', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-legacy.md'),
+      '# Legacy\n\nLaunch via omx ralph "Execute legacy plan"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-legacy.md'), '# Legacy Test Spec\n');
+    await writeFile(
+      join(plansDir, 'prd-20260427T153000Z-alpha.md'),
+      '# Old Alpha\n\nLaunch via omx ralph "Execute old alpha plan"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Legacy Test Spec\n');
+    await writeFile(
+      join(plansDir, 'prd-20260427T153100Z-alpha.md'),
+      '# New Alpha\n\nLaunch via omx ralph "Execute new alpha plan"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-20260427T153100Z-alpha.md'), '# Alpha Timestamped Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-alpha.md'), '# Alpha Legacy Deep Interview\n');
+    await writeFile(join(specsDir, 'deep-interview-20260427T153100Z-alpha.md'), '# Alpha Timestamped Deep Interview\n');
+    await writeFile(join(specsDir, 'deep-interview-autoresearch-20260427T153100Z-alpha.md'), '# Autoresearch Draft\n');
+
+    const selection = readLatestPlanningArtifacts(tempDir);
+    assert.equal(selection.prdPath, join(plansDir, 'prd-20260427T153100Z-alpha.md'));
+    assert.deepEqual(selection.testSpecPaths, [join(plansDir, 'test-spec-20260427T153100Z-alpha.md')]);
+    assert.deepEqual(selection.deepInterviewSpecPaths, [
+      join(specsDir, 'deep-interview-alpha.md'),
+      join(specsDir, 'deep-interview-20260427T153100Z-alpha.md'),
+    ]);
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute new alpha plan');
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-20260427T153100Z-alpha.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [
+      join(specsDir, 'deep-interview-alpha.md'),
+      join(specsDir, 'deep-interview-20260427T153100Z-alpha.md'),
+    ]);
+
+    const artifacts = readPlanningArtifacts(tempDir);
+    assert.equal(isPlanningComplete(artifacts), true);
+  });
+
+  it('keeps legacy test-spec compatibility aliases for non-timestamped PRDs', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-alpha.md'),
+      '# Alpha\n\nLaunch via omx ralph "Execute alpha"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(plansDir, 'testspec-alpha.md'), '# Alpha Compatibility Test Spec\n');
+    await writeFile(join(plansDir, 'test-spec-20260427T153100Z-alpha.md'), '# Alpha Timestamped Test Spec\n');
+
+    const selection = readLatestPlanningArtifacts(tempDir);
+    assert.equal(selection.prdPath, join(plansDir, 'prd-alpha.md'));
+    assert.deepEqual(selection.testSpecPaths, [
+      join(plansDir, 'test-spec-alpha.md'),
+      join(plansDir, 'testspec-alpha.md'),
+    ]);
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+    assert.ok(hint);
+    assert.deepEqual(hint?.testSpecPaths, [
+      join(plansDir, 'test-spec-alpha.md'),
+      join(plansDir, 'testspec-alpha.md'),
+    ]);
+  });
+
+
+  it('parses $ralph aliases with single-quoted task text for approved launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-1072.md'),
+      "# PRD\n\nLaunch via $ralph 'Execute approved issue 1072 plan'\n",
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-1072.md'), '# Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-issue-1072.md'), '# Deep Interview Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+    assert.ok(hint);
+    assert.equal(hint?.command, "$ralph 'Execute approved issue 1072 plan'");
+    assert.equal(hint?.task, 'Execute approved issue 1072 plan');
+    assert.equal(hint?.sourcePath, join(plansDir, 'prd-issue-1072.md'));
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-issue-1072.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [join(specsDir, 'deep-interview-issue-1072.md')]);
+  });
+
+  it('includes approved Ralph launch context with test and deep-interview artifacts', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-1072.md'),
+      '# PRD\n\nLaunch via omx ralph "Execute approved issue 1072 plan"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-1072.md'), '# Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-issue-1072.md'), '# Deep Interview Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute approved issue 1072 plan');
+    assert.equal(hint?.sourcePath, join(plansDir, 'prd-issue-1072.md'));
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-issue-1072.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [join(specsDir, 'deep-interview-issue-1072.md')]);
+  });
+
+  it('parses $team aliases with single-quoted task text for approved launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-1142.md'),
+      "# PRD\n\nLaunch via $team ralph 4:debugger 'Execute approved issue 1142 plan'\n",
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-1142.md'), '# Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-issue-1142.md'), '# Deep Interview Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+    assert.ok(hint);
+    assert.equal(hint?.command, "$team ralph 4:debugger 'Execute approved issue 1142 plan'");
+    assert.equal(hint?.task, 'Execute approved issue 1142 plan');
+    assert.equal(hint?.workerCount, 4);
+    assert.equal(hint?.agentType, 'debugger');
+    assert.equal(hint?.linkedRalph, true);
+    assert.equal(hint?.sourcePath, join(plansDir, 'prd-issue-1142.md'));
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-issue-1142.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [join(specsDir, 'deep-interview-issue-1142.md')]);
+  });
+
+  it('includes approved team launch context with staffing and matching artifacts', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-1142.md'),
+      '# PRD\n\nLaunch via omx team ralph 4:debugger "Execute approved issue 1142 plan"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-1142.md'), '# Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-issue-1142.md'), '# Deep Interview Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute approved issue 1142 plan');
+    assert.equal(hint?.workerCount, 4);
+    assert.equal(hint?.agentType, 'debugger');
+    assert.equal(hint?.linkedRalph, true);
+    assert.equal(hint?.sourcePath, join(plansDir, 'prd-issue-1142.md'));
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-issue-1142.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [join(specsDir, 'deep-interview-issue-1142.md')]);
+  });
+
+  it('binds approved team handoff context to the selected PRD slug in multi-plan repos', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-alpha.md'), '# Alpha\n\nLaunch via omx team 2:executor "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-alpha.md'), '# Alpha Deep Interview\n');
+    await writeFile(join(plansDir, 'prd-zeta.md'), '# Zeta\n\nLaunch via omx team 5 "Execute zeta"\n');
+    await writeFile(join(plansDir, 'test-spec-zeta.md'), '# Zeta Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-zeta.md'), '# Zeta Deep Interview\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute zeta');
+    assert.equal(hint?.workerCount, 5);
+    assert.equal(hint?.agentType, undefined);
+    assert.equal(hint?.sourcePath, join(plansDir, 'prd-zeta.md'));
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-zeta.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [join(specsDir, 'deep-interview-zeta.md')]);
+  });
+
+  it('binds approved handoff context to the selected PRD slug in multi-plan repos', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-alpha.md'), '# Alpha\n\nLaunch via omx ralph "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-alpha.md'), '# Alpha Deep Interview\n');
+    await writeFile(join(plansDir, 'prd-zeta.md'), '# Zeta\n\nLaunch via omx ralph "Execute zeta"\n');
+    await writeFile(join(plansDir, 'test-spec-zeta.md'), '# Zeta Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-zeta.md'), '# Zeta Deep Interview\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute zeta');
+    assert.equal(hint?.sourcePath, join(plansDir, 'prd-zeta.md'));
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-zeta.md')]);
+    assert.deepEqual(hint?.deepInterviewSpecPaths, [join(specsDir, 'deep-interview-zeta.md')]);
+  });
+
+  it('binds approved launch hints to the requested prd path', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    const alphaPrdPath = join(plansDir, 'prd-alpha.md');
+    await writeFile(alphaPrdPath, '# Alpha\n\nLaunch via omx ralph "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(plansDir, 'prd-zeta.md'), '# Zeta\n\nLaunch via omx ralph "Execute zeta"\n');
+    await writeFile(join(plansDir, 'test-spec-zeta.md'), '# Zeta Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph', { prdPath: alphaPrdPath });
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute alpha');
+    assert.equal(hint?.sourcePath, alphaPrdPath);
+    assert.deepEqual(hint?.testSpecPaths, [join(plansDir, 'test-spec-alpha.md')]);
+  });
+
+  it('binds approved launch hints through canonical-equivalent requested PRD aliases', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    const alphaPrdPath = join(plansDir, 'prd-alpha.md');
+    await writeFile(alphaPrdPath, '# Alpha\n\nLaunch via omx ralph "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(plansDir, 'prd-zeta.md'), '# Zeta\n\nLaunch via omx ralph "Execute zeta"\n');
+    await writeFile(join(plansDir, 'test-spec-zeta.md'), '# Zeta Test Spec\n');
+
+    const aliases = [
+      '.omx/plans/prd-alpha.md',
+      'prd-alpha.md',
+      alphaPrdPath,
+      '.omx/plans/../plans/prd-alpha.md',
+      '../plans/prd-alpha.md',
+      join(tempDir, '.omx', 'plans', '..', 'plans', 'prd-alpha.md'),
+    ];
+
+    for (const prdPath of aliases) {
+      const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { prdPath });
+
+      assert.equal(outcome.status, 'resolved');
+      if (outcome.status !== 'resolved') {
+        throw new Error(`expected resolved hint for alias ${prdPath}`);
+      }
+      assert.equal(outcome.hint.task, 'Execute alpha');
+      assert.equal(outcome.hint.sourcePath, alphaPrdPath);
+      assert.deepEqual(outcome.hint.testSpecPaths, [join(plansDir, 'test-spec-alpha.md')]);
+    }
+  });
+
+  it('does not bind requested PRD aliases that do not resolve to a discovered canonical PRD', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-alpha.md'), '# Alpha\n\nLaunch via omx ralph "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+
+    const rejectedAliases = [
+      '.omx/plans/prd-missing.md',
+      '../prd-alpha.md',
+      join('..', basename(tempDir), '.omx', 'plans', 'prd-alpha.md'),
+      join(tempDir, '.omx', 'prd-alpha.md'),
+      relative(process.cwd(), join(plansDir, 'prd-alpha.md')),
+    ];
+
+    for (const prdPath of rejectedAliases) {
+      assert.equal(
+        readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { prdPath }).status,
+        'absent',
+      );
+    }
+  });
+
+  it('honors the requested Ralph task when a single plan lists multiple Ralph launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-909.md'),
+      [
+        '# PRD',
+        '',
+        'Launch via omx ralph "Execute alpha"',
+        'Launch via omx ralph "Execute beta"',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-909.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph', { task: 'Execute alpha' });
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute alpha');
+    assert.equal(hint?.command, 'omx ralph "Execute alpha"');
+  });
+
+  it('reuses one planning artifact scan while task lookup checks older same-lineage PRDs', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const task = 'Execute cached planning artifact lineage lookup';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-alpha.md'),
+      `# Alpha\n\nLaunch via omx ralph ${JSON.stringify(task)}\n`,
+    );
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(
+      join(plansDir, 'prd-beta.md'),
+      `# Beta\n\nLaunch via omx ralph ${JSON.stringify(task)}\n`,
+    );
+    await writeFile(
+      join(plansDir, 'prd-gamma.md'),
+      `# Gamma\n\nLaunch via omx ralph ${JSON.stringify(task)}\n`,
+    );
+    await writeFile(
+      join(plansDir, 'prd-zeta.md'),
+      `# Zeta\n\nLaunch via omx ralph ${JSON.stringify(task)}\n`,
+    );
+
+    let readdirCount = 0;
+    const originalReaddirSync = fs.readdirSync;
+    mock.method(fs, 'readdirSync', ((...args: unknown[]) => {
+      readdirCount += 1;
+      return Reflect.apply(originalReaddirSync, fs, args);
+    }) as typeof fs.readdirSync);
+    syncBuiltinESMExports();
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { task });
+
+    assert.equal(outcome.status, 'resolved');
+    if (outcome.status !== 'resolved') {
+      return;
+    }
+    assert.equal(outcome.hint.sourcePath, join(plansDir, 'prd-alpha.md'));
+    assert.equal(readdirCount, 2);
+  });
+
+  it('fails closed for bare Ralph lookups when a single plan lists multiple Ralph launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-909-bare.md'),
+      [
+        '# PRD',
+        '',
+        'Launch via omx ralph "Execute alpha"',
+        'Launch via omx ralph "Execute beta"',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-909-bare.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+    assert.equal(hint, null);
+  });
+
+  it('ignores Ralph launch hints that appear only inside indented code blocks', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const task = 'Execute hidden indented ralph plan';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-hidden-indented-ralph.md'),
+      [
+        '# PRD',
+        '',
+        `    omx ralph ${JSON.stringify(task)}`,
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-hidden-indented-ralph.md'), '# Test Spec\n');
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { task });
+    assert.equal(outcome.status, 'absent');
+  });
+
+  it('does not let Ralph launch hints span hidden markdown gaps', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+
+    const scenarios = [
+      {
+        name: 'fenced',
+        buildHiddenLines: (task: string) => [
+          '```md',
+          JSON.stringify(task),
+          '```',
+        ],
+      },
+      {
+        name: 'commented',
+        buildHiddenLines: (task: string) => [
+          '<!--',
+          JSON.stringify(task),
+          '-->',
+        ],
+      },
+      {
+        name: 'indented',
+        buildHiddenLines: (task: string) => [
+          `    ${JSON.stringify(task)}`,
+        ],
+      },
+    ] as const;
+
+    for (const scenario of scenarios) {
+      const task = `Execute hidden-gap ${scenario.name} ralph plan`;
+      await writeFile(
+        join(plansDir, `prd-hidden-gap-${scenario.name}-ralph.md`),
+        [
+          '# PRD',
+          '',
+          'Launch via omx ralph',
+          ...scenario.buildHiddenLines(task),
+        ].join('\n'),
+      );
+      await writeFile(join(plansDir, `test-spec-hidden-gap-${scenario.name}-ralph.md`), '# Test Spec\n');
+
+      const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { task });
+      assert.equal(outcome.status, 'absent', scenario.name);
+    }
+  });
+
+  it('normalizes wrapped linked-Ralph team launch hints for exact command matching', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const task = 'Execute wrapped linked ralph team plan';
+    const command = `$team ralph 5:debugger ${JSON.stringify(task)}`;
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-wrapped-visible-team-linked-ralph.md'),
+      [
+        '# PRD',
+        '',
+        'Launch via $team',
+        'ralph',
+        '5:debugger',
+        JSON.stringify(task),
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-wrapped-visible-team-linked-ralph.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team', { command });
+    assert.ok(hint);
+    assert.equal(hint?.command, command);
+    assert.equal(hint?.workerCount, 5);
+    assert.equal(hint?.agentType, 'debugger');
+    assert.equal(hint?.linkedRalph, true);
+  });
+
+  it('keeps exact-command normalization bounded to visible whitespace-only variants', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+
+    const task = 'Execute exact-command normalization state table plan';
+    const command = `omx team 2:executor ${JSON.stringify(task)}`;
+    const cases = [
+      {
+        name: 'visible-whitespace-only-variant',
+        prdPath: 'prd-exact-command-visible.md',
+        content: [
+          '# PRD',
+          '',
+          'Launch via omx team',
+          '2:executor',
+          JSON.stringify(task),
+        ].join('\n'),
+        expectedStatus: 'resolved',
+      },
+      {
+        name: 'hidden-gap-counterfactual',
+        prdPath: 'prd-exact-command-hidden-gap.md',
+        content: [
+          '# PRD',
+          '',
+          'Launch via omx team',
+          '```md',
+          'hidden',
+          '```',
+          '2:executor',
+          JSON.stringify(task),
+        ].join('\n'),
+        expectedStatus: 'absent',
+      },
+      {
+        name: 'formatting-only-duplicate',
+        prdPath: 'prd-exact-command-duplicate.md',
+        content: [
+          '# PRD',
+          '',
+          `Launch via ${command}`,
+          'Launch via omx team',
+          '2:executor',
+          JSON.stringify(task),
+        ].join('\n'),
+        expectedStatus: 'ambiguous',
+      },
+    ] as const;
+
+    for (const scenario of cases) {
+      await writeFile(join(plansDir, scenario.prdPath), scenario.content);
+      await writeFile(
+        join(plansDir, scenario.prdPath.replace(/^prd-/, 'test-spec-')),
+        '# Test Spec\n',
+      );
+
+      const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'team', { command });
+      assert.equal(outcome.status, scenario.expectedStatus, scenario.name);
+
+      await rm(join(plansDir, scenario.prdPath), { force: true });
+      await rm(join(plansDir, scenario.prdPath.replace(/^prd-/, 'test-spec-')), { force: true });
+    }
+  });
+
+  it('does not normalize whitespace that changes the quoted task payload', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+
+    const task = 'Execute embedded\nnewline task';
+    const exactCommand = [
+      'omx ralph "Execute embedded',
+      'newline task"',
+    ].join('\n');
+    const collapsedCommand = 'omx ralph "Execute embedded newline task"';
+
+    await writeFile(
+      join(plansDir, 'prd-exact-command-embedded-newline-task.md'),
+      [
+        '# PRD',
+        '',
+        'Launch via omx ralph "Execute embedded',
+        'newline task"',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-exact-command-embedded-newline-task.md'), '# Test Spec\n');
+
+    const exactOutcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { command: exactCommand });
+    assert.equal(exactOutcome.status, 'resolved');
+    if (exactOutcome.status !== 'resolved') {
+      return;
+    }
+    assert.equal(exactOutcome.hint.command, exactCommand);
+    assert.equal(exactOutcome.hint.task, task);
+    assert.equal(
+      readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { command: collapsedCommand }).status,
+      'absent',
+    );
+  });
+
+  it('ignores Team launch hints that appear only inside fenced code blocks', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const task = 'Execute hidden fenced team plan';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-hidden-fenced-team.md'),
+      [
+        '# PRD',
+        '',
+        '```sh',
+        `omx team 2:executor ${JSON.stringify(task)}`,
+        '```',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-hidden-fenced-team.md'), '# Test Spec\n');
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'team', { task });
+    assert.equal(outcome.status, 'absent');
+  });
+
+  it('ignores Ralph launch hints that appear only inside nested commented blocks', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const task = 'Execute hidden commented ralph plan';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-hidden-commented-ralph.md'),
+      [
+        '# PRD',
+        '',
+        '<!--',
+        `Launch via omx ralph ${JSON.stringify(task)}`,
+        '<!--',
+        `omx ralph ${JSON.stringify(task)}`,
+        '```md',
+        `Launch via omx ralph ${JSON.stringify(task)}`,
+        '-->',
+        '-->',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-hidden-commented-ralph.md'), '# Test Spec\n');
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'ralph', { task });
+    assert.equal(outcome.status, 'absent');
+  });
+
+  it('honors the requested team task when a single plan lists multiple team launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-910.md'),
+      [
+        '# PRD',
+        '',
+        'Launch via omx team 2:executor "Execute alpha"',
+        'Launch via omx team 5:debugger "Execute beta"',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-910.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team', { task: 'Execute alpha' });
+    assert.ok(hint);
+    assert.equal(hint?.task, 'Execute alpha');
+    assert.equal(hint?.workerCount, 2);
+    assert.equal(hint?.agentType, 'executor');
+    assert.equal(hint?.command, 'omx team 2:executor "Execute alpha"');
+  });
+
+  it('fails closed when a single plan repeats the same team task in multiple launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const prdPath = join(plansDir, 'prd-issue-910-duplicate.md');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      prdPath,
+      [
+        '# PRD',
+        '',
+        'Launch via omx team 2:executor "Execute alpha"',
+        'Launch via $team 5:debugger "Execute alpha"',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-910-duplicate.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team', {
+      prdPath,
+      task: 'Execute alpha',
+    });
+    assert.equal(hint, null);
+  });
+
+  it('uses the requested team launch signature to disambiguate same-task launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const sharedTask = 'Execute shared team handoff';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-910-signature.md'),
+      [
+        '# PRD',
+        '',
+        `Launch via omx team 2:executor ${JSON.stringify(sharedTask)}`,
+        `Launch via $team ralph 5:debugger ${JSON.stringify(sharedTask)}`,
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-910-signature.md'), '# Test Spec\n');
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'team', {
+      task: sharedTask,
+      workerCount: 2,
+      agentType: 'executor',
+      linkedRalph: false,
+    });
+
+    assert.equal(outcome.status, 'resolved');
+    if (outcome.status !== 'resolved') {
+      throw new Error('expected a resolved team launch-hint outcome');
+    }
+    assert.equal(outcome.hint.command, `omx team 2:executor ${JSON.stringify(sharedTask)}`);
+    assert.equal(outcome.hint.workerCount, 2);
+    assert.equal(outcome.hint.agentType, 'executor');
+    assert.equal(outcome.hint.linkedRalph, false);
+  });
+
+  it('resolves Team launch hints when PRD recommends Team plus Ultragoal and separates Ralph follow-up', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const sharedTask = 'Implement durable parallel delivery with Team and Ultragoal';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-ultragoal-team-handoff.md'),
+      [
+        '# PRD',
+        '',
+        'Recommend Team + Ultragoal for parallelizable durable-goal execution.',
+        'Use Ralph only for a later persistent single-owner verification/fix loop.',
+        '',
+        `Launch via omx team 3:executor ${JSON.stringify(sharedTask)}`,
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-ultragoal-team-handoff.md'), '# Test Spec\n');
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'team', {
+      task: sharedTask,
+      workerCount: 3,
+      agentType: 'executor',
+      linkedRalph: false,
+    });
+
+    assert.equal(outcome.status, 'resolved');
+    if (outcome.status !== 'resolved') {
+      throw new Error('expected Team + Ultragoal PRD to resolve a team launch hint');
+    }
+    assert.equal(outcome.hint.linkedRalph, false);
+    assert.equal(outcome.hint.workerCount, 3);
+    assert.equal(outcome.hint.agentType, 'executor');
+  });
+
+  it('keeps same-task team launch-hint selection ambiguous when the full signature repeats', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const sharedTask = 'Execute shared duplicate team handoff';
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-910-same-signature.md'),
+      [
+        '# PRD',
+        '',
+        `Launch via omx team 2:executor ${JSON.stringify(sharedTask)}`,
+        `Launch via $team 2:executor ${JSON.stringify(sharedTask)}`,
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-910-same-signature.md'), '# Test Spec\n');
+
+    const outcome = readApprovedExecutionLaunchHintOutcome(tempDir, 'team', {
+      task: sharedTask,
+      workerCount: 2,
+      agentType: 'executor',
+      linkedRalph: false,
+    });
+
+    assert.equal(outcome.status, 'ambiguous');
+  });
+
+  it('rehydrates the exact team launch hint by command when one PRD repeats the same task', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const sharedTask = 'Ship feature';
+    const primaryCommand = `omx team 2:executor ${JSON.stringify(sharedTask)}`;
+    const secondaryCommand = `$team ralph 5:debugger ${JSON.stringify(sharedTask)}`;
+    const prdPath = join(plansDir, 'prd-issue-910-command.md');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      prdPath,
+      [
+        '# Approved plan',
+        '',
+        `Launch via ${primaryCommand}`,
+        `Launch via ${secondaryCommand}`,
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-910-command.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team', {
+      prdPath,
+      task: sharedTask,
+      command: primaryCommand,
+    });
+    assert.ok(hint);
+    assert.equal(hint?.command, primaryCommand);
+    assert.equal(hint?.workerCount, 2);
+    assert.equal(hint?.agentType, 'executor');
+    assert.equal(hint?.linkedRalph, false);
+  });
+
+  it('fails closed for bare team lookups when a single plan lists multiple team launch hints', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-910-bare.md'),
+      [
+        '# PRD',
+        '',
+        'Launch via omx team 2:executor "Execute alpha"',
+        'Launch via omx team 5:debugger "Execute beta"',
+      ].join('\n'),
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-910-bare.md'), '# Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+    assert.equal(hint, null);
+  });
+
+
+  it('attaches bounded approved repository context from a matching latest-plan sidecar', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-issue-2039.md'),
+      '# PRD\n\nLaunch via omx team 3:executor "Execute approved issue 2039 plan"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-issue-2039.md'), '# Test Spec\n');
+    await writeFile(join(plansDir, 'repo-context-issue-2039.md'), 'Key files: src/planning/artifacts.ts\n'.repeat(120));
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+
+    assert.ok(hint?.repositoryContextSummary);
+    assert.equal(hint.repositoryContextSummary.sourcePath, join(plansDir, 'repo-context-issue-2039.md'));
+    assert.match(hint.repositoryContextSummary.content, /Key files: src\/planning\/artifacts\.ts/);
+    assert.equal(hint.repositoryContextSummary.truncated, true);
+    assert.ok(hint.repositoryContextSummary.content.split('\n').length <= 80);
+  });
+
+  it('prefers exact timestamped repository context sidecars for timestamped PRDs', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-20260427T153100Z-alpha.md'),
+      '# Alpha\n\nLaunch via omx team 2:executor "Execute alpha"\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-20260427T153100Z-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(plansDir, 'repo-context-alpha.md'), 'stale alpha context\n');
+    await writeFile(
+      join(plansDir, 'repo-context-20260427T153100Z-alpha.md'),
+      'fresh alpha context\n',
+    );
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+
+    assert.ok(hint?.repositoryContextSummary);
+    assert.equal(
+      hint.repositoryContextSummary.sourcePath,
+      join(plansDir, 'repo-context-20260427T153100Z-alpha.md'),
+    );
+    assert.equal(hint.repositoryContextSummary.content, 'fresh alpha context');
+  });
+
+  it('does not attach stale repository context from a different PRD slug', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-alpha.md'), '# Alpha\n\nLaunch via omx team 2:executor "Execute alpha"\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test Spec\n');
+    await writeFile(join(plansDir, 'repo-context-alpha.md'), 'stale alpha context\n');
+    await writeFile(join(plansDir, 'prd-zeta.md'), '# Zeta\n\nLaunch via omx team 3:executor "Execute zeta"\n');
+    await writeFile(join(plansDir, 'test-spec-zeta.md'), '# Zeta Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'team');
+
+    assert.ok(hint);
+    assert.equal(hint.task, 'Execute zeta');
+    assert.equal(hint.repositoryContextSummary, undefined);
+  });
+
+  it('falls back to an inline approved repository context section when no sidecar exists', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(
+      join(plansDir, 'prd-inline.md'),
+      '# PRD\n\nLaunch via omx ralph "Execute inline"\n\n## Approved Repository Context Summary\n\n- Reuse src/cli/ralph.ts.\n\n## Verification\nRun tests.\n',
+    );
+    await writeFile(join(plansDir, 'test-spec-inline.md'), '# Inline Test Spec\n');
+
+    const hint = readApprovedExecutionLaunchHint(tempDir, 'ralph');
+
+    assert.ok(hint?.repositoryContextSummary);
+    assert.equal(hint.repositoryContextSummary.sourcePath, join(plansDir, 'prd-inline.md'));
+    assert.equal(hint.repositoryContextSummary.content, '- Reuse src/cli/ralph.ts.');
+  });
+
+  it('surfaces deep-interview specs for downstream traceability', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    const specsDir = join(tempDir, '.omx', 'specs');
+    await mkdir(plansDir, { recursive: true });
+    await mkdir(specsDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-issue-827.md'), '# PRD\n');
+    await writeFile(join(plansDir, 'test-spec-issue-827.md'), '# Test Spec\n');
+    await writeFile(join(specsDir, 'deep-interview-issue-827.md'), '# Deep Interview Spec\n');
+
+    const artifacts = readPlanningArtifacts(tempDir);
+    assert.equal(isPlanningComplete(artifacts), true);
+    assert.deepEqual(
+      artifacts.deepInterviewSpecPaths.map((file) => file.split('/').pop()),
+      ['deep-interview-issue-827.md'],
+    );
+  });
+
+  it('loads a matching Team DAG sidecar for the latest PRD slug', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-alpha.md'), '# Alpha\n');
+    await writeFile(join(plansDir, 'test-spec-alpha.md'), '# Alpha Test\n');
+    await writeFile(join(plansDir, 'team-dag-alpha.json'), JSON.stringify({
+      schema_version: 1,
+      nodes: [{ id: 'impl', subject: 'Implement alpha', description: 'Implement alpha DAG' }],
+    }));
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.source, 'sidecar');
+    assert.equal(result.planSlug, 'alpha');
+    assert.equal(result.dag?.nodes[0]?.id, 'impl');
+  });
+
+  it('prefers exact timestamped Team DAG sidecars for timestamped PRDs', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-20260427T153100Z-alpha.md'), '# Alpha\n');
+    await writeFile(join(plansDir, 'test-spec-20260427T153100Z-alpha.md'), '# Alpha Test\n');
+    await writeFile(join(plansDir, 'team-dag-alpha.json'), '{"source":"stale"}\n');
+    await writeFile(
+      join(plansDir, 'team-dag-20260427T153100Z-alpha.json'),
+      '{"source":"fresh"}\n',
+    );
+
+    const resolution = readTeamDagArtifactResolution(tempDir);
+
+    assert.equal(resolution.source, 'json-sidecar');
+    assert.equal(resolution.planSlug, '20260427T153100Z-alpha');
+    assert.equal(
+      resolution.artifactPath,
+      join(plansDir, 'team-dag-20260427T153100Z-alpha.json'),
+    );
+    assert.equal(resolution.content, '{"source":"fresh"}\n');
+    assert.deepEqual(resolution.warnings, []);
+  });
+
+  it('does not overmatch sidecars for a different slug prefix', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-foo.md'), '# Foo\n');
+    await writeFile(join(plansDir, 'test-spec-foo.md'), '# Foo Test\n');
+    await writeFile(join(plansDir, 'team-dag-foobar.json'), JSON.stringify({
+      schema_version: 1,
+      nodes: [{ id: 'wrong', subject: 'Wrong slug', description: 'Must not match foo' }],
+    }));
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.source, 'none');
+    assert.equal(result.planSlug, 'foo');
+    assert.equal(result.dag, null);
+  });
+
+  it('prefers sidecar DAG over embedded PRD Team DAG Handoff block', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-beta.md'), '# Beta\n\n## Team DAG Handoff\n```json\n{"schema_version":1,"nodes":[{"id":"markdown","subject":"Markdown"}]}\n```\n');
+    await writeFile(join(plansDir, 'test-spec-beta.md'), '# Beta Test\n');
+    await writeFile(join(plansDir, 'team-dag-beta.json'), JSON.stringify({
+      schema_version: 1,
+      nodes: [{ id: 'sidecar', subject: 'Sidecar wins', description: 'Sidecar DAG' }],
+    }));
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.source, 'sidecar');
+    assert.equal(result.dag?.nodes[0]?.id, 'sidecar');
+  });
+
+  it('reports multiple matching sidecars and chooses the lexicographically latest', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-gamma.md'), '# Gamma\n');
+    await writeFile(join(plansDir, 'test-spec-gamma.md'), '# Gamma Test\n');
+    await writeFile(join(plansDir, 'team-dag-gamma-a.json'), JSON.stringify({
+      schema_version: 1,
+      nodes: [{ id: 'old', subject: 'Old', description: 'Old DAG' }],
+    }));
+    await writeFile(join(plansDir, 'team-dag-gamma-z.json'), JSON.stringify({
+      schema_version: 1,
+      nodes: [{ id: 'new', subject: 'New', description: 'New DAG' }],
+    }));
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.warning, 'multiple_matches');
+    assert.equal(result.dag?.nodes[0]?.id, 'new');
+  });
+
+
+  it('does not load a Team DAG handoff when the latest PRD lacks a matching test spec', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-epsilon.md'), '# Epsilon\n');
+    await writeFile(join(plansDir, 'test-spec-other.md'), '# Other Test\n');
+    await writeFile(join(plansDir, 'team-dag-epsilon.json'), JSON.stringify({
+      schema_version: 1,
+      nodes: [{ id: 'impl', subject: 'Implement epsilon', description: 'Implement epsilon DAG' }],
+    }));
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.source, 'none');
+    assert.equal(result.dag, null);
+    assert.equal(result.error, 'missing_matching_test_spec');
+  });
+
+  it('rejects a Team DAG sidecar whose declared plan_slug does not match the latest PRD', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-zeta.md'), '# Zeta\n');
+    await writeFile(join(plansDir, 'test-spec-zeta.md'), '# Zeta Test\n');
+    await writeFile(join(plansDir, 'team-dag-zeta.json'), JSON.stringify({
+      schema_version: 1,
+      plan_slug: 'other',
+      nodes: [{ id: 'impl', subject: 'Implement zeta', description: 'Implement zeta DAG' }],
+    }));
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.source, 'sidecar');
+    assert.equal(result.dag, null);
+    assert.match(result.error ?? '', /does not match/);
+  });
+
+  it('fails open with explicit parse error metadata for malformed DAG sidecars', async () => {
+    const plansDir = join(tempDir, '.omx', 'plans');
+    await mkdir(plansDir, { recursive: true });
+    await writeFile(join(plansDir, 'prd-delta.md'), '# Delta\n');
+    await writeFile(join(plansDir, 'test-spec-delta.md'), '# Delta Test\n');
+    await writeFile(join(plansDir, 'team-dag-delta.json'), '{bad json');
+
+    const result = readTeamDagHandoffForLatestPlan(tempDir);
+    assert.equal(result.source, 'sidecar');
+    assert.equal(result.dag, null);
+    assert.match(result.error ?? '', /JSON|property/i);
+  });
+
+});

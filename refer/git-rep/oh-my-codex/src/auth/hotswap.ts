@@ -1,0 +1,348 @@
+import { spawn } from "child_process";
+import { dirname } from "path";
+import { homedir } from "os";
+import { buildPlatformCommandSpec, classifySpawnError } from "../utils/platform-command.js";
+import { readAuthConfig } from "./config.js";
+import { isQuotaError } from "./quota-detector.js";
+import { redactAuthSecrets } from "./redact.js";
+import { buildRotationPlan, nextSlotAfter } from "./rotation.js";
+import { findLatestRolloutSession } from "./sessions.js";
+import { listSlots, markSlotQuota, readAuthMetadata, useSlot } from "./storage.js";
+import { isSessionPointerLaunchAbort } from "../hooks/session.js";
+import type { LaunchSessionBinding } from "../hooks/session.js";
+
+export interface PreparedHotswapCodexHome {
+  codexHomeOverride?: string;
+  sqliteHomeOverride?: string;
+  projectLocalCodexHomeForCleanup?: string;
+  runtimeCodexHomeForCleanup?: string;
+}
+
+export type HotswapCompletionResult =
+  | { kind: "success" }
+  | { kind: "degraded-success"; operations: readonly string[] }
+  | { kind: "failure"; operation: string; error: unknown };
+
+export interface HotswapLifecycle {
+  prepareCodexHomeForLaunch: (cwd: string, sessionId: string, env: NodeJS.ProcessEnv) => Promise<PreparedHotswapCodexHome>;
+  preLaunch: (
+    cwd: string,
+    sessionId: string,
+    notifyTempContract: unknown,
+    codexHomeOverride: string | undefined,
+    enableNotifyFallbackAuthority: boolean,
+    worktreeDirty: boolean,
+  ) => Promise<{ binding: LaunchSessionBinding; completion: HotswapCompletionResult }>;
+  postLaunch: (
+    cwd: string,
+    sessionId: string,
+    binding: LaunchSessionBinding,
+    codexHomeOverride: string | undefined,
+    enableNotifyFallbackAuthority: boolean,
+    projectLocalCodexHomeForCleanup?: string,
+  ) => Promise<void>;
+  cleanupRuntimeCodexHome: (runtimeCodexHome?: string, projectCodexHome?: string) => Promise<void>;
+  normalizeCodexLaunchArgs: (args: string[]) => string[];
+  injectModelInstructionsBypassArgs: (cwd: string, args: string[], env: NodeJS.ProcessEnv, defaultFilePath?: string) => string[];
+  sessionModelInstructionsPath: (cwd: string, sessionId: string) => string;
+  resolveOmxRootForLaunch: (cwd: string, env: NodeJS.ProcessEnv) => string | undefined;
+  resolveNotifyTempContract: (args: string[], env: NodeJS.ProcessEnv) => {
+    contract: unknown;
+    passthroughArgs: string[];
+  };
+}
+
+export interface HotswapOptions {
+  cwd?: string;
+  env?: NodeJS.ProcessEnv;
+  home?: string;
+  argv: string[];
+  lifecycle: HotswapLifecycle;
+}
+
+export interface CodexRunResult {
+  status: number;
+  signal: NodeJS.Signals | null;
+  stderr: string;
+}
+
+export function stripHotswapArg(args: string[]): string[] {
+  const endOfOptionsIndex = args.indexOf("--");
+  const omxArgs = endOfOptionsIndex === -1 ? args : args.slice(0, endOfOptionsIndex);
+  const suffix = endOfOptionsIndex === -1 ? [] : args.slice(endOfOptionsIndex);
+  return [
+    ...omxArgs.filter((arg) => arg !== "--hotswap"),
+    ...suffix,
+  ];
+}
+
+function stripLeaderLaunchPolicyArgs(args: string[]): string[] {
+  const endOfOptionsIndex = args.indexOf("--");
+  const omxArgs = endOfOptionsIndex === -1 ? args : args.slice(0, endOfOptionsIndex);
+  const suffix = endOfOptionsIndex === -1 ? [] : args.slice(endOfOptionsIndex);
+  return [
+    ...omxArgs.filter((arg) => arg !== "--direct" && arg !== "--tmux"),
+    ...suffix,
+  ];
+}
+
+function isAuthInvalidationError(stderr: string | undefined): boolean {
+  return /token_invalidated|refresh_token_invalidated|authentication token has been invalidated/i.test(stderr || "");
+}
+
+async function runCodexDirect(
+  cwd: string,
+  args: string[],
+  env: NodeJS.ProcessEnv,
+): Promise<CodexRunResult> {
+  const spec = buildPlatformCommandSpec("codex", args, process.platform, env);
+  return await new Promise((resolve, reject) => {
+    const child = spawn(spec.command, spec.args, {
+      cwd,
+      env,
+      stdio: ["inherit", "inherit", "pipe"],
+      ...(process.platform === "win32" ? { windowsHide: true } : {}),
+    });
+    let stderr = "";
+    child.stderr?.on("data", (chunk: Buffer) => {
+      const text = redactAuthSecrets(chunk.toString("utf-8"));
+      stderr += text;
+      process.stderr.write(text);
+    });
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      const kind = classifySpawnError(error);
+      if (kind === "missing") {
+        reject(new Error("failed to launch codex: executable not found in PATH"));
+      } else if (kind === "blocked") {
+        reject(new Error(`failed to launch codex: executable is blocked (${error.code || "blocked"})`));
+      } else {
+        reject(error);
+      }
+    });
+    child.on("close", (status, signal) => {
+      resolve({ status: typeof status === "number" ? status : 1, signal, stderr });
+    });
+  });
+}
+
+export type CodexGlobalOptionValueArity = "single" | "variadic";
+
+export const CODEX_GLOBAL_OPTIONS_WITH_SPLIT_VALUE = new Map<string, CodexGlobalOptionValueArity>([
+  ["-a", "single"],
+  ["--ask-for-approval", "single"],
+  ["-c", "single"],
+  ["--config", "single"],
+  ["-C", "single"],
+  ["--cd", "single"],
+  ["-i", "variadic"],
+  ["--image", "variadic"],
+  ["-m", "single"],
+  ["--model", "single"],
+  ["-p", "single"],
+  ["--profile", "single"],
+  ["-s", "single"],
+  ["--sandbox", "single"],
+  ["--add-dir", "single"],
+  ["--disable", "single"],
+  ["--enable", "single"],
+  ["--local-provider", "single"],
+  ["--remote", "single"],
+  ["--remote-auth-token-env", "single"],
+]);
+
+export function resolveCodexGlobalOptionValue(
+  arg: string,
+): { valueArity: CodexGlobalOptionValueArity; attached: boolean } | undefined {
+  const exactArity = CODEX_GLOBAL_OPTIONS_WITH_SPLIT_VALUE.get(arg);
+  if (exactArity) return { valueArity: exactArity, attached: false };
+
+  if (arg.startsWith("--")) {
+    const equalsIndex = arg.indexOf("=");
+    if (equalsIndex > 2) {
+      const inlineArity = CODEX_GLOBAL_OPTIONS_WITH_SPLIT_VALUE.get(arg.slice(0, equalsIndex));
+      if (inlineArity) return { valueArity: inlineArity, attached: true };
+    }
+    return undefined;
+  }
+
+  for (const [option, valueArity] of CODEX_GLOBAL_OPTIONS_WITH_SPLIT_VALUE) {
+    if (option.length === 2 && option.startsWith("-") && arg.startsWith(option) && arg.length > 2) {
+      return { valueArity, attached: true };
+    }
+  }
+  return undefined;
+}
+
+const EXPLICIT_SESSION_RESUME_SELECTORS = new Set([
+  "--last",
+  "--all",
+  "--include-non-interactive",
+]);
+
+export function buildResumeArgsWithPreservedFlags(originalArgs: string[], sessionId: string): string[] {
+  const endOfOptionsIndex = originalArgs.indexOf("--");
+  const prefix = endOfOptionsIndex === -1 ? originalArgs : originalArgs.slice(0, endOfOptionsIndex);
+  const suffix = endOfOptionsIndex === -1 ? [] : originalArgs.slice(endOfOptionsIndex);
+  const preserved: string[] = [];
+
+  for (let index = 0; index < prefix.length; index += 1) {
+    const arg = prefix[index];
+    if (EXPLICIT_SESSION_RESUME_SELECTORS.has(arg)) continue;
+    const optionValue = resolveCodexGlobalOptionValue(arg);
+    if (optionValue) {
+      preserved.push(arg);
+      if (optionValue.attached) continue;
+      if (optionValue.valueArity === "variadic") {
+        while (index + 1 < prefix.length && !prefix[index + 1]!.startsWith("-")) {
+          preserved.push(prefix[index + 1]!);
+          index += 1;
+        }
+      } else if (index + 1 < prefix.length) {
+        preserved.push(prefix[index + 1]!);
+        index += 1;
+      }
+      continue;
+    }
+
+    if (arg.startsWith("-")) preserved.push(arg);
+  }
+
+  return ["resume", sessionId, ...preserved, ...suffix];
+}
+
+function codexHomeFromAuthPath(authPath: string): string {
+  return dirname(authPath);
+}
+
+function hotswapSessionId(): string {
+  return `omx-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
+export async function runAuthHotswap(options: HotswapOptions): Promise<number> {
+  const cwd = options.cwd ?? process.cwd();
+  const env = options.env ?? process.env;
+  const home = options.home ?? homedir();
+  const lifecycle = options.lifecycle;
+  const rawArgs = stripHotswapArg(options.argv);
+  const notifyTempResult = lifecycle.resolveNotifyTempContract(rawArgs, env);
+  const normalizedArgs = lifecycle.normalizeCodexLaunchArgs(
+    stripLeaderLaunchPolicyArgs(notifyTempResult.passthroughArgs),
+  );
+  const config = await readAuthConfig(cwd, home);
+  const slots = await listSlots(home);
+  if (slots.length === 0) {
+    process.stderr.write("[omx auth] no slots configured; run `omx auth add <slot>` first.\n");
+    return 1;
+  }
+
+  const sessionId = hotswapSessionId();
+  const prepared = await lifecycle.prepareCodexHomeForLaunch(cwd, sessionId, env);
+  const childCodexHome = prepared.codexHomeOverride || (env.CODEX_HOME && env.CODEX_HOME.trim()) || `${home}/.codex`;
+  const liveAuthPath = `${childCodexHome}/auth.json`;
+  const metadata = await readAuthMetadata(home);
+  const plan = buildRotationPlan(slots, config, metadata.currentSlot);
+  let currentSlot = plan.order[0];
+  if (!currentSlot) {
+    process.stderr.write("[omx auth] no slots configured; run `omx auth add <slot>` first.\n");
+    return 1;
+  }
+
+  const exhausted = new Set<string>();
+  let resumeArgs: string[] | null = null;
+  let skipPostLaunch = false;
+  let launchEstablished = false;
+  let launch: { binding: LaunchSessionBinding; completion: HotswapCompletionResult } | undefined;
+  try {
+    try {
+      launch = await lifecycle.preLaunch(cwd, sessionId, notifyTempResult.contract, prepared.codexHomeOverride, true, false);
+      if (launch.completion.kind === "failure") throw launch.completion.error;
+    launchEstablished = true;
+    } catch (err) {
+      if (isSessionPointerLaunchAbort(err)) {
+        skipPostLaunch = true;
+        process.stderr.write(`[omx auth] session pointer launch aborted: ${err.code}\n`);
+      }
+      throw err;
+    }
+    await useSlot(currentSlot, liveAuthPath, home);
+    const baseEnv: NodeJS.ProcessEnv = {
+      ...env,
+      ...(prepared.codexHomeOverride ? { CODEX_HOME: prepared.codexHomeOverride } : {}),
+      ...(prepared.sqliteHomeOverride ? { CODEX_SQLITE_HOME: prepared.sqliteHomeOverride } : {}),
+    };
+    const omxRoot = lifecycle.resolveOmxRootForLaunch(cwd, env);
+    if (omxRoot) baseEnv.OMX_ROOT = omxRoot;
+
+    for (let attempt = 0; attempt < plan.order.length; attempt++) {
+      const attemptArgs = lifecycle.injectModelInstructionsBypassArgs(
+        cwd,
+        resumeArgs ?? normalizedArgs,
+        baseEnv,
+        lifecycle.sessionModelInstructionsPath(cwd, sessionId),
+      );
+      process.stderr.write(`[omx auth] using slot ${currentSlot}\n`);
+      const result = await runCodexDirect(cwd, attemptArgs, baseEnv);
+      if (result.status === 0) return 0;
+      const authInvalid = isAuthInvalidationError(result.stderr);
+      const quota = isQuotaError({ status: result.status, signal: result.signal, stderr: result.stderr }, config);
+      if (!quota && !authInvalid) {
+        return result.status || 1;
+      }
+
+      if (quota) await markSlotQuota(currentSlot, home);
+      exhausted.add(currentSlot);
+      if (plan.mode === "manual") {
+        const reason = authInvalid ? "token invalidated" : "quota detected";
+        process.stderr.write(
+          `[omx auth] ${reason} for slot ${currentSlot}; rotation=manual, run \`omx auth use <slot>\` or \`omx auth add ${currentSlot} --device-auth\`.\n`,
+        );
+        return 1;
+      }
+
+      const next = nextSlotAfter(plan.order, currentSlot, exhausted);
+      if (!next) {
+        process.stderr.write(`[omx auth] all slots exhausted or invalid: ${[...exhausted].join(", ")}\n`);
+        return 1;
+      }
+      if (authInvalid) {
+        process.stderr.write(
+          `[omx auth] token invalidated for slot ${currentSlot}; rotating to slot ${next}. Refresh it later with \`omx auth add ${currentSlot} --device-auth\`.\n`,
+        );
+        currentSlot = next;
+        await useSlot(currentSlot, liveAuthPath, home);
+        continue;
+      }
+      const latest = await findLatestRolloutSession(codexHomeFromAuthPath(liveAuthPath), home);
+      if (!latest) {
+        process.stderr.write("[omx auth] quota detected but no Codex rollout session was found to resume.\n");
+        return 1;
+      }
+      currentSlot = next;
+      await useSlot(currentSlot, liveAuthPath, home);
+      resumeArgs = buildResumeArgsWithPreservedFlags(normalizedArgs, latest.id);
+      process.stderr.write(`[omx auth] quota detected; rotating to slot ${currentSlot} and resuming ${latest.id}\n`);
+    }
+
+    process.stderr.write(`[omx auth] all slots exhausted: ${plan.order.join(", ")}\n`);
+    return 1;
+  } catch (err) {
+    process.stderr.write(`[omx auth] ${redactAuthSecrets(err)}\n`);
+    return 1;
+  } finally {
+    let terminalCleanupFailed = false;
+    if (launchEstablished && !skipPostLaunch && launch) {
+      try {
+        await lifecycle.postLaunch(cwd, sessionId, launch.binding, prepared.codexHomeOverride, true, prepared.projectLocalCodexHomeForCleanup);
+      } catch (err) {
+        terminalCleanupFailed = true;
+        process.stderr.write(`[omx auth] postLaunch failed: ${redactAuthSecrets(err)}\n`);
+      }
+    }
+    try {
+      await lifecycle.cleanupRuntimeCodexHome(prepared.runtimeCodexHomeForCleanup, prepared.projectLocalCodexHomeForCleanup);
+    } catch (err) {
+      process.stderr.write(`[omx auth] cleanup warning: ${redactAuthSecrets(err)}\n`);
+    }
+    if (terminalCleanupFailed) return 1;
+  }
+}

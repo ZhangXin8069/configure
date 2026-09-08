@@ -1,0 +1,889 @@
+/**
+ * OMX HUD - State file readers
+ *
+ * Reads .omx/state/ files to build HUD render context.
+ */
+
+import { open, readFile, readdir, stat } from 'fs/promises';
+import { execFileSync } from 'child_process';
+import { join, basename } from 'path';
+import { findGitLayout, readGitLayoutFile } from '../utils/git-layout.js';
+import { resolveOmxDisplayVersionSync } from '../utils/version.js';
+import { getDefaultBridge, isBridgeEnabled } from '../runtime/bridge.js';
+import type { RuntimeSnapshot } from '../runtime/bridge.js';
+import { getBaseStateDir, getStateFilePath, readCurrentSessionId, resolveRuntimeStateScope } from '../mcp/state-paths.js';
+import { teamReadPhase as readTeamPhase } from '../team/team-ops.js';
+
+import { listActiveSkills, readVisibleSkillActiveStateForStateDir } from '../state/skill-active.js';
+import {
+  readSubagentTrackingState,
+  summarizeSubagentSession,
+  type SubagentTrackingState,
+} from '../subagents/tracker.js';
+import type {
+  RalphStateForHud,
+  UltragoalStateForHud,
+  UltraworkStateForHud,
+  AutopilotStateForHud,
+  RalplanStateForHud,
+  DeepInterviewStateForHud,
+  AutoresearchStateForHud,
+  CodeReviewStateForHud,
+  UltraqaStateForHud,
+  TeamStateForHud,
+  HudMetrics,
+  HudNotifyState,
+  HudConfig,
+  HudRenderContext,
+  SessionStateForHud,
+  ResolvedHudConfig,
+  HudGitDisplay,
+  LateGateHudSource,
+  GuardexFinishStateForHud,
+} from './types.js';
+import { DEFAULT_HUD_CONFIG } from './types.js';
+
+async function readJsonFile<T>(path: string): Promise<T | null> {
+  try {
+    const content = await readFile(path, 'utf-8');
+    return JSON.parse(content) as T;
+  } catch {
+    return null;
+  }
+}
+
+async function readAuthoritativeModeState<T>(cwd: string, mode: string): Promise<T | null> {
+  const sessionId = await readCurrentSessionId(cwd);
+  return readJsonFile<T>(getStateFilePath(`${mode}-state.json`, cwd, sessionId));
+}
+
+async function readCurrentAutopilotState(cwd: string): Promise<AutopilotStateForHud | null> {
+  return readJsonFile<AutopilotStateForHud>(join(getBaseStateDir(cwd), 'current-autopilot.json'));
+}
+
+function isValidPreset(value: unknown): value is ResolvedHudConfig['preset'] {
+  return value === 'minimal' || value === 'focused' || value === 'full';
+}
+
+function isValidGitDisplay(value: unknown): value is HudGitDisplay {
+  return value === 'branch' || value === 'repo-branch';
+}
+
+function sanitizeOptionalString(value: unknown): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+const GUARDEX_FINISH_TAIL_BYTES = 64 * 1024;
+const GUARDEX_FINISH_MAX_CANDIDATES = 32;
+const GUARDEX_FINISH_MAX_AGE_MS = 24 * 60 * 60 * 1_000;
+const GUARDEX_FINISH_RUN_ID_RE = /^finish-[^-]+-(\d+)-/;
+const GUARDEX_FINISH_FILE_RE = /^finish-([0-9a-z]+)-\d+-[^/]+\.jsonl$/;
+const GUARDEX_TERMINAL_STATES = new Set(['failed', 'finished']);
+
+interface GuardexFinishStateDependencies {
+  statFile?: (path: string) => Promise<{ mtimeMs: number }>;
+}
+
+interface RawGuardexFinishEvent {
+  schemaVersion?: unknown;
+  runId?: unknown;
+  timestamp?: unknown;
+  stage?: unknown;
+  state?: unknown;
+  index?: unknown;
+  total?: unknown;
+  label?: unknown;
+}
+
+function isProcessAlive(pid: number): boolean {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return (error as NodeJS.ErrnoException).code === 'EPERM';
+  }
+}
+
+async function readFileTail(path: string): Promise<string> {
+  const handle = await open(path, 'r');
+  try {
+    const fileStat = await handle.stat();
+    const length = Math.min(fileStat.size, GUARDEX_FINISH_TAIL_BYTES);
+    if (length <= 0) return '';
+    const buffer = Buffer.alloc(length);
+    await handle.read(buffer, 0, length, fileStat.size - length);
+    return buffer.toString('utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+function normalizeGuardexFinishEvent(raw: RawGuardexFinishEvent): GuardexFinishStateForHud | null {
+  if (raw.schemaVersion !== 1) return null;
+  const runId = sanitizeOptionalString(raw.runId);
+  const timestamp = sanitizeOptionalString(raw.timestamp);
+  const stage = sanitizeOptionalString(raw.stage);
+  const state = sanitizeOptionalString(raw.state);
+  const label = sanitizeOptionalString(raw.label);
+  const index = Number(raw.index);
+  const total = Number(raw.total);
+  const pidMatch = runId?.match(GUARDEX_FINISH_RUN_ID_RE);
+  const pid = Number(pidMatch?.[1]);
+  const updatedAt = timestamp ? Date.parse(timestamp) : Number.NaN;
+
+  if (!runId || !timestamp || !stage || stage === 'finish' || !state || state === 'pending' || !label) return null;
+  if (!Number.isSafeInteger(index) || index <= 0 || !Number.isSafeInteger(total) || total <= 0 || index > total) return null;
+  if (!Number.isSafeInteger(pid) || pid <= 0 || !isProcessAlive(pid)) return null;
+  if (!Number.isFinite(updatedAt) || Date.now() - updatedAt > GUARDEX_FINISH_MAX_AGE_MS) return null;
+  if (GUARDEX_TERMINAL_STATES.has(state)) return null;
+
+  return {
+    active: true,
+    stage: stage.slice(0, 40),
+    state: state.slice(0, 40),
+    index,
+    total,
+    label: label.slice(0, 80),
+    updatedAt: timestamp,
+  };
+}
+
+async function readGuardexFinishFile(path: string): Promise<GuardexFinishStateForHud | null> {
+  try {
+    const lines = (await readFileTail(path)).split('\n');
+    for (let index = lines.length - 1; index >= 0; index -= 1) {
+      const line = lines[index]?.trim();
+      if (!line) continue;
+      try {
+        const event = JSON.parse(line) as RawGuardexFinishEvent;
+        const state = normalizeGuardexFinishEvent(event);
+        if (state) return state;
+        if (event.schemaVersion === 1 && GUARDEX_TERMINAL_STATES.has(String(event.state || ''))) return null;
+      } catch {
+        // The writer may be appending the trailing JSON line while the HUD reads it.
+      }
+    }
+  } catch {
+    // Optional observability must remain fail-open for missing or unreadable files.
+  }
+  return null;
+}
+
+/** Read the newest active GitGuardex branch-finish event stream. */
+export async function readGuardexFinishState(
+  cwd: string,
+  dependencies: GuardexFinishStateDependencies = {},
+): Promise<GuardexFinishStateForHud | null> {
+  // Guardex writes to the repository-local state directory, independent of
+  // OMX session/team state-root overrides inherited by the HUD process.
+  const repoRoot = findGitLayout(cwd)?.worktreeRoot ?? cwd;
+  const directory = join(repoRoot, '.omx', 'state', 'finish-runs');
+  try {
+    const entries = await readdir(directory, { withFileTypes: true });
+    // Guardex encodes the run start time as base36 in each filename. Bound the
+    // newest run IDs before metadata reads so one HUD tick stays O(1).
+    const recentEntries = entries
+      .flatMap(entry => {
+        if (!entry.isFile()) return [];
+        const match = entry.name.match(GUARDEX_FINISH_FILE_RE);
+        if (!match) return [];
+        const startedAt = Number.parseInt(match[1], 36);
+        return Number.isSafeInteger(startedAt) ? [{ name: entry.name, startedAt }] : [];
+      })
+      .sort((left, right) => right.startedAt - left.startedAt || right.name.localeCompare(left.name))
+      .slice(0, GUARDEX_FINISH_MAX_CANDIDATES);
+    const statFile = dependencies.statFile ?? stat;
+    const candidates = await Promise.all(recentEntries
+      .map(async entry => ({
+        path: join(directory, entry.name),
+        modifiedAt: (await statFile(join(directory, entry.name))).mtimeMs,
+      })));
+    candidates.sort((left, right) => right.modifiedAt - left.modifiedAt);
+    for (const candidate of candidates) {
+      const state = await readGuardexFinishFile(candidate.path);
+      if (state) return state;
+    }
+  } catch {
+    // GitGuardex is optional; repos without its state directory render normally.
+  }
+  return null;
+}
+
+export function normalizeHudConfig(raw: HudConfig | null | undefined): ResolvedHudConfig {
+  const normalized: ResolvedHudConfig = {
+    preset: DEFAULT_HUD_CONFIG.preset,
+    git: {
+      ...DEFAULT_HUD_CONFIG.git,
+    },
+    statusLine: {
+      preset: DEFAULT_HUD_CONFIG.statusLine.preset,
+    },
+    guardex: {
+      enabled: DEFAULT_HUD_CONFIG.guardex?.enabled === true,
+    },
+  };
+
+  if (!raw || typeof raw !== 'object') return normalized;
+
+  if (isValidPreset(raw.preset)) {
+    normalized.preset = raw.preset;
+  }
+
+  if (raw.git && typeof raw.git === 'object') {
+    if (isValidGitDisplay(raw.git.display)) {
+      normalized.git.display = raw.git.display;
+    }
+
+    const remoteName = sanitizeOptionalString(raw.git.remoteName);
+    if (remoteName) normalized.git.remoteName = remoteName;
+
+    const repoLabel = sanitizeOptionalString(raw.git.repoLabel);
+    if (repoLabel) normalized.git.repoLabel = repoLabel;
+  }
+
+  if (raw.statusLine && typeof raw.statusLine === 'object') {
+    if (isValidPreset(raw.statusLine.preset)) {
+      normalized.statusLine.preset = raw.statusLine.preset;
+    }
+  }
+
+  if (raw.guardex && typeof raw.guardex === 'object' && typeof raw.guardex.enabled === 'boolean') {
+    normalized.guardex = { enabled: raw.guardex.enabled };
+  }
+
+  return normalized;
+}
+
+interface RawUltragoalGoal {
+  id?: unknown;
+  title?: unknown;
+  objective?: unknown;
+  status?: unknown;
+  steeringStatus?: unknown;
+  supersededBy?: unknown;
+}
+
+interface RawUltragoalPlan {
+  activeGoalId?: unknown;
+  aggregateCompletion?: unknown;
+  goals?: unknown;
+}
+
+const ULTRAGOAL_ACTIVE_STATUSES = new Set(['in_progress', 'review_blocked', 'needs_user_decision']);
+const ULTRAGOAL_UNRESOLVED_STATUSES = new Set(['pending', 'in_progress', 'failed', 'review_blocked', 'needs_user_decision']);
+
+type NormalizedUltragoalGoal = {
+  id: string;
+  title: string;
+  objective: string;
+  status: string;
+  steeringStatus?: string;
+  supersededBy: string[];
+};
+
+function normalizeUltragoalGoal(raw: unknown): NormalizedUltragoalGoal | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const goal = raw as RawUltragoalGoal;
+  const id = sanitizeOptionalString(goal.id);
+  const title = sanitizeOptionalString(goal.title);
+  const objective = sanitizeOptionalString(goal.objective);
+  const status = sanitizeOptionalString(goal.status);
+  const steeringStatus = sanitizeOptionalString(goal.steeringStatus);
+  if (!id || !title || !objective || !status) return null;
+  return { id, title, objective, status, steeringStatus, supersededBy: Array.isArray(goal.supersededBy) ? goal.supersededBy.map(sanitizeOptionalString).filter((id): id is string => id !== undefined) : [] };
+}
+
+function isResolvedUltragoalStatus(status: string): boolean {
+  return status === 'complete';
+}
+
+function isSupersededUltragoalGoalResolved(goal: NormalizedUltragoalGoal, goals: NormalizedUltragoalGoal[]): boolean {
+  if (goal.steeringStatus !== 'superseded') return false;
+  if (goal.supersededBy.length === 0) return false;
+  return goal.supersededBy.every((id) => {
+    const replacement = goals.find((candidate) => candidate.id === id);
+    return replacement !== undefined && isResolvedUltragoalStatus(replacement.status);
+  });
+}
+
+function isNonBlockingSupersededUltragoalGoal(goal: NormalizedUltragoalGoal, goals: NormalizedUltragoalGoal[]): boolean {
+  return isSupersededUltragoalGoalResolved(goal, goals);
+}
+function isHudCompletionBlockingUltragoalGoal(goal: NormalizedUltragoalGoal, goals: NormalizedUltragoalGoal[]): boolean {
+  if (goal.steeringStatus === 'superseded') return !isSupersededUltragoalGoalResolved(goal, goals);
+  if (goal.steeringStatus === 'blocked') return true;
+  return !isResolvedUltragoalStatus(goal.status);
+}
+
+function isHudUnresolvedUltragoalGoal(goal: NormalizedUltragoalGoal, goals: NormalizedUltragoalGoal[]): boolean {
+  return isHudCompletionBlockingUltragoalGoal(goal, goals);
+}
+
+export async function readUltragoalState(cwd: string): Promise<UltragoalStateForHud | null> {
+  const plan = await readJsonFile<RawUltragoalPlan>(join(cwd, '.omx', 'ultragoal', 'goals.json'));
+  if (!plan || typeof plan !== 'object' || !Array.isArray(plan.goals)) return null;
+
+  const goals = plan.goals.map(normalizeUltragoalGoal).filter((goal): goal is NormalizedUltragoalGoal => goal !== null);
+  if (goals.length === 0) return null;
+
+  const completed_goals = goals.filter((goal) => goal.status === 'complete').length;
+  const pending_goals = goals.filter((goal) => goal.status === 'pending' && !isNonBlockingSupersededUltragoalGoal(goal, goals)).length;
+  const in_progress_goals = goals.filter((goal) => goal.status === 'in_progress' && !isNonBlockingSupersededUltragoalGoal(goal, goals)).length;
+  const failed_goals = goals.filter((goal) => goal.status === 'failed' && !isNonBlockingSupersededUltragoalGoal(goal, goals)).length;
+  const review_blocked_goals = goals.filter((goal) => goal.status === 'review_blocked' && !isNonBlockingSupersededUltragoalGoal(goal, goals)).length;
+  const needs_user_decision_goals = goals.filter((goal) => goal.status === 'needs_user_decision' && !isNonBlockingSupersededUltragoalGoal(goal, goals)).length;
+  const unresolved_goals = goals.filter((goal) => isHudUnresolvedUltragoalGoal(goal, goals)).length;
+  const aggregateCompletion = plan.aggregateCompletion && typeof plan.aggregateCompletion === 'object' && !Array.isArray(plan.aggregateCompletion)
+    ? plan.aggregateCompletion as { status?: unknown }
+    : null;
+  const aggregateComplete = aggregateCompletion?.status === 'complete';
+  const activeGoalId = sanitizeOptionalString(plan.activeGoalId);
+  const activeGoal = (
+    (activeGoalId ? goals.find((goal) => goal.id === activeGoalId && isHudUnresolvedUltragoalGoal(goal, goals)) : undefined)
+    ?? goals.find((goal) => isHudUnresolvedUltragoalGoal(goal, goals) && ULTRAGOAL_ACTIVE_STATUSES.has(goal.status))
+    ?? goals.find((goal) => isHudUnresolvedUltragoalGoal(goal, goals) && ULTRAGOAL_UNRESOLVED_STATUSES.has(goal.status))
+  );
+  const activeIndex = activeGoal ? goals.findIndex((goal) => goal.id === activeGoal.id) : -1;
+  const complete = aggregateComplete || unresolved_goals === 0;
+  const toHudGoal = ({ goal, index }: { goal: NormalizedUltragoalGoal; index: number }) => ({
+    id: goal.id,
+    title: goal.title,
+    objective: goal.objective,
+    status: goal.status,
+    index: index + 1,
+  });
+  const nextPendingGoals = goals
+    .map((goal, index) => ({ goal, index }))
+    .filter(({ goal, index }) => index > activeIndex && goal.status === 'pending' && isHudUnresolvedUltragoalGoal(goal, goals) && goal.id !== activeGoal?.id)
+    .slice(0, 3)
+    .map(toHudGoal);
+  const orderedOngoingGoals = complete ? [] : [
+    ...(activeGoal && activeIndex >= 0 ? [toHudGoal({ goal: activeGoal, index: activeIndex })] : []),
+    ...nextPendingGoals,
+  ];
+
+  return {
+    active: !complete,
+    status: complete ? 'complete' : activeGoal?.status ?? 'active',
+    total: goals.length,
+    complete: completed_goals,
+    pending: pending_goals,
+    inProgress: in_progress_goals,
+    failed: failed_goals,
+    reviewBlocked: review_blocked_goals,
+    needsUserDecision: needs_user_decision_goals,
+    progressTotal: goals.length,
+    activeGoal: !complete && activeGoal && activeIndex >= 0 ? {
+      id: activeGoal.id,
+      title: activeGoal.title,
+      objective: activeGoal.objective,
+      status: activeGoal.status,
+      index: activeIndex + 1,
+    } : undefined,
+    ongoingGoals: orderedOngoingGoals,
+    nextGoals: nextPendingGoals,
+  };
+}
+
+export async function readRalphState(cwd: string): Promise<RalphStateForHud | null> {
+  const state = await readAuthoritativeModeState<RalphStateForHud>(cwd, 'ralph');
+  return state?.active ? state : null;
+}
+
+export async function readUltraworkState(cwd: string): Promise<UltraworkStateForHud | null> {
+  const state = await readAuthoritativeModeState<UltraworkStateForHud>(cwd, 'ultrawork');
+  return state?.active ? state : null;
+}
+
+export async function readAutopilotState(cwd: string): Promise<AutopilotStateForHud | null> {
+  const state = await readAuthoritativeModeState<AutopilotStateForHud>(cwd, 'autopilot');
+  return state?.active ? state : null;
+}
+
+export async function readRalplanState(cwd: string): Promise<RalplanStateForHud | null> {
+  const state = await readAuthoritativeModeState<RalplanStateForHud>(cwd, 'ralplan');
+  return state?.active ? state : null;
+}
+
+interface DeepInterviewRawState extends DeepInterviewStateForHud {
+  input_lock?: {
+    active?: boolean;
+  };
+}
+
+export async function readDeepInterviewState(cwd: string): Promise<DeepInterviewStateForHud | null> {
+  const state = await readAuthoritativeModeState<DeepInterviewRawState>(cwd, 'deep-interview');
+  if (!state?.active) return null;
+
+  return {
+    ...state,
+    input_lock_active: state.input_lock_active ?? state.input_lock?.active === true,
+  };
+}
+
+export async function readAutoresearchState(cwd: string): Promise<AutoresearchStateForHud | null> {
+  const state = await readAuthoritativeModeState<AutoresearchStateForHud>(cwd, 'autoresearch');
+  return state?.active ? state : null;
+}
+
+export async function readUltraqaState(cwd: string): Promise<UltraqaStateForHud | null> {
+  const state = await readAuthoritativeModeState<UltraqaStateForHud>(cwd, 'ultraqa');
+  return state?.active ? state : null;
+}
+
+export async function readTeamState(cwd: string): Promise<TeamStateForHud | null> {
+  const state = await readAuthoritativeModeState<TeamStateForHud>(cwd, 'team');
+  return state?.active ? state : null;
+}
+
+export async function readMetrics(cwd: string): Promise<HudMetrics | null> {
+  return readJsonFile<HudMetrics>(join(cwd, '.omx', 'metrics.json'));
+}
+
+export async function readHudNotifyState(cwd: string): Promise<HudNotifyState | null> {
+  const sessionId = await readCurrentSessionId(cwd);
+  const hudStatePath = getStateFilePath('hud-state.json', cwd, sessionId);
+  return readJsonFile<HudNotifyState>(hudStatePath);
+}
+
+export async function readSessionState(cwd: string): Promise<SessionStateForHud | null> {
+  const scope = await resolveRuntimeStateScope(cwd);
+  const metadata = scope.metadata;
+  return metadata?.sessionId ? {
+    session_id: metadata.sessionId,
+    started_at: typeof metadata.raw?.started_at === 'string' ? metadata.raw.started_at : '',
+  } : null;
+}
+
+export async function readHudConfig(cwd: string): Promise<ResolvedHudConfig> {
+  const repoRoot = findGitLayout(cwd)?.worktreeRoot ?? cwd;
+  const config = await readJsonFile<HudConfig>(join(repoRoot, '.omx', 'hud-config.json'));
+  return normalizeHudConfig(config);
+}
+
+export function readVersion(): string | null {
+  return resolveOmxDisplayVersionSync();
+}
+
+export type GitRunner = (cwd: string, args: string[]) => string | null;
+
+/**
+ * On Windows, read common git queries directly from .git/ files to avoid
+ * spawning console windows (conhost.exe flicker).  Falls back to execSync
+ * for non-Windows platforms or unrecognised arguments.
+ *
+ * See: https://github.com/Yeachan-Heo/oh-my-codex/issues/1100
+ */
+function runGit(cwd: string, args: string[]): string | null {
+  if (process.platform === 'win32') {
+    try {
+      const gitLayout = findGitLayout(cwd);
+      if (gitLayout) {
+        const cmd = args.join(' ');
+
+        if (cmd === 'rev-parse --abbrev-ref HEAD') {
+          const head = readGitLayoutFile(gitLayout.gitDir, 'HEAD');
+          if (head?.startsWith('ref: refs/heads/'))
+            return head.slice('ref: refs/heads/'.length);
+          return head; // detached HEAD — raw SHA
+        }
+
+        if (cmd.startsWith('remote get-url ')) {
+          const remoteName = args[2];
+          const config = readGitLayoutFile(gitLayout.gitDir, 'config')
+            ?? readGitLayoutFile(gitLayout.commonDir, 'config');
+          if (config) {
+            const escaped = remoteName.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+            const re = new RegExp(
+              `\\[remote "${escaped}"\\][\\s\\S]*?url\\s*=\\s*(.+)`,
+              'm',
+            );
+            const m = config.match(re);
+            if (m) return m[1].trim();
+          }
+          return null;
+        }
+
+        if (cmd === 'remote') {
+          const config = readGitLayoutFile(gitLayout.gitDir, 'config')
+            ?? readGitLayoutFile(gitLayout.commonDir, 'config');
+          if (config) {
+            const matches = [...config.matchAll(/\[remote "([^"]+)"\]/g)];
+            if (matches.length > 0) return matches.map((m) => m[1]).join('\n');
+          }
+          return null;
+        }
+
+        if (cmd === 'rev-parse --show-toplevel') {
+          return gitLayout.worktreeRoot;
+        }
+      }
+    } catch { /* fall through to execSync */ }
+  }
+
+  return runGitExec(cwd, args);
+}
+
+function runGitExec(cwd: string, args: string[]): string | null {
+  try {
+    return execFileSync('git', args, {
+      cwd,
+      encoding: 'utf-8',
+      timeout: 2000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      windowsHide: true,
+    }).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+function extractRepoName(remoteUrl: string | null): string | null {
+  if (!remoteUrl) return null;
+  const repoMatch = remoteUrl.match(/[:/]([^/]+?)(?:\.git)?$/);
+  return repoMatch?.[1] ?? null;
+}
+
+function readGitBranchName(cwd: string, gitRunner: GitRunner): string | null {
+  return gitRunner(cwd, ['rev-parse', '--abbrev-ref', 'HEAD']);
+}
+
+function readGitRemoteUrl(cwd: string, remoteName: string, gitRunner: GitRunner): string | null {
+  return gitRunner(cwd, ['remote', 'get-url', remoteName]);
+}
+
+function readFirstRemoteName(cwd: string, gitRunner: GitRunner): string | null {
+  const remotes = gitRunner(cwd, ['remote']);
+  if (!remotes) return null;
+
+  for (const remote of remotes.split(/\r?\n/)) {
+    const trimmed = remote.trim();
+    if (trimmed) return trimmed;
+  }
+
+  return null;
+}
+
+function readRepoBasename(cwd: string, gitRunner: GitRunner): string | null {
+  const topLevel = gitRunner(cwd, ['rev-parse', '--show-toplevel']);
+  return topLevel ? basename(topLevel) : null;
+}
+
+function resolveRepoLabel(cwd: string, config: ResolvedHudConfig, gitRunner: GitRunner): string | null {
+  if (config.git.repoLabel) return config.git.repoLabel;
+
+  if (config.git.remoteName) {
+    const repoFromConfiguredRemote = extractRepoName(readGitRemoteUrl(cwd, config.git.remoteName, gitRunner));
+    if (repoFromConfiguredRemote) return repoFromConfiguredRemote;
+  }
+
+  const repoFromOrigin = extractRepoName(readGitRemoteUrl(cwd, 'origin', gitRunner));
+  if (repoFromOrigin) return repoFromOrigin;
+
+  const firstRemoteName = readFirstRemoteName(cwd, gitRunner);
+  if (firstRemoteName) {
+    const repoFromFirstRemote = extractRepoName(readGitRemoteUrl(cwd, firstRemoteName, gitRunner));
+    if (repoFromFirstRemote) return repoFromFirstRemote;
+  }
+
+  return readRepoBasename(cwd, gitRunner);
+}
+
+export function readGitBranch(cwd: string): string | null {
+  return readGitBranchName(cwd, runGit);
+}
+
+export function buildGitBranchLabel(
+  cwd: string,
+  config: ResolvedHudConfig = DEFAULT_HUD_CONFIG,
+  gitRunner: GitRunner = runGit,
+): string | null {
+  const branch = readGitBranchName(cwd, gitRunner);
+  if (!branch) return null;
+
+  if (config.git.display === 'branch') {
+    return branch;
+  }
+
+  const repoLabel = resolveRepoLabel(cwd, config, gitRunner);
+  return repoLabel ? `${repoLabel}/${branch}` : branch;
+}
+
+const TERMINAL_OR_INACTIVE_PHASES = new Set(['complete', 'completed', 'cancelled', 'canceled', 'failed', 'inactive', 'cleared']);
+function normalizeCanonicalHudPhase(phase: string | undefined): string | undefined {
+  const raw = sanitizeOptionalString(phase);
+  if (!raw) return undefined;
+  const namespaced = raw.includes(':') ? raw.slice(raw.lastIndexOf(':') + 1) : raw;
+  const normalized = sanitizeOptionalString(namespaced)?.toLowerCase().replace(/_/g, '-');
+  if (!normalized || TERMINAL_OR_INACTIVE_PHASES.has(normalized)) return undefined;
+  if (!/^[a-z0-9][a-z0-9-]*$/.test(normalized)) return undefined;
+  return normalized;
+}
+
+
+function isMissingTerminalOrInactiveDetail(detail: { active?: boolean; current_phase?: string } | null): boolean {
+  if (!detail) return true;
+  if (detail.active !== true) return true;
+  const phase = sanitizeOptionalString(detail.current_phase)?.toLowerCase();
+  return phase ? TERMINAL_OR_INACTIVE_PHASES.has(phase) : false;
+}
+
+function shouldSurfaceCanonicalSkill(
+  canonicalSkills: Map<string, { phase?: string }>,
+  skill: string,
+  detail: { active?: boolean; current_phase?: string } | null,
+): boolean {
+  const canonicalPhase = canonicalPhaseForSkill(canonicalSkills, skill);
+  if (canonicalSkills.has(skill) && !detail && canonicalPhase) return true;
+  if (!canonicalSkills.has(skill)) return false;
+  return !isMissingTerminalOrInactiveDetail(detail);
+}
+
+function canonicalPhaseForSkill(
+  canonicalSkills: Map<string, { phase?: string }>,
+  skill: string,
+): string | undefined {
+  return canonicalSkills.get(skill)?.phase;
+}
+
+function mergePhase<T extends { active?: boolean; current_phase?: string }>(
+  detail: T | null,
+  canonicalPhase?: string,
+): T | null {
+  const normalizedCanonicalPhase = normalizeCanonicalHudPhase(canonicalPhase);
+  if (detail?.active === true) {
+    if (detail.current_phase || !normalizedCanonicalPhase) return detail;
+    return { ...detail, current_phase: normalizedCanonicalPhase };
+  }
+  if (!normalizedCanonicalPhase) return null;
+  return { active: true, current_phase: normalizedCanonicalPhase } as T;
+}
+
+async function readCanonicalTeamPhase(cwd: string, teamDetail: TeamStateForHud | null): Promise<string | undefined> {
+  const teamName = sanitizeOptionalString(teamDetail?.team_name);
+  if (!teamName) return undefined;
+  const phaseState = await readTeamPhase(teamName, cwd).catch(() => null);
+  return sanitizeOptionalString(phaseState?.current_phase);
+}
+
+function mergeTeamPhase(
+  detail: TeamStateForHud | null,
+  canonicalSkillPhase?: string,
+  canonicalTeamPhase?: string,
+): TeamStateForHud | null {
+  const canonicalPhase = canonicalTeamPhase || canonicalSkillPhase;
+  if (detail?.active === true) {
+    return canonicalPhase ? { ...detail, current_phase: canonicalPhase } : detail;
+  }
+  if (!canonicalPhase) return null;
+  return { active: true, current_phase: canonicalPhase };
+}
+
+function activeAutopilotPhase(autopilot: AutopilotStateForHud | null): string | undefined {
+  if (autopilot?.active !== true) return undefined;
+  return sanitizeOptionalString(autopilot.current_phase)?.toLowerCase().replace(/_/g, '-');
+}
+
+function isReportableCurrentAutopilotState(autopilot: AutopilotStateForHud | null): boolean {
+  if (autopilot?.active !== true) return false;
+  return sanitizeOptionalString(autopilot.current_phase) !== undefined
+    || sanitizeOptionalString(autopilot.session_id) !== undefined
+    || sanitizeOptionalString(autopilot.tmux_pane_id) !== undefined;
+}
+
+function buildStaleCurrentAutopilotState(autopilot: AutopilotStateForHud | null): AutopilotStateForHud | null {
+  if (!isReportableCurrentAutopilotState(autopilot)) return null;
+  const reportable = autopilot as AutopilotStateForHud;
+  return {
+    ...reportable,
+    active: true,
+    mode: reportable.mode ?? 'autopilot',
+    source: 'current-autopilot-stale',
+    stale_reason: 'current-autopilot-not-authoritative',
+  };
+}
+
+
+function withLateGateSource<T extends { source?: LateGateHudSource }>(
+  state: T | null,
+  source: LateGateHudSource,
+): T | null {
+  return state ? { ...state, source } : null;
+}
+
+function supervisedAutopilotStage<T extends { active?: boolean; current_phase?: string; source?: LateGateHudSource }>(
+  autopilot: AutopilotStateForHud | null,
+  stage: string,
+): T | null {
+  return activeAutopilotPhase(autopilot) === stage
+    ? { active: true, current_phase: 'autopilot', source: 'autopilot' } as T
+    : null;
+}
+
+function hasLiveCodeReviewSubagentEvidence(
+  tracking: SubagentTrackingState,
+  sessionId: string | undefined,
+): boolean {
+  if (!sessionId) return false;
+  const summary = summarizeSubagentSession(tracking, sessionId);
+  if (!summary || summary.activeSubagentThreadIds.length === 0) return false;
+  const session = tracking.sessions[sessionId];
+  if (!session) return false;
+  return summary.activeSubagentThreadIds.some((threadId) => {
+    const mode = sanitizeOptionalString(session.threads[threadId]?.mode)?.toLowerCase();
+    return mode === 'code-reviewer' || mode === 'code-review';
+  });
+}
+
+function codeReviewFromSubagentEvidence(
+  canonicalSkills: Map<string, { phase?: string }>,
+  tracking: SubagentTrackingState,
+  sessionId: string | undefined,
+  autopilot: AutopilotStateForHud | null,
+): CodeReviewStateForHud | null {
+  if (autopilot?.active === true) return null;
+  if (!hasLiveCodeReviewSubagentEvidence(tracking, sessionId)) return null;
+  const phase = normalizeCanonicalHudPhase(canonicalPhaseForSkill(canonicalSkills, 'autopilot'));
+  return {
+    active: true,
+    current_phase: phase === 'reviewing' || phase === 'review' || phase === 'code-review'
+      ? phase
+      : 'reviewing',
+    source: 'subagent-tracking',
+  };
+}
+
+/** Read all state files and build the full render context */
+export async function readAllState(cwd: string, config: ResolvedHudConfig = DEFAULT_HUD_CONFIG): Promise<HudRenderContext> {
+  const version = readVersion();
+  const gitBranch = buildGitBranchLabel(cwd, config);
+  const [metrics, hudNotify, session, currentSessionId, subagentTracking, guardexFinish] = await Promise.all([
+    readMetrics(cwd),
+    readHudNotifyState(cwd),
+    readSessionState(cwd),
+    readCurrentSessionId(cwd),
+    readSubagentTrackingState(cwd),
+    config.guardex?.enabled === true ? readGuardexFinishState(cwd) : Promise.resolve(null),
+  ]);
+  const stateDir = getBaseStateDir(cwd);
+  const canonicalSkillState = await readVisibleSkillActiveStateForStateDir(stateDir, currentSessionId);
+  const canonicalSkills = new Map(
+    listActiveSkills(canonicalSkillState).map((entry) => [entry.skill, entry] as const),
+  );
+
+
+  const [
+    ralphDetail,
+    ultragoalArtifact,
+    ultragoalDetail,
+    ultraworkDetail,
+    autopilotDetail,
+    ralplanDetail,
+    deepInterviewDetail,
+    autoresearchDetail,
+    ultraqaDetail,
+    teamDetail,
+    currentAutopilotDetail,
+  ] = await Promise.all([
+    readAuthoritativeModeState<RalphStateForHud>(cwd, 'ralph'),
+    readUltragoalState(cwd),
+    readAuthoritativeModeState<UltragoalStateForHud>(cwd, 'ultragoal'),
+    readAuthoritativeModeState<UltraworkStateForHud>(cwd, 'ultrawork'),
+    readAuthoritativeModeState<AutopilotStateForHud>(cwd, 'autopilot'),
+    readAuthoritativeModeState<RalplanStateForHud>(cwd, 'ralplan'),
+    readAuthoritativeModeState<DeepInterviewRawState>(cwd, 'deep-interview'),
+    readAuthoritativeModeState<AutoresearchStateForHud>(cwd, 'autoresearch'),
+    readAuthoritativeModeState<UltraqaStateForHud>(cwd, 'ultraqa'),
+    readAuthoritativeModeState<TeamStateForHud>(cwd, 'team'),
+    readCurrentAutopilotState(cwd),
+  ]);
+
+  const ralph = shouldSurfaceCanonicalSkill(canonicalSkills, 'ralph', ralphDetail)
+    ? mergePhase(ralphDetail?.active === true ? ralphDetail : null, canonicalPhaseForSkill(canonicalSkills, 'ralph'))
+    : null;
+  const ultragoal = ultragoalArtifact
+    ?? (shouldSurfaceCanonicalSkill(canonicalSkills, 'ultragoal', ultragoalDetail)
+      ? mergePhase(ultragoalDetail?.active === true ? ultragoalDetail : null, canonicalPhaseForSkill(canonicalSkills, 'ultragoal'))
+      : null);
+  const ultrawork = shouldSurfaceCanonicalSkill(canonicalSkills, 'ultrawork', ultraworkDetail)
+    ? mergePhase(ultraworkDetail?.active === true ? ultraworkDetail : null, canonicalPhaseForSkill(canonicalSkills, 'ultrawork'))
+    : null;
+  const autopilot = shouldSurfaceCanonicalSkill(canonicalSkills, 'autopilot', autopilotDetail)
+    ? mergePhase(autopilotDetail?.active === true ? autopilotDetail : null, canonicalPhaseForSkill(canonicalSkills, 'autopilot'))
+    : null;
+  const staleAutopilot = autopilot ? null : buildStaleCurrentAutopilotState(currentAutopilotDetail);
+  const ralplan = shouldSurfaceCanonicalSkill(canonicalSkills, 'ralplan', ralplanDetail)
+    ? mergePhase(ralplanDetail?.active === true ? ralplanDetail : null, canonicalPhaseForSkill(canonicalSkills, 'ralplan'))
+    : null;
+  const deepInterview = shouldSurfaceCanonicalSkill(canonicalSkills, 'deep-interview', deepInterviewDetail)
+    ? (() => {
+      const merged = mergePhase(
+        deepInterviewDetail?.active === true ? {
+          ...deepInterviewDetail,
+          input_lock_active: deepInterviewDetail.input_lock_active ?? deepInterviewDetail.input_lock?.active === true,
+        } : null,
+        canonicalPhaseForSkill(canonicalSkills, 'deep-interview'),
+      );
+      return merged;
+    })()
+    : null;
+  const codeReview = shouldSurfaceCanonicalSkill(canonicalSkills, 'code-review', null)
+    ? withLateGateSource(
+      mergePhase<CodeReviewStateForHud>(null, canonicalPhaseForSkill(canonicalSkills, 'code-review')),
+      'canonical-skill',
+    )
+    : supervisedAutopilotStage<CodeReviewStateForHud>(autopilot, 'code-review')
+      ?? codeReviewFromSubagentEvidence(canonicalSkills, subagentTracking, currentSessionId, autopilot);
+  const ultraqa = shouldSurfaceCanonicalSkill(canonicalSkills, 'ultraqa', ultraqaDetail)
+    ? (() => {
+      const detail = ultraqaDetail?.active === true ? ultraqaDetail : null;
+      const merged = mergePhase(detail, canonicalPhaseForSkill(canonicalSkills, 'ultraqa'));
+      return detail ? merged : withLateGateSource(merged, 'canonical-skill');
+    })()
+    : supervisedAutopilotStage<UltraqaStateForHud>(autopilot, 'ultraqa');
+  const canonicalTeamPhase = await readCanonicalTeamPhase(cwd, teamDetail?.active === true ? teamDetail : null);
+  const team = shouldSurfaceCanonicalSkill(canonicalSkills, 'team', teamDetail)
+    ? mergeTeamPhase(
+      teamDetail?.active === true ? teamDetail : null,
+      canonicalPhaseForSkill(canonicalSkills, 'team'),
+      canonicalTeamPhase,
+    )
+    : null;
+  const autoresearch = shouldSurfaceCanonicalSkill(canonicalSkills, 'autoresearch', autoresearchDetail)
+    ? mergePhase(
+      autoresearchDetail?.active === true ? autoresearchDetail : null,
+      canonicalPhaseForSkill(canonicalSkills, 'autoresearch'),
+    )
+    : null;
+
+  // When the Rust runtime bridge is enabled, prefer Rust-authored snapshot
+  // for authority/backlog/readiness display over JS-inferred state.
+  let runtimeSnapshot: RuntimeSnapshot | null = null;
+  if (isBridgeEnabled()) {
+    const bridge = getDefaultBridge(stateDir);
+    runtimeSnapshot = bridge.readCompatFile<RuntimeSnapshot>('snapshot.json');
+  }
+
+  return {
+    version,
+    gitBranch,
+    ralph,
+    ultragoal,
+    ultrawork,
+    autopilot,
+    ralplan,
+    deepInterview,
+    autoresearch,
+    codeReview,
+    ultraqa,
+    team,
+    guardexFinish,
+    metrics,
+    hudNotify,
+    session,
+    runtimeSnapshot,
+    staleAutopilot,
+  };
+}
