@@ -1,0 +1,390 @@
+# Codex native hook mapping
+
+This page is the canonical answer to:
+
+> Which OMC/OMX hooks run on native Codex hooks already, which stay on runtime fallbacks, and which are not supported yet?
+
+## Install surface
+
+For plugin installs on Codex versions that report official plugin-scoped hook
+support, the packaged plugin is the hook registration surface:
+
+- `plugins/oh-my-codex/.codex-plugin/plugin.json` → points Codex at `./hooks/hooks.json`
+- `plugins/oh-my-codex/hooks/hooks.json` → registers the OMX lifecycle hook commands with `${PLUGIN_ROOT}`
+- `.codex/config.toml` → enables `[features].plugin_hooks = true` and `[features].goals = true`
+
+`omx setup` still owns the legacy/fallback native Codex artifacts for legacy
+installs and older Codex versions that do not report `plugin_hooks`:
+
+- `.codex/config.toml` → enables the installed-Codex hook flag (`[features].hooks = true`, or legacy `[features].codex_hooks = true` when that is the only reported feature) and `[features].goals = true`
+- `.codex/hooks.json` → registers the OMX-managed native hook command while preserving non-OMX hook entries already in the file
+- `.codex/config.toml` → also records `hooks.state."<hooks.json>:<event>:<group>:<handler>".trusted_hash` for the OMX-owned wrappers so recent Codex releases do not require a manual `/hooks` review for setup-managed hooks
+
+Compatibility note: Codex CLI 0.129/0.130 treats `hooks` as the canonical stable feature key and keeps `codex_hooks` only as a legacy alias. Some public hook examples may still show `[features].codex_hooks = true`; OMX-generated fallback config intentionally emits `[features].hooks = true` while setup/uninstall migration paths still accept and normalize older `codex_hooks` entries so existing user configs do not lose hook enablement.
+
+For project scope, `.gitignore` keeps generated `.codex/hooks.json` out of source control.
+`omx uninstall` removes only the OMX-managed wrapper entries from `.codex/hooks.json`; if user hooks remain, the file stays in place.
+Project launches use a session-scoped `.omx/runtime/codex-home/<session>/` mirror for Codex runtime writes; hook review/discovery tools should treat that directory as runtime mirror state and ignore its `hooks.json` surfaces rather than loading them alongside the canonical `.codex/hooks.json`.
+Project-scoped resume and search discovery include generated runtime homes under `.omx/runtime/codex-home/omx-*/sessions`: plain `omx resume` and `omx session search` in a project-scoped repo include those session sources automatically, `omx resume --project` restricts resume to generated project runtime homes, and `--codex-home <path>` is the one-shot escape hatch for both `omx resume` and `omx session search`.
+
+`omx doctor` can confirm that these files exist and are shaped correctly. It does not prove that the same shell/profile can complete an authenticated Codex request; use `codex login status` plus a real `omx exec --skip-git-repo-check -C . "Reply with exactly OMX-EXEC-OK"` smoke test for that boundary.
+
+The native hook CLI retains at most 1 MiB of stdin for parsing. It still drains
+the complete stream when that limit is exceeded so Codex can finish writing the
+event payload without receiving `EPIPE`.
+
+## Ownership split
+
+- **Plugin-scoped Codex hooks**: `plugins/oh-my-codex/hooks/hooks.json` for plugin installs on Codex versions with `[features].plugin_hooks`
+- **Legacy/fallback native Codex hooks**: `.codex/hooks.json`
+- **OMX plugin hooks**: `.omx/hooks/*.mjs`
+- **tmux/runtime fallbacks**: `omx tmux-hook`, notify-hook, derived watcher, idle/session-end reporters
+
+OMX only owns the wrapper entries that invoke `dist/scripts/codex-native-hook.js`. User-managed hook entries in the same `.codex/hooks.json` file are preserved across `omx setup` refreshes and `omx uninstall`.
+Setup-owned trust state is limited to those generated wrapper identities; user hooks and user-owned `hooks.state` entries are preserved and remain subject to Codex's normal review flow.
+
+For authority-decreasing recovery without uninstalling OMX, run one of these
+copyable commands from an external shell:
+
+```sh
+omx setup --scope user --disable-hooks
+omx setup --scope project --disable-hooks
+```
+
+The command removes only OMX-owned hook registrations and related enablement
+while preserving project `.omx` artifacts, foreign hooks, and unrelated Codex
+configuration. Re-running it is safe.
+
+## Mapping matrix
+
+| OMC / OMX surface | Native Codex source | OMX runtime target | Status | Notes |
+| --- | --- | --- | --- | --- |
+| `session-start` | `SessionStart` | `session-start` | native | Native adapter refreshes leader session bookkeeping, preserves the canonical leader scope when a native subagent `SessionStart` is detected from rollout `session_meta`, restores startup developer context, and ensures `.omx/` is gitignored at the repo root |
+| wiki startup context | `SessionStart` | `session-start` | native | Wiki session-start context can append a compact `omx_wiki/` summary when wiki pages exist; startup writes stay config-gated |
+| `keyword-detector` | `UserPromptSubmit` | `keyword-detector` | native | Persists skill activation state and can add prompt-side developer context for top-level prompts; native subagent prompt text is treated as delegated task text, so literal workflow keywords inside a child prompt do not activate nested workflow state; `$ralph` prompt routing seeds workflow state only and does not launch `omx ralph --prd ...` |
+| ultragoal bounded steering | `UserPromptSubmit` | `ultragoal` artifacts | native | Only explicit structured directives such as `OMX_ULTRAGOAL_STEER: { ... }`, `omx.ultragoal.steer: { ... }`, or `omx ultragoal steer: { ... }` are parsed; accepted/rejected/deduped attempts route through `steerUltragoal`, append `.omx/ultragoal/ledger.jsonl`, and add advisory context without changing keyword precedence |
+| `pre-tool-use` | `PreToolUse` | `pre-tool-use` | native-partial | Native behavior cautions on Bash `rm -rf dist`, blocks inspectable inline `git commit` commands until Lore-format structure + the required `Co-authored-by: OmX <omx@oh-my-codex.dev>` trailer are present only when explicitly opted in with `OMX_LORE_COMMIT_GUARD=1`, emits non-blocking document-refresh warnings for mapped staged commit changes that lack rule-scoped docs/spec refresh evidence, and blocks `close_agent` / parallel close cleanup before it starts when a fresh native subagent capacity blocker was recorded |
+| native `PreToolUse` stdout schema | `PreToolUse` | CLI stdout | native | Codex CLI 0.141.0 accepts only `systemMessage` for `PreToolUse`; the native CLI writer strips internal `decision`, `reason`, `stopReason`, `continue`, and `hookSpecificOutput` fields before stdout while preserving richer internal dispatch results for tests and non-stdout callers. |
+| `post-tool-use` | `PostToolUse` | `post-tool-use` | native-partial | Built-in Bash behavior covers command-not-found / permission-denied / missing-path guidance only from stderr or non-zero Bash results, ignores failure-looking strings from successful source/log reads, keeps MCP transport-death guidance scoped to MCP-like tool calls, and records a short-lived `.omx/state/native-subagent-capacity-blocker.json` when native subagent spawn/collab output reports `agent thread limit reached`; document-refresh commit warnings use PreToolUse advisory output, with PostToolUse reserved as a future fallback if Codex advisory semantics change |
+| Ralph/persistence stop handling | `Stop` | `stop` | native-partial | Native adapter uses the documented native Stop continuation contract (`decision: "block"` + `reason`) for active Ralph runs, emits a single JSON object on Stop stdout even for no-op Stop decisions, emits deterministic JSON continuation output if Stop dispatch fails before normal handling, no-ops immediately when the selected session pointer belongs to a foreign cwd or the Stop session is unmatched, and bounds other unusable session-pointer authorization failures to one diagnostic block per Stop replay chain so active Stop-hook replays no-op instead of looping forever |
+| imagegen continuation helper | `Stop` | `stop` | native-partial | `omx imagegen continuation <session-id> --artifact <name>` records `.omx/state/sessions/<session>/imagegen-pending.json` and queues an audited exec follow-up so built-in `image_gen` turns that must end immediately can resume Ralph visual QA/recovery at the next Stop checkpoint |
+| Autopilot continuation | `Stop` | `stop` | native-partial | Native adapter continues non-terminal autopilot sessions from active session/root mode state |
+| Ultrawork continuation | `Stop` | `stop` | native-partial | Native adapter continues non-terminal ultrawork sessions from active session/root mode state |
+| UltraQA continuation | `Stop` | `stop` | native-partial | Native adapter continues non-terminal ultraqa sessions from active session/root mode state |
+| Team-phase continuation | `Stop` | `stop` | native-partial | Native adapter treats per-team `phase.json` as canonical when deciding whether a current-session team run is still non-terminal and can re-block on later fresh Stop replies while keeping leader guidance explicit about rewriting system-generated worker auto-checkpoint commits into Lore-format final history |
+| `ralplan` skill-state continuation | `Stop` | `stop` | native-partial | Native adapter can block on active `skill-active-state.json` for `ralplan`, unless active subagents are already the real in-flight owners |
+| `deep-interview` skill-state continuation | `Stop` | `stop` | native-partial | Native adapter can block on active `skill-active-state.json` for `deep-interview`, unless active subagents are already the real in-flight owners |
+| auto-nudge continuation | `Stop` | `stop` | native-partial | Native adapter continues turns that end in a permission/stall prompt, can re-fire for later fresh replies, and suppresses auto-nudge while interview / deep-interview state is active; explicit terminal lifecycle metadata should be authoritative when present, legacy `blocked_on_user` remains a suppress-continuation compatibility signal, and `cancelled` stays internal legacy-only for user-facing lifecycle summaries |
+| team worker Stop nudge | `Stop` | `stop` | native-partial | Team worker leader nudges are lifecycle-driven: a resolved allowed native worker Stop may notify the leader through guarded delivery after the non-terminal task guard passes. Deprecated worker stall/progress environment knobs such as `OMX_TEAM_PROGRESS_STALL_MS` and `OMX_TEAM_WORKER_TURN_STALL_MS` are compatibility/test-only surfaces and must not be documented as active team-nudge tuning knobs. |
+| `ask-user-question` | none | runtime-only | runtime-fallback | No distinct Codex native hook today |
+| `PostToolUseFailure` | none | runtime-only | runtime-fallback | Fold into runtime/fallback handling until native support exists |
+| non-Bash tool interception | `PreToolUse` / `PostToolUse` when provided by Codex | native hook | native-partial | OMX stays no-op for unrelated non-Bash tools, but native subagent capacity failures and close-agent cleanup requests are handled when Codex provides those tool events |
+| code simplifier stop follow-up | none | runtime-only | runtime-fallback | Cleanup follow-up stays on runtime/fallback surfaces, not native Stop |
+| `SubagentStop` | none | runtime-only | not-supported-yet | OMC-specific lifecycle extension |
+| `session-end` | none | `session-end` | runtime-fallback | Still emitted from runtime/notify path, not native Codex hooks |
+| wiki session capture | none | `session-end` | runtime-fallback | Wiki session-log capture runs from the existing runtime session-end cleanup path, not from a native Codex hook |
+| `session-idle` | none | `session-idle` | runtime-fallback | Still emitted from runtime/notify path, not native Codex hooks |
+
+
+## PreToolUse: conductor and native-child write boundary
+
+The Main-root Conductor write guard blocks source, package, git, and substantive
+plan/spec/review edits from the leader while allowing only explicitly authorized
+workflow metadata writes.
+
+`agent_id` is the only hook-native child identity. `agent_type`, typed roles,
+prompt labels, and unofficial identity aliases are not identity or write
+authority. A leader anchor is always resolved first, so a leader payload remains
+Main-root even when Team environment variables are present. A native child with a
+non-leader `agent_id` is recognized as same-session provenance only; any mutation
+through Bash, built-in patch tools, filesystem MCP, OMX state MCP, or an
+unrecognized transport is denied with `OWNER_CONFIRMATION_REQUIRED`. Bash
+classification includes semantic mutation APIs inside actual inline runtime code,
+including Node `fs` write, remove, rename, copy, link, permission, and timestamp
+operations. The hook inspects actual `node`/`nodejs` eval operands, including ANSI-C
+quoted and attached short-option forms, and structurally resolves arbitrary finite wrapper
+chains such as nested `env` and `xargs`. It resolves explicit CommonJS or ESM `fs`
+bindings, direct and indirect mutation calls, and receiver-scoped reflected loader paths,
+including Function constructors and `process.getBuiltinModule` descriptors. Node
+`child_process` loaders remain mutation-capable. Shell-parameter, command-substitution,
+backtick eval source, computed/unsupported/reflected internal loaders, unsupported `fs`
+access, malformed source, unresolved mutation targets, and execution or sourcing of an
+uninspected script fail closed. For statically inspectable source, ordinary array/dynamic
+object reads and benign reflection do not become mutation authority through broad
+raw-command matching.
+
+Official Team worker roots may omit both `agent_id` and legacy `thread_id`.
+After Main-root exclusion, OMX preserves their established exemption only when
+the Team environment agrees with the durable worker identity, Team config, and
+current worker pane recorded under the strictly resolved Team state root. A
+leader native-session match wins before this check, and a payload with any named
+unknown or foreign identity cannot borrow the Team exemption.
+
+Known read-only MCP compatibility tools are governed by an explicit name contract,
+not a read-looking prefix heuristic. The audited contract covers filesystem/state
+reads, trace timeline/summary, code-intelligence diagnostic, symbol, hover, and
+reference queries, wiki query/lint/list/read, and project-memory/notepad read or stats
+operations. MCP wiki query/lint explicitly suppress their normal durable audit-log
+side effect on this read-only transport. Mutating siblings such as
+filesystem writes, state writes, AST replacement, wiki ingest/add/delete, and
+memory/notepad writes are not in that contract. Unknown tool names remain denied
+while the Conductor boundary is active.
+
+Planning boundaries (`ralplan`, `deep-interview`) remain fail-closed for mutation
+transports: only their documented planning artifact paths and non-deactivating
+state operations are allowed. No assignment-backed grant, prompt-derived scope,
+or child-write allowance exists in this Option C implementation.
+
+### Exact direct-cancel recovery exception
+
+The native planning/Conductor boundary retains one narrowly authenticated recovery surface: exact canonical `omx cancel` and workflow-supported `omx cancel --force`. An inherited non-empty `NODE_EXTRA_CA_CERTS` does not independently block that exact command because it supplies TLS trust material rather than executable, shell-startup, or loader substitution. Every independent raw-command, canonical executable, PATH/PATHEXT, shell function/startup, `NODE_OPTIONS`, loader/import, `OPENSSL_CONF`, output, dynamic-loader, assignment, chaining, and workflow-force check remains fail-closed.
+
+On Windows, cancellation and native-owner validation treat a path `lstat()` device value of zero and a populated opened-handle device value as the same file only when the nonzero inode also matches. The reverse mismatch, different nonzero devices, zero inode, and changed inode remain rejected.
+
+When a resumed session has current pointer/native-owner/target agreement but a stale top-level `owner_codex_session_id` in session-scoped `skill-active-state.json`, exact cancellation may replace that one field inside its existing exact-session transaction. The stale value never becomes an alias or authority; nested, live, malformed, ambiguous, or cross-session evidence denies without successful mutation. OMX does not infer root `SessionStart` authority for this repair because documented native hooks cannot distinguish a root event from unreadable or malformed child evidence. The transaction provides frozen all-target validation and in-process reverse rollback, not crash-atomic multi-file visibility.
+
+## Document-refresh warning MVP
+
+The native hook adapter includes an agent-only document-refresh warning MVP for
+spec-driven development hygiene. It does **not** install a generic CI gate, does
+**not** add a repo-wide pre-commit framework, and must not hard-block `git
+commit` for document-refresh reasons. Existing Lore commit blocking remains
+separate and still wins when the Lore commit guard is explicitly enabled and an
+inline commit message is not Lore-compliant.
+
+## Lore commit guard opt-in
+
+Lore commit enforcement is disabled by default. To require Lore-format inline
+commit messages and the OmX co-author trailer while keeping OMX-managed native
+hooks installed, set `OMX_LORE_COMMIT_GUARD` to `1`, `true`, `yes`, or `on`.
+
+For persistent Codex CLI usage, place the opt-in in `config.toml`:
+
+```toml
+[shell_environment_policy.set]
+OMX_LORE_COMMIT_GUARD = "1"
+```
+
+The opt-in controls only the Lore-style `git commit` blocking guard. Other
+native `PreToolUse` checks, including document-refresh warnings and command
+safety checks, still run. Native hook enforcement reads the same persistent
+Codex config fallback when the hook process does not already have
+`OMX_LORE_COMMIT_GUARD` in its environment. Inline command environment still
+wins for that command, so `OMX_LORE_COMMIT_GUARD=0 git commit ...` disables a
+persistent opt-in and `env -u OMX_LORE_COMMIT_GUARD git commit ...` removes the
+persistent fallback for that invocation. `omx doctor` reports whether the guard
+is enabled by explicit opt-in, disabled by default/config/environment, or
+disabled because an explicit value is invalid.
+
+Warning scope is intentionally narrow and rule-scoped:
+
+- **Commit path:** `PreToolUse` is Bash-only in this MVP and evaluates only
+  inspectable `git commit` commands. It reads `git diff --cached --name-status`,
+  so only staged changes count. Staged product docs such as
+  `docs/codex-native-hooks.md` can suppress a native-hook rule warning.
+  Rule-owned `.omx/plans/**` and `.omx/specs/**` targets suppress commit-path
+  warnings only when they are tracked or force-staged despite `.omx/` being
+  gitignored. Local-only ignored planning files do not suppress commit warnings.
+- **Final handoff path:** `Stop` evaluates only terminal-looking final handoff
+  attempts, after active-mode blockers and auto-nudge recovery. It reads staged
+  plus unstaged diffs and can count fresh local rule-owned `.omx/plans/**` or
+  `.omx/specs/**` files when their mtimes are newer than the mapped source
+  change. This is an agent-local heuristic freshness check for final handoff,
+  not commit evidence or proof of semantic refresh.
+- **Mappings:** rules live in `src/document-refresh/config.ts`; unrelated doc
+  or `.omx` edits do not suppress warnings for another rule. Initial rules cover
+  native hook behavior, document-refresh enforcer behavior, CLI/operator
+  behavior, and prompt-guidance behavior only.
+- **Exclusions:** tooling-only changes, release collateral, rename-only changes,
+  and explicitly ignored non-user-facing internal tests are ignored
+  conservatively. Ambiguous refactors should use the explicit exemption if no
+  product/spec refresh is needed.
+
+To acknowledge a legitimate no-refresh case, include this exact line in the
+commit message or final handoff text with a concrete reason:
+
+```text
+Document-refresh: not-needed | <reason>
+```
+
+The warning output names the mapped triggering path(s) and expected refresh
+target group(s), so agents can refresh the right product docs or planning specs
+instead of using an unrelated docs edit as a blanket suppression.
+
+## Project wiki addendum (approved v1 backport)
+
+The approved OMX-native wiki backport keeps lifecycle ownership intentionally narrow:
+
+- **Storage** lives under repository `omx_wiki/`, not ignored `.omx/wiki/` runtime state and not `.omc/wiki/`.
+- **SessionStart** may surface bounded wiki context from `omx_wiki/` when the wiki already exists, but it should stay read-mostly and must not block the native hook path on expensive writes or index rebuilds.
+- **SessionEnd** remains a runtime/notify-path responsibility for best-effort, non-blocking session capture into `omx_wiki/`.
+- **PreCompact** and **PostCompact** are native and no-stdout by default: they record the lifecycle seams without emitting advisory `additionalContext` that Codex rejects for compact hook events.
+- **Routing should stay explicit**: prefer `$wiki` or task verbs like `wiki query` / `wiki add`, and avoid implicit bare `wiki` noun activation.
+
+## Explicit terminal stop model note
+
+The approved explicit terminal stop model adds a canonical lifecycle layer for active workflow handoffs:
+
+- `finished`
+- `blocked`
+- `failed`
+- `userinterlude`
+- `askuserQuestion`
+
+Hook readers should prefer explicit lifecycle metadata over assistant-text heuristics when those signals are available.
+During migration, legacy `blocked_on_user` still suppresses continuation, but `cancelled` should be treated as internal legacy/admin compatibility rather than a canonical user-facing outcome.
+
+For `ralplan`, native `PreToolUse` allows only a standalone terminal
+`omx state write` transport for the current session's complete closeout
+(`active:false`, `current_phase:"complete"`). The state backend remains the
+authority for consensus validation and root/session terminalization, so compound
+Bash commands that add any suffix after the closeout command stay blocked.
+
+There is still no distinct native Codex `ask-user-question` hook today. That means `askuserQuestion` classification remains a runtime/fallback responsibility unless a future native hook surface exposes first-class question-stop metadata.
+
+## Combined workflow note
+
+Stop/continuation readers must interpret approved combined workflow state from
+the shared active-set contract rather than from a single legacy `skill` owner.
+For the first-pass multi-state rollout, the approved overlaps are:
+
+- `team + ralph`
+- `team + ultrawork`
+
+Unsupported overlaps should preserve the current state unchanged and direct the
+operator to clear incompatible state explicitly via `omx state ...` or the
+`omx_state.*` MCP tools before retrying. See
+`docs/contracts/multi-state-transition-contract.md`.
+
+## Exact reviewed Codex releases and same-user native-child boundary (#3194, #3212, #3358, #3452)
+
+Official Codex CLI **0.144.5**, **0.145.0**, **0.146.1**, and **0.148.0-alpha.5** source contracts include `turn_id` and optional `agent_id`/`agent_type` fields for `ThreadSpawn` subagents, but they do not provide positive proof that a `PreToolUse` event belongs to the root leader required by adapted Ralplan or Team authority. Omission of those optional child fields is shared by other session-source classes and is not positive Main-root proof. The payloads have no issuer, nonce, replay protection, canonical root-thread claim, or host-verifiable receipt. The alpha contract is sourced from official tag commit [`f757695017737bb9fcdbc595a101721704205e76`](https://github.com/openai/codex/tree/f757695017737bb9fcdbc595a101721704205e76). Same-user native children are fully hostile: sandbox labels, environment, local files, session/thread/turn IDs, pointers, transcripts, trackers, markers, task names, prompts, versions, and absent child evidence are not authentication. OMX does not infer, repair, or synthesize authority from them.
+
+Typed native role routing remains the preferred path when the task surface exposes `agent_type`. `agent_type`, `agent_role`, tracker fields, lifecycle records, plugin launch routing, and detected versions are non-authoritative routing or diagnostic data; they can select or describe work but cannot release consensus. The documented-leader preflight applies only when both conditions hold: native role routing reports `role_routing_unavailable`, and the caller attempts adapted Ralplan Planner, Architect, or Critic authority, adapted role-intent, or adapted consensus authority. Only then run `omx ralplan preflight --json`. Preflight is a state-preserving compatibility diagnostic: it does not grant authority or mutate routing/workflow state, and a successful reviewed-version probe fails closed with:
+
+```json
+{"ok":false,"reason":"unsupported_documented_leader_proof","diagnostics":{"probe_status":"ok","detected_version":"0.148.0-alpha.5","documented_root_identity":{"status":"missing"}}}
+```
+
+The bounded diagnostics also represent `start-unavailable`, `exit-failure`, and `timeout`; only the exact reviewed releases report `documented_root_identity.status:"missing"`. Unreviewed, malformed, or over-limit output yields `documented_root_identity.status:"unknown"`. No diagnostic combination authorizes.
+
+A canonical standalone `omx ralplan role-intent write --role <role> --parent-thread "$CODEX_THREAD_ID" --json` Bash command is denied before pointer, ledger, tracker, or runtime work. For an installed role, the exact `PreToolUse` denial reason is:
+
+```text
+unsupported_documented_leader_proof: Codex hooks do not expose a documented, non-user-mintable root identity required for adapted Ralplan.
+```
+
+The direct CLI result for an installed role is likewise `{"ok":false,"reason":"unsupported_documented_leader_proof"}`. An unknown role remains separately denied as `unknown_role`; it is not a fallback or an authority probe. Wrappers, assignments, compounds, redirects, malformed commands, unrelated tools, and typed native spawn payloads are outside this narrow hook boundary and retain their existing handling.
+Ordinary native planning, lifecycle, state, status, health, HUD, runtime, setup, install, sync, and unrelated delegation are outside this preflight boundary and remain governed by their existing controls; do not run this preflight merely because the surface is native or routing is unavailable.
+
+The former Ralplan host-consensus-receipt gate is retired. Missing host receipt
+capability no longer blocks `ralplan -> ultragoal` or terminalizes the ordinary
+workflow. Native Architect/Critic lifecycle evidence remains useful review data,
+not a host authorization token. The packaged plugin's `OMX_CODEX_LAUNCH_ID` and
+`plugin-hook-routing` record remain routing-only discriminators rather than
+secrets or signed claims. See [ADR 3194](./adr/3194-codex-01445-documented-leader-proof.md),
+[ADR 3212](./adr/3212-same-user-native-child-auth-boundary.md), and the retired
+[consensus gate contract](./contracts/ralplan-consensus-gate.md) for historical
+context.
+
+Exact Team launch therefore remains denied on Codex 0.145.0 unless a future documented host verifier supplies non-user-mintable Main-root/session/root-thread proof before any Team state, worktree, tmux, mailbox, worker, or process effect. Exact command grammar and local Ultragoal/task/session state may restrict a request, but they cannot authorize it. Native children remain limited to positively classified reads and verification/advice. Child-to-leader collaboration reporting also remains denied because 0.145.0 does not bind the caller to a host-authenticated direct parent and target; local subagent trackers cannot authorize that relation.
+
+During an active Conductor workflow, bare `git status --short --branch` remains denied because plain-looking argv does not suppress configured pagers, fsmonitor, filters, external diff helpers, submodules, or optional index writes. The admitted POSIX form is one direct, literal invocation with an authenticated Git executable and command-local neutralizers:
+
+```sh
+GIT_ATTR_NOSYSTEM=1 GIT_CONFIG_COUNT=0 GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_SYSTEM=/dev/null GIT_EDITOR= GIT_EXTERNAL_DIFF= GIT_PAGER= GIT_SEQUENCE_EDITOR= PAGER= git --no-pager --no-optional-locks -c core.fsmonitor=false -c core.untrackedCache=false -c pager.status=false status --short --branch --untracked-files=normal --ignore-submodules=all --no-renames
+```
+
+Windows uses `NUL` instead of `/dev/null`. OMX denies the invocation when the command-local `PATH` does not resolve the authenticated Git binary, any other `GIT_*` input apart from benign `GIT_TERMINAL_PROMPT=0` is active, repository configuration exposes aliases/includes/pagers/fsmonitor/hooks/external diff/filter/submodule helpers, an active `.gitattributes` file applies to tracked content, a submodule entry or gitlink is tracked, or `.git/info/attributes` is active. Bounded `find` is likewise admitted only as one literal command whose executable resolves through the authenticated command-local `PATH`, whose existing starting paths canonically resolve inside the workspace, and whose static numeric `-maxdepth` is between 0 and 32; wrappers, functions, aliases, substitutions, brace/pathname/extglob/tilde expansion, escapes, pipelines, chaining, redirects, `-exec`, `-delete`, output-file predicates, dynamic values, and unmodeled predicates remain denied.
+
+## UserPromptSubmit: session provenance
+
+`UserPromptSubmit` resolves a storage session from the explicit native payload only when it matches the selected pointer's canonical/native/owner aliases. That alias match may select the canonical storage scope; it is not root-leader authority for the #3194 Ralplan boundary. When payload identity is absent, pointer fallback likewise resolves storage only. Cwd, directory existence, last-writer pointer state, and alias/pointer resolution are not ownership proof.
+
+Native and notify leader turns classify provenance once and pass an immutable authorization context to activation, continuation, HUD, auto-nudge, pane injection, and Ralph helpers. Notify's compatibility fork keeps Codex owner P separate from an already-existing OMX storage scope F; only the notify resolver may authorize that relation. Trusted child provenance is compared to the Codex owner, never the storage directory: a proven child of the current owner is silently suppressed, while foreign or ambiguous child evidence rejects the turn before workflow reads or writes.
+
+Rejected turns perform no activation, continuation, steering, plugin, HUD, pane, timestamp, or neighboring-session mutation. They may append one redacted `prompt_session_provenance_rejected` diagnostic under the already-selected state root; the record contains the reason and producer but no raw session/thread identifiers, prompt text, environment value, or foreign path. `PreToolUse`, `Stop`, SessionStart reconciliation, and authoritative-root selection retain their existing contracts.
+
+## Stop: session owner provenance
+
+Native root `SessionStart` records process-bound owner evidence under
+`.omx/state/sessions/<native-session-id>/session-owner.json`. The singleton
+`.omx/state/session.json` remains the backward-compatible selected pointer,
+but a different live process cannot replace it.
+
+When a `Stop` payload does not match a usable selected pointer, or the selected
+pointer is stale-dead, OMX reads only the payload session's exact owner sidecar.
+Usable PID, Linux start-tick, command-line, cwd, and session-id evidence
+authorizes only that session's scoped workflow checks. Root/global hook side
+effects remain suppressed, the selected pointer is not rewritten, and missing,
+dead, reused, malformed, foreign, forged, or indeterminate evidence stays
+fail-closed. A foreign, malformed, or identity-indeterminate selected pointer
+also remains fail-closed. An unmatched Stop with no usable exact owner sidecar
+returns a no-op response instead of a diagnostic continuation block.
+
+Native `Stop` ends one assistant turn rather than the Codex process, so a
+successful `Stop` does not delete owner evidence.
+
+## Stop: sloppy fallback/workaround diff audit
+
+Native `Stop` audits the worktree for ungrounded fallback wording in added
+source lines: staged and unstaged diffs, plus untracked source files. A finding
+blocks the stop and asks the agent to ground or rework the line.
+
+The audit is bounded so a single finding cannot hold a session hostage:
+
+- Identical findings block at most `OMX_NATIVE_STOP_SLOPPY_FALLBACK_MAX_REPEATS`
+  times (default 3), tracked per session in
+  `.omx/state/native-stop-state.json` under `sloppy_fallback_diff_guard`. The
+  guard fingerprints the finding set by path, line text, and new-file line
+  number, sorted so the fingerprint is order-insensitive (not the assistant
+  message, and not the staged/unstaged/untracked source, so identical
+  findings keep counting across `git add`/`git reset` and subset staging,
+  while relocating the same text to another line starts a fresh count),
+  resets when findings change, and clears when findings disappear. Past the
+  cap the gate fails open for that identical finding set.
+- `OMX_NATIVE_STOP_SLOPPY_FALLBACK_AUDIT=off` (also `0`/`false`/`disabled`)
+  disables the audit entirely.
+- Untracked files that provably predate the session are skipped, so
+  pre-existing repo content the session never touched cannot block it. A file
+  counts as pre-session only when every available indicator (mtime, ctime,
+  and birth time when reported) predates the session transcript's birth time;
+  lstat semantics keep in-session symlinks to older targets auditable, and
+  symlink targets are stat'ed as well, so a pre-session link whose target is
+  rewritten during the session is audited too. This prevents
+  `cp -p`/`tar`-style preserved mtimes from smuggling new sloppy lines past
+  the audit. The transcript birth time is trusted only when it is
+  immutable — when the filesystem reports no birth time or one
+  indistinguishable from ctime (a mutable fallback that transcript appends
+  would move), the scoping is disabled and all untracked source files are
+  audited.
+
+## UserPromptSubmit: triage advisory context
+
+`UserPromptSubmit` can now emit triage advisory context alongside keyword context. When no keyword matches, the triage layer classifies the prompt and may inject an advisory prompt-routing context string — this is advisory prompt-routing context that does not activate a skill or workflow by itself; it adds a developer-context hint the model may follow. Light advisory destinations include repo-local `explore`, narrow-edit `executor`, visual `designer`, and external documentation/reference `researcher`; researcher routing is for official-doc, version-compatibility, source-backed, or external lookup requests, does not override local anchors or implementation-shaped prompts, and still writes only prompt-routing state. Keywords remain the deterministic control surface: a matched keyword always takes precedence over triage output, and users can suppress triage injection per prompt with phrases such as `no workflow`, `just chat`, or `plain answer`.
+
+Tracked native subagent `UserPromptSubmit` events are intentionally isolated from keyword activation and triage injection. The parent may delegate a child prompt that starts with text such as `$ralplan Architect review step...`; once the child native session is known in `.omx/state/subagent-tracking.json`, that prompt is handled as literal task text rather than as a fresh workflow invocation. Top-level prompt submits are unchanged and still activate workflows normally.
+
+
+## UserPromptSubmit: bounded ultragoal steering
+
+When `.omx/ultragoal/goals.json` exists, native `UserPromptSubmit` can apply bounded ultragoal steering only from explicit structured directives. The parser recognizes JSON objects after labels such as `OMX_ULTRAGOAL_STEER:`, `omx.ultragoal.steer:`, or `omx ultragoal steer:`. It does not infer mutations from ordinary prose.
+
+Accepted and rejected proposals are delegated to `src/ultragoal/artifacts.ts` via `steerUltragoal`, so hook code does not own mutation semantics. The hook returns additional context that names `.omx/ultragoal/goals.json`, `.omx/ultragoal/ledger.jsonl`, the accepted/rejected/deduped status, and the invariant result. Steering context is additive with keyword, goal-warning, and triage context; keyword routing still takes precedence.
+
+The steering invariants are the same as the CLI: no aggregate objective edits, no constraint edits, no hard delete, no auto-complete, no silent mutation, and no broad natural-language magic. Repeated prompt-submit directives dedupe by prompt signature or idempotency key so structural mutations are not duplicated.
+
+## Verification guidance
+
+When validating hooks, keep the proof boundary explicit:
+
+1. **Native Codex hook proof**
+   - `omx setup` wrote `.codex/hooks.json`
+   - native Codex event invoked `dist/scripts/codex-native-hook.js`
+2. **OMX plugin proof**
+   - plugin dispatch/log evidence exists under `.omx/logs/hooks-*.jsonl`
+3. **Fallback proof**
+   - behavior came from notify-hook / derived watcher / tmux runtime, not native Codex hooks
+
+Do not claim “native hooks work” when only tmux or synthetic notify fallback paths were exercised.
+Likewise, do not claim real execution readiness from hook/install evidence alone; validate an actual Codex execution in the active runtime profile when diagnosing auth or provider issues.

@@ -1,0 +1,3 @@
+- Use outcome-first, evidence-dense verdicts: name the claim, success criteria, validation evidence, gaps, and stop condition.
+- Keep the verification path concise and gather the proof that matters rather than unrelated tool output.
+- Continue inspecting and checking until the verdict is grounded or a required proof source is unavailable.
