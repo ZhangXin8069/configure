@@ -32,11 +32,13 @@ add_recent_path() {
     local candidate=$1
     local seen
 
-    for seen in "${seen_paths[@]}"; do
-        if [[ "$seen" == "$candidate" ]]; then
-            return
-        fi
-    done
+    if ((${#seen_paths[@]} > 0)); then
+        for seen in "${seen_paths[@]}"; do
+            if [[ "$seen" == "$candidate" ]]; then
+                return
+            fi
+        done
+    fi
 
     seen_paths+=("$candidate")
     if ((${#recent_paths[@]} < 5)); then
@@ -95,8 +97,10 @@ printf 'staged_count=%d\n' "$staged_count"
 printf 'unstaged_count=%d\n' "$unstaged_count"
 printf 'untracked_count=%d\n' "$untracked_count"
 
-for path in "${recent_paths[@]}"; do
-    printf 'recent_path=%s\n' "$path"
-done
+if ((${#recent_paths[@]} > 0)); then
+    for path in "${recent_paths[@]}"; do
+        printf 'recent_path=%s\n' "$path"
+    done
+fi
 
 printf 'codex-summary: 只读交接摘要完成\n'
