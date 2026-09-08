@@ -265,6 +265,12 @@ for path in "${paths[@]}"; do
             failures=$((failures + 1))
             ;;
     esac
+    case "$path" in
+        data/runs|data/runs/*|data/hooks|data/hooks/*)
+            printf '✗ 禁止验证 agent 运行时数据：%s\n' "$path" >&2
+            failures=$((failures + 1))
+            ;;
+    esac
 
     if interpreter=$(shell_interpreter "$path"); then
         if [[ -n "$interpreter" ]]; then
