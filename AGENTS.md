@@ -24,6 +24,7 @@
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm），`{~skill-name}` 触发 |
 | `docs/` | 参考文档、包清单、图片素材 |
+| `data/` | agent 运行时本地数据：runs manifest/state/events/context/log/inputs；默认不入库 |
 | `hooks/` | Codex agent hook 适配层与独立 Git 质量门禁；不会自动修改 Codex 配置或 `core.hooksPath` |
 | `plugins/` | Codex 插件推荐索引与显式安装器；不自动安装第三方插件 |
 | `tools/` | 配置仓库维护工具与上游工具推荐信息 |

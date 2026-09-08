@@ -201,6 +201,11 @@ for raw_path in "${paths[@]}"; do
             failures=$((failures + 1))
             continue
             ;;
+        data/runs|data/runs/*|data/hooks|data/hooks/*)
+            printf '✗ 禁止直接操作 agent 运行时数据：%s\n' "$raw_path" >&2
+            failures=$((failures + 1))
+            continue
+            ;;
     esac
     case "$base" in
         .agent.*.log|.*.*.log)
