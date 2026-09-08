@@ -34,7 +34,8 @@ metadata:
    延长超时路径持续重试，直至成功或用户终止；HTTP 4xx/不支持的接口切换回退并报告，
    不把永久错误伪装成“正在重试”；每次失败记录 URL、错误类别和重试次数。
 4. **差距分析证据驱动**：逐条对照（四树现状 vs 最佳实践）形成差距表，只升级有实据的差距；
-   不编造“最佳实践”内容，借鉴内容注明来源网站、仓库和技能名。
+   不编造“最佳实践”内容。采纳外部 skill、脚本或模板前固定 commit/tag，核对许可证、内容哈希、
+   测试/兼容性和安全边界，记录采纳或拒绝决策；不执行未知安装器、hooks 或外部源码。
 5. **最小改动**：优化只改差距所在处，遵循当前公共契约与既有格式；`skills` 改动遵循
    `SKILL.md + AGENTS.md + 技能表/镜像` 约定，`tools/hooks/plugins` 只改其真实接口、清单或
    安全缺口，不因目标扩展而批量重写。
@@ -92,9 +93,12 @@ metadata:
 ```bash
 REPO_ROOT="$(git rev-parse --show-toplevel)"
 for rel in skills tools hooks plugins; do
-  path="$REPO_ROOT/$rel"
-  if [ -d "$path" ]; then
-    count="$(rg --files --hidden -g '!.agent.*' -g '!*.log' "$path" 2>/dev/null | wc -l | tr -d ' ')"
+  tree_path="$REPO_ROOT/$rel"
+  if [ -d "$tree_path" ]; then
+    count=0
+    while IFS= read -r _; do
+      count=$((count + 1))
+    done < <(rg --files --hidden -g '!.agent.*' -g '!*.log' "$tree_path" 2>/dev/null)
     printf '%s: %s files\n' "$rel" "$count"
   else
     printf '%s: MISSING\n' "$rel"
@@ -139,7 +143,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
   技能表行与 SKILL.md 现状是否脱节（核心点变更未同步即差距）；
   ② **互鉴表** = 各技能标志性优点清单，升级时检查"该优点是否已借鉴到适用技能"；
   ③ **范式总览** = 文档结构与执行范式标准，验证时逐项对齐；
-  ④ **跨技能调用约定** = 新技能/改动须维护「与其他技能配合」条目（19/19）。
+  ④ **跨技能调用约定** = 新技能/改动须维护「与其他技能配合」条目，覆盖
+  `skills/AGENTS.md` 当前技能表登记的全部技能。
   任何更新完成前，对照技能表核对登记是否同步（本技能自己的 Step 6 验证也含此项）。
 
 ### Step 3. 多源最佳实践调研与热榜检索（失败一直重试）
@@ -156,6 +161,7 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 | 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 |
 | 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 |
 | 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 |
+| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 |
 
 以上来源是“发现候选”和“核对规则”的不同层：热榜只决定先看谁，规范/官方/社区原文才决定是否吸收。
 外部页面可能调整参数，执行时以接口返回和当前文档为准，并在终端记录实际 URL、HTTP 状态和读取时间。
@@ -181,7 +187,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
    每个来源内部按原生 star 数降序；跨源展示必须保留来源和原始字段，不能宣称不同平台的
    star 可直接比较。星数相同按更新时间倒序，并保留并列。
 5. 对榜单前 `N` 个候选逐一核对实际 skill/配置内容、许可证、近期提交、兼容性和安全边界；
-   仅因 star 高而采纳属于不充分证据。来源清单必须写出 URL、仓库/技能名、吸收点和未采纳理由。
+   准备采纳时固定 commit/tag 并记录内容哈希、测试证据和决策。仅因 star 高而采纳属于不充分证据。
+   来源清单必须写出 URL、仓库/技能名、固定 ref、吸收点和未采纳理由。
 
 #### 3.3 重试与来源降级
 
@@ -224,7 +231,7 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 3. **新增**：只有差距表证明确有缺口才新建 `skills/<name>/SKILL.md` + `AGENTS.md`（3-7 行），
    或新建目标树所需的真实入口/清单；技能新增还要更新 `skills/AGENTS.md` 技能表登记；
 4. **debug**：修复发现的格式、完整性、逻辑、权限或加载问题；不以“换平台”掩盖根因；
-5. **借鉴内容注明出处**（网站 + 仓库/技能名 + URL），不照搬不署名。
+5. **借鉴内容注明出处**（网站 + 仓库/技能名 + 固定 ref + URL），同时记录许可证、哈希、测试和采纳决策，不照搬不署名。
 
 ### Step 5.3 插件推荐与一键安装流程（目标包含 plugins 推荐/安装器时启用）
 
