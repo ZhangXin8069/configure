@@ -569,7 +569,7 @@ run_opencode() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认 -f DeepSeek V4 Flash (2x usage)；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh) / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
+    # 模型选择：默认 -f GLM-5.3-Flash (max)；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh) / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
     # 各旗标默认模型可用 OPENCODE_MODEL_M/O/P/Q/K/G/F/H 环境变量覆盖；OPENCODE_MODEL/--model 直接覆盖。
     case "${MODEL_FLAG}" in
         -m) MODEL_ID="${OPENCODE_MODEL_M:-opencode-go/muse-spark-1.2-contributor}"; MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
@@ -578,7 +578,7 @@ run_opencode() {
         -q) MODEL_ID="${OPENCODE_MODEL_Q:-opencode-go/qwen3.8-max}";      MODEL_NAME="Qwen3.8 Max";;
         -k) MODEL_ID="${OPENCODE_MODEL_K:-opencode-go/kimi-k3}";          MODEL_NAME="Kimi K3";;
         -g) MODEL_ID="${OPENCODE_MODEL_G:-opencode-go/gpt-5.6-luna}";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
-        -f) MODEL_ID="${OPENCODE_MODEL_F:-opencode-go/deepseek-v4-flash}"; MODEL_NAME="DeepSeek V4 Flash (2x usage)";;
+        -f) MODEL_ID="${OPENCODE_MODEL_F:-opencode-go/glm-5.3-flash}"; MODEL_NAME="GLM-5.3-Flash";;
         -h) MODEL_ID="${OPENCODE_MODEL_H:-opencode-go/hy3}";              MODEL_NAME="Hy3"; VARIANT="high";;
         *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
     esac
