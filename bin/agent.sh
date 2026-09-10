@@ -667,7 +667,7 @@ run_codex() {
                 _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
-                echo "默认模型: gpt-5.5 xhigh（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
+                echo "默认模型: gpt-6-astra medium（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -681,12 +681,12 @@ run_codex() {
     unset _ti_raw
     [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
 
-    # 模型选择：默认 -q GPT-5.5 (xhigh)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
+    # 模型选择：默认 -q GPT-6-Astra (medium)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
     case "${MODEL_FLAG}" in
         -m) MODEL_ID="${CODEX_MODEL_M:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="max";;
         -o) MODEL_ID="${CODEX_MODEL_O:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="max";;
         -p) MODEL_ID="${CODEX_MODEL_P:-gpt-5.6-terra}"; MODEL_NAME="GPT-5.6-Terra"; REASONING_EFFORT="high";;
-        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-5.5}";       MODEL_NAME="GPT-5.5";       REASONING_EFFORT="xhigh";;
+        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-6-astra}";   MODEL_NAME="GPT-6-Astra";   REASONING_EFFORT="medium";;
         -k) MODEL_ID="${CODEX_MODEL_K:-gpt-5.4-mini}";  MODEL_NAME="GPT-5.4-Mini";  REASONING_EFFORT="high";;
         -g) MODEL_ID="${CODEX_MODEL_G:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
         -f) MODEL_ID="${CODEX_MODEL_F:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="low";;
@@ -704,7 +704,7 @@ run_codex() {
     local CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-LQCD_API_KEY}"
     local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-1000000}"
     local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}"
-    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-fast}"
+    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-off}"
     local CODEX_PERSONALITY="${CODEX_PERSONALITY:-pragmatic}"
     local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-auto_review}"
     local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-api}"
