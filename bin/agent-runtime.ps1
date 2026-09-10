@@ -1534,7 +1534,7 @@ function Parse-Arguments {
                 '-q' = @('opencode-go/qwen3.8-max', 'Qwen3.8 Max')
                 '-k' = @('opencode-go/kimi-k3', 'Kimi K3')
                 '-g' = @('opencode-go/gpt-5.6-luna', 'GPT-5.6 Luna (2x usage)')
-                '-f' = @('opencode-go/deepseek-v4-flash', 'DeepSeek V4 Flash (2x usage)')
+                '-f' = @('opencode-go/glm-5.3-flash', 'GLM-5.3-Flash')
                 '-h' = @('opencode-go/hy3', 'Hy3')
             }
             $modelEnvPrefix = 'OPENCODE_MODEL_'
