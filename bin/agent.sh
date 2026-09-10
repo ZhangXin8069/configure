@@ -926,7 +926,7 @@ run_codex() {
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "默认模型: gpt-5.5 xhigh（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
+                echo "默认模型: gpt-6-astra medium（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -951,12 +951,12 @@ run_codex() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认 -q GPT-5.5 (xhigh)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
+    # 模型选择：默认 -q GPT-6 Astra (medium)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
     case "${MODEL_FLAG}" in
         -m) MODEL_ID="${CODEX_MODEL_M:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="max";;
         -o) MODEL_ID="${CODEX_MODEL_O:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="max";;
         -p) MODEL_ID="${CODEX_MODEL_P:-gpt-5.6-terra}"; MODEL_NAME="GPT-5.6-Terra"; REASONING_EFFORT="high";;
-        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-5.5}";       MODEL_NAME="GPT-5.5";       REASONING_EFFORT="xhigh";;
+        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-6-astra}";   MODEL_NAME="GPT-6 Astra";   REASONING_EFFORT="medium";;
         -k) MODEL_ID="${CODEX_MODEL_K:-gpt-5.4-mini}";  MODEL_NAME="GPT-5.4-Mini";  REASONING_EFFORT="high";;
         -g) MODEL_ID="${CODEX_MODEL_G:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
         -f) MODEL_ID="${CODEX_MODEL_F:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="low";;
@@ -989,7 +989,8 @@ run_codex() {
     local CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-LQCD_API_KEY}"
     local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-1000000}"
     local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}"
-    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-fast}"
+    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-}"
+    local CODEX_FAST_MODE="${CODEX_FAST_MODE:-false}"
     local CODEX_PERSONALITY="${CODEX_PERSONALITY:-pragmatic}"
     local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-auto_review}"
     local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-api}"
@@ -1006,7 +1007,6 @@ run_codex() {
         --config "model_auto_compact_token_limit=${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT}"
         --config "personality=\"${CODEX_PERSONALITY}\""
         --config "approvals_reviewer=\"${CODEX_APPROVALS_REVIEWER}\""
-        --config "service_tier=\"${CODEX_SERVICE_TIER}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.name=\"${CODEX_PROVIDER_NAME}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.base_url=\"${CODEX_PROVIDER_BASE_URL}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.env_key=\"${CODEX_PROVIDER_ENV_KEY}\""
@@ -1014,10 +1014,14 @@ run_codex() {
         --config "model_providers.${CODEX_PROVIDER_ID}.supports_websockets=true"
         --config "tui.status_line=${CODEX_TUI_STATUS_LINE}"
         --config "tui.status_line_use_colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
+        --config "features.fast_mode=${CODEX_FAST_MODE}"
         --config "model_reasoning_effort=\"${REASONING_EFFORT}\""
         --config "approval_policy=\"${CODEX_APPROVAL_POLICY}\""
         --config "sandbox_mode=\"${CODEX_SANDBOX_MODE}\""
     )
+    if [[ -n "${CODEX_SERVICE_TIER}" ]]; then
+        CODEX_COMMON_ARGS+=(--config "service_tier=\"${CODEX_SERVICE_TIER}\"")
+    fi
     for _agent_dir in "${_agent_config_dirs[@]}"; do
         [[ -d "${_agent_dir}" ]] || continue
         CODEX_AGENT_DIR_ARGS+=(--add-dir "${_agent_dir}")
@@ -1030,7 +1034,7 @@ run_codex() {
 
     echo "============================================================"
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
-    echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER} | personality=${CODEX_PERSONALITY}"
+    echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER:-standard} | personality=${CODEX_PERSONALITY}"
     echo "  tui: status_line preset | colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
     echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"

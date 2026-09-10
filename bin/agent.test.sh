@@ -29,6 +29,13 @@ assert_file_contains() {
     assert_contains "$(cat -- "$1")" "$2"
 }
 
+assert_file_not_contains() {
+    [[ -f "$1" ]] || fail "文件不存在：$1"
+    if rg -Fq -- "$2" "$1"; then
+        fail "$1 不应包含：$2"
+    fi
+}
+
 make_fake() {
     local name="$1"
     local script="$test_root/${name}.sh"
@@ -115,6 +122,21 @@ run_launcher() {
         *) fail "未知测试 launcher：$name" ;;
     esac
 }
+
+set +e
+default_codex_output=$(CODEX_DEFAULT_MODEL_FLAG= CODEX_MODEL= CODEX_MODEL_Q= \
+    CODEX_REASONING_EFFORT= CODEX_SERVICE_TIER= CODEX_FAST_MODE= \
+    run_launcher co "$fake_codex" --once 2>&1)
+default_codex_status=$?
+set -e
+(( default_codex_status == 0 )) || fail "Codex 默认配置 fake launcher 失败：$default_codex_output"
+assert_contains "$default_codex_output" 'Codex: GPT-6 Astra | reasoning=medium'
+assert_contains "$default_codex_output" 'provider: lqcd | tier=standard'
+assert_file_contains "$call_log" '--model gpt-6-astra'
+assert_file_contains "$call_log" 'features.fast_mode=false'
+assert_file_contains "$call_log" 'model_reasoning_effort="medium"'
+assert_file_not_contains "$call_log" 'service_tier='
+printf 'PASS: Codex 默认模型、reasoning 和 Fast 关闭\n'
 
 set +e
 codex_output=$(run_launcher co "$fake_codex" --once --model fake-model --reasoning-effort low 2>&1)
@@ -316,7 +338,7 @@ assert_file_contains "$stop_run/manifest.env" 'state=stopped'
 assert_file_contains "$stop_run/events.jsonl" '"event":"session-stop"'
 
 status_json=$(AGENT_DATA_DIR="$data" "$status_script" --all --json)
-if ! printf '%s\n' "$status_json" | jq -e 'length == 7 and all(.[]; .run_id != "")' >/dev/null; then
+if ! printf '%s\n' "$status_json" | jq -e 'length == 8 and all(.[]; .run_id != "")' >/dev/null; then
     fail "agent-status JSON 结果不完整：$status_json"
 fi
 printf 'PASS: stop-file 与 agent-status JSON 只读查询\n'

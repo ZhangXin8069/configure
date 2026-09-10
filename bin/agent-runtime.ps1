@@ -1170,7 +1170,8 @@ function Run-Codex {
     $compactLimit = [Environment]::GetEnvironmentVariable('CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT')
     if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = '900000' }
     $serviceTier = [Environment]::GetEnvironmentVariable('CODEX_SERVICE_TIER')
-    if ([string]::IsNullOrWhiteSpace($serviceTier)) { $serviceTier = 'fast' }
+    $fastMode = [Environment]::GetEnvironmentVariable('CODEX_FAST_MODE')
+    if ([string]::IsNullOrWhiteSpace($fastMode)) { $fastMode = 'false' }
     $personality = [Environment]::GetEnvironmentVariable('CODEX_PERSONALITY')
     if ([string]::IsNullOrWhiteSpace($personality)) { $personality = 'pragmatic' }
     $reviewer = [Environment]::GetEnvironmentVariable('CODEX_APPROVALS_REVIEWER')
@@ -1196,7 +1197,6 @@ function Run-Codex {
         '--config', "model_auto_compact_token_limit=$compactLimit"
         '--config', "personality=`"$personality`""
         '--config', "approvals_reviewer=`"$reviewer`""
-        '--config', "service_tier=`"$serviceTier`""
         '--config', "model_providers.$providerId.name=`"$providerName`""
         '--config', "model_providers.$providerId.base_url=`"$providerBase`""
         '--config', "model_providers.$providerId.env_key=`"$providerKey`""
@@ -1204,10 +1204,14 @@ function Run-Codex {
         '--config', 'model_providers.' + $providerId + '.supports_websockets=true'
         '--config', "tui.status_line=$statusLine"
         '--config', "tui.status_line_use_colors=$statusColors"
+        '--config', "features.fast_mode=$fastMode"
         '--config', "model_reasoning_effort=`"$($script:Reasoning)`""
         '--config', "approval_policy=`"$approval`""
         '--config', "sandbox_mode=`"$sandbox`""
     )
+    if (-not [string]::IsNullOrWhiteSpace($serviceTier)) {
+        $common += @('--config', "service_tier=`"$serviceTier`"")
+    }
     $agentDirs = @(
         (Join-Path $homeRoot 'configure\skills')
         (Join-Path $homeRoot 'configure\tools')
@@ -1221,7 +1225,8 @@ function Run-Codex {
     }
     Write-Host '============================================================'
     Write-Host "  Codex: $($script:Model) | reasoning=$($script:Reasoning)"
-    Write-Host "  provider: $providerId | tier=$serviceTier | personality=$personality"
+    $displayTier = if ([string]::IsNullOrWhiteSpace($serviceTier)) { 'standard' } else { $serviceTier }
+    Write-Host "  provider: $providerId | tier=$displayTier | personality=$personality"
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -1540,7 +1545,7 @@ function Parse-Arguments {
                 '-m' = @('gpt-5.6-luna', 'GPT-5.6-Luna')
                 '-o' = @('gpt-5.6-sol', 'GPT-5.6-Sol')
                 '-p' = @('gpt-5.6-terra', 'GPT-5.6-Terra')
-                '-q' = @('gpt-5.5', 'GPT-5.5')
+                '-q' = @('gpt-6-astra', 'GPT-6 Astra')
                 '-k' = @('gpt-5.4-mini', 'GPT-5.4-Mini')
                 '-g' = @('gpt-5.6-luna', 'GPT-5.6-Luna')
                 '-f' = @('gpt-5.6-sol', 'GPT-5.6-Sol')
@@ -1551,7 +1556,7 @@ function Parse-Arguments {
                 '-m' { 'max' }
                 '-o' { 'max' }
                 '-p' { 'high' }
-                '-q' { 'xhigh' }
+                '-q' { 'medium' }
                 '-k' { 'high' }
                 '-g' { 'high' }
                 '-f' { 'low' }
