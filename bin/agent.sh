@@ -926,7 +926,7 @@ run_codex() {
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "默认模型: gpt-6-astra medium（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
+                echo "默认模型: gpt-6-astra max（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -951,12 +951,12 @@ run_codex() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认 -q GPT-6 Astra (medium)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
+    # 模型选择：默认 -q GPT-6 Astra (max)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
     case "${MODEL_FLAG}" in
         -m) MODEL_ID="${CODEX_MODEL_M:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="max";;
         -o) MODEL_ID="${CODEX_MODEL_O:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="max";;
         -p) MODEL_ID="${CODEX_MODEL_P:-gpt-5.6-terra}"; MODEL_NAME="GPT-5.6-Terra"; REASONING_EFFORT="high";;
-        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-6-astra}";   MODEL_NAME="GPT-6 Astra";   REASONING_EFFORT="medium";;
+        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-6-astra}";   MODEL_NAME="GPT-6 Astra";   REASONING_EFFORT="max";;
         -k) MODEL_ID="${CODEX_MODEL_K:-gpt-5.4-mini}";  MODEL_NAME="GPT-5.4-Mini";  REASONING_EFFORT="high";;
         -g) MODEL_ID="${CODEX_MODEL_G:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
         -f) MODEL_ID="${CODEX_MODEL_F:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="low";;
