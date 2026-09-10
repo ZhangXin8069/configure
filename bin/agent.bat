@@ -11,7 +11,7 @@ rem  Deploy: copy agent.bat as cl.bat / op.bat / co.bat
 rem          (or: mklink /H cl.bat agent.bat  on the same volume)
 rem  Reference: agent.sh (Unix). Prompt read from agent-prompt.txt.
 rem  Usage: {cl|op|co}.bat [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time DUR]
-rem    Codex 默认模型: gpt-5.5 / xhigh（CODEX_DEFAULT_MODEL_FLAG 可覆盖默认旗标）
+rem    Codex 默认模型: gpt-6-astra / medium（CODEX_DEFAULT_MODEL_FLAG 可覆盖默认旗标）
 rem    --model MODEL    : override model id directly (env *AGENT*_MODEL also works)
 rem    --variant LEVEL  : opencode only - build agent variant (max/xhigh/high/low etc.)
 rem    --reasoning-effort LEVEL : codex only (low/medium/high/xhigh/max/ultra)
@@ -170,12 +170,12 @@ if defined OPENCODE_MODEL set "MODEL_ID=%OPENCODE_MODEL%"
 goto model_done
 
 :model_codex
-set "MODEL_ID=gpt-5.5"
-set "MODEL_NAME=GPT-5.5"
-set "REASONING_EFFORT=xhigh"
+set "MODEL_ID=gpt-6-astra"
+set "MODEL_NAME=GPT-6-Astra"
+set "REASONING_EFFORT=medium"
 if "%MODEL_FLAG%"=="-o" (set "MODEL_ID=gpt-5.6-sol" & set "MODEL_NAME=GPT-5.6-Sol" & set "REASONING_EFFORT=max")
 if "%MODEL_FLAG%"=="-p" (set "MODEL_ID=gpt-5.6-terra" & set "MODEL_NAME=GPT-5.6-Terra" & set "REASONING_EFFORT=high")
-if "%MODEL_FLAG%"=="-q" (set "MODEL_ID=gpt-5.5" & set "MODEL_NAME=GPT-5.5" & set "REASONING_EFFORT=xhigh")
+if "%MODEL_FLAG%"=="-q" (set "MODEL_ID=gpt-6-astra" & set "MODEL_NAME=GPT-6-Astra" & set "REASONING_EFFORT=medium")
 if "%MODEL_FLAG%"=="-k" (set "MODEL_ID=gpt-5.4-mini" & set "MODEL_NAME=GPT-5.4-Mini" & set "REASONING_EFFORT=high")
 if "%MODEL_FLAG%"=="-g" (set "MODEL_ID=gpt-5.6-luna" & set "MODEL_NAME=GPT-5.6-Luna" & set "REASONING_EFFORT=high")
 if "%MODEL_FLAG%"=="-f" (set "MODEL_ID=gpt-5.6-sol" & set "MODEL_NAME=GPT-5.6-Sol" & set "REASONING_EFFORT=low")
@@ -226,7 +226,7 @@ if not defined CODEX_PROVIDER_BASE_URL set "CODEX_PROVIDER_BASE_URL=http://nat20
 if not defined CODEX_PROVIDER_ENV_KEY set "CODEX_PROVIDER_ENV_KEY=LQCD_API_KEY"
 if not defined CODEX_MODEL_CONTEXT_WINDOW set "CODEX_MODEL_CONTEXT_WINDOW=1000000"
 if not defined CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT set "CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT=900000"
-if not defined CODEX_SERVICE_TIER set "CODEX_SERVICE_TIER=fast"
+if not defined CODEX_SERVICE_TIER set "CODEX_SERVICE_TIER=off"
 if not defined CODEX_PERSONALITY set "CODEX_PERSONALITY=pragmatic"
 if not defined CODEX_APPROVALS_REVIEWER set "CODEX_APPROVALS_REVIEWER=auto_review"
 if not defined CODEX_FORCED_LOGIN_METHOD set "CODEX_FORCED_LOGIN_METHOD=api"
