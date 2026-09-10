@@ -55,6 +55,9 @@ for contract in \
     'Join-Path $script:DataRoot '\''runs'\'''; do
     assert_contains "$runtime" "$contract"
 done
+assert_contains "$runtime" "'-q' = @('gpt-6-astra', 'GPT-6 Astra')"
+assert_contains "$runtime" "'-q' { 'medium' }"
+assert_contains "$runtime" 'features.fast_mode=$fastMode'
 
 if command -v powershell.exe >/dev/null 2>&1; then
     ps_cmd=powershell.exe
