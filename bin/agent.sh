@@ -17,6 +17,17 @@ else
     if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 fi
 _NAME=${AGENT_LAUNCHER_NAME:-${_SRC##*/}}
+case "${_NAME}" in
+    cl)   _AGENT=claude;   _SNSC=0;;
+    cls)  _AGENT=claude;   _SNSC=1;;
+    op)   _AGENT=opencode; _SNSC=0;;
+    co)   _AGENT=codex;    _SNSC=0;;
+    ops)  _AGENT=opencode; _SNSC=1;;
+    cos)  _AGENT=codex;    _SNSC=1;;
+    *)
+        echo "Usage: ln -s agent.sh {cl|cls|op|co|ops|cos}"
+        exit 1;;
+esac
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 # 增强鲁棒性：cwd 失效（如所在目录已被删除）时回退到脚本目录，
@@ -24,12 +35,16 @@ echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 if ! _PWD="$(pwd 2>/dev/null)"; then
     echo "###${_NAME}: warning: 当前目录不可用（getcwd 失败），回退到 ${_PATH}###" >&2
     cd "${_PATH}" || exit 1
-    _PWD="$(pwd)"
+_PWD="$(pwd)"
 fi
 
-_TS="$(date +%Y-%m-%d-%H-%M-%S)"
-LOG_FILE=".agent.${_TS}.log"
-unset _TS
+if [[ ! -r "${_PATH}/agent-runtime.sh" ]]; then
+    echo "###${_NAME}: ERROR: ${_PATH}/agent-runtime.sh 不存在或不可读（共享 runtime 缺失）###" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/agent-runtime.sh"
+_agent_runtime_init "${_PWD}" "${_PATH}" || exit $?
 
 # ---- 公共工具 ----
 # 时长解析："30"→30 秒；支持 s/m/h 后缀（30s/5m/2h）
@@ -50,6 +65,21 @@ _parse_interval() {
     esac
 }
 
+_parse_nonnegative_integer() {
+    local value="${1:-}"
+    [[ "$value" =~ ^[0-9]+$ ]] || return 1
+    printf '%s\n' "$value"
+}
+
+_parse_runtime_limit() {
+    local value="${1:-}"
+    [[ "$value" == 0 ]] && {
+        printf '0\n'
+        return 0
+    }
+    _parse_interval "$value"
+}
+
 # prompt 基础读取：agent-prompt.txt 单一来源，替换 ${HOME}/${_PWD} 占位符；
 # 文件缺失时给出明确报错并退出（防静默用空 prompt）。成功后 PROMPT 就绪。
 _load_prompt() {
@@ -61,6 +91,10 @@ _load_prompt() {
     PROMPT="$(<"${_pf}")"
     PROMPT="${PROMPT//\$\{HOME\}/${HOME:-}}"
     PROMPT="${PROMPT//\$\{_PWD\}/$_PWD}"
+    PROMPT="${PROMPT//\$\{LIST_FILE\}/${LIST_FILE:-}}"
+    if [[ -n "${AGENT_CONTEXT_PROMPT:-}" ]]; then
+        PROMPT+="${AGENT_CONTEXT_PROMPT}"
+    fi
 }
 
 # 全局 agent 配置目录清单注入（co/cl 共用）：只列路径，不读取内容
@@ -118,12 +152,25 @@ _append_skill_list() {
 # op 分支另有用户输入兜底补录（_recover_inputs，仅 op 分支定义）
 _LIVE_PID=""
 _cleanup() {
+    local _exit_rc=$?
     if [[ "${_AGENT:-}" == opencode ]] && declare -F _recover_inputs >/dev/null 2>&1; then
         _recover_inputs
     fi
     [[ -n "${_LIVE_PID:-}" ]] && kill "${_LIVE_PID}" 2>/dev/null
+    _agent_runtime_on_exit "${_exit_rc}"
+    return "${_exit_rc}"
 }
 trap '_cleanup' EXIT
+_interrupt() {
+    _agent_runtime_mark stopped "收到中断信号" 130
+    exit 130
+}
+_terminate() {
+    _agent_runtime_mark stopped "收到终止信号" 143
+    exit 143
+}
+trap '_interrupt' INT
+trap '_terminate' TERM
 
 # =====================================================================
 # Claude Code 分支（cl/cls）：TUI 或 -p/--resume 驱动链；模型旗标与 op/co 一致
@@ -138,7 +185,6 @@ run_claude() {
         exit 127
     fi
 
-    _load_prompt
     # 与 co 相同的注入：全局 agent 配置目录 + skill 清单
     local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
     local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
@@ -177,12 +223,19 @@ run_claude() {
     local MODEL_FLAG="${CLAUDE_DEFAULT_MODEL_FLAG:--m}"
     local MODEL_OVERRIDE="${CLAUDE_MODEL:-}"
     local MODEL_ID MODEL_NAME DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
+    local MODEL_EXPLICIT=0
+    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
+    local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
+    local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
+    local RESUME_RUN_ID="${AGENT_RESUME_RUN_ID:-}"
+    local ONCE_MODE="${AGENT_ONCE:-0}"
+    [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; shift;;
+            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; MODEL_EXPLICIT=1; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
-                MODEL_OVERRIDE="$2"; shift 2;;
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time DUR]"
                 echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
@@ -194,6 +247,20 @@ run_claude() {
             -time|--time)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
                 _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
+            --once)
+                ONCE_MODE=1; DRIVE_MODE=1; shift;;
+            --max-turns)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少回合数###" >&2; exit 64; fi
+                MAX_TURNS_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --max-runtime)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
+                MAX_RUNTIME_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --stop-file)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
+                STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
+            --resume)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
+                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
         esac
     done
@@ -205,6 +272,14 @@ run_claude() {
     fi
     unset _ti_raw
     [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
+    if ! MAX_TURNS_RAW="$(_parse_nonnegative_integer "${MAX_TURNS_RAW}")"; then
+        echo "###${_NAME}: ERROR: --max-turns '${MAX_TURNS_RAW}' 必须是非负整数###" >&2
+        exit 64
+    fi
+    if ! MAX_RUNTIME_RAW="$(_parse_runtime_limit "${MAX_RUNTIME_RAW}")"; then
+        echo "###${_NAME}: ERROR: --max-runtime '${MAX_RUNTIME_RAW}' 格式无效（示例: 0 / 30 / 5m / 2h）###" >&2
+        exit 64
+    fi
 
     # 模型选择：-m/-o/-p 侧重深度，-f/-k 侧重速度；默认 slug 可用 CLAUDE_MODEL_* 覆盖，CLAUDE_MODEL/--model 直接覆盖
     case "${MODEL_FLAG}" in
@@ -223,14 +298,32 @@ run_claude() {
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
     fi
 
+    local _runtime_mode=tui
+    (( DRIVE_MODE )) && _runtime_mode=drive
+    [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
+    AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_REASONING=""
+    AGENT_RUNTIME_VARIANT=""
+    _agent_runtime_start_or_resume \
+        claude "$MODEL_ID" "$_runtime_mode" \
+        "${AGENT_ROLE:-solo-agent}" "${AGENT_TIER:-standard}" \
+        "${AGENT_POSTURE:-deep-worker}" "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" \
+        "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 0 0 || exit $?
+    MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
+    _load_prompt
+    _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "" ""
+
     echo "============================================================"
     echo "  Claude Code: ${MODEL_NAME} | permission-mode auto"
+    echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"
+    echo "  state: ${AGENT_MANIFEST_FILE}"
+    echo "  context: ${AGENT_CONTEXT_COUNT} 层说明文件（清单：${AGENT_CONTEXT_FILE}）"
     if (( _SNSC )); then
         echo "  launcher: snsc/HPC"
     fi
     if (( DRIVE_MODE )); then
-        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
+        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
     else
         echo "  mode: TUI interactive"
     fi
@@ -238,8 +331,15 @@ run_claude() {
 
     if (( ! DRIVE_MODE )); then
         # 原 TUI 交互模式（--permission-mode auto 原语义保留）
+        _agent_runtime_turn_begin
         "${_CLAUDE_BIN}" --permission-mode auto --model "${MODEL_ID}" 2> "${LOG_FILE}"
-        return $?
+        _run_rc=$?
+        if (( _run_rc == 0 )); then
+            _agent_runtime_turn_success
+        else
+            _agent_runtime_turn_failure
+        fi
+        return "${_run_rc}"
     fi
 
     # ---- 驱动模式：headless claude -p → --resume 链式驱动 ----
@@ -267,26 +367,49 @@ run_claude() {
         echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2
         exit 66
     fi
-    _live_log
-    echo "---- drive: prompt round start $(date "+%F-%T") ----"
-    "${_CLAUDE_BIN}" -p --permission-mode auto --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
-    _drv_rc=$?
-    if (( _drv_rc != 0 )); then
-        echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
-        exit "${_drv_rc}"
+    if _agent_runtime_stop_file_requested; then
+        echo "logs -> ${LOG_FILE}"
+        return 0
     fi
-    _drv_sid="$(grep -oE 'session_(id|\.id)=[A-Za-z0-9_-]+' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
-    if [[ -z "${_drv_sid}" ]]; then
-        echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session id，驱动终止###" >&2
-        exit 1
+    _live_log
+    _drv_sid="${AGENT_SESSION_ID:-}"
+    if [[ -n "${RESUME_RUN_ID}" ]]; then
+        if [[ -z "${_drv_sid}" ]]; then
+            echo "###${_NAME}: ERROR: 可恢复会话没有 session_id，驱动终止###" >&2
+            exit 1
+        fi
+        echo "---- drive: resume session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
+    else
+        echo "---- drive: prompt round start $(date "+%F-%T") ----"
+        _agent_runtime_turn_begin
+        "${_CLAUDE_BIN}" -p --permission-mode auto --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
+        _drv_rc=$?
+        if (( _drv_rc != 0 )); then
+            _agent_runtime_turn_failure
+            echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
+            exit "${_drv_rc}"
+        fi
+        _agent_runtime_turn_success
+        _drv_sid="$(grep -oE 'session_(id|\.id)=[A-Za-z0-9_-]+' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+        if [[ -z "${_drv_sid}" ]]; then
+            echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session id，驱动终止###" >&2
+            exit 1
+        fi
+        _agent_runtime_set_session "${_drv_sid}" ""
     fi
     echo "---- drive: session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
     if [[ -n "${DRIVE_FILE}" ]]; then
         _drv_instr="$(<"${DRIVE_FILE}")"
         echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
+        _agent_runtime_turn_begin
         "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --permission-mode auto --model "${MODEL_ID}" "${_drv_instr}" \
                 2>> "${LOG_FILE}"
         _drv_rc=$?
+        if (( _drv_rc == 0 )); then
+            _agent_runtime_turn_success
+        else
+            _agent_runtime_turn_failure
+        fi
         if (( _drv_rc != 0 )); then
             echo "###${_NAME}: warning: 首条指令回合退出码 ${_drv_rc}，仍进入继续循环###" >&2
         fi
@@ -294,28 +417,61 @@ run_claude() {
     else
         echo "---- drive: 未提供 -file，跳过首条指令直接进入继续循环 ----"
     fi
+    if (( ONCE_MODE )); then
+        if [[ -n "${RESUME_RUN_ID}" && -z "${DRIVE_FILE}" ]]; then
+            _agent_runtime_turn_begin
+            "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --permission-mode auto --model "${MODEL_ID}" "继续" \
+                    2>> "${LOG_FILE}"
+            _drv_rc=$?
+            if (( _drv_rc == 0 )); then
+                _agent_runtime_turn_success
+                _agent_runtime_mark finished "resume once"
+                echo "logs -> ${LOG_FILE}"
+                return 0
+            fi
+            _agent_runtime_turn_failure
+            _agent_runtime_mark failed "resume once 失败" "${_drv_rc}"
+            return "${_drv_rc}"
+        fi
+        _agent_runtime_should_stop 0 || true
+        echo "logs -> ${LOG_FILE}"
+        return 0
+    fi
     _nudges=0
     _fails=0
+    _loop_rc=0
     while :; do
+        if _agent_runtime_should_stop "${_nudges}"; then
+            break
+        fi
         sleep "${DRIVE_INTERVAL}"
+        if _agent_runtime_should_stop "${_nudges}"; then
+            break
+        fi
+        _agent_runtime_turn_begin
         if "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --permission-mode auto --model "${MODEL_ID}" "继续" \
                 2>> "${LOG_FILE}"; then
+            _agent_runtime_turn_success
             _nudges=$((_nudges + 1))
             _fails=0
             echo "---- drive: 继续 #${_nudges} ok $(date "+%F-%T") ----"
         else
             _drv_rc=$?
+            _agent_runtime_turn_failure
             _fails=$((_fails + 1))
             echo "###${_NAME}: warning: 继续发送失败 ${_fails}/3（退出码 ${_drv_rc}）###" >&2
             if (( _fails >= 3 )); then
                 echo "###${_NAME}: ERROR: 连续 3 次「继续」失败，驱动循环终止（累计成功 ${_nudges} 次）###" >&2
+                _agent_runtime_mark blocked "连续 3 次继续失败" "${_drv_rc}"
+                _loop_rc=1
                 break
             fi
         fi
     done
-    unset _drv_sid _drv_rc _nudges _fails
+    _drive_result="${_loop_rc:-0}"
+    unset _drv_sid _drv_rc _nudges _fails _loop_rc
     echo "logs -> ${LOG_FILE}"
-    return 0
+    return "${_drive_result}"
 }
 
 # =====================================================================
@@ -337,43 +493,6 @@ run_opencode() {
         exit 127
     fi
 
-    _load_prompt
-    PROMPT="${PROMPT//\$\{LIST_FILE\}/$LIST_FILE}"
-
-    # 自动收集工作目录项目上下文：从 pwd 向上查找 AGENTS.md 与 .opencode，注入 prompt
-    local PROJECT_CONTEXT="" project_root="" _ctx_dir="${_PWD}" _parent
-    while :; do
-        if [[ -f "${_ctx_dir}/AGENTS.md" || -d "${_ctx_dir}/.opencode" ]]; then
-            project_root="${_ctx_dir}"
-            break
-        fi
-        _parent="${_ctx_dir%/*}"
-        [ -z "${_parent}" ] && _parent="/"
-        [[ "${_parent}" == "${_ctx_dir}" ]] && break
-        _ctx_dir="${_parent}"
-    done
-
-    if [[ -n "${project_root}" ]]; then
-        PROJECT_CONTEXT=$'\n\n\n### 工作目录项目上下文（由 agent.sh 自动注入） ###'
-        if [[ -f "${project_root}/AGENTS.md" ]]; then
-            PROJECT_CONTEXT+=$'\n\n===== AGENTS.md ('"${project_root}"'/AGENTS.md) =====\n'
-            _n_lines="$(wc -l < "${project_root}/AGENTS.md")"
-            if (( _n_lines > 400 )); then
-                PROJECT_CONTEXT+="$(head -400 "${project_root}/AGENTS.md")"
-                PROJECT_CONTEXT+=$'\n\n...（AGENTS.md 共 '"${_n_lines}"$' 行，已截断；完整内容请自行读取 '"${project_root}"$'/AGENTS.md）'
-            else
-                PROJECT_CONTEXT+="$(<"${project_root}/AGENTS.md")"
-            fi
-            unset _n_lines
-        fi
-        if [[ -d "${project_root}/.opencode" ]]; then
-            PROJECT_CONTEXT+=$'\n\n===== .opencode 目录结构 ('"${project_root}"'/.opencode) =====\n'
-            PROJECT_CONTEXT+="$(cd "${project_root}/.opencode" && find . -maxdepth 2 -mindepth 1 ! -path './node_modules*' ! -path './.git*' | sort)"
-        fi
-        PROMPT="${PROMPT}${PROJECT_CONTEXT}"
-    fi
-    unset PROJECT_CONTEXT _ctx_dir _parent project_root
-
     # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
     # 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID，覆盖模型旗标；也可用 OPENCODE_MODEL 环境变量覆盖。
@@ -386,15 +505,23 @@ run_opencode() {
     local MODEL_OVERRIDE="${OPENCODE_MODEL:-}"
     local VARIANT_OVERRIDE="${OPENCODE_VARIANT:-}"
     local MODEL_ID MODEL_NAME VARIANT="max" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
+    local MODEL_EXPLICIT=0 VARIANT_EXPLICIT=0
+    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
+    local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
+    local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
+    local RESUME_RUN_ID="${AGENT_RESUME_RUN_ID:-}"
+    local ONCE_MODE="${AGENT_ONCE:-0}"
+    [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
+    [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; shift;;
+            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; MODEL_EXPLICIT=1; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
-                MODEL_OVERRIDE="$2"; shift 2;;
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
             --variant)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
-                VARIANT_OVERRIDE="$2"; shift 2;;
+                VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; shift 2;;
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
                 echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
@@ -405,6 +532,20 @@ run_opencode() {
             -time|--time)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
                 _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
+            --once)
+                ONCE_MODE=1; DRIVE_MODE=1; shift;;
+            --max-turns)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少回合数###" >&2; exit 64; fi
+                MAX_TURNS_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --max-runtime)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
+                MAX_RUNTIME_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --stop-file)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
+                STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
+            --resume)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
+                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
         esac
     done
@@ -416,6 +557,17 @@ run_opencode() {
     fi
     unset _ti_raw
     [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
+    _max_turns_input="$MAX_TURNS_RAW"
+    if ! MAX_TURNS_RAW="$(_parse_nonnegative_integer "${_max_turns_input}")"; then
+        echo "###${_NAME}: ERROR: --max-turns '${_max_turns_input}' 必须是非负整数###" >&2
+        exit 64
+    fi
+    _max_runtime_input="$MAX_RUNTIME_RAW"
+    if ! MAX_RUNTIME_RAW="$(_parse_runtime_limit "${_max_runtime_input}")"; then
+        echo "###${_NAME}: ERROR: --max-runtime '${_max_runtime_input}' 格式无效（示例: 0 / 30 / 5m / 2h）###" >&2
+        exit 64
+    fi
+    unset _max_turns_input _max_runtime_input
 
     # 模型选择：默认 -f DeepSeek V4 Flash (2x usage)；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh) / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
     # 各旗标默认模型可用 OPENCODE_MODEL_M/O/P/Q/K/G/F/H 环境变量覆盖；OPENCODE_MODEL/--model 直接覆盖。
@@ -436,22 +588,41 @@ run_opencode() {
     fi
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT="${VARIANT_OVERRIDE}"
 
+    local _runtime_mode=tui
+    (( DRIVE_MODE )) && _runtime_mode=drive
+    [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
+    AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_REASONING=""
+    AGENT_RUNTIME_VARIANT="$VARIANT"
+    _agent_runtime_start_or_resume \
+        opencode "$MODEL_ID" "$_runtime_mode" \
+        "${AGENT_ROLE:-solo-agent}" "${AGENT_TIER:-standard}" \
+        "${AGENT_POSTURE:-deep-worker}" "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" \
+        "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 0 "$VARIANT_EXPLICIT" || exit $?
+    MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
+    VARIANT="${AGENT_RUNTIME_VARIANT:-$VARIANT}"
+    _load_prompt
+    _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "" "$VARIANT"
+
     export OPENCODE_CONFIG_CONTENT='{"lsp":true,"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
 
     echo "============================================================"
     echo "  OpenCode: build | auto | ${MODEL_NAME} (${VARIANT})"
+    echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"
+    echo "  state: ${AGENT_MANIFEST_FILE}"
+    echo "  context: ${AGENT_CONTEXT_COUNT} 层说明文件（清单：${AGENT_CONTEXT_FILE}）"
     echo "  user-input list: ${LIST_FILE}"
     if (( _SNSC )); then
         echo "  launcher: snsc/HPC"
     fi
-    if [[ -n "${project_root:-}" ]]; then
-        echo "  project context: ${project_root}（AGENTS.md 与 .opencode 已注入 prompt）"
+    if (( AGENT_CONTEXT_COUNT > 0 )); then
+        echo "  project context: ${AGENT_WORKSPACE_ROOT}（分层说明文件清单已注入 prompt）"
     else
-        echo "  project context: 未发现 AGENTS.md / .opencode（仅使用固定 prompt）"
+        echo "  project context: 未发现分层说明文件（仅使用固定 prompt）"
     fi
     if (( DRIVE_MODE )); then
-        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
+        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
     else
         echo "  mode: TUI interactive"
     fi
@@ -485,7 +656,7 @@ run_opencode() {
         [[ -n "${_rec_sid}" ]] || return 0
         [[ -x "${_OPENCODE_BIN}" ]] || return 0
         command -v python3  >/dev/null 2>&1 || return 0
-        _rec_jf="/tmp/opencode/${LIST_FILE}.export.json"
+        _rec_jf="${AGENT_RUN_DIR}/export.json"
         if "${_OPENCODE_BIN}" export "${_rec_sid}" 2>/dev/null > "${_rec_jf}"; then
             python3 - "${_rec_jf}" "${LIST_FILE}" <<'PYEOF'
 import json, sys, datetime
@@ -522,10 +693,18 @@ PYEOF
     }
 
     if (( ! DRIVE_MODE )); then
-        # 原有 TUI 交互模式（无 -file/-time 时行为完全不变）
+        # 原有 TUI 交互模式（无驱动选项时保持原生交互）
+        _agent_runtime_turn_begin
         "${_OPENCODE_BIN}" --agent build --auto --prompt "${PROMPT}" \
                 --print-logs --log-level DEBUG \
                 2> "${LOG_FILE}"
+        _run_rc=$?
+        if (( _run_rc == 0 )); then
+            _agent_runtime_turn_success
+        else
+            _agent_runtime_turn_failure
+        fi
+        return "${_run_rc}"
     else
         # ---- 驱动模式：headless opencode run 链式驱动 ----
         # 回合1 prompt → 从日志提取 session.id →（可选）回合2 文件首指令 → 每 N 秒「继续」
@@ -533,27 +712,50 @@ PYEOF
             echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2
             exit 66
         fi
-        _live_log
-        echo "---- drive: prompt round start $(date "+%F-%T") ----"
-        "${_OPENCODE_BIN}" run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
-                2> "${LOG_FILE}"
-        _drv_rc=$?
-        if (( _drv_rc != 0 )); then
-            echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
-            exit "${_drv_rc}"
+        if _agent_runtime_stop_file_requested; then
+            echo "logs -> ${LOG_FILE}"
+            return 0
         fi
-        _drv_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
-        if [[ -z "${_drv_sid}" ]]; then
-            echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session.id，驱动终止###" >&2
-            exit 1
+        _live_log
+        _drv_sid="${AGENT_SESSION_ID:-}"
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            if [[ -z "${_drv_sid}" ]]; then
+                echo "###${_NAME}: ERROR: 可恢复会话没有 session_id，驱动终止###" >&2
+                exit 1
+            fi
+            echo "---- drive: resume session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
+        else
+            echo "---- drive: prompt round start $(date "+%F-%T") ----"
+            _agent_runtime_turn_begin
+            "${_OPENCODE_BIN}" run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
+                    2> "${LOG_FILE}"
+            _drv_rc=$?
+            if (( _drv_rc != 0 )); then
+                _agent_runtime_turn_failure
+                echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
+                exit "${_drv_rc}"
+            fi
+            _agent_runtime_turn_success
+            _drv_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+            if [[ -z "${_drv_sid}" ]]; then
+                echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session.id，驱动终止###" >&2
+                exit 1
+            fi
+            _agent_runtime_set_session "${_drv_sid}" ""
         fi
         echo "---- drive: session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
         if [[ -n "${DRIVE_FILE}" ]]; then
             _drv_instr="$(<"${DRIVE_FILE}")"
             echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
+            _agent_runtime_turn_begin
             "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "${_drv_instr}" \
                     2>> "${LOG_FILE}"
             _drv_rc=$?
+            if (( _drv_rc == 0 )); then
+                _agent_runtime_turn_success
+            else
+                _agent_runtime_turn_failure
+            fi
             if (( _drv_rc != 0 )); then
                 echo "###${_NAME}: warning: 首条指令回合退出码 ${_drv_rc}，仍进入继续循环###" >&2
             fi
@@ -561,26 +763,61 @@ PYEOF
         else
             echo "---- drive: 未提供 -file，跳过首条指令直接进入继续循环 ----"
         fi
+        if (( ONCE_MODE )); then
+            if [[ -n "${RESUME_RUN_ID}" && -z "${DRIVE_FILE}" ]]; then
+                _agent_runtime_turn_begin
+                "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
+                        2>> "${LOG_FILE}"
+                _drv_rc=$?
+                if (( _drv_rc == 0 )); then
+                    _agent_runtime_turn_success
+                    _agent_runtime_mark finished "resume once"
+                    echo "logs -> ${LOG_FILE}"
+                    return 0
+                fi
+                _agent_runtime_turn_failure
+                _agent_runtime_mark failed "resume once 失败" "${_drv_rc}"
+                return "${_drv_rc}"
+            fi
+            _agent_runtime_should_stop 0 || true
+            echo "logs -> ${LOG_FILE}"
+            return 0
+        fi
         _nudges=0
         _fails=0
+        _loop_rc=0
         while :; do
+            if _agent_runtime_should_stop "${_nudges}"; then
+                break
+            fi
             sleep "${DRIVE_INTERVAL}"
+            if _agent_runtime_should_stop "${_nudges}"; then
+                break
+            fi
+            _agent_runtime_turn_begin
             if "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
                     2>> "${LOG_FILE}"; then
+                _agent_runtime_turn_success
                 _nudges=$((_nudges + 1))
                 _fails=0
                 echo "---- drive: 继续 #${_nudges} ok $(date "+%F-%T") ----"
             else
                 _drv_rc=$?
+                _agent_runtime_turn_failure
                 _fails=$((_fails + 1))
                 echo "###${_NAME}: warning: 继续发送失败 ${_fails}/3（退出码 ${_drv_rc}）###" >&2
                 if (( _fails >= 3 )); then
                     echo "###${_NAME}: ERROR: 连续 3 次「继续」失败，驱动循环终止（累计成功 ${_nudges} 次）###" >&2
+                    _agent_runtime_mark blocked "连续 3 次继续失败" "${_drv_rc}"
+                    _loop_rc=1
                     break
                 fi
             fi
         done
-        unset _drv_sid _drv_rc _nudges _fails
+        _drive_result="${_loop_rc:-0}"
+        unset _drv_sid _drv_rc _nudges _fails _loop_rc
+        echo "logs -> ${LOG_FILE}"
+        return "${_drive_result}"
     fi
 
     if [[ -s "${LIST_FILE}" ]]; then
@@ -605,7 +842,6 @@ run_codex() {
         exit 127
     fi
 
-    _load_prompt
     # 初始注入包含固定 prompt、全局 agent 配置目录清单以及全局/工作区 skill 清单。
     # 这里只列出路径，不读取配置内容；模型需要时再按需读取。
     local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
@@ -647,15 +883,23 @@ run_codex() {
     local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-danger-full-access}"
     local CODEX_APPROVAL_POLICY="${CODEX_APPROVAL:-never}"
     local MODEL_ID MODEL_NAME REASONING_EFFORT DRIVE_INTERVAL="" DRIVE_MODE=0
+    local MODEL_EXPLICIT=0 REASONING_EXPLICIT=0
+    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
+    local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
+    local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
+    local RESUME_RUN_ID="${AGENT_RESUME_RUN_ID:-}"
+    local ONCE_MODE="${AGENT_ONCE:-0}"
+    [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
+    [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; shift;;
+            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; MODEL_EXPLICIT=1; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
-                MODEL_OVERRIDE="$2"; shift 2;;
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
             --reasoning-effort)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
-                REASONING_OVERRIDE="$2"; shift 2;;
+                REASONING_OVERRIDE="$2"; REASONING_EXPLICIT=1; shift 2;;
             --sandbox)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少策略参数###" >&2; exit 64; fi
                 CODEX_SANDBOX_MODE="$2"; shift 2;;
@@ -665,9 +909,28 @@ run_codex() {
             -time|--time)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
                 _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
+            --once)
+                ONCE_MODE=1; DRIVE_MODE=1; shift;;
+            --max-turns)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少回合数###" >&2; exit 64; fi
+                MAX_TURNS_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --max-runtime)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
+                MAX_RUNTIME_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --stop-file)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
+                STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
+            --resume)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
+                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+<<<<<<< HEAD
                 echo "默认模型: gpt-6-astra medium（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出 -time 时进入 exec 驱动模式。"
+=======
+                echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
+                echo "默认模型: gpt-5.5 xhigh（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
+>>>>>>> 18a5bfec545adc0029cee1129dba8a3437730299
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -680,6 +943,17 @@ run_codex() {
     fi
     unset _ti_raw
     [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
+    _max_turns_input="$MAX_TURNS_RAW"
+    if ! MAX_TURNS_RAW="$(_parse_nonnegative_integer "${_max_turns_input}")"; then
+        echo "###${_NAME}: ERROR: --max-turns '${_max_turns_input}' 必须是非负整数###" >&2
+        exit 64
+    fi
+    _max_runtime_input="$MAX_RUNTIME_RAW"
+    if ! MAX_RUNTIME_RAW="$(_parse_runtime_limit "${_max_runtime_input}")"; then
+        echo "###${_NAME}: ERROR: --max-runtime '${_max_runtime_input}' 格式无效（示例: 0 / 30 / 5m / 2h）###" >&2
+        exit 64
+    fi
+    unset _max_turns_input _max_runtime_input
 
     # 模型选择：默认 -q GPT-6-Astra (medium)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
     case "${MODEL_FLAG}" in
@@ -698,6 +972,21 @@ run_codex() {
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
     fi
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
+    local _runtime_mode=tui
+    (( DRIVE_MODE )) && _runtime_mode=drive
+    [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
+    AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_REASONING="$REASONING_EFFORT"
+    AGENT_RUNTIME_VARIANT=""
+    _agent_runtime_start_or_resume \
+        codex "$MODEL_ID" "$_runtime_mode" \
+        "${AGENT_ROLE:-solo-agent}" "${AGENT_TIER:-standard}" \
+        "${AGENT_POSTURE:-frontier-orchestrator}" "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" \
+        "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" "$REASONING_EXPLICIT" 0 || exit $?
+    MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
+    REASONING_EFFORT="${AGENT_RUNTIME_REASONING:-$REASONING_EFFORT}"
+    _load_prompt
+    _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "$REASONING_EFFORT" ""
     local CODEX_PROVIDER_ID="${CODEX_PROVIDER_ID:-lqcd}"
     local CODEX_PROVIDER_NAME="${CODEX_PROVIDER_NAME:-lqcd}"
     local CODEX_PROVIDER_BASE_URL="${CODEX_PROVIDER_BASE_URL:-http://nat200.natappvip.cc/v1}"
@@ -747,13 +1036,16 @@ run_codex() {
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
     echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER} | personality=${CODEX_PERSONALITY}"
     echo "  tui: status_line preset | colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
+    echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"
+    echo "  state: ${AGENT_MANIFEST_FILE}"
+    echo "  context: ${AGENT_CONTEXT_COUNT} 层说明文件（清单：${AGENT_CONTEXT_FILE}）"
     echo "  agent config: ${_configure_agent_root}/{skills,tools,hooks,plugins}"
     if (( _SNSC )); then
         echo "  launcher: snsc/HPC"
     fi
     if (( DRIVE_MODE )); then
-        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | prompt + 继续"
+        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | prompt + 继续"
     else
         echo "  mode: TUI interactive"
     fi
@@ -833,66 +1125,110 @@ PY
 
     if (( ! DRIVE_MODE )); then
         # 普通模式：保持 Codex TUI；只给模型旗标时不进入 exec 链。
+        _agent_runtime_turn_begin
         "${_CODEX_BIN}" "${CODEX_INITIAL_ARGS[@]}" -- "${PROMPT}" 2>"${LOG_FILE}"
         _run_rc=$?
+        if (( _run_rc == 0 )); then
+            _agent_runtime_turn_success
+        else
+            _agent_runtime_turn_failure
+        fi
     else
         # ---- 驱动模式：headless codex exec → exec resume 链式驱动 ----
         # 回合1 prompt → thread.started → 每 N 秒发送固定的「继续」。
+        if _agent_runtime_stop_file_requested; then
+            echo "logs -> ${LOG_FILE}"
+            return 0
+        fi
         _live_log
-        echo "---- drive: prompt round start $(date "+%F-%T") ----"
-        if "${_CODEX_BIN}" exec "${CODEX_INITIAL_ARGS[@]}" --json -- "${PROMPT}" >>"${LOG_FILE}" 2>&1; then
-            _drv_rc=0
+        _drv_sid="${AGENT_THREAD_ID:-}"
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            if [[ -z "${_drv_sid}" ]]; then
+                echo "###${_NAME}: ERROR: 可恢复会话没有 thread_id，驱动终止###" >&2
+                exit 1
+            fi
+            echo "---- drive: resume thread=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
         else
-            _drv_rc=$?
-        fi
-        if (( _drv_rc != 0 )); then
-            echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
-            exit "${_drv_rc}"
-        fi
-        _drv_sid="$(_extract_thread_id "${LOG_FILE}")"
-        if [[ -z "${_drv_sid}" ]]; then
-            echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 thread_id，驱动终止###" >&2
-            exit 1
+            echo "---- drive: prompt round start $(date "+%F-%T") ----"
+            _agent_runtime_turn_begin
+            if "${_CODEX_BIN}" exec "${CODEX_INITIAL_ARGS[@]}" --json -- "${PROMPT}" >>"${LOG_FILE}" 2>&1; then
+                _drv_rc=0
+            else
+                _drv_rc=$?
+            fi
+            if (( _drv_rc != 0 )); then
+                _agent_runtime_turn_failure
+                echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_drv_rc}），驱动终止###" >&2
+                exit "${_drv_rc}"
+            fi
+            _agent_runtime_turn_success
+            _drv_sid="$(_extract_thread_id "${LOG_FILE}")"
+            if [[ -z "${_drv_sid}" ]]; then
+                echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 thread_id，驱动终止###" >&2
+                exit 1
+            fi
+            _agent_runtime_set_session "${_drv_sid}" "${_drv_sid}"
         fi
         echo "---- drive: thread=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
         echo "---- drive: prompt 已完成，进入继续循环 ----"
+        if (( ONCE_MODE )); then
+            if [[ -n "${RESUME_RUN_ID}" ]]; then
+                _agent_runtime_turn_begin
+                if "${_CODEX_BIN}" exec resume "${CODEX_COMMON_ARGS[@]}" --json "${_drv_sid}" -- "继续" >>"${LOG_FILE}" 2>&1; then
+                    _agent_runtime_turn_success
+                    _agent_runtime_mark finished "resume once"
+                    _run_rc=0
+                else
+                    _run_rc=$?
+                    _agent_runtime_turn_failure
+                    _agent_runtime_mark failed "resume once 失败" "${_run_rc}"
+                fi
+            else
+                _agent_runtime_mark finished "once 模式"
+                _run_rc=0
+            fi
+            echo "logs -> ${LOG_FILE}"
+            return "${_run_rc}"
+        fi
         _nudges=0
         _fails=0
+        _loop_rc=0
         while :; do
+            if _agent_runtime_should_stop "${_nudges}"; then
+                break
+            fi
             sleep "${DRIVE_INTERVAL}"
+            if _agent_runtime_should_stop "${_nudges}"; then
+                break
+            fi
+            _agent_runtime_turn_begin
             if "${_CODEX_BIN}" exec resume "${CODEX_COMMON_ARGS[@]}" --json "${_drv_sid}" -- "继续" >>"${LOG_FILE}" 2>&1; then
+                _agent_runtime_turn_success
                 _nudges=$((_nudges + 1))
                 _fails=0
                 echo "---- drive: 继续 #${_nudges} ok $(date "+%F-%T") ----"
             else
                 _drv_rc=$?
+                _agent_runtime_turn_failure
                 _fails=$((_fails + 1))
                 echo "###${_NAME}: warning: 继续发送失败 ${_fails}/3（退出码 ${_drv_rc}）###" >&2
                 if (( _fails >= 3 )); then
                     echo "###${_NAME}: ERROR: 连续 3 次「继续」失败，驱动循环终止（累计成功 ${_nudges} 次）###" >&2
+                    _agent_runtime_mark blocked "连续 3 次继续失败" "${_drv_rc}"
+                    _loop_rc=1
                     break
                 fi
             fi
         done
-        unset _drv_sid _drv_rc _nudges _fails
+        _drive_result="${_loop_rc:-0}"
+        unset _drv_sid _drv_rc _nudges _fails _loop_rc
+        echo "logs -> ${LOG_FILE}"
+        return "${_drive_result}"
     fi
 
     echo "logs -> ${LOG_FILE}"
     return "${_run_rc:-0}"
 }
-
-# ---- 分发（cpupower.sh 模式：按 $_NAME 分发）----
-case "${_NAME}" in
-    cl)   _AGENT=claude;   _SNSC=0;;
-    cls)  _AGENT=claude;   _SNSC=1;;
-    op)   _AGENT=opencode; _SNSC=0;;
-    co)   _AGENT=codex;    _SNSC=0;;
-    ops)  _AGENT=opencode; _SNSC=1;;
-    cos)  _AGENT=codex;    _SNSC=1;;
-    *)
-        echo "Usage: ln -s agent.sh {cl|cls|op|co|ops|cos}"
-        exit 1;;
-esac
 
 case "${_AGENT}" in
     claude)   run_claude "$@";;
