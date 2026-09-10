@@ -428,6 +428,10 @@ _minted*/
 .debug.*
 .optim.*
 .tag.*
+.agent-runtime/
+data/runs/
+data/hooks/
+data/context-*.txt
 .pdfcheck.*
 # ZhangXin
 *.VSCodeCounter
