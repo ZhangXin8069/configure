@@ -1,10 +1,11 @@
 @echo off
-setlocal EnableExtensions EnableDelayedExpansion
+setlocal EnableExtensions
 chcp 65001 >nul
 title Agent Launcher
 
 rem ============================================================
 rem  agent.bat - Windows unified agent launcher
+<<<<<<< HEAD
 rem  Distribution by filename (%%~nx0, cpupower.sh-style): 
 rem    cl.bat -> Claude Code | op.bat -> OpenCode | co.bat -> Codex
 rem  Deploy: copy agent.bat as cl.bat / op.bat / co.bat
@@ -20,23 +21,45 @@ rem    codex default provider: lqcd / api / fast / pragmatic (key via LQCD_API_K
 rem    -file PATH : drive mode (cl/op) - after the prompt round completes, send file
 rem                 content as first instruction, then send "continue" every -time
 rem    -time DUR  : "continue" interval; plain number=seconds; s/m/h suffix ok (default 30s)
+=======
+rem  Distribution by filename:
+rem    cl[ s ].bat -> Claude Code
+rem    op[ s ].bat -> OpenCode
+rem    co[ s ].bat -> Codex
+rem  The implementation lives in agent-runtime.ps1 so that state,
+rem  locking, JSON events and bounded drive semantics remain testable.
+>>>>>>> 18a5bfec545adc0029cee1129dba8a3437730299
 rem ============================================================
 
 set "_NAME=%~nx0"
 set "_PATH=%~dp0"
 set "_PWD=%CD%"
+set "_AGENT="
+set "_SNSC=0"
 
-rem ---- distribution by filename ----
-set "AGENT="
-if /i "%_NAME%"=="cl.bat" set "AGENT=claude"
-if /i "%_NAME%"=="op.bat" set "AGENT=opencode"
-if /i "%_NAME%"=="co.bat" set "AGENT=codex"
-if not defined AGENT (
-    echo ERROR: %_NAME% is not a recognized launcher name.
-    echo Usage: copy agent.bat as cl.bat / op.bat / co.bat  ^(or: mklink /H ^<name^>.bat agent.bat^)
+if /i "%_NAME%"=="cl.bat"  set "_AGENT=claude"
+if /i "%_NAME%"=="cls.bat" (
+    set "_AGENT=claude"
+    set "_SNSC=1"
+)
+if /i "%_NAME%"=="op.bat"  set "_AGENT=opencode"
+if /i "%_NAME%"=="ops.bat" (
+    set "_AGENT=opencode"
+    set "_SNSC=1"
+)
+if /i "%_NAME%"=="co.bat"  set "_AGENT=codex"
+if /i "%_NAME%"=="cos.bat" (
+    set "_AGENT=codex"
+    set "_SNSC=1"
+)
+
+if not defined _AGENT (
+    echo 用法：将 agent.bat 复制或链接为 cl.bat、op.bat、co.bat
+    echo HPC 变体：cls.bat、ops.bat、cos.bat
     exit /b 1
 )
 
+<<<<<<< HEAD
 rem ---- arg parsing: model flags + drive options ----
 set "MODEL_FLAG="
 set "MODEL_OVERRIDE="
@@ -241,161 +264,32 @@ set "LIST_FILE=.agent.%_TS%.list"
 rem ---- prompt template must exist ----
 if not exist "%_PATH%agent-prompt.txt" (
     echo ERROR: %_PATH%agent-prompt.txt not found
+=======
+if not exist "%_PATH%agent-runtime.ps1" (
+    echo ERROR: %_PATH%agent-runtime.ps1 不存在
+>>>>>>> 18a5bfec545adc0029cee1129dba8a3437730299
     exit /b 127
 )
 
-echo ============================================================
-if "%AGENT%"=="opencode" echo   OpenCode: build ^| auto ^| %MODEL_NAME% (%VARIANT%)
-if "%AGENT%"=="codex" echo   Codex: %MODEL_NAME% ^| reasoning=%REASONING_EFFORT%
-if "%AGENT%"=="codex" echo   provider: %CODEX_PROVIDER_ID% ^| tier=%CODEX_SERVICE_TIER% ^| personality=%CODEX_PERSONALITY%
-if "%AGENT%"=="codex" echo   tui: status_line preset ^| colors=%CODEX_TUI_STATUS_LINE_USE_COLORS%
-if "%AGENT%"=="claude" echo   Claude Code: %MODEL_NAME% ^| permission-mode auto
-echo   log: %LOG_FILE%
-if "%AGENT%"=="opencode" echo   user-input list: %LIST_FILE%
-if "%AGENT%"=="codex" echo   sandbox: %SANDBOX_MODE% ^| approval: %APPROVAL_POLICY%
-if "%DRIVE_MODE%"=="1" (
-    echo   drive mode: ON ^| interval=%DRIVE_TIME% ^| first-instruction: %DRIVE_FILE%
-) else (
-    echo   mode: TUI interactive
+set "AGENT_BAT_LAUNCHER_NAME=%_NAME%"
+set "AGENT_BAT_SCRIPT_DIR=%_PATH%"
+set "AGENT_BAT_WORKDIR=%_PWD%"
+set "AGENT_BAT_AGENT=%_AGENT%"
+set "AGENT_BAT_SNSC=%_SNSC%"
+
+set "_PS_CMD="
+where powershell.exe >nul 2>&1
+if not errorlevel 1 set "_PS_CMD=powershell.exe"
+if not defined _PS_CMD (
+    where pwsh.exe >nul 2>&1
+    if not errorlevel 1 set "_PS_CMD=pwsh.exe"
 )
-echo ============================================================
+if not defined _PS_CMD (
+    echo ERROR: 未找到 powershell.exe 或 pwsh.exe
+    exit /b 127
+)
 
-rem ---- run per agent ----
-if "%AGENT%"=="opencode" goto run_opencode
-if "%AGENT%"=="codex" goto run_codex
-goto run_claude
-
-rem ============================================================
-rem  OpenCode: TUI or headless opencode run chain (session.id)
-rem ============================================================
-:run_opencode
-set "OPENCODE_CONFIG_CONTENT={"lsp":true,"agent":{"build":{"model":"%MODEL_ID%","variant":"%VARIANT%"}}}
-if "%DRIVE_MODE%"=="0" goto op_tui
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$opencode=if($env:OPENCODE_BIN){$env:OPENCODE_BIN}else{'opencode'};" ^
-  "$msg=[string][char]0x7EE7+[char]0x7EED;" ^
-  "$iv='%DRIVE_TIME%';" ^
-  "if ($iv -eq '') { $sec=30 } else {" ^
-  "  $mm=[regex]::Match($iv,'^(\d+)([smh]?)$');" ^
-  "  if (-not $mm.Success) { Write-Host ('ERROR: bad --time value: ' + $iv); exit 64 }" ^
-  "  $n=[int]$mm.Groups[1].Value;" ^
-  "  switch ($mm.Groups[2].Value) { 's' {$sec=$n} 'm' {$sec=$n*60} 'h' {$sec=$n*3600} default {$sec=$n} }" ^
-  "}" ^
-  "$p=[IO.File]::ReadAllText('%_PATH%agent-prompt.txt');" ^
-  "$p=$p.Replace('${HOME}',$env:USERPROFILE).Replace('${_PWD}','%_PWD%').Replace('${LIST_FILE}','%LIST_FILE%');" ^
-  "Write-Host ('---- drive: prompt round start ' + (Get-Date -Format 'yyyy-MM-dd-HH:mm:ss'));" ^
-  "& $opencode run --agent build --auto --print-logs --log-level DEBUG $p 2>>'%LOG_FILE%';" ^
-  "if ($LASTEXITCODE -ne 0) { Write-Host ('ERROR: prompt round failed, rc=' + $LASTEXITCODE); exit $LASTEXITCODE }" ^
-  "$m=Select-String -Path '%LOG_FILE%' -Pattern 'session.id=([A-Za-z0-9_-]+)' | Select-Object -First 1;" ^
-  "if (-not $m) { Write-Host 'ERROR: cannot extract session.id'; exit 1 }" ^
-  "$sid=$m.Matches[0].Groups[1].Value;" ^
-  "Write-Host ('---- drive: session=' + $sid + ' interval=' + $sec + 's ----');" ^
-  "if ('%DRIVE_FILE%' -ne '') {" ^
-  "  if (-not (Test-Path '%DRIVE_FILE%')) { Write-Host ('ERROR: --file not readable: %DRIVE_FILE%'); exit 66 }" ^
-  "  Write-Host ('---- drive: first instruction <- %DRIVE_FILE% ----');" ^
-  "  & $opencode run -s $sid --agent build --auto --print-logs --log-level DEBUG ([IO.File]::ReadAllText('%DRIVE_FILE%')) 2>>'%LOG_FILE%';" ^
-  "  if ($LASTEXITCODE -ne 0) { Write-Host ('WARN: first-instruction round rc=' + $LASTEXITCODE + ', entering continue loop anyway') }" ^
-  "} else { Write-Host '---- drive: no -file, enter continue loop directly ----' }" ^
-  "$nudges=0; $fails=0;" ^
-  "while ($true) {" ^
-  "  Start-Sleep -Seconds $sec;" ^
-  "  & $opencode run -s $sid --agent build --auto --print-logs --log-level DEBUG $msg 2>>'%LOG_FILE%';" ^
-  "  if ($LASTEXITCODE -eq 0) { $nudges++; $fails=0; Write-Host ('---- drive: continue #' + $nudges + ' ok ' + (Get-Date -Format 'yyyy-MM-dd-HH:mm:ss')) }" ^
-  "  else { $fails++; Write-Host ('WARN: continue send failed ' + $fails + '/3'); if ($fails -ge 3) { Write-Host ('ERROR: 3 consecutive failures, stop (total ok=' + $nudges + ')'); break } }" ^
-  "}"
-goto run_done
-
-:op_tui
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$opencode=if($env:OPENCODE_BIN){$env:OPENCODE_BIN}else{'opencode'};" ^
-  "$p=[IO.File]::ReadAllText('%_PATH%agent-prompt.txt');" ^
-  "$p=$p.Replace('${HOME}',$env:USERPROFILE).Replace('${_PWD}','%_PWD%').Replace('${LIST_FILE}','%LIST_FILE%');" ^
-  "& $opencode --agent build --auto --prompt $p --print-logs --log-level DEBUG" 2> "%LOG_FILE%"
-goto run_done
-
-rem ============================================================
-rem  Codex: TUI or headless codex exec -> exec resume chain
-rem ============================================================
-:run_codex
-set "CODEX_PROMPT_FILE=%_PATH%agent-prompt.txt"
-set "CODEX_RUN_CWD=%_PWD%"
-set "CODEX_LOG_FILE=%LOG_FILE%"
-set "CODEX_MODEL_ID=%MODEL_ID%"
-set "CODEX_REASONING=%REASONING_EFFORT%"
-set "CODEX_SANDBOX_MODE=%SANDBOX_MODE%"
-set "CODEX_APPROVAL_POLICY=%APPROVAL_POLICY%"
-set "CODEX_DRIVE_MODE=%DRIVE_MODE%"
-set "CODEX_DRIVE_TIME=%DRIVE_TIME%"
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$ErrorActionPreference='Continue';" ^
-  "$codex=if($env:CODEX_BIN){$env:CODEX_BIN}else{'codex'};" ^
-  "$prompt=[IO.File]::ReadAllText($env:CODEX_PROMPT_FILE);" ^
-  "$homeRoot=if($env:HOME){$env:HOME}else{$env:USERPROFILE}; $prompt=$prompt.Replace('${HOME}',$homeRoot).Replace('${_PWD}',$env:CODEX_RUN_CWD);" ^
-  "$eol=[Environment]::NewLine; $seen=@{};" ^
-  "$agentConfigDirs=@((Join-Path $homeRoot 'configure\skills'),(Join-Path $homeRoot 'configure\tools'),(Join-Path $homeRoot 'configure\hooks'),(Join-Path $homeRoot 'configure\plugins'));" ^
-  "$prompt += $eol+$eol+'### 全局 Agent 配置目录（按需读取） ###'+$eol+($agentConfigDirs -join $eol)+$eol;" ^
-  "function Get-SkillSection([string]$title,[string[]]$roots){ $paths=@(); foreach($root in $roots){ if(Test-Path -LiteralPath $root -PathType Container){ Get-ChildItem -LiteralPath $root -Filter SKILL.md -File -Recurse -ErrorAction SilentlyContinue | Sort-Object -Property FullName | ForEach-Object { $key=$_.FullName.ToLowerInvariant(); if(!$seen.ContainsKey($key)){ $seen[$key]=$true; $paths+=$_.FullName } } } }; $text=$eol+$eol+'### '+$title+' ###'+$eol; if($paths.Count){$text+=($paths -join $eol)+$eol}else{$text+='（未找到 SKILL.md）'+$eol}; return $text };" ^
-  "$workspaceRoot=$env:CODEX_RUN_CWD; try{$gitRoot=((& git -C $workspaceRoot rev-parse --show-toplevel 2>$null | Select-Object -First 1) -as [string]).Trim();if($gitRoot){$workspaceRoot=$gitRoot}}catch{};" ^
-  "$globalSkills=Join-Path $homeRoot 'configure\skills'; $workspaceSkills=@((Join-Path $env:CODEX_RUN_CWD 'skills'),(Join-Path $env:CODEX_RUN_CWD '.codex\skills')); if($workspaceRoot -ne $env:CODEX_RUN_CWD){$workspaceSkills += @((Join-Path $workspaceRoot 'skills'),(Join-Path $workspaceRoot '.codex\skills'))};" ^
-  "$prompt += Get-SkillSection ('全局技能（'+$globalSkills+'）') @($globalSkills); $prompt += Get-SkillSection ('当前工作目录技能（'+$env:CODEX_RUN_CWD+'）') $workspaceSkills;" ^
-  "$common=@('--model',$env:CODEX_MODEL_ID,'--config',('forced_login_method='+[char]34+$env:CODEX_FORCED_LOGIN_METHOD+[char]34),'--config',('model_provider='+[char]34+$env:CODEX_PROVIDER_ID+[char]34),'--config',('model_context_window='+$env:CODEX_MODEL_CONTEXT_WINDOW),'--config',('model_auto_compact_token_limit='+$env:CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT),'--config',('personality='+[char]34+$env:CODEX_PERSONALITY+[char]34),'--config',('approvals_reviewer='+[char]34+$env:CODEX_APPROVALS_REVIEWER+[char]34),'--config',('service_tier='+[char]34+$env:CODEX_SERVICE_TIER+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.name='+[char]34+$env:CODEX_PROVIDER_NAME+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.base_url='+[char]34+$env:CODEX_PROVIDER_BASE_URL+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.env_key='+[char]34+$env:CODEX_PROVIDER_ENV_KEY+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.wire_api='+[char]34+'responses'+[char]34),'--config',('model_providers.'+$env:CODEX_PROVIDER_ID+'.supports_websockets=true'),'--config',('tui.status_line='+$env:CODEX_TUI_STATUS_LINE),'--config',('tui.status_line_use_colors='+$env:CODEX_TUI_STATUS_LINE_USE_COLORS),'--config',('model_reasoning_effort='+[char]34+$env:CODEX_REASONING+[char]34),'--config',('approval_policy='+[char]34+$env:CODEX_APPROVAL_POLICY+[char]34),'--config',('sandbox_mode='+[char]34+$env:CODEX_SANDBOX_MODE+[char]34)); $initialCommon=@($common); foreach($dir in $agentConfigDirs){if(Test-Path -LiteralPath $dir -PathType Container){$initialCommon+=@('--add-dir',$dir)}};" ^
-  "if($env:CODEX_DRIVE_MODE -eq '0'){ $a=@()+'--' + $prompt; & $codex @initialCommon @a 2>>$env:CODEX_LOG_FILE; exit $LASTEXITCODE };" ^
-  "$raw=$env:CODEX_DRIVE_TIME; if(!$raw){$sec=30} elseif($raw -match '^(\d+)([smh]?)$'){ $n=[int64]$Matches[1]; if($n -le 0){Write-Host 'ERROR: bad --time value'; exit 64}; switch($Matches[2]){'s'{$sec=$n};'m'{$sec=$n*60};'h'{$sec=$n*3600};default{$sec=$n}} } else {Write-Host ('ERROR: bad --time value: '+$raw); exit 64};" ^
-  "$common += @('--json'); $initialCommon += @('--json'); function Invoke-Codex([bool]$resume,[string]$message){ $a=@('exec'); if($resume){$a+=@('resume');$a+=$common}else{$a+=$initialCommon}; if($resume){$a+=@($thread,'--',$message)}else{$a+=@('--',$message)}; & $codex @a 2>>$env:CODEX_LOG_FILE | Tee-Object -FilePath $env:CODEX_LOG_FILE -Append; return $LASTEXITCODE };" ^
-  "$rc=Invoke-Codex $false $prompt; if($rc -ne 0){Write-Host ('ERROR: prompt round failed, rc='+$rc); exit $rc};" ^
-  "$thread=$null; foreach($line in [IO.File]::ReadLines($env:CODEX_LOG_FILE)){try{$e=$line|ConvertFrom-Json}catch{continue}; if($e.type -eq 'thread.started' -and $e.thread_id){$thread=$e.thread_id;break}}; if(!$thread){Write-Host 'ERROR: cannot extract thread_id'; exit 1}; Write-Host ('---- drive: thread='+$thread+' interval='+$sec+'s ----');" ^
-  "$nudges=0; $fails=0; while($true){Start-Sleep -Seconds $sec; $rc=Invoke-Codex $true '继续'; if($rc -eq 0){$nudges++;$fails=0;Write-Host ('---- drive: continue #'+$nudges+' ok '+(Get-Date -Format 'yyyy-MM-dd-HH:mm:ss'))}else{$fails++;Write-Host ('WARN: continue send failed '+$fails+'/3');if($fails -ge 3){Write-Host ('ERROR: 3 consecutive failures, stop (total ok='+$nudges+')');break}}}"
-goto run_done
-
-rem ============================================================
-rem  Claude Code: TUI or headless claude -p -> --resume chain
-rem ============================================================
-:run_claude
-powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$claude=if($env:CLAUDE_BIN){$env:CLAUDE_BIN}else{'claude'};" ^
-  "$msg=[string][char]0x7EE7+[char]0x7EED;" ^
-  "$iv='%DRIVE_TIME%';" ^
-  "if ($iv -eq '') { $sec=30 } else {" ^
-  "  $mm=[regex]::Match($iv,'^(\d+)([smh]?)$');" ^
-  "  if (-not $mm.Success) { Write-Host ('ERROR: bad --time value: ' + $iv); exit 64 }" ^
-  "  $n=[int]$mm.Groups[1].Value;" ^
-  "  switch ($mm.Groups[2].Value) { 's' {$sec=$n} 'm' {$sec=$n*60} 'h' {$sec=$n*3600} default {$sec=$n} }" ^
-  "}" ^
-  "$p=[IO.File]::ReadAllText('%_PATH%agent-prompt.txt');" ^
-  "$homeRoot=if($env:HOME){$env:HOME}else{$env:USERPROFILE}; $p=$p.Replace('${HOME}',$homeRoot).Replace('${_PWD}','%_PWD%');" ^
-  "$eol=[Environment]::NewLine; $seen=@{};" ^
-  "$agentConfigDirs=@((Join-Path $homeRoot 'configure\skills'),(Join-Path $homeRoot 'configure\tools'),(Join-Path $homeRoot 'configure\hooks'),(Join-Path $homeRoot 'configure\plugins'));" ^
-  "$p += $eol+$eol+'### 全局 Agent 配置目录（按需读取） ###'+$eol+($agentConfigDirs -join $eol)+$eol;" ^
-  "function Get-SkillSection([string]$title,[string[]]$roots){ $paths=@(); foreach($root in $roots){ if(Test-Path -LiteralPath $root -PathType Container){ Get-ChildItem -LiteralPath $root -Filter SKILL.md -File -Recurse -ErrorAction SilentlyContinue | Sort-Object -Property FullName | ForEach-Object { $key=$_.FullName.ToLowerInvariant(); if(!$seen.ContainsKey($key)){ $seen[$key]=$true; $paths+=$_.FullName } } } }; $text=$eol+$eol+'### '+$title+' ###'+$eol; if($paths.Count){$text+=($paths -join $eol)+$eol}else{$text+='（未找到 SKILL.md）'+$eol}; return $text };" ^
-  "$workspaceRoot='%_PWD%'; try{$gitRoot=((& git -C $workspaceRoot rev-parse --show-toplevel 2>$null | Select-Object -First 1) -as [string]).Trim();if($gitRoot){$workspaceRoot=$gitRoot}}catch{};" ^
-  "$globalSkills=Join-Path $homeRoot 'configure\skills'; $workspaceSkills=@('%_PWD%\skills','%_PWD%\.codex\skills'); if($workspaceRoot -ne '%_PWD%'){$workspaceSkills += @((Join-Path $workspaceRoot 'skills'),(Join-Path $workspaceRoot '.codex\skills'))};" ^
-  "$p += Get-SkillSection ('全局技能（'+$globalSkills+'）') @($globalSkills); $p += Get-SkillSection ('当前工作目录技能（%_PWD%）') $workspaceSkills;" ^
-  "if ('%DRIVE_MODE%' -eq '0') { & $claude --permission-mode auto --model '%MODEL_ID%' 2>>'%LOG_FILE%'; exit $LASTEXITCODE };" ^
-  "Write-Host ('---- drive: prompt round start ' + (Get-Date -Format 'yyyy-MM-dd-HH:mm:ss'));" ^
-  "& $claude -p --permission-mode auto --model '%MODEL_ID%' $p 2>>'%LOG_FILE%';" ^
-  "if ($LASTEXITCODE -ne 0) { Write-Host ('ERROR: prompt round failed, rc=' + $LASTEXITCODE); exit $LASTEXITCODE }" ^
-  "$m=Select-String -Path '%LOG_FILE%' -Pattern 'session_id=([A-Za-z0-9_-]+)' | Select-Object -First 1;" ^
-  "if (-not $m) { Write-Host 'ERROR: cannot extract session_id'; exit 1 }" ^
-  "$sid=$m.Matches[0].Groups[1].Value;" ^
-  "Write-Host ('---- drive: session=' + $sid + ' interval=' + $sec + 's ----');" ^
-  "if ('%DRIVE_FILE%' -ne '') {" ^
-  "  if (-not (Test-Path '%DRIVE_FILE%')) { Write-Host ('ERROR: --file not readable: %DRIVE_FILE%'); exit 66 }" ^
-  "  Write-Host ('---- drive: first instruction <- %DRIVE_FILE% ----');" ^
-  "  & $claude -p --resume $sid --permission-mode auto --model '%MODEL_ID%' ([IO.File]::ReadAllText('%DRIVE_FILE%')) 2>>'%LOG_FILE%';" ^
-  "  if ($LASTEXITCODE -ne 0) { Write-Host ('WARN: first-instruction round rc=' + $LASTEXITCODE + ', entering continue loop anyway') }" ^
-  "} else { Write-Host '---- drive: no -file, enter continue loop directly ----' }" ^
-  "$nudges=0; $fails=0;" ^
-  "while ($true) {" ^
-  "  Start-Sleep -Seconds $sec;" ^
-  "  & $claude -p --resume $sid --permission-mode auto --model '%MODEL_ID%' $msg 2>>'%LOG_FILE%';" ^
-  "  if ($LASTEXITCODE -eq 0) { $nudges++; $fails=0; Write-Host ('---- drive: continue #' + $nudges + ' ok ' + (Get-Date -Format 'yyyy-MM-dd-HH:mm:ss')) }" ^
-  "  else { $fails++; Write-Host ('WARN: continue send failed ' + $fails + '/3'); if ($fails -ge 3) { Write-Host ('ERROR: 3 consecutive failures, stop (total ok=' + $nudges + ')'); break } }" ^
-  "}"
-goto run_done
-
-:run_done
-echo.
-echo   logs -^> %LOG_FILE%
-for /f %%i in ('powershell -NoProfile -Command "Get-Date -Format yyyy-MM-dd-HH-mm-ss"') do set "_NOW=%%i"
-echo ###%_NAME% in %_PATH% is done......:%_NOW%###
-exit /b %errorlevel%
+"%_PS_CMD%" -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%_PATH%agent-runtime.ps1" %*
+set "_RC=%errorlevel%"
+echo ###%_NAME% in %_PATH% is done......:%date% %time%###
+exit /b %_RC%
