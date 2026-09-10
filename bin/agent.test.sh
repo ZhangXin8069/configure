@@ -130,11 +130,11 @@ default_codex_output=$(CODEX_DEFAULT_MODEL_FLAG= CODEX_MODEL= CODEX_MODEL_Q= \
 default_codex_status=$?
 set -e
 (( default_codex_status == 0 )) || fail "Codex 默认配置 fake launcher 失败：$default_codex_output"
-assert_contains "$default_codex_output" 'Codex: GPT-6 Astra | reasoning=medium'
+assert_contains "$default_codex_output" 'Codex: GPT-6 Astra | reasoning=max'
 assert_contains "$default_codex_output" 'provider: lqcd | tier=standard'
 assert_file_contains "$call_log" '--model gpt-6-astra'
 assert_file_contains "$call_log" 'features.fast_mode=false'
-assert_file_contains "$call_log" 'model_reasoning_effort="medium"'
+assert_file_contains "$call_log" 'model_reasoning_effort="max"'
 assert_file_not_contains "$call_log" 'service_tier='
 printf 'PASS: Codex 默认模型、reasoning 和 Fast 关闭\n'
 

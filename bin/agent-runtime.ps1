@@ -1556,7 +1556,7 @@ function Parse-Arguments {
                 '-m' { 'max' }
                 '-o' { 'max' }
                 '-p' { 'high' }
-                '-q' { 'medium' }
+                '-q' { 'max' }
                 '-k' { 'high' }
                 '-g' { 'high' }
                 '-f' { 'low' }
