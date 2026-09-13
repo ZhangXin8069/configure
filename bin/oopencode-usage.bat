@@ -3,7 +3,7 @@ setlocal enabledelayedexpansion
 title OpenCode Usage
 
 echo ============================================================
-echo   OpenCode - Usage (GLM-5.3-Flash)
+echo   OpenCode - Usage (DeepSeek V4.1 Flash)
 echo ============================================================
 echo.
 echo   Opening https://opencode.ai/workspace/wrk_01KZTY1K326GTXPHTBF82TRZ80/usage ...
