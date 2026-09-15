@@ -67,7 +67,8 @@ usage() {
 
 默认行为: 打印将要合并的 YAML 差异，不写盘；加 --apply 才写入。
 配置位置: $SETTINGS_FILE 与 $CRED_FILE（合并保留已有键与注释；凭证文件强制 600）
-认证:     API key 也可稍后在 dsh web 的 Settings → Models 中填写（二者等价）。
+启动:     TUI（默认）: dsh-tui；Web UI: dsh web（默认 http://127.0.0.1:3080）
+认证:     API key 也可稍后在 TUI 内 /settings 或 dsh web 的 Settings → Models 中填写（二者等价）。
 EOF
 }
 
@@ -319,6 +320,16 @@ check_status() {
         dsh_ver="$(dsh --version 2>/dev/null | head -1 || echo '版本未知')"
     fi
     printf 'dsh:      %s\n' "$dsh_ver"
+    local tui_state="未安装（npm install -g @deepseek-harness-tui/dsh-tui）"
+    if command -v dsh-tui >/dev/null 2>&1; then
+        tui_state="$(command -v dsh-tui)"
+        if [ -d "$DSH_DIR/profiles/dsh-tui" ]; then
+            tui_state="$tui_state（profile 已初始化）"
+        else
+            tui_state="$tui_state（profile 未初始化，首次运行自动创建）"
+        fi
+    fi
+    printf 'dsh-tui:  %s\n' "$tui_state"
     printf 'node:     %s\n' "$(node -v 2>/dev/null || echo '未安装')"
     printf 'npm:      %s\n' "$(npm -v 2>/dev/null || echo '未安装')"
     printf 'DSH_HOME: %s\n' "$DSH_DIR"
@@ -382,9 +393,9 @@ PY
     if [ -n "$source" ]; then
         printf 'API key（ref %s）: 已配置（来源: %s）\n' "$ref" "$source"
     else
-        printf 'API key（ref %s）: 未配置（dsh web → Settings → Models，或本脚本 --key-from-env --apply）\n' "$ref"
+        printf 'API key（ref %s）: 未配置（TUI 内 /settings 或 dsh web → Settings → Models，或本脚本 --key-from-env --apply）\n' "$ref"
     fi
-    printf '启动: dsh web   （无头模式: dsh --profile headless "<任务>"）\n'
+    printf '启动: dsh-tui   （TUI，默认；Web UI: dsh web；无头模式: dsh --profile headless "<任务>"）\n'
 }
 
 main() {
