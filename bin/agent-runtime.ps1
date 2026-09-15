@@ -31,6 +31,7 @@ $script:ContextFile = ''
 $script:StopFile = ''
 $script:ContextCount = 0
 $script:DiscoveredInstructions = @()
+$script:ClaudeSettingsFile = ''
 $script:RuntimeConfigs = @()
 $script:SessionId = ''
 $script:ThreadId = ''
@@ -894,11 +895,51 @@ function Record-FirstInstruction {
     )
 }
 
+function Set-ClaudeDefaults {
+    $env:ANTHROPIC_BASE_URL = 'https://api.deepseek.com/anthropic'
+    $env:ANTHROPIC_MODEL = 'deepseek-flash[1m]'
+    $env:ANTHROPIC_DEFAULT_OPUS_MODEL = 'deepseek-flash[1m]'
+    $env:ANTHROPIC_DEFAULT_SONNET_MODEL = 'deepseek-flash[1m]'
+    $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = 'deepseek-flash'
+    $env:CLAUDE_CODE_SUBAGENT_MODEL = 'deepseek-flash'
+    $env:CLAUDE_CODE_EFFORT_LEVEL = 'max'
+    $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = '786432'
+    $deepseekKey = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY')
+    if ([string]::IsNullOrWhiteSpace($deepseekKey)) {
+        Remove-Item -Path 'Env:ANTHROPIC_AUTH_TOKEN' -ErrorAction SilentlyContinue
+        Write-ErrorLine "###$($script:LauncherName): warning: 未设置 DEEPSEEK_API_KEY，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###"
+    } else {
+        $env:ANTHROPIC_AUTH_TOKEN = $deepseekKey
+    }
+}
+
+function New-ClaudeSettingsFile {
+    $envMap = [ordered]@{
+        ANTHROPIC_BASE_URL              = $env:ANTHROPIC_BASE_URL
+        ANTHROPIC_MODEL                 = $env:ANTHROPIC_MODEL
+        ANTHROPIC_DEFAULT_OPUS_MODEL    = $env:ANTHROPIC_DEFAULT_OPUS_MODEL
+        ANTHROPIC_DEFAULT_SONNET_MODEL  = $env:ANTHROPIC_DEFAULT_SONNET_MODEL
+        ANTHROPIC_DEFAULT_HAIKU_MODEL   = $env:ANTHROPIC_DEFAULT_HAIKU_MODEL
+        CLAUDE_CODE_SUBAGENT_MODEL      = $env:CLAUDE_CODE_SUBAGENT_MODEL
+        CLAUDE_CODE_EFFORT_LEVEL        = $env:CLAUDE_CODE_EFFORT_LEVEL
+        CLAUDE_CODE_AUTO_COMPACT_WINDOW = $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW
+    }
+    if (-not [string]::IsNullOrWhiteSpace($env:ANTHROPIC_AUTH_TOKEN)) {
+        $envMap['ANTHROPIC_AUTH_TOKEN'] = $env:ANTHROPIC_AUTH_TOKEN
+    }
+    $path = Join-Path ([System.IO.Path]::GetTempPath()) ('claude-settings-' + [guid]::NewGuid().ToString('N') + '.json')
+    $json = [ordered]@{ env = $envMap } | ConvertTo-Json -Depth 4 -Compress
+    [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding($false)))
+    return $path
+}
+
 function Run-Claude {
     $executable = Resolve-Executable 'CLAUDE_BIN' 'claude'
     if ([string]::IsNullOrWhiteSpace($executable)) {
         return 127
     }
+    Set-ClaudeDefaults
+    $script:ClaudeSettingsFile = New-ClaudeSettingsFile
     $prompt = Build-Prompt
     if ($null -eq $prompt) {
         return $script:FailureCode
@@ -915,7 +956,7 @@ function Run-Claude {
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
         Turn-Begin
-        $rc = Invoke-Logged $executable @('--permission-mode', 'auto', '--model', $script:Model)
+        $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model)
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -941,7 +982,7 @@ function Run-Claude {
     } else {
         Write-Host "---- drive: prompt round start $(Get-Date -Format 'yyyy-MM-dd-HH:mm:ss') ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('-p', '--permission-mode', 'auto', '--model', $script:Model, $prompt) $true
+        $rc = Invoke-Logged $executable @('-p', '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, $prompt) $true
         if ($rc -ne 0) {
             Turn-Failure
             Write-ErrorLine "###$($script:LauncherName): ERROR: prompt 回合失败（退出码 $rc），驱动终止###"
@@ -961,7 +1002,7 @@ function Run-Claude {
         $instruction = [System.IO.File]::ReadAllText($script:DriveFile)
         Write-Host "---- drive: first instruction <- $($script:DriveFile) ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--permission-mode', 'auto', '--model', $script:Model, $instruction) $true
+        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, $instruction) $true
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         if ($rc -ne 0) {
             Write-ErrorLine "###$($script:LauncherName): warning: 首条指令回合退出码 $rc，仍进入继续循环###"
@@ -971,7 +1012,7 @@ function Run-Claude {
         if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId) -and
             [string]::IsNullOrWhiteSpace($script:DriveFile)) {
             Turn-Begin
-            $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--permission-mode', 'auto', '--model', $script:Model, '继续') $true
+            $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, '继续') $true
             if ($rc -eq 0) {
                 Turn-Success
                 Mark-State 'finished' 'resume once' ''
@@ -995,7 +1036,7 @@ function Run-Claude {
             return 0
         }
         Turn-Begin
-        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--permission-mode', 'auto', '--model', $script:Model, '继续') $true
+        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, '继续') $true
         if ($rc -eq 0) {
             Turn-Success
             $nudges++
@@ -1514,14 +1555,14 @@ function Parse-Arguments {
     switch ($script:Agent) {
         'claude' {
             $modelTable = @{
-                '-m' = @('claude-sonnet-4-5', 'Claude Sonnet 4.5')
-                '-o' = @('claude-opus-4-1', 'Claude Opus 4.1')
-                '-p' = @('claude-opus-4-1', 'Claude Opus 4.1')
-                '-q' = @('claude-sonnet-4-5', 'Claude Sonnet 4.5')
-                '-k' = @('claude-haiku-4-5', 'Claude Haiku 4.5')
-                '-g' = @('claude-sonnet-4-5', 'Claude Sonnet 4.5')
-                '-f' = @('claude-haiku-4-5', 'Claude Haiku 4.5')
-                '-h' = @('claude-sonnet-4-5', 'Claude Sonnet 4.5')
+                '-m' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
+                '-o' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
+                '-p' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
+                '-q' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
+                '-k' = @('deepseek-flash', 'deepseek-flash')
+                '-g' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
+                '-f' = @('deepseek-flash', 'deepseek-flash')
+                '-h' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
             }
             $modelEnvPrefix = 'CLAUDE_MODEL_'
             $defaultReasoning = ''
@@ -1648,6 +1689,10 @@ try {
         } else {
             Mark-State 'failed' "进程退出码 $($script:ExitCode)" $script:ExitCode
         }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($script:ClaudeSettingsFile) -and
+        (Test-Path -LiteralPath $script:ClaudeSettingsFile)) {
+        Remove-Item -LiteralPath $script:ClaudeSettingsFile -Force -ErrorAction SilentlyContinue
     }
     Release-RunLock
 }
