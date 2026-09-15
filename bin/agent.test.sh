@@ -65,6 +65,19 @@ case "$(basename -- "$0")" in
         ;;
     fake-claude.sh)
         printf 'session_id=session-fake\n' >&2
+        _prev=''
+        for _arg in "$@"; do
+            if [[ "${_prev}" == '--settings' && -f "${_arg}" ]]; then
+                printf 'claude-settings: %s\n' "$(cat -- "${_arg}")" >> "$FAKE_CALL_LOG"
+                printf 'claude-settings-path: %s\n' "${_arg}" >> "$FAKE_CALL_LOG"
+            fi
+            _prev="${_arg}"
+        done
+        printf 'claude-env ANTHROPIC_BASE_URL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_AUTH_TOKEN=%s CLAUDE_CODE_SUBAGENT_MODEL=%s CLAUDE_CODE_EFFORT_LEVEL=%s CLAUDE_CODE_AUTO_COMPACT_WINDOW=%s\n' \
+            "${ANTHROPIC_BASE_URL:-}" "${ANTHROPIC_MODEL:-}" "${ANTHROPIC_DEFAULT_OPUS_MODEL:-}" \
+            "${ANTHROPIC_DEFAULT_SONNET_MODEL:-}" "${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}" \
+            "${ANTHROPIC_AUTH_TOKEN:-}" "${CLAUDE_CODE_SUBAGENT_MODEL:-}" \
+            "${CLAUDE_CODE_EFFORT_LEVEL:-}" "${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-}" >> "$FAKE_CALL_LOG"
         ;;
 esac
 exit 0
@@ -118,6 +131,12 @@ run_launcher() {
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
             CLAUDE_BIN="$binary" \
+            ANTHROPIC_BASE_URL=https://external.invalid/anthropic ANTHROPIC_MODEL=external-model \
+            ANTHROPIC_AUTH_TOKEN=external-token \
+            ANTHROPIC_DEFAULT_OPUS_MODEL=external-opus ANTHROPIC_DEFAULT_SONNET_MODEL=external-sonnet \
+            ANTHROPIC_DEFAULT_HAIKU_MODEL=external-haiku CLAUDE_CODE_SUBAGENT_MODEL=external-subagent \
+            CLAUDE_CODE_EFFORT_LEVEL=low CLAUDE_CODE_AUTO_COMPACT_WINDOW=123 \
+            DEEPSEEK_API_KEY=test-deepseek-key \
             "$test_root/$name" "$@") ;;
         *) fail "未知测试 launcher：$name" ;;
     esac
@@ -275,8 +294,30 @@ cl_run_id=$(printf '%s\n' "$cl_output" | sed -n 's/^  run: //p' | head -1)
 cl_run="$data/runs/$cl_run_id"
 assert_file_contains "$cl_run/manifest.env" 'agent=claude'
 assert_file_contains "$cl_run/manifest.env" 'session_id=session-fake'
+assert_file_contains "$cl_run/manifest.env" 'model=deepseek-flash[1m]'
 assert_file_contains "$cl_run/events.jsonl" '"event":"session-bound"'
-printf 'PASS: Claude --once、session 绑定和持久事件\n'
+assert_file_contains "$call_log" '--model deepseek-flash[1m]'
+assert_file_contains "$call_log" 'claude-env ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic ANTHROPIC_MODEL=deepseek-flash[1m]'
+assert_file_contains "$call_log" 'ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-flash[1m]'
+assert_file_contains "$call_log" 'ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]'
+assert_file_contains "$call_log" 'ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash '
+assert_file_contains "$call_log" 'ANTHROPIC_AUTH_TOKEN=test-deepseek-key'
+assert_file_contains "$call_log" 'CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash'
+assert_file_contains "$call_log" 'CLAUDE_CODE_EFFORT_LEVEL=max'
+assert_file_contains "$call_log" 'CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432'
+assert_file_not_contains "$call_log" 'ANTHROPIC_MODEL=external-model'
+assert_file_not_contains "$call_log" 'ANTHROPIC_BASE_URL=https://external.invalid/anthropic'
+assert_file_not_contains "$call_log" 'ANTHROPIC_AUTH_TOKEN=external-token'
+assert_file_contains "$call_log" '--settings'
+settings_line=$(sed -n 's/^claude-settings: //p' "$call_log" | head -1)
+assert_contains "$settings_line" '"ANTHROPIC_BASE_URL":"https://api.deepseek.com/anthropic"'
+assert_contains "$settings_line" '"ANTHROPIC_AUTH_TOKEN":"test-deepseek-key"'
+assert_contains "$settings_line" '"ANTHROPIC_MODEL":"deepseek-flash[1m]"'
+assert_contains "$settings_line" '"CLAUDE_CODE_AUTO_COMPACT_WINDOW":"786432"'
+settings_path=$(sed -n 's/^claude-settings-path: //p' "$call_log" | head -1)
+[[ -n "$settings_path" ]] || fail '未记录 claude --settings 临时文件路径'
+[[ ! -e "$settings_path" ]] || fail "claude --settings 临时文件退出后未清理：$settings_path"
+printf 'PASS: Claude --once、session 绑定、DeepSeek 明文定死环境注入（env+--settings）和持久事件\n'
 
 max_turns_before=$(call_count)
 set +e

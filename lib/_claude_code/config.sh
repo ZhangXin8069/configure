@@ -1,1 +1,0 @@
-../claude_code-v20260706/config.sh
