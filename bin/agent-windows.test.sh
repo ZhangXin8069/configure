@@ -58,6 +58,9 @@ done
 assert_contains "$runtime" "'-q' = @('gpt-6-astra', 'GPT-6 Astra')"
 assert_contains "$runtime" "'-q' { 'max' }"
 assert_contains "$runtime" 'features.fast_mode=$fastMode'
+assert_contains "$runtime" 'function Set-ClaudeDefaults'
+assert_contains "$runtime" 'function New-ClaudeSettingsFile'
+assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
 
 if command -v powershell.exe >/dev/null 2>&1; then
     ps_cmd=powershell.exe
