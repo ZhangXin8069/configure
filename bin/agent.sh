@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 统一 agent 启动器：cl/cls/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
-#   cl  → Claude Code（TUI：--permission-mode auto；驱动：claude -p → --resume 链）
+#   cl  → Claude Code（默认 DeepSeek Anthropic 兼容端点；TUI：--permission-mode auto；驱动：claude -p → --resume 链）
 #   cls → Claude Code HPC/snsc 入口
 #   op  → OpenCode（build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
@@ -122,6 +122,16 @@ _contains() {
     return 1
 }
 
+# JSON 字符串值转义（反斜杠/双引号/换行；用于 cl 的 --settings 私有设置文件）
+_json_escape() {
+    local _s="$1"
+    _s="${_s//\\/\\\\}"
+    _s="${_s//\"/\\\"}"
+    _s="${_s//$'\n'/}"
+    _s="${_s//$'\r'/}"
+    printf '%s' "${_s}"
+}
+
 # 全局/工作区 SKILL.md 路径清单注入（co/cl 共用）：只列路径；去重
 _append_skill_list() {
     local _title="$1" _root _skill_path _found=0 _discovered=0
@@ -151,12 +161,16 @@ _append_skill_list() {
 # 实时监视器清理（公共）：驱动模式下各分支启动 _live_log 并写入 _LIVE_PID；
 # op 分支另有用户输入兜底补录（_recover_inputs，仅 op 分支定义）
 _LIVE_PID=""
+_CLAUDE_SETTINGS_TMP=""
 _cleanup() {
     local _exit_rc=$?
     if [[ "${_AGENT:-}" == opencode ]] && declare -F _recover_inputs >/dev/null 2>&1; then
         _recover_inputs
     fi
     [[ -n "${_LIVE_PID:-}" ]] && kill "${_LIVE_PID}" 2>/dev/null
+    if [[ -n "${_CLAUDE_SETTINGS_TMP:-}" && -f "${_CLAUDE_SETTINGS_TMP}" ]]; then
+        rm -f -- "${_CLAUDE_SETTINGS_TMP}"
+    fi
     _agent_runtime_on_exit "${_exit_rc}"
     return "${_exit_rc}"
 }
@@ -184,6 +198,49 @@ run_claude() {
         echo "###${_NAME}: ERROR: 未找到 claude，请安装 Claude Code 或设置 CLAUDE_BIN###" >&2
         exit 127
     fi
+
+    # ---- DeepSeek Anthropic 兼容端点初始设置（明文定死，无条件覆盖外部同名变量） ----
+    # ANTHROPIC_AUTH_TOKEN 始终等于 ${DEEPSEEK_API_KEY}（缺失时清除并告警）。
+    ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
+    ANTHROPIC_MODEL="deepseek-flash[1m]"
+    ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-flash[1m]"
+    ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-flash[1m]"
+    ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-flash"
+    CLAUDE_CODE_SUBAGENT_MODEL="deepseek-flash"
+    CLAUDE_CODE_EFFORT_LEVEL="max"
+    CLAUDE_CODE_AUTO_COMPACT_WINDOW="786432"
+    export ANTHROPIC_BASE_URL ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL \
+           ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL \
+           CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL \
+           CLAUDE_CODE_AUTO_COMPACT_WINDOW
+    if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
+        ANTHROPIC_AUTH_TOKEN="${DEEPSEEK_API_KEY}"
+        export ANTHROPIC_AUTH_TOKEN
+    else
+        unset ANTHROPIC_AUTH_TOKEN
+        echo "###${_NAME}: warning: 未设置 DEEPSEEK_API_KEY，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###" >&2
+    fi
+
+    # 用户级 settings.json 的 env 块（如 cc-switch 遗留的 ANTHROPIC_BASE_URL）优先级高于进程环境变量，
+    # 因此再生成只读私有临时设置文件并经 CLI --settings 注入（优先级高于用户/项目设置）；退出时清理。
+    _CLAUDE_SETTINGS_TMP="$(mktemp "${TMPDIR:-/tmp}/claude-settings.XXXXXX")" || {
+        echo "###${_NAME}: ERROR: 无法创建 claude --settings 临时文件###" >&2
+        exit 1
+    }
+    chmod 600 "${_CLAUDE_SETTINGS_TMP}"
+    _claude_token_fragment=""
+    if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
+        _claude_token_fragment=",\"ANTHROPIC_AUTH_TOKEN\":\"$(_json_escape "${ANTHROPIC_AUTH_TOKEN}")\""
+    fi
+    {
+        printf '{"env":{"ANTHROPIC_BASE_URL":"%s","ANTHROPIC_MODEL":"%s","ANTHROPIC_DEFAULT_OPUS_MODEL":"%s","ANTHROPIC_DEFAULT_SONNET_MODEL":"%s","ANTHROPIC_DEFAULT_HAIKU_MODEL":"%s","CLAUDE_CODE_SUBAGENT_MODEL":"%s","CLAUDE_CODE_EFFORT_LEVEL":"%s","CLAUDE_CODE_AUTO_COMPACT_WINDOW":"%s"%s}}\n' \
+            "${ANTHROPIC_BASE_URL}" "${ANTHROPIC_MODEL}" \
+            "${ANTHROPIC_DEFAULT_OPUS_MODEL}" "${ANTHROPIC_DEFAULT_SONNET_MODEL}" \
+            "${ANTHROPIC_DEFAULT_HAIKU_MODEL}" "${CLAUDE_CODE_SUBAGENT_MODEL}" \
+            "${CLAUDE_CODE_EFFORT_LEVEL}" "${CLAUDE_CODE_AUTO_COMPACT_WINDOW}" \
+            "${_claude_token_fragment}"
+    } > "${_CLAUDE_SETTINGS_TMP}"
+    unset _claude_token_fragment
 
     # 与 co 相同的注入：全局 agent 配置目录 + skill 清单
     local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
@@ -281,18 +338,20 @@ run_claude() {
         exit 64
     fi
 
-    # 模型选择：-m/-o/-p 侧重深度，-f/-k 侧重速度；默认 slug 可用 CLAUDE_MODEL_* 覆盖，CLAUDE_MODEL/--model 直接覆盖
+    # 模型选择：默认接入 DeepSeek Anthropic 兼容端点——深度旗标（-m/-o/-p/-q/-g/-h）用 deepseek-flash[1m]，
+    # 速度旗标（-k/-f）用 deepseek-flash；默认 slug 可用 CLAUDE_MODEL_* 覆盖，CLAUDE_MODEL/--model 直接覆盖
     case "${MODEL_FLAG}" in
-        -m) MODEL_ID="${CLAUDE_MODEL_M:-claude-sonnet-4-5}"; MODEL_NAME="Claude Sonnet 4.5";;
-        -o) MODEL_ID="${CLAUDE_MODEL_O:-claude-opus-4-1}"; MODEL_NAME="Claude Opus 4.1";;
-        -p) MODEL_ID="${CLAUDE_MODEL_P:-claude-opus-4-1}"; MODEL_NAME="Claude Opus 4.1";;
-        -q) MODEL_ID="${CLAUDE_MODEL_Q:-claude-sonnet-4-5}"; MODEL_NAME="Claude Sonnet 4.5";;
-        -k) MODEL_ID="${CLAUDE_MODEL_K:-claude-haiku-4-5}"; MODEL_NAME="Claude Haiku 4.5";;
-        -g) MODEL_ID="${CLAUDE_MODEL_G:-claude-sonnet-4-5}"; MODEL_NAME="Claude Sonnet 4.5";;
-        -f) MODEL_ID="${CLAUDE_MODEL_F:-claude-haiku-4-5}"; MODEL_NAME="Claude Haiku 4.5";;
-        -h) MODEL_ID="${CLAUDE_MODEL_H:-claude-sonnet-4-5}"; MODEL_NAME="Claude Sonnet 4.5";;
+        -m) MODEL_ID="${CLAUDE_MODEL_M:-deepseek-flash[1m]}";;
+        -o) MODEL_ID="${CLAUDE_MODEL_O:-deepseek-flash[1m]}";;
+        -p) MODEL_ID="${CLAUDE_MODEL_P:-deepseek-flash[1m]}";;
+        -q) MODEL_ID="${CLAUDE_MODEL_Q:-deepseek-flash[1m]}";;
+        -k) MODEL_ID="${CLAUDE_MODEL_K:-deepseek-flash}";;
+        -g) MODEL_ID="${CLAUDE_MODEL_G:-deepseek-flash[1m]}";;
+        -f) MODEL_ID="${CLAUDE_MODEL_F:-deepseek-flash}";;
+        -h) MODEL_ID="${CLAUDE_MODEL_H:-deepseek-flash[1m]}";;
         *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
     esac
+    MODEL_NAME="${MODEL_ID}"
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
@@ -332,7 +391,7 @@ run_claude() {
     if (( ! DRIVE_MODE )); then
         # 原 TUI 交互模式（--permission-mode auto 原语义保留）
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" --permission-mode auto --model "${MODEL_ID}" 2> "${LOG_FILE}"
+        "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" 2> "${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
@@ -382,7 +441,7 @@ run_claude() {
     else
         echo "---- drive: prompt round start $(date "+%F-%T") ----"
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" -p --permission-mode auto --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
+        "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
         _drv_rc=$?
         if (( _drv_rc != 0 )); then
             _agent_runtime_turn_failure
@@ -402,7 +461,7 @@ run_claude() {
         _drv_instr="$(<"${DRIVE_FILE}")"
         echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --permission-mode auto --model "${MODEL_ID}" "${_drv_instr}" \
+        "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "${_drv_instr}" \
                 2>> "${LOG_FILE}"
         _drv_rc=$?
         if (( _drv_rc == 0 )); then
@@ -420,7 +479,7 @@ run_claude() {
     if (( ONCE_MODE )); then
         if [[ -n "${RESUME_RUN_ID}" && -z "${DRIVE_FILE}" ]]; then
             _agent_runtime_turn_begin
-            "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --permission-mode auto --model "${MODEL_ID}" "继续" \
+            "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "继续" \
                     2>> "${LOG_FILE}"
             _drv_rc=$?
             if (( _drv_rc == 0 )); then
@@ -449,7 +508,7 @@ run_claude() {
             break
         fi
         _agent_runtime_turn_begin
-        if "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --permission-mode auto --model "${MODEL_ID}" "继续" \
+        if "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "继续" \
                 2>> "${LOG_FILE}"; then
             _agent_runtime_turn_success
             _nudges=$((_nudges + 1))

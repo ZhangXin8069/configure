@@ -1,1 +1,0 @@
-../claude_code-v20260706/uninstall_cc-v20260812.bat
