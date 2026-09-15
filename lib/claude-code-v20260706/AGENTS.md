@@ -1,6 +1,6 @@
-# AGENTS.md — claude_code-v20260706
+# AGENTS.md — claude-code-v20260706
 
-Claude Code 离线安装包 v2026-07-06（当前最新版，`../_claude_code/` 为其符号链接兼容目录）：
+Claude Code 离线安装包 v2026-07-06（当前最新版，`../_claude-code/` 为其兼容目录，真实文件副本）：
 
 | 文件 | 说明 |
 |---|---|
@@ -14,4 +14,4 @@ Claude Code 离线安装包 v2026-07-06（当前最新版，`../_claude_code/` �
 | `uninstall_ccswitch-v20260813.sh` | cc-switch 卸载脚本（v2026-08-13，agent 会话生成） |
 | `.gitignore` | 忽略下载的二进制包 |
 
-修改本目录文件时保持 `_claude_code/` 符号链接一致性（更新即生效，无需改链接）。校验 `bash -n <script>`。
+修改本目录文件时同步 `../_claude-code/` 兼容目录（两处均为真实文件，内容保持一致）。校验 `bash -n <script>`。
