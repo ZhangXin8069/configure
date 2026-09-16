@@ -12,6 +12,15 @@ cleanup() {
 }
 trap cleanup EXIT HUP INT TERM
 
+# 屏蔽宿主环境导出的真实 key/模型变量，保证断言确定性（测试内显式前缀赋值仍可覆盖）
+unset DEEPSEEK_PAY_API_KEY OPENCODE_GO_API_KEY CUSTOM_GPT_API_KEY DEEPSEEK_API_KEY LQCD_API_KEY \
+      ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
+      ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL \
+      CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL CLAUDE_MODEL OPENCODE_MODEL OPENCODE_VARIANT \
+      CODEX_MODEL CODEX_REASONING_EFFORT CODEX_SANDBOX CODEX_APPROVAL CLAUDE_PROVIDER OPENCODE_PROVIDER \
+      CODEX_PROVIDER_ID CODEX_PROVIDER_BASE_URL CODEX_PROVIDER_ENV_KEY OPENCODE_AUTOUPDATE \
+      CODEX_CHECK_FOR_UPDATE_ON_STARTUP AGENT_ONCE 2>/dev/null || true
+
 fail() {
     printf 'FAIL: %s\n' "$*" >&2
     exit 1
@@ -74,10 +83,10 @@ case "$(basename -- "$0")" in
             fi
             _prev="${_arg}"
         done
-        printf 'claude-env ANTHROPIC_BASE_URL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_AUTH_TOKEN=%s CLAUDE_CODE_SUBAGENT_MODEL=%s CLAUDE_CODE_EFFORT_LEVEL=%s CLAUDE_CODE_AUTO_COMPACT_WINDOW=%s\n' \
+        printf 'claude-env ANTHROPIC_BASE_URL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_AUTH_TOKEN=%s ANTHROPIC_API_KEY=%s CLAUDE_CODE_SUBAGENT_MODEL=%s CLAUDE_CODE_EFFORT_LEVEL=%s CLAUDE_CODE_AUTO_COMPACT_WINDOW=%s\n' \
             "${ANTHROPIC_BASE_URL:-}" "${ANTHROPIC_MODEL:-}" "${ANTHROPIC_DEFAULT_OPUS_MODEL:-}" \
             "${ANTHROPIC_DEFAULT_SONNET_MODEL:-}" "${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}" \
-            "${ANTHROPIC_AUTH_TOKEN:-}" "${CLAUDE_CODE_SUBAGENT_MODEL:-}" \
+            "${ANTHROPIC_AUTH_TOKEN:-}" "${ANTHROPIC_API_KEY:-}" "${CLAUDE_CODE_SUBAGENT_MODEL:-}" \
             "${CLAUDE_CODE_EFFORT_LEVEL:-}" "${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-}" >> "$FAKE_CALL_LOG"
         ;;
 esac
@@ -155,13 +164,12 @@ run_launcher() {
 }
 
 set +e
-default_codex_output=$(CODEX_DEFAULT_MODEL_FLAG= CODEX_MODEL= CODEX_MODEL_Q= \
-    CODEX_REASONING_EFFORT= CODEX_SERVICE_TIER= CODEX_FAST_MODE= \
+default_codex_output=$(CODEX_MODEL= CODEX_REASONING_EFFORT= CODEX_SERVICE_TIER= CODEX_FAST_MODE= \
     run_launcher co "$fake_codex" --once 2>&1)
 default_codex_status=$?
 set -e
 (( default_codex_status == 0 )) || fail "Codex 默认配置 fake launcher 失败：$default_codex_output"
-assert_contains "$default_codex_output" 'Codex: GPT-6 Astra | reasoning=max'
+assert_contains "$default_codex_output" 'Codex: gpt-6-astra | reasoning=max'
 assert_contains "$default_codex_output" 'provider: custom-gpt | tier=standard'
 assert_file_contains "$call_log" '--model gpt-6-astra'
 assert_file_contains "$call_log" 'features.fast_mode=false'
@@ -430,7 +438,11 @@ assert_file_contains "$stop_run/manifest.env" 'state=stopped'
 assert_file_contains "$stop_run/events.jsonl" '"event":"session-stop"'
 
 status_json=$(AGENT_DATA_DIR="$data" "$status_script" --all --json)
-if ! printf '%s\n' "$status_json" | jq -e 'length == 9 and all(.[]; .run_id != "")' >/dev/null; then
+if ! printf '%s\n' "$status_json" | python3 -c '
+import json, sys
+runs = json.load(sys.stdin)
+sys.exit(0 if len(runs) == 9 and all(r.get("run_id") for r in runs) else 1)
+'; then
     fail "agent-status JSON 结果不完整：$status_json"
 fi
 printf 'PASS: stop-file 与 agent-status JSON 只读查询\n'
@@ -448,18 +460,39 @@ ln -sf "$script_dir/agent-prompt.txt" "$alt_dir/agent-prompt.txt"
 cp -- "$script_dir/agent-config.json" "$alt_dir/agent-config.json"
 cat > "$alt_dir/agent-custom.json" <<'EOF'
 {
+  "providers": {
+    "opencode-go": {
+      "default_models": {
+        "claude": "custom-claude-model",
+        "opencode": "opencode-go/custom-op-model",
+        "codex": "custom-codex-model"
+      },
+      "default_strengths": {
+        "claude": "medium",
+        "opencode": "high",
+        "codex": "medium"
+      }
+    },
+    "deepseek-pay": {
+      "default_models": {
+        "codex": "custom-codex-model"
+      },
+      "default_strengths": {
+        "codex": "low"
+      }
+    }
+  },
   "agents": {
     "claude": {
-      "provider": "opencode-go",
-      "flags": { "-m": { "model": "custom-claude-model" } }
+      "provider": "opencode-go"
     },
     "opencode": {
-      "variant": "low",
-      "flags": { "-f": { "model": "opencode-go/custom-op-model", "name": "Custom OP" } }
+      "provider": "opencode-go",
+      "variant": "low"
     },
     "codex": {
       "provider": "deepseek-pay",
-      "flags": { "-q": { "model": "custom-codex-model", "reasoning": "high" } }
+      "reasoning": "high"
     }
   }
 }
@@ -475,8 +508,12 @@ set -e
 custom_cl_new=$(tail -n +$((custom_cl_before + 1)) "$call_log")
 assert_contains "$custom_cl_new" '--model custom-claude-model'
 assert_contains "$custom_cl_new" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go'
-assert_contains "$custom_cl_new" 'ANTHROPIC_AUTH_TOKEN=test-go-key'
-printf 'PASS: 个性化 cl 切换途径为 opencode-go 并覆盖模型\n'
+assert_contains "$custom_cl_new" 'ANTHROPIC_API_KEY=test-go-key'
+assert_contains "$custom_cl_new" 'ANTHROPIC_AUTH_TOKEN= '
+assert_contains "$custom_cl_new" 'ANTHROPIC_DEFAULT_OPUS_MODEL=custom-claude-model'
+assert_contains "$custom_cl_new" 'ANTHROPIC_DEFAULT_SONNET_MODEL=custom-claude-model'
+assert_contains "$custom_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=medium'
+printf 'PASS: 个性化 cl 切换途径为 opencode-go（x-api-key 认证），模型别名跟随解析链、强度取途径默认\n'
 
 custom_op_before=$(wc -l < "$call_log")
 set +e
@@ -491,7 +528,7 @@ assert_contains "$custom_op_new" '"opencode-go":{"options":{"apiKey":"{env:OPENC
 case "$custom_op_new" in
     *DEEPSEEK_PAY_API_KEY*|*CUSTOM_GPT_API_KEY*) fail 'custom op 不应注入 key 缺失的途径' ;;
 esac
-printf 'PASS: 个性化 op 覆盖模型与 variant，缺 key 途径不注入\n'
+printf 'PASS: 个性化 op 覆盖模型，旧键 variant 优先于途径默认强度，缺 key 途径不注入\n'
 
 custom_co_before=$(wc -l < "$call_log")
 set +e
@@ -505,9 +542,121 @@ assert_contains "$custom_co_new" '--model custom-codex-model'
 assert_contains "$custom_co_new" 'model_provider="deepseek-pay"'
 assert_contains "$custom_co_new" 'model_providers.deepseek-pay.base_url="https://api.deepseek.com"'
 assert_contains "$custom_co_new" 'model_providers.deepseek-pay.env_key="DEEPSEEK_PAY_API_KEY"'
-assert_contains "$custom_co_new" 'model_providers.deepseek-pay.wire_api="chat"'
+assert_contains "$custom_co_new" 'model_providers.deepseek-pay.wire_api="responses"'
 assert_contains "$custom_co_new" 'model_reasoning_effort="high"'
-printf 'PASS: 个性化 co 切换途径为 deepseek-pay 并覆盖模型与 reasoning\n'
+printf 'PASS: 个性化 co 切换途径为 deepseek-pay，旧键 reasoning 优先于途径默认强度\n'
+
+# ---- agent 层默认优先于供应商层（两层相互独立；命令行显式模型 > agent 默认 > 途径默认） ----
+alt2_dir="$test_root/altbin2"
+mkdir -p "$alt2_dir"
+ln -sf "$script_dir/agent-runtime.sh" "$alt2_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-prompt.txt" "$alt2_dir/agent-prompt.txt"
+cp -- "$script_dir/agent-config.json" "$alt2_dir/agent-config.json"
+cat > "$alt2_dir/agent-custom.json" <<'EOF'
+{
+  "providers": {
+    "deepseek-pay": {
+      "default_models": {
+        "claude": "provider-claude-model",
+        "opencode": "deepseek/provider-op-model",
+        "codex": "provider-codex-model"
+      },
+      "default_strengths": {
+        "claude": "low",
+        "opencode": "low",
+        "codex": "low"
+      }
+    },
+    "custom-gpt": {
+      "default_models": {
+        "codex": "provider-gpt-codex-model"
+      },
+      "default_strengths": {
+        "codex": "medium"
+      }
+    }
+  },
+  "agents": {
+    "claude": {
+      "provider": "deepseek-pay",
+      "model": "agent-claude-model",
+      "strength": "high"
+    },
+    "opencode": {
+      "provider": "deepseek-pay",
+      "model": "agent-op-model",
+      "strength": "xhigh"
+    },
+    "codex": {
+      "provider": "deepseek-pay",
+      "model": "agent-codex-model",
+      "strength": "high"
+    }
+  }
+}
+EOF
+
+alt2_cl_before=$(wc -l < "$call_log")
+set +e
+alt2_cl_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" run_launcher cl "$fake_claude" --once 2>&1)
+alt2_cl_status=$?
+set -e
+(( alt2_cl_status == 0 )) || fail "agent 层 cl 默认失败：$alt2_cl_output"
+alt2_cl_new=$(tail -n +$((alt2_cl_before + 1)) "$call_log")
+assert_contains "$alt2_cl_new" '--model agent-claude-model'
+assert_contains "$alt2_cl_new" 'ANTHROPIC_MODEL=agent-claude-model'
+assert_contains "$alt2_cl_new" 'ANTHROPIC_DEFAULT_OPUS_MODEL=agent-claude-model'
+assert_contains "$alt2_cl_new" 'ANTHROPIC_DEFAULT_SONNET_MODEL=agent-claude-model'
+assert_contains "$alt2_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=high'
+printf 'PASS: 个性化 cl 的 agent 默认模型/强度优先于途径默认值\n'
+
+alt2_op_before=$(wc -l < "$call_log")
+set +e
+alt2_op_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" DEEPSEEK_PAY_API_KEY=test-deepseek-key \
+    run_launcher op "$fake_opencode" --once 2>&1)
+alt2_op_status=$?
+set -e
+(( alt2_op_status == 0 )) || fail "agent 层 op 默认失败：$alt2_op_output"
+alt2_op_new=$(tail -n +$((alt2_op_before + 1)) "$call_log")
+assert_contains "$alt2_op_new" '"model":"agent-op-model","variant":"xhigh"'
+printf 'PASS: 个性化 op 的 agent 默认模型/强度优先于途径默认值\n'
+
+alt2_co_before=$(wc -l < "$call_log")
+set +e
+alt2_co_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" run_launcher co "$fake_codex" --once 2>&1)
+alt2_co_status=$?
+set -e
+(( alt2_co_status == 0 )) || fail "agent 层 co 默认失败：$alt2_co_output"
+alt2_co_new=$(tail -n +$((alt2_co_before + 1)) "$call_log")
+assert_contains "$alt2_co_new" '--model agent-codex-model'
+assert_contains "$alt2_co_new" 'model_provider="deepseek-pay"'
+assert_contains "$alt2_co_new" 'model_reasoning_effort="high"'
+printf 'PASS: 个性化 co 的 agent 默认模型/强度优先于途径默认值\n'
+
+alt2_co_switch_before=$(wc -l < "$call_log")
+set +e
+alt2_co_switch_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" CUSTOM_GPT_API_KEY=test-custom-key \
+    run_launcher co "$fake_codex" gpt --once 2>&1)
+alt2_co_switch_status=$?
+set -e
+(( alt2_co_switch_status == 0 )) || fail "agent 层 co 显式切途径失败：$alt2_co_switch_output"
+alt2_co_switch_new=$(tail -n +$((alt2_co_switch_before + 1)) "$call_log")
+assert_contains "$alt2_co_switch_new" '--model agent-codex-model'
+assert_contains "$alt2_co_switch_new" 'model_provider="custom-gpt"'
+assert_contains "$alt2_co_switch_new" 'model_reasoning_effort="high"'
+printf 'PASS: agent 层模型/强度与途径相互独立（显式切途径仍以 agent 默认为准）\n'
+
+alt2_co_override_before=$(wc -l < "$call_log")
+set +e
+alt2_co_override_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" \
+    run_launcher co "$fake_codex" --model cli-model --reasoning-effort ultra --once 2>&1)
+alt2_co_override_status=$?
+set -e
+(( alt2_co_override_status == 0 )) || fail "agent 层 co 命令行覆盖失败：$alt2_co_override_output"
+alt2_co_override_new=$(tail -n +$((alt2_co_override_before + 1)) "$call_log")
+assert_contains "$alt2_co_override_new" '--model cli-model'
+assert_contains "$alt2_co_override_new" 'model_reasoning_effort="ultra"'
+printf 'PASS: 命令行模型/强度覆盖优先于 agent 层默认\n'
 
 # ---- 供应商快捷词：cl go / op gpt / op pay / co pay ----
 switch_cl_before=$(wc -l < "$call_log")
@@ -522,9 +671,9 @@ esac
 switch_cl_new=$(tail -n +$((switch_cl_before + 1)) "$call_log")
 assert_contains "$switch_cl_new" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go'
 assert_contains "$switch_cl_new" 'ANTHROPIC_MODEL=deepseek-v4.1-flash'
-assert_contains "$switch_cl_new" 'ANTHROPIC_AUTH_TOKEN=test-go-key'
+assert_contains "$switch_cl_new" 'ANTHROPIC_API_KEY=test-go-key'
 assert_contains "$switch_cl_new" '--model deepseek-v4.1-flash'
-printf 'PASS: 快捷词 cl go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash）\n'
+printf 'PASS: 快捷词 cl go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash，x-api-key 认证）\n'
 
 switch_op_before=$(wc -l < "$call_log")
 set +e
@@ -558,7 +707,7 @@ assert_contains "$switch_co_new" '--model deepseek-flash'
 assert_contains "$switch_co_new" 'model_provider="deepseek-pay"'
 assert_contains "$switch_co_new" 'model_providers.deepseek-pay.base_url="https://api.deepseek.com"'
 assert_contains "$switch_co_new" 'model_providers.deepseek-pay.env_key="DEEPSEEK_PAY_API_KEY"'
-assert_contains "$switch_co_new" 'model_providers.deepseek-pay.wire_api="chat"'
+assert_contains "$switch_co_new" 'model_providers.deepseek-pay.wire_api="responses"'
 assert_contains "$switch_co_new" 'supports_websockets=false'
 printf 'PASS: 快捷词 co pay 切换 deepseek-pay 途径并使用默认模型\n'
 
@@ -572,9 +721,9 @@ switch_co_go_new=$(tail -n +$((switch_co_go_before + 1)) "$call_log")
 assert_contains "$switch_co_go_new" '--model deepseek-v4.1-flash'
 assert_contains "$switch_co_go_new" 'model_provider="opencode-go"'
 assert_contains "$switch_co_go_new" 'model_providers.opencode-go.base_url="https://opencode.ai/zen/go/v1"'
-assert_contains "$switch_co_go_new" 'model_providers.opencode-go.wire_api="chat"'
+assert_contains "$switch_co_go_new" 'model_providers.opencode-go.wire_api="responses"'
 assert_contains "$switch_co_go_new" 'supports_websockets=false'
-printf 'PASS: 快捷词 co go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash，chat 端点）\n'
+printf 'PASS: 快捷词 co go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash，responses 端点）\n'
 
 switch_explicit_before=$(wc -l < "$call_log")
 set +e

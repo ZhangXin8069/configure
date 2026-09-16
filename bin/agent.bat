@@ -17,22 +17,22 @@ set "_NAME=%~nx0"
 set "_PATH=%~dp0"
 set "_PWD=%CD%"
 set "_AGENT="
-set "_SNSC=0"
+set "_SECURE=0"
 
 if /i "%_NAME%"=="cl.bat"  set "_AGENT=claude"
 if /i "%_NAME%"=="cls.bat" (
     set "_AGENT=claude"
-    set "_SNSC=1"
+    set "_SECURE=1"
 )
 if /i "%_NAME%"=="op.bat"  set "_AGENT=opencode"
 if /i "%_NAME%"=="ops.bat" (
     set "_AGENT=opencode"
-    set "_SNSC=1"
+    set "_SECURE=1"
 )
 if /i "%_NAME%"=="co.bat"  set "_AGENT=codex"
 if /i "%_NAME%"=="cos.bat" (
     set "_AGENT=codex"
-    set "_SNSC=1"
+    set "_SECURE=1"
 )
 
 if not defined _AGENT (
@@ -50,7 +50,7 @@ set "AGENT_BAT_LAUNCHER_NAME=%_NAME%"
 set "AGENT_BAT_SCRIPT_DIR=%_PATH%"
 set "AGENT_BAT_WORKDIR=%_PWD%"
 set "AGENT_BAT_AGENT=%_AGENT%"
-set "AGENT_BAT_SNSC=%_SNSC%"
+set "AGENT_BAT_SECURE=%_SECURE%"
 
 set "_PS_CMD="
 where powershell.exe >nul 2>&1

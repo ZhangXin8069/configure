@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # 统一 agent 启动器：cl/cls/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
 #   cl  → Claude Code（默认 deepseek-pay 途径的 Anthropic 兼容端点；TUI 权限模式见配置；驱动：claude -p → --resume 链）
-#   cls → Claude Code HPC/snsc 入口
+#   cls → Claude Code HPC/secure 入口
 #   op  → OpenCode（默认 build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
-#   ops → OpenCode HPC/snsc 入口（默认 OPENCODE_BIN 指向 vscode-server 内部署路径）
-#   cos → Codex HPC/snsc 入口
+#   ops → OpenCode HPC/secure 入口（默认 OPENCODE_BIN 指向 vscode-server 内部署路径）
+#   cos → Codex HPC/secure 入口
 # prompt 单一来源：同目录 agent-prompt.txt（模板含 ${HOME}/${_PWD} 占位符；op 另支持 ${LIST_FILE}）
 # 配置来源：同目录 agent-config.json（通用）+ agent-custom.json 或 agent-custom.json.refer（个性化，
-#   存在 agent-custom.json 时替代后者）深度合并；模型途径、旗标模型表与共用参数均取自这两份配置
+#   存在 agent-custom.json 时替代后者）深度合并；模型途径、各途径/各 agent 默认模型与强度、共用参数均取自这两份配置
 
 # ---- 脚本定位：AGENT_SCRIPT_DIR 可在 /dev/fd/3 等场景注入真实目录；缺失时回退 BASH_SOURCE ----
 _SRC=${BASH_SOURCE[0]:-${0}}
@@ -20,12 +20,12 @@ else
 fi
 _NAME=${AGENT_LAUNCHER_NAME:-${_SRC##*/}}
 case "${_NAME}" in
-    cl)   _AGENT=claude;   _SNSC=0;;
-    cls)  _AGENT=claude;   _SNSC=1;;
-    op)   _AGENT=opencode; _SNSC=0;;
-    co)   _AGENT=codex;    _SNSC=0;;
-    ops)  _AGENT=opencode; _SNSC=1;;
-    cos)  _AGENT=codex;    _SNSC=1;;
+    cl)   _AGENT=claude;   _SECURE=0;;
+    cls)  _AGENT=claude;   _SECURE=1;;
+    op)   _AGENT=opencode; _SECURE=0;;
+    co)   _AGENT=codex;    _SECURE=0;;
+    ops)  _AGENT=opencode; _SECURE=1;;
+    cos)  _AGENT=codex;    _SECURE=1;;
     *)
         echo "Usage: ln -s agent.sh {cl|cls|op|co|ops|cos}"
         exit 1;;
@@ -148,11 +148,7 @@ _migrate_legacy_keys() {
     done
 }
 
-# 配置键规整化：旗标（-m→M）与途径名（custom-gpt→CUSTOM_GPT）转成大写下划线，
-# 与 _agent_config_load 展开出的 _CFG_* 变量名保持一致
-_cfg_flag_key() {
-    printf '%s' "${1#-}" | tr '[:lower:]' '[:upper:]'
-}
+# 途径名规整化：custom-gpt → CUSTOM_GPT，与 _agent_config_load 展开出的 _CFG_* 变量名保持一致
 _cfg_provider_key() {
     printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
 }
@@ -173,6 +169,15 @@ _cfg_provider_default_model() {
     _pkey="$(_cfg_provider_key "$1")"
     _akey="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
     _var="_CFG_PROVIDERS_${_pkey}_DEFAULT_MODELS_${_akey}"
+    printf '%s' "${!_var:-}"
+}
+
+# 途径在某 agent 下的默认强度（个性化配置 providers.<途径>.default_strengths.<agent>），未配置输出空
+_cfg_provider_default_strength() {
+    local _pkey _akey _var
+    _pkey="$(_cfg_provider_key "$1")"
+    _akey="$(printf '%s' "$2" | tr '[:lower:]' '[:upper:]')"
+    _var="_CFG_PROVIDERS_${_pkey}_DEFAULT_STRENGTHS_${_akey}"
     printf '%s' "${!_var:-}"
 }
 
@@ -393,16 +398,17 @@ run_claude() {
     fi
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
-    # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time DUR]
-    #   --model MODEL     : 直接指定模型 ID，覆盖模型旗标；也可用 CLAUDE_MODEL 环境变量覆盖。
+    # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
+    # 用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time DUR]
+    #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
+    #                       未指定时取 agent 自身默认模型（agents.claude.model），再回退当前途径的
+    #                       默认模型（providers.<途径>.default_models.claude）。
     #   -file/--file PATH : 驱动模式——prompt 回合完成后以文件内容为第一条指令，
     #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
-    # 仅给模型旗标时保持原有 TUI 交互模式不变
-    local MODEL_FLAG="${CLAUDE_DEFAULT_MODEL_FLAG:-${_CFG_AGENTS_CLAUDE_DEFAULT_FLAG:--m}}"
+    # 不给驱动选项时保持原有 TUI 交互模式不变
     local MODEL_OVERRIDE="${CLAUDE_MODEL:-}"
-    local PROVIDER_OVERRIDE="${CLAUDE_PROVIDER:-}" PROVIDER_CLI=0
+    local PROVIDER_OVERRIDE="${CLAUDE_PROVIDER:-}"
     local MODEL_ID MODEL_NAME DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
     local MODEL_EXPLICIT=0
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
@@ -414,16 +420,15 @@ run_claude() {
     while (( $# )); do
         case "$1" in
             pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
-                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; PROVIDER_CLI=1; shift;;
-            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; MODEL_EXPLICIT=1; shift;;
+                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time DUR]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} go）。"
-                echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
-                echo "模型默认 slug 可用 CLAUDE_MODEL_M/O/P/Q/K/G/F/H 环境变量覆盖。"
+                echo "模型: 默认取 agents.claude.model，未配置则取当前途径的 providers.<途径>.default_models.claude；--model/CLAUDE_MODEL 直接覆盖。"
+                echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
                 exit 0;;
             -file|--file)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
@@ -445,7 +450,7 @@ run_claude() {
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
-            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
+            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
         esac
     done
     if [[ -n "${_ti_raw:-}" ]]; then
@@ -465,66 +470,52 @@ run_claude() {
         exit 64
     fi
 
-    # 模型选择：默认旗标与各旗标 slug 来自 agent-config.json/agent-custom.json；
-    # CLAUDE_MODEL_* 环境变量逐旗标覆盖，CLAUDE_MODEL/--model 直接覆盖
-    case "${MODEL_FLAG}" in
-        -m|-o|-p|-q|-k|-g|-f|-h) ;;
-        *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
-    esac
-    local _cl_flag _cl_model_env _cl_model_var
-    _cl_flag="$(_cfg_flag_key "${MODEL_FLAG}")"
-    _cl_model_env="CLAUDE_MODEL_${_cl_flag}"
-    _cl_model_var="_CFG_AGENTS_CLAUDE_FLAGS_${_cl_flag}_MODEL"
-    MODEL_ID="${!_cl_model_env:-}"
-    [[ -n "${MODEL_ID}" ]] || MODEL_ID="${!_cl_model_var:-}"
-    if [[ -z "${MODEL_ID}" ]]; then
-        echo "###${_NAME}: ERROR: 旗标 '${MODEL_FLAG}' 缺少模型配置（agent-config.json agents.claude.flags）###" >&2
-        exit 64
-    fi
-    MODEL_NAME="${MODEL_ID}"
-    if [[ -n "${MODEL_OVERRIDE}" ]]; then
-        MODEL_ID="${MODEL_OVERRIDE}"
-        MODEL_NAME="${MODEL_OVERRIDE}（override）"
-    fi
-
-    # 供应商快捷词：先校验途径是否提供 Anthropic 兼容端点（cl 的硬性要求），再应用默认模型
-    if (( PROVIDER_CLI )); then
-        local _cl_pre_pkey _cl_pre_var
-        _cl_pre_pkey="$(_cfg_provider_key "${PROVIDER_OVERRIDE}")"
-        _cl_pre_var="_CFG_PROVIDERS_${_cl_pre_pkey}_ANTHROPIC_BASE_URL"
-        if [[ -z "${!_cl_pre_var:-}" ]]; then
-            echo "###${_NAME}: ERROR: 途径 '${PROVIDER_OVERRIDE}' 未定义 anthropic_base_url，cl 无法使用该途径（见 agent-config.json / agent-custom.json）###" >&2
-            exit 64
-        fi
-    fi
-
-    # 供应商快捷词：未显式指定模型时，优先使用该途径的默认模型（个性化配置 providers.*.default_models.claude）
-    if (( PROVIDER_CLI )) && (( ! MODEL_EXPLICIT )); then
-        local _cl_default_model
-        _cl_default_model="$(_cfg_provider_default_model "${PROVIDER_OVERRIDE}" claude)"
-        if [[ -n "${_cl_default_model}" ]]; then
-            MODEL_ID="${_cl_default_model}"
-            MODEL_NAME="${_cl_default_model}"
-        else
-            echo "###${_NAME}: warning: 途径 '${PROVIDER_OVERRIDE}' 未定义 claude 默认模型，沿用 ${MODEL_ID}（可在 agent-custom.json providers.${PROVIDER_OVERRIDE}.default_models.claude 配置）###" >&2
-        fi
-    fi
-
     # ---- 途径设置：Anthropic 兼容端点与 key 均取自 agent-config.json/agent-custom.json ----
     # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
+    # 途径来自命令行快捷词（pay/go/gpt）或个性化配置 agents.claude.provider。
     local _cl_provider="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}"
+    if [[ -z "${_cl_provider}" ]]; then
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.claude.provider）###" >&2
+        exit 64
+    fi
     local _CL_PERMISSION_MODE="${_CFG_AGENTS_CLAUDE_PERMISSION_MODE:-auto}"
     local _cl_pkey _cl_var _cl_key_name _cl_key=""
     _cl_pkey="$(_cfg_provider_key "${_cl_provider}")"
     _cl_var="_CFG_PROVIDERS_${_cl_pkey}_ANTHROPIC_BASE_URL"
     ANTHROPIC_BASE_URL="${!_cl_var:-}"
     if [[ -z "${ANTHROPIC_BASE_URL}" ]]; then
-        echo "###${_NAME}: ERROR: 途径 '${_cl_provider}' 未定义 anthropic_base_url（见 agent-config.json / agent-custom.json）###" >&2
+        echo "###${_NAME}: ERROR: 途径 '${_cl_provider}' 未定义 anthropic_base_url，cl 无法使用该途径（见 agent-config.json / agent-custom.json）###" >&2
         exit 64
     fi
     _cl_var="_CFG_PROVIDERS_${_cl_pkey}_ENV_KEY"
     _cl_key_name="${!_cl_var:-}"
     export ANTHROPIC_BASE_URL
+
+    # 模型选择（两层默认相互独立，agent 层优先）：
+    #   1) --model/CLAUDE_MODEL 显式覆盖；
+    #   2) agents.claude.model —— agent 自身默认模型，不随途径切换变化；
+    #   3) providers.<途径>.default_models.claude —— 当前途径下 claude 的默认模型。
+    # 未配置 2)/3) 时启动报错，避免模型与端点脱钩。
+    if [[ -n "${MODEL_OVERRIDE}" ]]; then
+        MODEL_ID="${MODEL_OVERRIDE}"
+        MODEL_NAME="${MODEL_OVERRIDE}（override）"
+    elif [[ -n "${_CFG_AGENTS_CLAUDE_MODEL:-}" ]]; then
+        MODEL_ID="${_CFG_AGENTS_CLAUDE_MODEL}"
+        MODEL_NAME="${MODEL_ID}（agent 默认）"
+    else
+        MODEL_ID="$(_cfg_provider_default_model "${_cl_provider}" claude)"
+        MODEL_NAME="${MODEL_ID}"
+        if [[ -z "${MODEL_ID}" ]]; then
+            echo "###${_NAME}: ERROR: 途径 '${_cl_provider}' 未定义 claude 默认模型（见 agent-custom.json agents.claude.model 或 providers.${_cl_provider}.default_models.claude）###" >&2
+            exit 64
+        fi
+    fi
+    # 强度选择（同两层优先级）：agents.claude.strength > 旧键 agents.claude.env.CLAUDE_CODE_EFFORT_LEVEL
+    #   > providers.<途径>.default_strengths.claude > max（内置兜底）
+    local CLAUDE_STRENGTH="${_CFG_AGENTS_CLAUDE_STRENGTH:-}"
+    [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="${_CFG_AGENTS_CLAUDE_ENV_CLAUDE_CODE_EFFORT_LEVEL:-}"
+    [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="$(_cfg_provider_default_strength "${_cl_provider}" claude)"
+    [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="max"
     # 状态栏（与 co 同款的通用 statusline 配置，经 agent-statusline.sh 渲染）
     export AGENT_STATUSLINE_SEGMENTS="${_CFG_STATUSLINE_SEGMENTS:-[]}"
     export AGENT_STATUSLINE_USE_COLORS="${_CFG_STATUSLINE_USE_COLORS:-true}"
@@ -546,16 +537,40 @@ run_claude() {
         fi
     done
     unset _cl_env_key _cl_env_value
-    # ANTHROPIC_MODEL 与最终模型保持一致（快捷词/default_models 切换模型时同步 env 与 --settings）
+    # ANTHROPIC_MODEL 与最终模型保持一致（快捷词/两层默认切换模型时同步 env 与 --settings）；
+    # OPUS/SONNET 别名未在 agents.claude.env 显式配置时同样跟随最终模型，避免切换途径后残留旧模型
     ANTHROPIC_MODEL="${MODEL_ID}"
     export ANTHROPIC_MODEL
+    if [[ -z "${_CFG_AGENTS_CLAUDE_ENV_ANTHROPIC_DEFAULT_OPUS_MODEL:-}" ]]; then
+        ANTHROPIC_DEFAULT_OPUS_MODEL="${MODEL_ID}"
+        export ANTHROPIC_DEFAULT_OPUS_MODEL
+    fi
+    if [[ -z "${_CFG_AGENTS_CLAUDE_ENV_ANTHROPIC_DEFAULT_SONNET_MODEL:-}" ]]; then
+        ANTHROPIC_DEFAULT_SONNET_MODEL="${MODEL_ID}"
+        export ANTHROPIC_DEFAULT_SONNET_MODEL
+    fi
+    # 强度落地：CLAUDE_CODE_EFFORT_LEVEL 取解析结果（覆盖外部/旧配置同名变量）
+    printf -v CLAUDE_CODE_EFFORT_LEVEL '%s' "${CLAUDE_STRENGTH}"
+    export CLAUDE_CODE_EFFORT_LEVEL
+    # 认证头：多数 Anthropic 兼容端点接受 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN），
+    # 少数（如 opencode-go）只认 x-api-key（ANTHROPIC_API_KEY）；由途径的 anthropic_auth 选择
+    # （取值 api_key / auth_token，缺省 auth_token）。另一认证变量显式清除，避免残留旧值抢占。
+    _cl_var="_CFG_PROVIDERS_${_cl_pkey}_ANTHROPIC_AUTH"
+    if [[ "${!_cl_var:-auth_token}" == "api_key" ]]; then
+        _cl_auth_var="ANTHROPIC_API_KEY"
+        _cl_auth_other="ANTHROPIC_AUTH_TOKEN"
+    else
+        _cl_auth_var="ANTHROPIC_AUTH_TOKEN"
+        _cl_auth_other="ANTHROPIC_API_KEY"
+    fi
     [[ -n "${_cl_key_name}" ]] && _cl_key="${!_cl_key_name:-}"
     if [[ -n "${_cl_key}" ]]; then
-        ANTHROPIC_AUTH_TOKEN="${_cl_key}"
-        export ANTHROPIC_AUTH_TOKEN
+        printf -v "${_cl_auth_var}" '%s' "${_cl_key}"
+        export "${_cl_auth_var}"
+        unset "${_cl_auth_other}"
     else
-        unset ANTHROPIC_AUTH_TOKEN
-        echo "###${_NAME}: warning: 未设置 ${_cl_key_name:-途径 key 环境变量}，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###" >&2
+        unset "${_cl_auth_var}" "${_cl_auth_other}"
+        echo "###${_NAME}: warning: 未设置 ${_cl_key_name:-途径 key 环境变量}，${_cl_auth_var} 已清除，Claude Code 可能无法认证###" >&2
     fi
 
     # 用户级 settings.json 的 env 块（如 cc-switch 遗留的 ANTHROPIC_BASE_URL）优先级高于进程环境变量，
@@ -565,12 +580,12 @@ run_claude() {
         exit 1
     }
     chmod 600 "${_CLAUDE_SETTINGS_TMP}"
-    _claude_token_fragment=""
-    if [[ -n "${ANTHROPIC_AUTH_TOKEN:-}" ]]; then
-        _claude_token_fragment=",\"ANTHROPIC_AUTH_TOKEN\":\"$(_json_escape "${ANTHROPIC_AUTH_TOKEN}")\""
+    # 两个认证键都显式写入（生效的带值、另一个为空串），以覆盖用户级 settings.json 里可能遗留的旧 token
+    # （如 PROXY_MANAGED）或另一种认证头的残留值，避免误导性 401
+    if [[ "${_cl_auth_var}" == "ANTHROPIC_API_KEY" ]]; then
+        _claude_token_fragment=",\"ANTHROPIC_API_KEY\":\"$(_json_escape "${ANTHROPIC_API_KEY:-}")\",\"ANTHROPIC_AUTH_TOKEN\":\"\""
     else
-        # 显式空 token：覆盖用户级 settings.json 里可能遗留的旧 token（如 PROXY_MANAGED），避免误导性 401
-        _claude_token_fragment=",\"ANTHROPIC_AUTH_TOKEN\":\"\""
+        _claude_token_fragment=",\"ANTHROPIC_AUTH_TOKEN\":\"$(_json_escape "${ANTHROPIC_AUTH_TOKEN:-}")\",\"ANTHROPIC_API_KEY\":\"\""
     fi
     # env 块由 _cl_env_keys 动态生成（未配置的键省略，含 DISABLE_AUTOUPDATER 等）
     local _claude_env_fragment="" _cl_frag_key _cl_frag_value
@@ -588,7 +603,7 @@ run_claude() {
             "${_claude_env_fragment}" "${_claude_token_fragment}" \
             "$(_json_escape "${_claude_statusline_cmd}")"
     } > "${_CLAUDE_SETTINGS_TMP}"
-    unset _claude_token_fragment _claude_env_fragment _claude_statusline_cmd
+    unset _claude_token_fragment _claude_env_fragment _claude_statusline_cmd _cl_auth_var _cl_auth_other
 
     local _runtime_mode=tui
     (( DRIVE_MODE )) && _runtime_mode=drive
@@ -620,8 +635,8 @@ run_claude() {
     echo "  log: ${LOG_FILE}"
     echo "  state: ${AGENT_MANIFEST_FILE}"
     echo "  context: ${AGENT_CONTEXT_COUNT} 层说明文件（清单：${AGENT_CONTEXT_FILE}）"
-    if (( _SNSC )); then
-        echo "  launcher: snsc/HPC"
+    if (( _SECURE )); then
+        echo "  launcher: secure/HPC"
     fi
     if (( DRIVE_MODE )); then
         echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
@@ -780,12 +795,12 @@ run_claude() {
 # =====================================================================
 run_opencode() {
     local _OPENCODE_BIN="${OPENCODE_BIN:-}"
-    if (( _SNSC )) && [[ -z "${_OPENCODE_BIN}" ]]; then
-        # snsc 上 opencode 通常手动部署在 vscode-server 目录内（升级后路径会变，请更新或设 OPENCODE_BIN）：
+    if (( _SECURE )) && [[ -z "${_OPENCODE_BIN}" ]]; then
+        # HPC/secure 变体下 opencode 通常手动部署在 vscode-server 目录内（升级后路径会变，请更新或设 OPENCODE_BIN）：
         #   mkdir -p /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/
         #   cp /public/home/zhangxin/.opencode/bin/opencode <上路径>/output_result_debug_Stable-.../
-        # 该路径是机器相关项，取自 agent-custom.json 的 agents.opencode.snsc_binary
-        _OPENCODE_BIN="${_CFG_AGENTS_OPENCODE_SNSC_BINARY:-}"
+        # 该路径是机器相关项，取自 agent-custom.json 的 agents.opencode.secure_binary
+        _OPENCODE_BIN="${_CFG_AGENTS_OPENCODE_SECURE_BINARY:-}"
     fi
     if [[ -z "${_OPENCODE_BIN}" ]]; then
         _OPENCODE_BIN="$(command -v opencode 2>/dev/null || true)"
@@ -795,19 +810,20 @@ run_opencode() {
         exit 127
     fi
 
-    # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
-    #   --model MODEL     : 直接指定模型 ID，覆盖模型旗标；也可用 OPENCODE_MODEL 环境变量覆盖。
+    # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
+    # 用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+    #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
+    #                       未指定时取 agent 自身默认模型（agents.opencode.model），再回退当前途径的
+    #                       默认模型（providers.<途径>.default_models.opencode）。
     #   --variant LEVEL   : 直接指定 build agent 的 variant（max/xhigh/high/low 等）。
     #   -file/--file PATH : 驱动模式——prompt 回合完成后以文件内容为第一条指令，
     #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
-    # 仅给模型旗标时保持原有 TUI 交互模式不变
-    local MODEL_FLAG="${OPENCODE_DEFAULT_MODEL_FLAG:-${_CFG_AGENTS_OPENCODE_DEFAULT_FLAG:--f}}"
+    # 不给驱动选项时保持原有 TUI 交互模式不变
     local MODEL_OVERRIDE="${OPENCODE_MODEL:-}"
     local VARIANT_OVERRIDE="${OPENCODE_VARIANT:-}"
     local PROVIDER_OVERRIDE="${OPENCODE_PROVIDER:-}" PROVIDER_CLI=0
-    local MODEL_ID MODEL_NAME VARIANT="${_CFG_AGENTS_OPENCODE_VARIANT:-max}" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
+    local MODEL_ID MODEL_NAME VARIANT="" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
     local MODEL_EXPLICIT=0 VARIANT_EXPLICIT=0
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
@@ -820,7 +836,6 @@ run_opencode() {
         case "$1" in
             pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; PROVIDER_CLI=1; shift;;
-            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; MODEL_EXPLICIT=1; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
@@ -828,9 +843,10 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
                 VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} gpt）。"
-                echo "默认模型: ${MODEL_FLAG}；只给模型旗标时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
+                echo "模型: 默认取 agents.opencode.model，未配置则取当前途径的 providers.<途径>.default_models.opencode；--model/OPENCODE_MODEL 直接覆盖。"
+                echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
                 exit 0;;
             -file|--file)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
@@ -852,7 +868,7 @@ run_opencode() {
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
-            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
+            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
         esac
     done
     if [[ -n "${_ti_raw:-}" ]]; then
@@ -875,45 +891,40 @@ run_opencode() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认旗标与各旗标模型/显示名/variant 来自 agent-config.json/agent-custom.json；
-    # OPENCODE_MODEL_* 环境变量逐旗标覆盖，OPENCODE_MODEL/--model 直接覆盖，--variant 覆盖等级。
-    case "${MODEL_FLAG}" in
-        -m|-o|-p|-q|-k|-g|-f|-h) ;;
-        *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
-    esac
-    local _op_flag _op_model_env _op_var _op_flag_variant
-    _op_flag="$(_cfg_flag_key "${MODEL_FLAG}")"
-    _op_model_env="OPENCODE_MODEL_${_op_flag}"
-    _op_var="_CFG_AGENTS_OPENCODE_FLAGS_${_op_flag}_MODEL"
-    MODEL_ID="${!_op_model_env:-}"
-    [[ -n "${MODEL_ID}" ]] || MODEL_ID="${!_op_var:-}"
-    _op_var="_CFG_AGENTS_OPENCODE_FLAGS_${_op_flag}_NAME"
-    MODEL_NAME="${!_op_var:-${MODEL_ID}}"
-    _op_var="_CFG_AGENTS_OPENCODE_FLAGS_${_op_flag}_VARIANT"
-    _op_flag_variant="${!_op_var:-}"
-    if [[ -n "${_op_flag_variant}" ]]; then
-        VARIANT="${_op_flag_variant}"
-    fi
-    if [[ -z "${MODEL_ID}" ]]; then
-        echo "###${_NAME}: ERROR: 旗标 '${MODEL_FLAG}' 缺少模型配置（agent-config.json agents.opencode.flags）###" >&2
+    # 模型选择（两层默认相互独立，agent 层优先）：
+    #   1) --model/OPENCODE_MODEL 显式覆盖；
+    #   2) agents.opencode.model —— agent 自身默认模型，不随途径切换变化；
+    #   3) providers.<途径>.default_models.opencode —— 当前途径下 opencode 的默认模型。
+    # 强度（variant）同理：agents.opencode.strength > 旧键 agents.opencode.variant
+    #   > providers.<途径>.default_strengths.opencode > max（内置兜底）。
+    local _op_provider="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}"
+    if [[ -z "${_op_provider}" ]]; then
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
+    elif [[ -n "${_CFG_AGENTS_OPENCODE_MODEL:-}" ]]; then
+        MODEL_ID="${_CFG_AGENTS_OPENCODE_MODEL}"
+        MODEL_NAME="${MODEL_ID}（agent 默认）"
+    else
+        MODEL_ID="$(_cfg_provider_default_model "${_op_provider}" opencode)"
+        MODEL_NAME="${MODEL_ID}"
+        if [[ -z "${MODEL_ID}" ]]; then
+            echo "###${_NAME}: ERROR: 途径 '${_op_provider}' 未定义 opencode 默认模型（见 agent-custom.json agents.opencode.model 或 providers.${_op_provider}.default_models.opencode）###" >&2
+            exit 64
+        fi
     fi
+    VARIANT="${_CFG_AGENTS_OPENCODE_STRENGTH:-}"
+    [[ -n "${VARIANT}" ]] || VARIANT="${_CFG_AGENTS_OPENCODE_VARIANT:-}"
+    [[ -n "${VARIANT}" ]] || VARIANT="$(_cfg_provider_default_strength "${_op_provider}" opencode)"
+    [[ -n "${VARIANT}" ]] || VARIANT="max"
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT="${VARIANT_OVERRIDE}"
 
-    # 供应商快捷词：未显式指定模型时，优先使用该途径的默认模型（个性化配置 providers.*.default_models.opencode）
-    if (( PROVIDER_CLI )) && (( ! MODEL_EXPLICIT )); then
-        local _op_default_model _op_pkey _op_key_var _op_key_name
-        _op_default_model="$(_cfg_provider_default_model "${PROVIDER_OVERRIDE}" opencode)"
-        if [[ -n "${_op_default_model}" ]]; then
-            MODEL_ID="${_op_default_model}"
-            MODEL_NAME="${_op_default_model}"
-        else
-            echo "###${_NAME}: warning: 途径 '${PROVIDER_OVERRIDE}' 未定义 opencode 默认模型，沿用 ${MODEL_ID}（可在 agent-custom.json providers.${PROVIDER_OVERRIDE}.default_models.opencode 配置）###" >&2
-        fi
+    # 供应商快捷词：提示该途径 key 未设置（op 仅注册 key 已设置的途径）
+    if (( PROVIDER_CLI )); then
+        local _op_pkey _op_key_var _op_key_name
         _op_pkey="$(_cfg_provider_key "${PROVIDER_OVERRIDE}")"
         _op_key_var="_CFG_PROVIDERS_${_op_pkey}_ENV_KEY"
         _op_key_name="${!_op_key_var:-}"
@@ -982,8 +993,8 @@ run_opencode() {
     echo "  state: ${AGENT_MANIFEST_FILE}"
     echo "  context: ${AGENT_CONTEXT_COUNT} 层说明文件（清单：${AGENT_CONTEXT_FILE}）"
     echo "  user-input list: ${LIST_FILE}"
-    if (( _SNSC )); then
-        echo "  launcher: snsc/HPC"
+    if (( _SECURE )); then
+        echo "  launcher: secure/HPC"
     fi
     if (( AGENT_CONTEXT_COUNT > 0 )); then
         echo "  project context: ${AGENT_WORKSPACE_ROOT}（分层说明文件清单已注入 prompt）"
@@ -1237,16 +1248,18 @@ run_codex() {
     fi
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
-    # ---- 参数解析：模型旗标 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL]
+    # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
+    # 用法: ${_NAME} [pay|go|gpt] [--model MODEL]
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
-    #   --model MODEL     : 直接指定 Codex 模型，覆盖模型旗标；也可用 CODEX_MODEL 环境变量覆盖。
-    #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra）。
-    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:-${_CFG_AGENTS_CODEX_DEFAULT_FLAG:--q}}"
+    #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
+    #                       未指定时取 agent 自身默认模型（agents.codex.model），再回退当前途径的
+    #                       默认模型（providers.<途径>.default_models.codex）。
+    #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra），
+    #                              默认取 agents.codex.strength，再回退途径默认强度。
     local MODEL_OVERRIDE="${CODEX_MODEL:-}"
     local REASONING_OVERRIDE="${CODEX_REASONING_EFFORT:-}"
-    local PROVIDER_OVERRIDE="${CODEX_PROVIDER_ID:-}" PROVIDER_CLI=0
+    local PROVIDER_OVERRIDE="${CODEX_PROVIDER_ID:-}"
     local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-${_CFG_AGENTS_CODEX_SANDBOX:-danger-full-access}}"
     local CODEX_APPROVAL_POLICY="${CODEX_APPROVAL:-${_CFG_AGENTS_CODEX_APPROVAL:-never}}"
     local MODEL_ID MODEL_NAME REASONING_EFFORT DRIVE_INTERVAL="" DRIVE_MODE=0
@@ -1261,8 +1274,7 @@ run_codex() {
     while (( $# )); do
         case "$1" in
             pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
-                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; PROVIDER_CLI=1; shift;;
-            -m|-o|-p|-q|-k|-g|-f|-h) MODEL_FLAG="$1"; MODEL_EXPLICIT=1; shift;;
+                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
@@ -1293,12 +1305,13 @@ run_codex() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} pay）。"
-                echo "默认模型: 旗标 ${MODEL_FLAG}（模型表见 agent-config.json/agent-custom.json；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
+                echo "模型: 默认取 agents.codex.model，未配置则取当前途径的 providers.<途径>.default_models.codex；--model/CODEX_MODEL 直接覆盖。"
+                echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
-            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
+            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
     done
     if [[ -n "${_ti_raw:-}" ]]; then
@@ -1321,43 +1334,36 @@ run_codex() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认旗标与各旗标模型/名称/reasoning 来自 agent-config.json/agent-custom.json；
-    # CODEX_MODEL_* 环境变量逐旗标覆盖，--model/CODEX_MODEL 与 --reasoning-effort 直接覆盖。
-    case "${MODEL_FLAG}" in
-        -m|-o|-p|-q|-k|-g|-f|-h) ;;
-        *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
-    esac
-    local _cx_flag _cx_model_env _cx_var
-    _cx_flag="$(_cfg_flag_key "${MODEL_FLAG}")"
-    _cx_model_env="CODEX_MODEL_${_cx_flag}"
-    _cx_var="_CFG_AGENTS_CODEX_FLAGS_${_cx_flag}_MODEL"
-    MODEL_ID="${!_cx_model_env:-}"
-    [[ -n "${MODEL_ID}" ]] || MODEL_ID="${!_cx_var:-}"
-    _cx_var="_CFG_AGENTS_CODEX_FLAGS_${_cx_flag}_NAME"
-    MODEL_NAME="${!_cx_var:-${MODEL_ID}}"
-    _cx_var="_CFG_AGENTS_CODEX_FLAGS_${_cx_flag}_REASONING"
-    REASONING_EFFORT="${!_cx_var:-high}"
-    if [[ -z "${MODEL_ID}" ]]; then
-        echo "###${_NAME}: ERROR: 旗标 '${MODEL_FLAG}' 缺少模型配置（agent-config.json agents.codex.flags）###" >&2
+    # 模型选择（两层默认相互独立，agent 层优先）：
+    #   1) --model/CODEX_MODEL 显式覆盖；
+    #   2) agents.codex.model —— agent 自身默认模型，不随途径切换变化；
+    #   3) providers.<途径>.default_models.codex —— 当前途径下 codex 的默认模型。
+    # 强度（reasoning）：agents.codex.strength > 旧键 agents.codex.reasoning
+    #   > providers.<途径>.default_strengths.codex > max（内置兜底）。
+    local _cx_provider="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}"
+    if [[ -z "${_cx_provider}" ]]; then
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
-    fi
-    [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
-
-    # 供应商快捷词：未显式指定模型时，优先使用该途径的默认模型（个性化配置 providers.*.default_models.codex）
-    if (( PROVIDER_CLI )) && (( ! MODEL_EXPLICIT )); then
-        local _cx_default_model
-        _cx_default_model="$(_cfg_provider_default_model "${PROVIDER_OVERRIDE}" codex)"
-        if [[ -n "${_cx_default_model}" ]]; then
-            MODEL_ID="${_cx_default_model}"
-            MODEL_NAME="${_cx_default_model}"
-        else
-            echo "###${_NAME}: warning: 途径 '${PROVIDER_OVERRIDE}' 未定义 codex 默认模型，沿用 ${MODEL_ID}（可在 agent-custom.json providers.${PROVIDER_OVERRIDE}.default_models.codex 配置）###" >&2
+    elif [[ -n "${_CFG_AGENTS_CODEX_MODEL:-}" ]]; then
+        MODEL_ID="${_CFG_AGENTS_CODEX_MODEL}"
+        MODEL_NAME="${MODEL_ID}（agent 默认）"
+    else
+        MODEL_ID="$(_cfg_provider_default_model "${_cx_provider}" codex)"
+        MODEL_NAME="${MODEL_ID}"
+        if [[ -z "${MODEL_ID}" ]]; then
+            echo "###${_NAME}: ERROR: 途径 '${_cx_provider}' 未定义 codex 默认模型（见 agent-custom.json agents.codex.model 或 providers.${_cx_provider}.default_models.codex）###" >&2
+            exit 64
         fi
     fi
+    REASONING_EFFORT="${_CFG_AGENTS_CODEX_STRENGTH:-}"
+    [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="${_CFG_AGENTS_CODEX_REASONING:-}"
+    [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="$(_cfg_provider_default_strength "${_cx_provider}" codex)"
+    [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="max"
+    [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
 
     local _runtime_mode=tui
     (( DRIVE_MODE )) && _runtime_mode=drive
@@ -1378,7 +1384,7 @@ run_codex() {
     _append_skill_list "当前工作目录技能（${_PWD}）" "${_workspace_skill_roots[@]}"
     unset _git_root _workspace_root _workspace_skill_roots
     _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "$REASONING_EFFORT" ""
-    local CODEX_PROVIDER_ID="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}"
+    local CODEX_PROVIDER_ID="${_cx_provider}"
     local _cx_pkey _cx_pvar
     _cx_pkey="$(_cfg_provider_key "${CODEX_PROVIDER_ID}")"
     _cx_pvar="_CFG_PROVIDERS_${_cx_pkey}_ENV_KEY"
@@ -1452,8 +1458,8 @@ run_codex() {
     echo "  state: ${AGENT_MANIFEST_FILE}"
     echo "  context: ${AGENT_CONTEXT_COUNT} 层说明文件（清单：${AGENT_CONTEXT_FILE}）"
     echo "  agent config: ${_configure_agent_root}/{skills,tools,hooks,plugins}"
-    if (( _SNSC )); then
-        echo "  launcher: snsc/HPC"
+    if (( _SECURE )); then
+        echo "  launcher: secure/HPC"
     fi
     if (( DRIVE_MODE )); then
         echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | prompt + 继续"
