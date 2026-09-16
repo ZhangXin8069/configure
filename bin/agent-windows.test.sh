@@ -48,6 +48,9 @@ for contract in \
     'function Emit-Event' \
     'function Discover-Context' \
     'function Find-CodexThread' \
+    'function Merge-JsonNode' \
+    'function Import-AgentConfig' \
+    'function Get-OpenCodeProviderConfig' \
     '--max-turns' \
     '--max-runtime' \
     '--stop-file' \
@@ -55,8 +58,14 @@ for contract in \
     'Join-Path $script:DataRoot '\''runs'\'''; do
     assert_contains "$runtime" "$contract"
 done
-assert_contains "$runtime" "'-q' = @('gpt-6-astra', 'GPT-6 Astra')"
-assert_contains "$runtime" "'-q' { 'max' }"
+assert_contains "$runtime" "'agent-config.json'"
+assert_contains "$runtime" "'agent-custom.json.refer'"
+assert_contains "$runtime" '$agentConfig.default_flag'
+assert_contains "$runtime" '$agentConfig.flags.$defaultFlag'
+assert_contains "$runtime" '$permissionMode'
+assert_contains "$runtime" 'agents.opencode.agent'
+assert_contains "$runtime" 'model_providers.$providerId.env_key'
+assert_contains "$runtime" 'model_providers.$providerId.wire_api'
 assert_contains "$runtime" 'features.fast_mode=$fastMode'
 assert_contains "$runtime" 'function Set-ClaudeDefaults'
 assert_contains "$runtime" 'function New-ClaudeSettingsFile'
@@ -73,16 +82,17 @@ else
 fi
 
 parser='
+$target = $env:AGENT_TEST_PARSE_TARGET
 $tokens = $null
 $errors = $null
-[System.Management.Automation.Language.Parser]::ParseFile($args[0], [ref]$tokens, [ref]$errors) | Out-Null
+[System.Management.Automation.Language.Parser]::ParseFile($target, [ref]$tokens, [ref]$errors) | Out-Null
 if ($errors.Count -gt 0) {
     $errors | ForEach-Object { $_.Message } | Write-Error
     exit 1
 }
 '
 set +e
-parser_output=$("$ps_cmd" -NoLogo -NoProfile -Command "$parser" "$runtime" 2>&1)
+parser_output=$(AGENT_TEST_PARSE_TARGET="$runtime" "$ps_cmd" -NoLogo -NoProfile -Command "$parser" 2>&1)
 parser_status=$?
 set -e
 (( parser_status == 0 )) || fail "PowerShell Parser 失败：$parser_output"

@@ -1,0 +1,87 @@
+{
+  "schema": "agent-config/v1",
+  "description": "agent 系列（cl/op/co）通用配置：模型提供途径目录与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
+  "providers": {
+    "deepSeek-pay": {
+      "label": "DeepSeek 官方（按量付费）",
+      "env_key": "DEEPSEEK_PAY_API_KEY",
+      "base_url": "https://api.deepseek.com",
+      "anthropic_base_url": "https://api.deepseek.com/anthropic",
+      "wire_api": "chat"
+    },
+    "opencode-go": {
+      "label": "OpenCode Go 订阅（$10/月）",
+      "env_key": "OPENCODE_GO_API_KEY",
+      "base_url": "https://opencode.ai/zen/go/v1",
+      "anthropic_base_url": "https://opencode.ai/zen/go",
+      "wire_api": "responses"
+    },
+    "custom-gpt": {
+      "label": "自定义 GPT 兼容端点",
+      "env_key": "CUSTOM_GPT_API_KEY",
+      "base_url": "http://nat200.natappvip.cc/v1",
+      "anthropic_base_url": "",
+      "wire_api": "responses",
+      "opencode": {
+        "npm": "@ai-sdk/openai",
+        "models": [
+          "gpt-6-astra",
+          "gpt-5.6-luna",
+          "gpt-5.6-sol",
+          "gpt-5.6-terra",
+          "gpt-5.4-mini"
+        ]
+      }
+    }
+  },
+  "agents": {
+    "claude": {
+      "permission_mode": "auto",
+      "env": {
+        "CLAUDE_CODE_AUTO_COMPACT_WINDOW": "786432"
+      }
+    },
+    "opencode": {
+      "agent": "build",
+      "lsp": true,
+      "key_providers": [
+        "deepSeek-pay",
+        "opencode-go",
+        "custom-gpt"
+      ]
+    },
+    "codex": {
+      "approval": "never",
+      "sandbox": "danger-full-access",
+      "config": {
+        "model_context_window": "1000000",
+        "model_auto_compact_token_limit": "900000",
+        "personality": "pragmatic",
+        "approvals_reviewer": "auto_review",
+        "forced_login_method": "api",
+        "service_tier": "",
+        "features": {
+          "fast_mode": "false"
+        },
+        "tui": {
+          "status_line": [
+            "model-with-reasoning",
+            "current-dir",
+            "hostname",
+            "branch-changes",
+            "run-state",
+            "permissions",
+            "approval-mode",
+            "context-used",
+            "weekly-limit",
+            "estimated-thread-cost",
+            "thread-id",
+            "fast-mode",
+            "task-progress"
+          ],
+          "status_line_use_colors": "true"
+        }
+      }
+    }
+  }
+}

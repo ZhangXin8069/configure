@@ -62,6 +62,7 @@ case "$(basename -- "$0")" in
         ;;
     fake-opencode.sh)
         printf 'timestamp=x level=INFO session.id=session-fake message=started\n' >&2
+        printf 'opencode-config: %s\n' "${OPENCODE_CONFIG_CONTENT:-}" >> "$FAKE_CALL_LOG"
         ;;
     fake-claude.sh)
         printf 'session_id=session-fake\n' >&2
@@ -109,24 +110,31 @@ run_launcher() {
     shift
     local binary="$1"
     shift
+    local script_root="${AGENT_TEST_SCRIPT_DIR:-$script_dir}"
     ln -sf "$launcher" "$test_root/$name"
     case "$name" in
         co) (cd "$repo/nested" && \
-            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" \
+            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_root" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
             CODEX_BIN="$binary" \
+            CODEX_PROVIDER_ID="${CODEX_PROVIDER_ID:-}" \
+            CODEX_PROVIDER_BASE_URL="${CODEX_PROVIDER_BASE_URL:-}" \
+            CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-}" \
             "$test_root/$name" "$@") ;;
         op) (cd "$repo/nested" && \
-            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" \
+            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_root" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
             OPENCODE_BIN="$binary" \
+            OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
+            DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
+            CUSTOM_GPT_API_KEY="${CUSTOM_GPT_API_KEY:-}" \
             "$test_root/$name" "$@") ;;
         cl) (cd "$repo/nested" && \
-            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" \
+            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_root" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
@@ -136,7 +144,8 @@ run_launcher() {
             ANTHROPIC_DEFAULT_OPUS_MODEL=external-opus ANTHROPIC_DEFAULT_SONNET_MODEL=external-sonnet \
             ANTHROPIC_DEFAULT_HAIKU_MODEL=external-haiku CLAUDE_CODE_SUBAGENT_MODEL=external-subagent \
             CLAUDE_CODE_EFFORT_LEVEL=low CLAUDE_CODE_AUTO_COMPACT_WINDOW=123 \
-            DEEPSEEK_API_KEY=test-deepseek-key \
+            DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-test-deepseek-key}" \
+            OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             "$test_root/$name" "$@") ;;
         *) fail "未知测试 launcher：$name" ;;
     esac
@@ -150,12 +159,15 @@ default_codex_status=$?
 set -e
 (( default_codex_status == 0 )) || fail "Codex 默认配置 fake launcher 失败：$default_codex_output"
 assert_contains "$default_codex_output" 'Codex: GPT-6 Astra | reasoning=max'
-assert_contains "$default_codex_output" 'provider: lqcd | tier=standard'
+assert_contains "$default_codex_output" 'provider: custom-gpt | tier=standard'
 assert_file_contains "$call_log" '--model gpt-6-astra'
 assert_file_contains "$call_log" 'features.fast_mode=false'
 assert_file_contains "$call_log" 'model_reasoning_effort="max"'
+assert_file_contains "$call_log" 'model_providers.custom-gpt.base_url="http://nat200.natappvip.cc/v1"'
+assert_file_contains "$call_log" 'model_providers.custom-gpt.env_key="CUSTOM_GPT_API_KEY"'
+assert_file_contains "$call_log" 'model_providers.custom-gpt.wire_api="responses"'
 assert_file_not_contains "$call_log" 'service_tier='
-printf 'PASS: Codex 默认模型、reasoning 和 Fast 关闭\n'
+printf 'PASS: Codex 默认模型、reasoning、custom-gpt 途径与 Fast 关闭\n'
 
 set +e
 codex_output=$(run_launcher co "$fake_codex" --once --model fake-model --reasoning-effort low 2>&1)
@@ -272,7 +284,8 @@ assert_contains "$workspace_mismatch_output" 'workspace_root='
 printf 'PASS: 不同 workspace 的恢复请求被拒绝\n'
 
 set +e
-op_output=$(run_launcher op "$fake_opencode" --once --file "$repo/first.txt" --time 1s 2>&1)
+op_output=$(OPENCODE_GO_API_KEY=test-go-key DEEPSEEK_PAY_API_KEY=test-deepseek-key CUSTOM_GPT_API_KEY=test-custom-key \
+    run_launcher op "$fake_opencode" --once --file "$repo/first.txt" --time 1s 2>&1)
 op_status=$?
 set -e
 (( op_status == 0 )) || fail "OpenCode fake launcher 失败：$op_output"
@@ -283,7 +296,12 @@ assert_file_contains "$op_run/manifest.env" 'agent=opencode'
 assert_file_contains "$op_run/manifest.env" 'state=finished'
 assert_file_contains "$op_run/inputs.txt" ''
 assert_file_contains "$call_log" 'first instruction'
-printf 'PASS: OpenCode --once、文件指令和数据目录隔离\n'
+assert_file_contains "$call_log" '"apiKey":"{env:DEEPSEEK_PAY_API_KEY}"'
+assert_file_contains "$call_log" '"apiKey":"{env:OPENCODE_GO_API_KEY}"'
+assert_file_contains "$call_log" '"apiKey":"{env:CUSTOM_GPT_API_KEY}"'
+assert_file_contains "$call_log" '"baseURL":"http://nat200.natappvip.cc/v1"'
+assert_file_contains "$call_log" '"model":"deepseek/deepseek-flash","variant":"max"'
+printf 'PASS: OpenCode --once、三途径 key 注入、custom-gpt 注册、数据目录隔离\n'
 
 set +e
 cl_output=$(run_launcher cl "$fake_claude" --once --file "$repo/first.txt" 2>&1)
@@ -388,3 +406,86 @@ if find "$repo" -maxdepth 1 -name '.agent.*' -print | grep -q .; then
     fail '工作目录不应生成 .agent.* 运行产物'
 fi
 printf 'PASS: 工作目录无运行时垃圾\n'
+
+# ---- 配置文件加载：agent-custom.json 替代 refer、坏配置报错 ----
+alt_dir="$test_root/altbin"
+mkdir -p "$alt_dir"
+ln -sf "$script_dir/agent-runtime.sh" "$alt_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-prompt.txt" "$alt_dir/agent-prompt.txt"
+cp -- "$script_dir/agent-config.json" "$alt_dir/agent-config.json"
+cat > "$alt_dir/agent-custom.json" <<'EOF'
+{
+  "agents": {
+    "claude": {
+      "provider": "opencode-go",
+      "flags": { "-m": { "model": "custom-claude-model" } }
+    },
+    "opencode": {
+      "variant": "low",
+      "flags": { "-f": { "model": "opencode-go/custom-op-model", "name": "Custom OP" } }
+    },
+    "codex": {
+      "provider": "deepSeek-pay",
+      "flags": { "-q": { "model": "custom-codex-model", "reasoning": "high" } }
+    }
+  }
+}
+EOF
+
+custom_cl_before=$(wc -l < "$call_log")
+set +e
+custom_cl_output=$(AGENT_TEST_SCRIPT_DIR="$alt_dir" OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cl "$fake_claude" --once 2>&1)
+custom_cl_status=$?
+set -e
+(( custom_cl_status == 0 )) || fail "custom 覆盖 cl 失败：$custom_cl_output"
+custom_cl_new=$(tail -n +$((custom_cl_before + 1)) "$call_log")
+assert_contains "$custom_cl_new" '--model custom-claude-model'
+assert_contains "$custom_cl_new" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go'
+assert_contains "$custom_cl_new" 'ANTHROPIC_AUTH_TOKEN=test-go-key'
+printf 'PASS: 个性化 cl 切换途径为 opencode-go 并覆盖模型\n'
+
+custom_op_before=$(wc -l < "$call_log")
+set +e
+custom_op_output=$(AGENT_TEST_SCRIPT_DIR="$alt_dir" OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher op "$fake_opencode" --once 2>&1)
+custom_op_status=$?
+set -e
+(( custom_op_status == 0 )) || fail "custom 覆盖 op 失败：$custom_op_output"
+custom_op_new=$(tail -n +$((custom_op_before + 1)) "$call_log")
+assert_contains "$custom_op_new" '"model":"opencode-go/custom-op-model","variant":"low"'
+assert_contains "$custom_op_new" '"opencode-go":{"options":{"apiKey":"{env:OPENCODE_GO_API_KEY}"}}'
+case "$custom_op_new" in
+    *DEEPSEEK_PAY_API_KEY*|*CUSTOM_GPT_API_KEY*) fail 'custom op 不应注入 key 缺失的途径' ;;
+esac
+printf 'PASS: 个性化 op 覆盖模型与 variant，缺 key 途径不注入\n'
+
+custom_co_before=$(wc -l < "$call_log")
+set +e
+custom_co_output=$(AGENT_TEST_SCRIPT_DIR="$alt_dir" \
+    run_launcher co "$fake_codex" --once 2>&1)
+custom_co_status=$?
+set -e
+(( custom_co_status == 0 )) || fail "custom 覆盖 co 失败：$custom_co_output"
+custom_co_new=$(tail -n +$((custom_co_before + 1)) "$call_log")
+assert_contains "$custom_co_new" '--model custom-codex-model'
+assert_contains "$custom_co_new" 'model_provider="deepSeek-pay"'
+assert_contains "$custom_co_new" 'model_providers.deepSeek-pay.base_url="https://api.deepseek.com"'
+assert_contains "$custom_co_new" 'model_providers.deepSeek-pay.env_key="DEEPSEEK_PAY_API_KEY"'
+assert_contains "$custom_co_new" 'model_providers.deepSeek-pay.wire_api="chat"'
+assert_contains "$custom_co_new" 'model_reasoning_effort="high"'
+printf 'PASS: 个性化 co 切换途径为 deepSeek-pay 并覆盖模型与 reasoning\n'
+
+bad_dir="$test_root/badbin"
+mkdir -p "$bad_dir"
+printf '{ not json\n' > "$bad_dir/agent-config.json"
+printf '{}\n' > "$bad_dir/agent-custom.json"
+ln -sf "$script_dir/agent-runtime.sh" "$bad_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-prompt.txt" "$bad_dir/agent-prompt.txt"
+set +e
+bad_output=$(AGENT_TEST_SCRIPT_DIR="$bad_dir" run_launcher cl "$fake_claude" --once 2>&1)
+bad_status=$?
+set -e
+(( bad_status != 0 )) || fail '损坏的 agent-config.json 应报错退出'
+assert_contains "$bad_output" '解析配置失败'
+printf 'PASS: 损坏配置明确报错\n'

@@ -1,0 +1,137 @@
+{
+  "schema": "agent-custom/v1",
+  "description": "agent 系列个性化配置：各 agent 使用的供应商（provider）、模型（flags）与模型强度（variant/reasoning/effort），以及机器相关路径。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
+  "guidance": [
+    "复制本文件为 agent-custom.json 后按需修改；agent-custom.json 已被 .gitignore 忽略，不会入库。",
+    "切换供应商：agents.<agent>.provider 指定 providers 中的途径名；cl 用其 anthropic_base_url，co 用其 base_url/wire_api/env_key（途径端点等通用设置见 agent-config.json）。",
+    "切换模型与强度：agents.<agent>.flags.<旗标>.model 为模型 ID；op 用 variant（max/xhigh/high/low），co 用 reasoning（low/medium/high/xhigh/max/ultra），cl 用 env.CLAUDE_CODE_EFFORT_LEVEL。",
+    "agents.opencode.snsc_binary 为 HPC/snsc 上 opencode 的部署路径（升级 vscode-server 后会变化）。"
+  ],
+  "agents": {
+    "claude": {
+      "default_flag": "-m",
+      "provider": "deepSeek-pay",
+      "flags": {
+        "-m": {
+          "model": "deepseek-flash[1m]"
+        },
+        "-o": {
+          "model": "deepseek-flash[1m]"
+        },
+        "-p": {
+          "model": "deepseek-flash[1m]"
+        },
+        "-q": {
+          "model": "deepseek-flash[1m]"
+        },
+        "-k": {
+          "model": "deepseek-flash"
+        },
+        "-g": {
+          "model": "deepseek-flash[1m]"
+        },
+        "-f": {
+          "model": "deepseek-flash"
+        },
+        "-h": {
+          "model": "deepseek-flash[1m]"
+        }
+      },
+      "env": {
+        "ANTHROPIC_MODEL": "deepseek-flash[1m]",
+        "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-flash[1m]",
+        "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-flash[1m]",
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-flash",
+        "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-flash",
+        "CLAUDE_CODE_EFFORT_LEVEL": "max"
+      }
+    },
+    "opencode": {
+      "default_flag": "-f",
+      "variant": "max",
+      "snsc_binary": "/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713",
+      "flags": {
+        "-m": {
+          "model": "opencode-go/muse-spark-1.2-contributor",
+          "name": "Build auto·Muse Spark 1.2 Contributor OpenCode Go",
+          "variant": "xhigh"
+        },
+        "-o": {
+          "model": "opencode-go/ox-alpha-free",
+          "name": "Build auto · Ox Alpha Free (Unlimited) OpenCode Go"
+        },
+        "-p": {
+          "model": "opencode-go/deepseek-v4-pro",
+          "name": "DeepSeek V4 Pro (New)"
+        },
+        "-q": {
+          "model": "opencode-go/qwen3.8-max",
+          "name": "Qwen3.8 Max"
+        },
+        "-k": {
+          "model": "opencode-go/kimi-k3",
+          "name": "Kimi K3"
+        },
+        "-g": {
+          "model": "opencode-go/gpt-5.6-luna",
+          "name": "GPT-5.6 Luna (2x usage)"
+        },
+        "-f": {
+          "model": "deepseek/deepseek-flash",
+          "name": "DeepSeek V4.1 Flash"
+        },
+        "-h": {
+          "model": "opencode-go/hy3",
+          "name": "Hy3",
+          "variant": "high"
+        }
+      }
+    },
+    "codex": {
+      "default_flag": "-q",
+      "provider": "custom-gpt",
+      "flags": {
+        "-m": {
+          "model": "gpt-5.6-luna",
+          "name": "GPT-5.6-Luna",
+          "reasoning": "max"
+        },
+        "-o": {
+          "model": "gpt-5.6-sol",
+          "name": "GPT-5.6-Sol",
+          "reasoning": "max"
+        },
+        "-p": {
+          "model": "gpt-5.6-terra",
+          "name": "GPT-5.6-Terra",
+          "reasoning": "high"
+        },
+        "-q": {
+          "model": "gpt-6-astra",
+          "name": "GPT-6 Astra",
+          "reasoning": "max"
+        },
+        "-k": {
+          "model": "gpt-5.4-mini",
+          "name": "GPT-5.4-Mini",
+          "reasoning": "high"
+        },
+        "-g": {
+          "model": "gpt-5.6-luna",
+          "name": "GPT-5.6-Luna",
+          "reasoning": "high"
+        },
+        "-f": {
+          "model": "gpt-5.6-sol",
+          "name": "GPT-5.6-Sol",
+          "reasoning": "low"
+        },
+        "-h": {
+          "model": "gpt-5.6-luna",
+          "name": "GPT-5.6-Luna",
+          "reasoning": "high"
+        }
+      }
+    }
+  }
+}
