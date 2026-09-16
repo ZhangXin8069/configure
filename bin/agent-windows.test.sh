@@ -31,6 +31,10 @@ assert_not_contains() {
 
 assert_file "$bat"
 assert_file "$runtime"
+assert_file "$script_dir/agent-statusline.ps1"
+assert_contains "$script_dir/agent-statusline.ps1" 'context_window.used_percentage'
+assert_contains "$script_dir/agent-statusline.ps1" 'rate_limits.seven_day'
+assert_contains "$script_dir/agent-statusline.ps1" 'fast_mode'
 
 for mapping in \
     'cl.bat' 'cls.bat' 'op.bat' 'ops.bat' 'co.bat' 'cos.bat'; do
@@ -70,6 +74,21 @@ assert_contains "$runtime" 'features.fast_mode=$fastMode'
 assert_contains "$runtime" 'function Set-ClaudeDefaults'
 assert_contains "$runtime" 'function New-ClaudeSettingsFile'
 assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
+assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$script:Model, \$prompt"
+assert_contains "$runtime" 'Resolve-ProviderAlias'
+assert_contains "$runtime" "'pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt'"
+assert_contains "$runtime" 'Get-ProviderDefaultModel'
+assert_contains "$runtime" 'Invoke-LegacyKeyMigration'
+assert_contains "$runtime" "'DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'"
+assert_contains "$runtime" "'CUSTOM_GPT_API_KEY', 'LQCD_API_KEY'"
+assert_contains "$runtime" 'agent-statusline.ps1'
+assert_contains "$runtime" 'AGENT_STATUSLINE_SEGMENTS'
+assert_contains "$runtime" 'statusLine'
+assert_contains "$runtime" '$providerWebsockets'
+assert_contains "$runtime" 'check_for_update_on_startup'
+assert_contains "$runtime" 'DISABLE_AUTOUPDATER'
+assert_contains "$runtime" 'OPENCODE_AUTOUPDATE'
+assert_contains "$runtime" 'autoupdate'
 
 if command -v powershell.exe >/dev/null 2>&1; then
     ps_cmd=powershell.exe

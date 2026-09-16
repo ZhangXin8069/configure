@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Install opencode (Linux / macOS) from GitHub releases into ~/.opencode/bin
+# Install opencode (Linux / macOS) from GitHub releases into ~/.local/bin
 # Usage: bash install.sh [VERSION]   (default: latest)
+# Env:   OPENCODE_INSTALL_DIR  安装目录（默认 $HOME/.local/bin）
 
 set -euo pipefail
 
 APP="opencode"
-INSTALL_DIR="$HOME/.opencode/bin"
+INSTALL_DIR="${OPENCODE_INSTALL_DIR:-$HOME/.local/bin}"
 REPO="https://github.com/anomalyco/opencode/releases"
 
 # --- 依赖检查 ---

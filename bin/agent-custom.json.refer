@@ -1,16 +1,39 @@
 {
   "schema": "agent-custom/v1",
-  "description": "agent 系列个性化配置：各 agent 使用的供应商（provider）、模型（flags）与模型强度（variant/reasoning/effort），以及机器相关路径。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
+  "description": "agent 系列个性化配置：各 agent 使用的供应商（provider）、模型（flags）与模型强度（variant/reasoning/effort），以及各供应商在本机使用的默认模型与机器相关路径。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
   "guidance": [
     "复制本文件为 agent-custom.json 后按需修改；agent-custom.json 已被 .gitignore 忽略，不会入库。",
-    "切换供应商：agents.<agent>.provider 指定 providers 中的途径名；cl 用其 anthropic_base_url，co 用其 base_url/wire_api/env_key（途径端点等通用设置见 agent-config.json）。",
+    "切换供应商：命令行快捷词（cl go / op gpt / co pay）或 agents.<agent>.provider；cl 用其 anthropic_base_url，co 用其 base_url/wire_api/env_key（途径端点等通用设置见 agent-config.json）。",
+    "供应商默认模型：providers.<途径>.default_models.<agent> 决定快捷切换供应商时的默认模型（未显式指定模型时生效）；未配置则沿用当前旗标模型并告警。",
     "切换模型与强度：agents.<agent>.flags.<旗标>.model 为模型 ID；op 用 variant（max/xhigh/high/low），co 用 reasoning（low/medium/high/xhigh/max/ultra），cl 用 env.CLAUDE_CODE_EFFORT_LEVEL。",
     "agents.opencode.snsc_binary 为 HPC/snsc 上 opencode 的部署路径（升级 vscode-server 后会变化）。"
   ],
+  "providers": {
+    "deepseek-pay": {
+      "default_models": {
+        "claude": "deepseek-flash[1m]",
+        "opencode": "deepseek/deepseek-flash",
+        "codex": "deepseek-flash"
+      }
+    },
+    "opencode-go": {
+      "default_models": {
+        "claude": "deepseek-v4.1-flash",
+        "opencode": "opencode-go/deepseek-v4.1-flash",
+        "codex": "deepseek-v4.1-flash"
+      }
+    },
+    "custom-gpt": {
+      "default_models": {
+        "opencode": "custom-gpt/gpt-6-astra",
+        "codex": "gpt-6-astra"
+      }
+    }
+  },
   "agents": {
     "claude": {
       "default_flag": "-m",
-      "provider": "deepSeek-pay",
+      "provider": "deepseek-pay",
       "flags": {
         "-m": {
           "model": "deepseek-flash[1m]"
