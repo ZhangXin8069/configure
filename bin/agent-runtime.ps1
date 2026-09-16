@@ -79,6 +79,8 @@ $script:DriveFile = ''
 $script:StopFileArg = ''
 $script:Drive = $false
 $script:AgentConfig = $null
+$script:ProviderOverride = ''
+$script:ProviderCli = $false
 
 function Write-Info {
     param([string]$Message)
@@ -183,6 +185,23 @@ function Import-AgentConfig {
     return $true
 }
 
+# 旧 key 环境变量名过渡：新名缺失而旧名存在时写入新名（并告警提示迁移）
+#   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY；LQCD_API_KEY → CUSTOM_GPT_API_KEY
+function Invoke-LegacyKeyMigration {
+    foreach ($pair in @(
+        @('DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'),
+        @('CUSTOM_GPT_API_KEY', 'LQCD_API_KEY')
+    )) {
+        $newName = $pair[0]
+        $oldName = $pair[1]
+        if ([string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($newName)) -and
+            -not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($oldName))) {
+            [Environment]::SetEnvironmentVariable($newName, [Environment]::GetEnvironmentVariable($oldName))
+            Write-ErrorLine "###$($script:LauncherName): warning: 未设置 $newName，回退使用旧变量 $oldName（建议迁移到新名）###"
+        }
+    }
+}
+
 # 读取配置引用的环境变量（env_key/value_from_env 等），缺失返回空串
 function Get-ConfigEnvironmentValue {
     param([string]$Name)
@@ -191,6 +210,28 @@ function Get-ConfigEnvironmentValue {
     $value = [Environment]::GetEnvironmentVariable($Name)
     if ($null -eq $value) { return '' }
     return $value
+}
+
+# 供应商快捷词：pay→deepseek-pay、go→opencode-go、gpt→custom-gpt；完整途径名原样返回
+function Resolve-ProviderAlias {
+    param([string]$Value)
+
+    switch ($Value) {
+        'pay' { return 'deepseek-pay' }
+        'go' { return 'opencode-go' }
+        'gpt' { return 'custom-gpt' }
+        default { return $Value }
+    }
+}
+
+# 途径在某 agent 下的默认模型（个性化配置 providers.<途径>.default_models.<agent>），未配置返回空串
+function Get-ProviderDefaultModel {
+    param([string]$ProviderName, [string]$AgentName)
+
+    if ([string]::IsNullOrWhiteSpace($ProviderName)) { return '' }
+    $provider = $script:AgentConfig.providers.$ProviderName
+    if ($null -eq $provider -or $null -eq $provider.default_models) { return '' }
+    return [string]$provider.default_models.$AgentName
 }
 
 # OpenCode provider 注入块：仅注入 key 环境变量存在的途径；custom-gpt 额外注册端点与模型
@@ -204,6 +245,8 @@ function Get-OpenCodeProviderConfig {
         $envKey = [string]$provider.env_key
         if ([string]::IsNullOrWhiteSpace($envKey)) { continue }
         if ([string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $envKey))) { continue }
+        $providerId = [string]$provider.opencode_provider_id
+        if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$name }
         if ($name -eq 'custom-gpt') {
             $baseUrl = [string]$provider.base_url
             if ([string]::IsNullOrWhiteSpace($baseUrl)) { continue }
@@ -213,14 +256,14 @@ function Get-OpenCodeProviderConfig {
                     $models[[string]$model] = [ordered]@{}
                 }
             }
-            $result[$name] = [ordered]@{
+            $result[$providerId] = [ordered]@{
                 npm     = [string]$provider.opencode.npm
                 name    = [string]$provider.label
                 options = [ordered]@{ baseURL = $baseUrl; apiKey = "{env:$envKey}" }
                 models  = $models
             }
         } else {
-            $result[$name] = [ordered]@{ options = [ordered]@{ apiKey = "{env:$envKey}" } }
+            $result[$providerId] = [ordered]@{ options = [ordered]@{ apiKey = "{env:$envKey}" } }
         }
     }
     return $result
@@ -910,7 +953,8 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 cl.bat go）。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。纯模型旗标保持原生 TUI。'
 }
@@ -1019,7 +1063,7 @@ function Record-FirstInstruction {
 
 function Set-ClaudeDefaults {
     $agentConfig = $script:AgentConfig.agents.claude
-    $providerId = [Environment]::GetEnvironmentVariable('CLAUDE_PROVIDER')
+    $providerId = $script:ProviderOverride
     if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$agentConfig.provider }
     $provider = $script:AgentConfig.providers.$providerId
     if ($null -eq $provider -or [string]::IsNullOrWhiteSpace([string]$provider.anthropic_base_url)) {
@@ -1030,7 +1074,7 @@ function Set-ClaudeDefaults {
     foreach ($keyName in @(
         'ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL',
         'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL',
-        'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW'
+        'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW', 'DISABLE_AUTOUPDATER'
     )) {
         $value = [string]$agentConfig.env.$keyName
         if ([string]::IsNullOrWhiteSpace($value)) {
@@ -1039,6 +1083,8 @@ function Set-ClaudeDefaults {
             Set-Item -Path "Env:$keyName" -Value $value
         }
     }
+    # ANTHROPIC_MODEL 与最终模型保持一致（快捷词/default_models 切换模型时同步 env 与 --settings）
+    $env:ANTHROPIC_MODEL = $script:Model
     $keyName = [string]$provider.env_key
     $keyValue = Get-ConfigEnvironmentValue $keyName
     if ([string]::IsNullOrWhiteSpace($keyValue)) {
@@ -1060,12 +1106,25 @@ function New-ClaudeSettingsFile {
         CLAUDE_CODE_SUBAGENT_MODEL      = $env:CLAUDE_CODE_SUBAGENT_MODEL
         CLAUDE_CODE_EFFORT_LEVEL        = $env:CLAUDE_CODE_EFFORT_LEVEL
         CLAUDE_CODE_AUTO_COMPACT_WINDOW = $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW
+        DISABLE_AUTOUPDATER             = $env:DISABLE_AUTOUPDATER
     }
-    if (-not [string]::IsNullOrWhiteSpace($env:ANTHROPIC_AUTH_TOKEN)) {
+    # 显式空 token：覆盖用户级 settings.json 里可能遗留的旧 token（如 PROXY_MANAGED），避免误导性 401
+    if ([string]::IsNullOrWhiteSpace($env:ANTHROPIC_AUTH_TOKEN)) {
+        $envMap['ANTHROPIC_AUTH_TOKEN'] = ''
+    } else {
         $envMap['ANTHROPIC_AUTH_TOKEN'] = $env:ANTHROPIC_AUTH_TOKEN
     }
+    # statusLine 命令路径统一正斜杠（Claude Code 在 Windows 经 Git Bash 执行时会吞反斜杠）
+    $statuslineScript = ((Join-Path $script:ScriptDir 'agent-statusline.ps1') -replace '\\', '/')
+    $settingsRoot = [ordered]@{
+        env        = $envMap
+        statusLine = [ordered]@{
+            type    = 'command'
+            command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$statuslineScript`""
+        }
+    }
     $path = Join-Path ([System.IO.Path]::GetTempPath()) ('claude-settings-' + [guid]::NewGuid().ToString('N') + '.json')
-    $json = [ordered]@{ env = $envMap } | ConvertTo-Json -Depth 4 -Compress
+    $json = $settingsRoot | ConvertTo-Json -Depth 4 -Compress
     [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding($false)))
     return $path
 }
@@ -1078,15 +1137,35 @@ function Run-Claude {
     if (-not (Set-ClaudeDefaults)) {
         return 64
     }
+    $providerId = $script:ProviderOverride
+    if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$script:AgentConfig.agents.claude.provider }
     $permissionMode = [string]$script:AgentConfig.agents.claude.permission_mode
     if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = 'auto' }
+    # 状态栏（与 co 同款的通用 statusline 配置，经 agent-statusline.ps1 渲染）
+    $statusline = $script:AgentConfig.statusline
+    $statuslineSegments = '[]'
+    if ($null -ne $statusline -and $null -ne $statusline.segments) {
+        $statuslineSegments = (@($statusline.segments) | ConvertTo-Json -Compress)
+    }
+    $env:AGENT_STATUSLINE_SEGMENTS = $statuslineSegments
+    $env:AGENT_STATUSLINE_USE_COLORS = 'true'
+    if ($null -ne $statusline -and $null -ne $statusline.use_colors) {
+        $env:AGENT_STATUSLINE_USE_COLORS = ([bool]$statusline.use_colors).ToString().ToLowerInvariant()
+    }
+    $env:AGENT_PERMISSION_MODE = $permissionMode
     $script:ClaudeSettingsFile = New-ClaudeSettingsFile
     $prompt = Build-Prompt
     if ($null -eq $prompt) {
         return $script:FailureCode
     }
     Write-Host '============================================================'
-    Write-Host "  Claude Code: $($script:Model) | permission-mode $permissionMode"
+    Write-Host "  Claude Code: $($script:Model) | provider=$providerId | permission-mode $permissionMode"
+    $claudeProvider = $script:AgentConfig.providers.$providerId
+    $claudeKeyName = ''
+    if ($null -ne $claudeProvider) { $claudeKeyName = [string]$claudeProvider.env_key }
+    if ([string]::IsNullOrWhiteSpace($env:ANTHROPIC_AUTH_TOKEN)) {
+        Write-Host "  auth: $claudeKeyName 未设置 —— 请先 export 该变量（缺失时请求会 401）"
+    }
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -1097,7 +1176,7 @@ function Run-Claude {
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
         Turn-Begin
-        $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model)
+        $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, $prompt)
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -1214,10 +1293,19 @@ function Run-OpenCode {
         model = $script:Model
         variant = $script:Variant
     }
+    $autoupdate = $false
+    if ($null -ne $script:AgentConfig.agents.opencode.autoupdate) {
+        $autoupdate = [bool]$script:AgentConfig.agents.opencode.autoupdate
+    }
+    $autoupdateEnv = [Environment]::GetEnvironmentVariable('OPENCODE_AUTOUPDATE')
+    if (-not [string]::IsNullOrWhiteSpace($autoupdateEnv)) {
+        $autoupdate = ($autoupdateEnv -eq 'true')
+    }
     $config = [ordered]@{
-        lsp = [bool]$lspEnabled
-        agent = $agentBlock
-        provider = Get-OpenCodeProviderConfig
+        lsp        = [bool]$lspEnabled
+        autoupdate = $autoupdate
+        agent      = $agentBlock
+        provider   = Get-OpenCodeProviderConfig
     }
     $env:OPENCODE_CONFIG_CONTENT = ($config | ConvertTo-Json -Compress -Depth 8)
     Write-Host '============================================================'
@@ -1345,7 +1433,7 @@ function Run-Codex {
         $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
     }
     $codexConfig = $script:AgentConfig.agents.codex
-    $providerId = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_ID')
+    $providerId = $script:ProviderOverride
     if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$codexConfig.provider }
     $provider = $script:AgentConfig.providers.$providerId
     $providerName = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_NAME')
@@ -1357,12 +1445,18 @@ function Run-Codex {
     $providerWire = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_WIRE_API')
     if ([string]::IsNullOrWhiteSpace($providerWire) -and $null -ne $provider) { $providerWire = [string]$provider.wire_api }
     if ([string]::IsNullOrWhiteSpace($providerWire)) { $providerWire = 'responses' }
+    $providerWebsockets = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_SUPPORTS_WEBSOCKETS')
+    if ([string]::IsNullOrWhiteSpace($providerWebsockets) -and $null -ne $provider) { $providerWebsockets = [string]$provider.supports_websockets }
+    if ([string]::IsNullOrWhiteSpace($providerWebsockets)) { $providerWebsockets = 'false' }
     if ([string]::IsNullOrWhiteSpace($providerBase)) {
         Write-ErrorLine "###$($script:LauncherName): warning: 途径 '$providerId' 未配置 base_url（见 agent-config.json / agent-custom.json）###"
     }
     $contextWindow = [Environment]::GetEnvironmentVariable('CODEX_MODEL_CONTEXT_WINDOW')
     if ([string]::IsNullOrWhiteSpace($contextWindow)) { $contextWindow = [string]$codexConfig.config.model_context_window }
     if ([string]::IsNullOrWhiteSpace($contextWindow)) { $contextWindow = '1000000' }
+    $checkForUpdate = [Environment]::GetEnvironmentVariable('CODEX_CHECK_FOR_UPDATE_ON_STARTUP')
+    if ([string]::IsNullOrWhiteSpace($checkForUpdate)) { $checkForUpdate = [string]$codexConfig.config.check_for_update_on_startup }
+    if ([string]::IsNullOrWhiteSpace($checkForUpdate)) { $checkForUpdate = 'false' }
     $compactLimit = [Environment]::GetEnvironmentVariable('CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT')
     if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = [string]$codexConfig.config.model_auto_compact_token_limit }
     if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = '900000' }
@@ -1381,14 +1475,26 @@ function Run-Codex {
     if ([string]::IsNullOrWhiteSpace($loginMethod)) { $loginMethod = [string]$codexConfig.config.forced_login_method }
     if ([string]::IsNullOrWhiteSpace($loginMethod)) { $loginMethod = 'api' }
     $statusLine = [Environment]::GetEnvironmentVariable('CODEX_TUI_STATUS_LINE')
-    if ([string]::IsNullOrWhiteSpace($statusLine) -and $null -ne $codexConfig.config.tui.status_line) {
+    if ([string]::IsNullOrWhiteSpace($statusLine) -and
+        $null -ne $codexConfig.config.tui -and $null -ne $codexConfig.config.tui.status_line) {
         $statusLine = (@($codexConfig.config.tui.status_line) | ConvertTo-Json -Compress)
+    }
+    if ([string]::IsNullOrWhiteSpace($statusLine) -and
+        $null -ne $script:AgentConfig.statusline -and $null -ne $script:AgentConfig.statusline.segments) {
+        $statusLine = (@($script:AgentConfig.statusline.segments) | ConvertTo-Json -Compress)
     }
     if ([string]::IsNullOrWhiteSpace($statusLine)) {
         $statusLine = '["model-with-reasoning","current-dir","hostname","branch-changes","run-state","permissions","approval-mode","context-used","weekly-limit","estimated-thread-cost","thread-id","fast-mode","task-progress"]'
     }
     $statusColors = [Environment]::GetEnvironmentVariable('CODEX_TUI_STATUS_LINE_USE_COLORS')
-    if ([string]::IsNullOrWhiteSpace($statusColors)) { $statusColors = [string]$codexConfig.config.tui.status_line_use_colors }
+    if ([string]::IsNullOrWhiteSpace($statusColors) -and
+        $null -ne $codexConfig.config.tui -and $null -ne $codexConfig.config.tui.status_line_use_colors) {
+        $statusColors = [string]$codexConfig.config.tui.status_line_use_colors
+    }
+    if ([string]::IsNullOrWhiteSpace($statusColors) -and
+        $null -ne $script:AgentConfig.statusline -and $null -ne $script:AgentConfig.statusline.use_colors) {
+        $statusColors = ([bool]$script:AgentConfig.statusline.use_colors).ToString().ToLowerInvariant()
+    }
     if ([string]::IsNullOrWhiteSpace($statusColors)) { $statusColors = 'true' }
     $approval = [Environment]::GetEnvironmentVariable('CODEX_APPROVAL')
     if ([string]::IsNullOrWhiteSpace($approval)) { $approval = [string]$codexConfig.approval }
@@ -1402,6 +1508,7 @@ function Run-Codex {
         '--config', "forced_login_method=`"$loginMethod`""
         '--config', "model_provider=`"$providerId`""
         '--config', "model_context_window=$contextWindow"
+        '--config', "check_for_update_on_startup=$checkForUpdate"
         '--config', "model_auto_compact_token_limit=$compactLimit"
         '--config', "personality=`"$personality`""
         '--config', "approvals_reviewer=`"$reviewer`""
@@ -1409,7 +1516,7 @@ function Run-Codex {
         '--config', "model_providers.$providerId.base_url=`"$providerBase`""
         '--config', "model_providers.$providerId.env_key=`"$providerKey`""
         '--config', "model_providers.$providerId.wire_api=`"$providerWire`""
-        '--config', "model_providers.$providerId.supports_websockets=true"
+        '--config', "model_providers.$providerId.supports_websockets=$providerWebsockets"
         '--config', "tui.status_line=$statusLine"
         '--config', "tui.status_line_use_colors=$statusColors"
         '--config', "features.fast_mode=$fastMode"
@@ -1435,6 +1542,10 @@ function Run-Codex {
     Write-Host "  Codex: $($script:Model) | reasoning=$($script:Reasoning)"
     $displayTier = if ([string]::IsNullOrWhiteSpace($serviceTier)) { 'standard' } else { $serviceTier }
     Write-Host "  provider: $providerId | tier=$displayTier | personality=$personality"
+    if (-not [string]::IsNullOrWhiteSpace($providerKey) -and
+        [string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $providerKey))) {
+        Write-Host "  auth: $providerKey 未设置 —— 请先 export 该变量（缺失时请求会 401）"
+    }
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -1563,6 +1674,14 @@ function Parse-Arguments {
     }
     $modelOverride = [Environment]::GetEnvironmentVariable($modelVariable)
     $script:ModelExplicit = -not [string]::IsNullOrWhiteSpace($modelOverride)
+    $providerVariable = switch ($script:Agent) {
+        'claude' { 'CLAUDE_PROVIDER' }
+        'opencode' { 'OPENCODE_PROVIDER' }
+        default { 'CODEX_PROVIDER_ID' }
+    }
+    $providerOverride = [Environment]::GetEnvironmentVariable($providerVariable)
+    if ([string]::IsNullOrWhiteSpace($providerOverride)) { $providerOverride = '' }
+    $providerCli = $false
     $variantOverride = [Environment]::GetEnvironmentVariable('OPENCODE_VARIANT')
     $reasoningOverride = [Environment]::GetEnvironmentVariable('CODEX_REASONING_EFFORT')
     $sandbox = [Environment]::GetEnvironmentVariable('CODEX_SANDBOX')
@@ -1584,6 +1703,11 @@ function Parse-Arguments {
     $errorMessage = ''
     for ($i = 0; $i -lt $cliArgs.Count; $i++) {
         $option = [string]$cliArgs[$i]
+        if ($option -in @('pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt')) {
+            $providerOverride = Resolve-ProviderAlias $option
+            $providerCli = $true
+            continue
+        }
         if ($option -in @('-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h')) {
             $defaultFlag = $option
             $modelFlagExplicit = $true
@@ -1714,6 +1838,8 @@ function Parse-Arguments {
     $script:DriveFile = $driveFile
     $script:StopFileArg = $stopFileArg
     $script:ResumeRunId = $resumeRunId
+    $script:ProviderOverride = $providerOverride
+    $script:ProviderCli = $providerCli
     $script:Mode = if ($resumeRunId) { 'resume' } elseif ($drive) { 'drive' } else { 'tui' }
     $script:Role = [Environment]::GetEnvironmentVariable('AGENT_ROLE')
     $script:Tier = [Environment]::GetEnvironmentVariable('AGENT_TIER')
@@ -1745,6 +1871,22 @@ function Parse-Arguments {
         $script:ModelExplicit = $true
     }
     $script:Model = if ([string]::IsNullOrWhiteSpace($modelOverride)) { $flagModel } else { $modelOverride }
+    if ($script:ProviderCli -and $script:Agent -eq 'claude') {
+        $providerName = $script:ProviderOverride
+        $providerCheck = $script:AgentConfig.providers.$providerName
+        if ($null -eq $providerCheck -or [string]::IsNullOrWhiteSpace([string]$providerCheck.anthropic_base_url)) {
+            Fail-Parse "###$($script:LauncherName): ERROR: 途径 '$($script:ProviderOverride)' 未定义 anthropic_base_url，cl 无法使用该途径（见 agent-config.json / agent-custom.json）###"
+            return $false
+        }
+    }
+    if ($script:ProviderCli -and -not $script:ModelExplicit) {
+        $providerDefault = Get-ProviderDefaultModel $script:ProviderOverride $agentKey
+        if (-not [string]::IsNullOrWhiteSpace($providerDefault)) {
+            $script:Model = $providerDefault
+        } else {
+            Write-ErrorLine "###$($script:LauncherName): warning: 途径 '$($script:ProviderOverride)' 未定义 $agentKey 默认模型，沿用 $($script:Model)（可在 agent-custom.json providers.$($script:ProviderOverride).default_models.$agentKey 配置）###"
+        }
+    }
     $script:Reasoning = if ($script:Agent -eq 'codex') {
         if ([string]::IsNullOrWhiteSpace($reasoningOverride)) { [string]$flagConfig.reasoning } else { $reasoningOverride }
     } else { '' }
@@ -1792,6 +1934,7 @@ try {
             $script:WorkspaceRoot = $script:WorkDir
         }
         Discover-Context
+        Invoke-LegacyKeyMigration
         if (-not (Import-AgentConfig -ScriptDir $script:ScriptDir)) {
             $script:ExitCode = 64
         } elseif (-not (Parse-Arguments)) {
