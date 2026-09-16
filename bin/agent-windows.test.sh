@@ -111,6 +111,36 @@ assert_contains "$runtime" 'codex-models-$versionKey-$safeModel-$key.json'
 assert_contains "$runtime" 'CODEX_MODEL_CATALOG'
 assert_contains "$runtime" '$codexConfig.model_catalog'
 
+# 多场景部署：configure 根/数据根跟随部署位置（与 Unix 端 agent-runtime.sh 语义一致）
+assert_contains "$runtime" 'function Get-ConfigureRoot'
+assert_contains "$runtime" 'function Test-IsConfigureRoot'
+assert_contains "$runtime" 'function Test-WritableDirectory'
+assert_contains "$runtime" 'function Get-HomeRoot'
+assert_contains "$runtime" 'AGENT_CONFIGURE_ROOT'
+assert_contains "$runtime" '${CONFIGURE_ROOT}'
+assert_not_contains "$runtime" 'configure\skills'
+assert_not_contains "$runtime" 'configure\tools'
+
+# 缺失可执行文件时自动安装（与 Unix 端 agent-runtime.sh 语义一致）
+for contract in \
+    'function Get-AgentInstallScript' \
+    'function Add-AgentPathEntry' \
+    'function Install-AgentExecutable' \
+    "'_claude-code'" \
+    "'_opencode'" \
+    "'_codex'" \
+    "'install.bat', 'install.ps1', 'install.sh'" \
+    'AGENT_AUTO_INSTALL' \
+    'AGENT_AUTO_INSTALL_DONE' \
+    'AGENT_INSTALL_DIR' \
+    '未找到 $AgentName，自动运行安装脚本' \
+    '安装完成：'; do
+    assert_contains "$runtime" "$contract"
+done
+# 安装脚本输出必须走 Out-Host（前述 stdout 混入返回值会污染 secure_binary 路径）
+assert_contains "$runtime" '& cmd.exe /c "`"$scriptPath`"" | Out-Host'
+assert_contains "$runtime" '& bash $scriptPath | Out-Host'
+
 if command -v powershell.exe >/dev/null 2>&1; then
     ps_cmd=powershell.exe
 elif command -v pwsh.exe >/dev/null 2>&1; then
