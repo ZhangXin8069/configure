@@ -838,11 +838,13 @@ printf 'PASS: 快捷词与 --model 共存时显式模型优先\n'
 
 # ---- 状态栏渲染：agent-statusline.sh 按通用 segments 渲染官方字段 ----
 statusline_output=$(printf '%s' '{"model":{"display_name":"Test Model"},"effort":{"level":"max"},"workspace":{"current_dir":"/tmp"},"session_id":"abcdef1234567890","cost":{"total_cost_usd":0.5},"context_window":{"total_input_tokens":150000,"context_window_size":1000000,"used_percentage":15},"fast_mode":true,"rate_limits":{"seven_day":{"used_percentage":42.5}}}' | \
-    AGENT_STATUSLINE_SEGMENTS='["model-with-reasoning","current-dir","thread-id","estimated-thread-cost","context-used","weekly-limit","fast-mode","task-progress"]' \
+    AGENT_STATUSLINE_SEGMENTS='["model-with-reasoning","current-dir","thread-id","estimated-thread-cost","context-used","context-window-size","weekly-limit","fast-mode","task-progress"]' \
     AGENT_STATUSLINE_USE_COLORS=false AGENT_PERMISSION_MODE=auto bash "$script_dir/agent-statusline.sh")
 assert_contains "$statusline_output" 'Test Model (max)'
 assert_contains "$statusline_output" '/tmp'
 assert_contains "$statusline_output" 'ctx 15% 150k/1000k'
+# 上下文窗口容量独立成段：1M 窗口渲染为 1M 而非 1000k
+assert_contains "$statusline_output" 'ctx-max 1M'
 assert_contains "$statusline_output" '7d 42%'
 assert_contains "$statusline_output" 'fast'
 assert_contains "$statusline_output" '$0.5'

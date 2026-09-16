@@ -2,7 +2,8 @@
 # Claude Code statusLine 渲染器：输出与 co（Codex tui.status_line）同款字段的一行状态栏。
 # 由 Claude Code 高频调用（stdin 传入官方状态 JSON，stdout 首行为状态栏），只输出一行。
 # 官方字段映射：model.display_name→model-with-reasoning、effort.level→推理强度、
-#   workspace.current_dir→current-dir、context_window.*→context-used、
+#   workspace.current_dir→current-dir、context_window.used_percentage→context-used、
+#   context_window.context_window_size→context-window-size、
 #   rate_limits.seven_day.used_percentage→weekly-limit、fast_mode→fast-mode、
 #   cost.total_cost_usd→estimated-thread-cost、session_id→thread-id；
 #   run-state/permissions/branch-changes 由本地环境与 git 提供。
@@ -106,6 +107,20 @@ _render() {
                 value="${_C_DIM}ctx ${pct}% $((total / 1000))k/$((window / 1000))k${_C_RESET}"
             else
                 value="${_C_DIM}ctx ${pct}%${_C_RESET}"
+            fi
+            ;;
+        context-window-size)
+            # 上下文窗口容量（tokens）：官方 context_window.context_window_size，
+            # 默认 200000，扩展上下文模型为 1000000。与 context-used 相互独立。
+            window="$(_number_in context_window context_window_size)"
+            [[ -n "${window}" ]] || return 1
+            window="${window%%.*}"
+            [[ "${window}" =~ ^[0-9]+$ ]] || return 1
+            (( window > 0 )) || return 1
+            if (( window >= 1000000 )) && (( window % 1000000 == 0 )); then
+                value="${_C_DIM}ctx-max $((window / 1000000))M${_C_RESET}"
+            else
+                value="${_C_DIM}ctx-max $((window / 1000))k${_C_RESET}"
             fi
             ;;
         weekly-limit)
