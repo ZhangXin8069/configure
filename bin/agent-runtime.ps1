@@ -27,7 +27,7 @@ $script:LauncherName = [Environment]::GetEnvironmentVariable('AGENT_BAT_LAUNCHER
 $script:ScriptDir = [Environment]::GetEnvironmentVariable('AGENT_BAT_SCRIPT_DIR')
 $script:WorkDir = [Environment]::GetEnvironmentVariable('AGENT_BAT_WORKDIR')
 $script:Agent = [Environment]::GetEnvironmentVariable('AGENT_BAT_AGENT')
-$script:Snsc = [Environment]::GetEnvironmentVariable('AGENT_BAT_SNSC')
+$script:Secure = [Environment]::GetEnvironmentVariable('AGENT_BAT_SECURE')
 $script:ExitCode = 0
 $script:FailureCode = 0
 $script:RunReady = $false
@@ -66,6 +66,7 @@ $script:Reasoning = ''
 $script:ReasoningExplicit = $false
 $script:Variant = ''
 $script:VariantExplicit = $false
+$script:ClaudeStrength = ''
 $script:Mode = 'tui'
 $script:Role = ''
 $script:Tier = ''
@@ -232,6 +233,16 @@ function Get-ProviderDefaultModel {
     $provider = $script:AgentConfig.providers.$ProviderName
     if ($null -eq $provider -or $null -eq $provider.default_models) { return '' }
     return [string]$provider.default_models.$AgentName
+}
+
+# 途径在某 agent 下的默认强度（个性化配置 providers.<途径>.default_strengths.<agent>），未配置返回空串
+function Get-ProviderDefaultStrength {
+    param([string]$ProviderName, [string]$AgentName)
+
+    if ([string]::IsNullOrWhiteSpace($ProviderName)) { return '' }
+    $provider = $script:AgentConfig.providers.$ProviderName
+    if ($null -eq $provider -or $null -eq $provider.default_strengths) { return '' }
+    return [string]$provider.default_strengths.$AgentName
 }
 
 # OpenCode provider 注入块：仅注入 key 环境变量存在的途径；custom-gpt 额外注册端点与模型
@@ -953,10 +964,11 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
     Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 cl.bat go）。'
+    Write-Host '模型：默认取 agents.<agent>.model，未配置则取当前途径的 providers.<途径>.default_models.<agent>；--model/{CLAUDE,OPENCODE,CODEX}_MODEL 直接覆盖。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
-    Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。纯模型旗标保持原生 TUI。'
+    Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
 
 function Invoke-Logged {
@@ -1085,13 +1097,36 @@ function Set-ClaudeDefaults {
     }
     # ANTHROPIC_MODEL 与最终模型保持一致（快捷词/default_models 切换模型时同步 env 与 --settings）
     $env:ANTHROPIC_MODEL = $script:Model
+    # OPUS/SONNET 别名未在 agents.claude.env 显式配置时跟随最终模型，避免切换途径后残留旧模型
+    if ([string]::IsNullOrWhiteSpace([string]$agentConfig.env.ANTHROPIC_DEFAULT_OPUS_MODEL)) {
+        $env:ANTHROPIC_DEFAULT_OPUS_MODEL = $script:Model
+    }
+    if ([string]::IsNullOrWhiteSpace([string]$agentConfig.env.ANTHROPIC_DEFAULT_SONNET_MODEL)) {
+        $env:ANTHROPIC_DEFAULT_SONNET_MODEL = $script:Model
+    }
+    # 强度落地：CLAUDE_CODE_EFFORT_LEVEL 取解析链结果（覆盖旧配置/外部同名变量）
+    if (-not [string]::IsNullOrWhiteSpace($script:ClaudeStrength)) {
+        $env:CLAUDE_CODE_EFFORT_LEVEL = $script:ClaudeStrength
+    }
+    # 认证头：多数 Anthropic 兼容端点接受 Authorization: Bearer（ANTHROPIC_AUTH_TOKEN），
+    # 少数（如 opencode-go）只认 x-api-key（ANTHROPIC_API_KEY）；由途径的 anthropic_auth 选择
+    # （取值 api_key / auth_token，缺省 auth_token）。另一认证变量显式清除，避免残留旧值抢占。
+    if ([string]$provider.anthropic_auth -eq 'api_key') {
+        $authVar = 'ANTHROPIC_API_KEY'
+        $authOther = 'ANTHROPIC_AUTH_TOKEN'
+    } else {
+        $authVar = 'ANTHROPIC_AUTH_TOKEN'
+        $authOther = 'ANTHROPIC_API_KEY'
+    }
     $keyName = [string]$provider.env_key
     $keyValue = Get-ConfigEnvironmentValue $keyName
     if ([string]::IsNullOrWhiteSpace($keyValue)) {
-        Remove-Item -Path 'Env:ANTHROPIC_AUTH_TOKEN' -ErrorAction SilentlyContinue
-        Write-ErrorLine "###$($script:LauncherName): warning: 未设置 $keyName，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###"
+        Remove-Item -Path "Env:$authVar" -ErrorAction SilentlyContinue
+        Remove-Item -Path "Env:$authOther" -ErrorAction SilentlyContinue
+        Write-ErrorLine "###$($script:LauncherName): warning: 未设置 $keyName，$authVar 已清除，Claude Code 可能无法认证###"
     } else {
-        $env:ANTHROPIC_AUTH_TOKEN = $keyValue
+        Set-Item -Path "Env:$authVar" -Value $keyValue
+        Remove-Item -Path "Env:$authOther" -ErrorAction SilentlyContinue
     }
     return $true
 }
@@ -1108,11 +1143,14 @@ function New-ClaudeSettingsFile {
         CLAUDE_CODE_AUTO_COMPACT_WINDOW = $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW
         DISABLE_AUTOUPDATER             = $env:DISABLE_AUTOUPDATER
     }
-    # 显式空 token：覆盖用户级 settings.json 里可能遗留的旧 token（如 PROXY_MANAGED），避免误导性 401
-    if ([string]::IsNullOrWhiteSpace($env:ANTHROPIC_AUTH_TOKEN)) {
-        $envMap['ANTHROPIC_AUTH_TOKEN'] = ''
+    # 两个认证键都显式写入（生效的带值、另一个为空串），覆盖用户级 settings.json 里可能遗留的
+    # 旧 token（如 PROXY_MANAGED）或另一种认证头的残留值，避免误导性 401
+    if ([string]::IsNullOrWhiteSpace([string]$env:ANTHROPIC_API_KEY)) {
+        $envMap['ANTHROPIC_API_KEY'] = ''
+        $envMap['ANTHROPIC_AUTH_TOKEN'] = [string]$env:ANTHROPIC_AUTH_TOKEN
     } else {
-        $envMap['ANTHROPIC_AUTH_TOKEN'] = $env:ANTHROPIC_AUTH_TOKEN
+        $envMap['ANTHROPIC_API_KEY'] = [string]$env:ANTHROPIC_API_KEY
+        $envMap['ANTHROPIC_AUTH_TOKEN'] = ''
     }
     # statusLine 命令路径统一正斜杠（Claude Code 在 Windows 经 Git Bash 执行时会吞反斜杠）
     $statuslineScript = ((Join-Path $script:ScriptDir 'agent-statusline.ps1') -replace '\\', '/')
@@ -1170,8 +1208,8 @@ function Run-Claude {
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
     Write-Host "  context: $($script:ContextCount) 层说明文件（清单：$($script:ContextFile)）"
-    if ($script:Snsc -eq '1') {
-        Write-Host '  launcher: snsc/HPC'
+    if ($script:Secure -eq '1') {
+        Write-Host '  launcher: secure/HPC'
     }
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
@@ -1315,8 +1353,8 @@ function Run-OpenCode {
     Write-Host "  state: $($script:ManifestFile)"
     Write-Host "  context: $($script:ContextCount) 层说明文件（清单：$($script:ContextFile)）"
     Write-Host "  user-input list: $($script:ListFile)"
-    if ($script:Snsc -eq '1') {
-        Write-Host '  launcher: snsc/HPC'
+    if ($script:Secure -eq '1') {
+        Write-Host '  launcher: secure/HPC'
     }
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
@@ -1550,8 +1588,8 @@ function Run-Codex {
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
     Write-Host "  context: $($script:ContextCount) 层说明文件（清单：$($script:ContextFile)）"
-    if ($script:Snsc -eq '1') {
-        Write-Host '  launcher: snsc/HPC'
+    if ($script:Secure -eq '1') {
+        Write-Host '  launcher: secure/HPC'
     }
     Write-Host "  sandbox: $sandbox | approval: $approval"
     if (-not $script:Drive) {
@@ -1651,22 +1689,6 @@ function Parse-Arguments {
 
     $agentKey = [string]$script:Agent
     $agentConfig = $script:AgentConfig.agents.$agentKey
-    $defaultVariable = switch ($script:Agent) {
-        'claude' { 'CLAUDE_DEFAULT_MODEL_FLAG' }
-        'opencode' { 'OPENCODE_DEFAULT_MODEL_FLAG' }
-        default { 'CODEX_DEFAULT_MODEL_FLAG' }
-    }
-    $defaultFlag = [Environment]::GetEnvironmentVariable($defaultVariable)
-    if ([string]::IsNullOrWhiteSpace($defaultFlag)) {
-        $defaultFlag = [string]$agentConfig.default_flag
-    }
-    if ([string]::IsNullOrWhiteSpace($defaultFlag)) {
-        $defaultFlag = switch ($script:Agent) {
-            'claude' { '-m' }
-            'opencode' { '-f' }
-            default { '-q' }
-        }
-    }
     $modelVariable = switch ($script:Agent) {
         'claude' { 'CLAUDE_MODEL' }
         'opencode' { 'OPENCODE_MODEL' }
@@ -1689,7 +1711,6 @@ function Parse-Arguments {
     $driveFile = ''
     $driveTime = ''
     $drive = $false
-    $modelFlagExplicit = $false
     $once = ([Environment]::GetEnvironmentVariable('AGENT_ONCE') -eq '1')
     $maxTurnsRaw = [Environment]::GetEnvironmentVariable('AGENT_MAX_TURNS')
     if ([string]::IsNullOrWhiteSpace($maxTurnsRaw)) { $maxTurnsRaw = '100' }
@@ -1706,11 +1727,6 @@ function Parse-Arguments {
         if ($option -in @('pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt')) {
             $providerOverride = Resolve-ProviderAlias $option
             $providerCli = $true
-            continue
-        }
-        if ($option -in @('-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h')) {
-            $defaultFlag = $option
-            $modelFlagExplicit = $true
             continue
         }
         switch ($option.ToLowerInvariant()) {
@@ -1811,9 +1827,6 @@ function Parse-Arguments {
         Fail-Parse "###$($script:LauncherName): ERROR: $errorMessage###"
         return $false
     }
-    if ($modelFlagExplicit) {
-        $script:ModelExplicit = $true
-    }
     if (-not [string]::IsNullOrWhiteSpace($driveTime)) {
         $parsedInterval = Parse-Interval $driveTime $false
         if ($null -eq $parsedInterval) {
@@ -1850,56 +1863,56 @@ function Parse-Arguments {
         $script:Posture = if ($script:Agent -eq 'codex') { 'frontier-orchestrator' } else { 'deep-worker' }
     }
 
-    $modelEnvPrefix = switch ($script:Agent) {
-        'claude' { 'CLAUDE_MODEL_' }
-        'opencode' { 'OPENCODE_MODEL_' }
-        default { 'CODEX_MODEL_' }
+    # 途径来自命令行快捷词（pay/go/gpt）或个性化配置 agents.<agent>.provider
+    $providerForModel = if (-not [string]::IsNullOrWhiteSpace($providerOverride)) {
+        $providerOverride
+    } else {
+        [string]$agentConfig.provider
     }
-    $flagConfig = $null
-    if ($null -ne $agentConfig) {
-        $flagConfig = $agentConfig.flags.$defaultFlag
-    }
-    if ($null -eq $flagConfig) {
-        Fail-Parse "###$($script:LauncherName): ERROR: 不支持的默认模型旗标 '$defaultFlag'###"
+    if ([string]::IsNullOrWhiteSpace($providerForModel)) {
+        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.$agentKey.provider）###"
         return $false
     }
-    $modelEnvName = $modelEnvPrefix + $defaultFlag.Substring(1).ToUpperInvariant()
-    $flagModel = [Environment]::GetEnvironmentVariable($modelEnvName)
-    if ([string]::IsNullOrWhiteSpace($flagModel)) {
-        $flagModel = [string]$flagConfig.model
-    } else {
-        $script:ModelExplicit = $true
-    }
-    $script:Model = if ([string]::IsNullOrWhiteSpace($modelOverride)) { $flagModel } else { $modelOverride }
-    if ($script:ProviderCli -and $script:Agent -eq 'claude') {
-        $providerName = $script:ProviderOverride
-        $providerCheck = $script:AgentConfig.providers.$providerName
+    if ($script:Agent -eq 'claude') {
+        $providerCheck = $script:AgentConfig.providers.$providerForModel
         if ($null -eq $providerCheck -or [string]::IsNullOrWhiteSpace([string]$providerCheck.anthropic_base_url)) {
-            Fail-Parse "###$($script:LauncherName): ERROR: 途径 '$($script:ProviderOverride)' 未定义 anthropic_base_url，cl 无法使用该途径（见 agent-config.json / agent-custom.json）###"
+            Fail-Parse "###$($script:LauncherName): ERROR: 途径 '$providerForModel' 未定义 anthropic_base_url，cl 无法使用该途径（见 agent-config.json / agent-custom.json）###"
             return $false
         }
     }
-    if ($script:ProviderCli -and -not $script:ModelExplicit) {
-        $providerDefault = Get-ProviderDefaultModel $script:ProviderOverride $agentKey
-        if (-not [string]::IsNullOrWhiteSpace($providerDefault)) {
-            $script:Model = $providerDefault
-        } else {
-            Write-ErrorLine "###$($script:LauncherName): warning: 途径 '$($script:ProviderOverride)' 未定义 $agentKey 默认模型，沿用 $($script:Model)（可在 agent-custom.json providers.$($script:ProviderOverride).default_models.$agentKey 配置）###"
+    # 模型（两层默认相互独立，agent 层优先）：--model/{AGENT}_MODEL > agents.<agent>.model > providers.<途径>.default_models.<agent>
+    if (-not [string]::IsNullOrWhiteSpace($modelOverride)) {
+        $script:Model = $modelOverride
+    } elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.model)) {
+        $script:Model = [string]$agentConfig.model
+    } else {
+        $providerDefault = Get-ProviderDefaultModel $providerForModel $agentKey
+        if ([string]::IsNullOrWhiteSpace($providerDefault)) {
+            Fail-Parse "###$($script:LauncherName): ERROR: 途径 '$providerForModel' 未定义 $agentKey 默认模型（见 agent-custom.json agents.$agentKey.model 或 providers.$providerForModel.default_models.$agentKey）###"
+            return $false
         }
+        $script:Model = $providerDefault
     }
+    # 强度（同两层优先级）：覆盖 > agents.<agent>.strength > 旧键 variant/reasoning > providers.<途径>.default_strengths.<agent> > max
+    $agentStrength = [string]$agentConfig.strength
+    $providerStrength = Get-ProviderDefaultStrength $providerForModel $agentKey
+    if ([string]::IsNullOrWhiteSpace($providerStrength)) { $providerStrength = 'max' }
     $script:Reasoning = if ($script:Agent -eq 'codex') {
-        if ([string]::IsNullOrWhiteSpace($reasoningOverride)) { [string]$flagConfig.reasoning } else { $reasoningOverride }
+        if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) { $reasoningOverride }
+        elseif (-not [string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength }
+        elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.reasoning)) { [string]$agentConfig.reasoning }
+        else { $providerStrength }
     } else { '' }
     $script:Variant = if ($script:Agent -eq 'opencode') {
-        if (-not [string]::IsNullOrWhiteSpace($variantOverride)) {
-            $variantOverride
-        } elseif (-not [string]::IsNullOrWhiteSpace([string]$flagConfig.variant)) {
-            [string]$flagConfig.variant
-        } elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.variant)) {
-            [string]$agentConfig.variant
-        } else {
-            'max'
-        }
+        if (-not [string]::IsNullOrWhiteSpace($variantOverride)) { $variantOverride }
+        elseif (-not [string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength }
+        elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.variant)) { [string]$agentConfig.variant }
+        else { $providerStrength }
+    } else { '' }
+    $script:ClaudeStrength = if ($script:Agent -eq 'claude') {
+        if (-not [string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength }
+        elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.env.CLAUDE_CODE_EFFORT_LEVEL)) { [string]$agentConfig.env.CLAUDE_CODE_EFFORT_LEVEL }
+        else { $providerStrength }
     } else { '' }
     if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) {
         $script:ReasoningExplicit = $true
