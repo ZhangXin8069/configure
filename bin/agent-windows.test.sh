@@ -94,6 +94,14 @@ assert_contains "$runtime" 'default_strengths.$AgentName'
 assert_contains "$runtime" 'agents.$agentKey.model'
 assert_contains "$runtime" '$agentConfig.strength'
 assert_contains "$runtime" '$script:ClaudeStrength'
+# 两层默认择序：显式选途径（快捷词或 *_PROVIDER 环境变量）时 providers 层优先，标签随之切换
+assert_contains "$runtime" '$providerExplicit -and -not [string]::IsNullOrWhiteSpace($providerModel)'
+assert_contains "$runtime" '$providerExplicit -and -not [string]::IsNullOrWhiteSpace($providerStrength)'
+assert_contains "$runtime" '$script:ProviderExplicit'
+assert_contains "$runtime" '（agent 默认）'
+assert_contains "$runtime" '（途径默认）'
+# provider 强度不得提前兜底为 max，否则显式途径时 agent 层强度永远无法回退
+assert_not_contains "$runtime" 'IsNullOrWhiteSpace($providerStrength)) { $providerStrength'
 assert_not_contains "$runtime" "'-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h'"
 assert_contains "$runtime" 'Invoke-LegacyKeyMigration'
 assert_contains "$runtime" "'DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'"
