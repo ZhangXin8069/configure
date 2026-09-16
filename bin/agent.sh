@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
 # 统一 agent 启动器：cl/cls/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
-#   cl  → Claude Code（默认 DeepSeek Anthropic 兼容端点；TUI：--permission-mode auto；驱动：claude -p → --resume 链）
+#   cl  → Claude Code（默认 deepSeek-pay 途径的 Anthropic 兼容端点；TUI 权限模式见配置；驱动：claude -p → --resume 链）
 #   cls → Claude Code HPC/snsc 入口
-#   op  → OpenCode（build agent：TUI；驱动：run -s 链）
+#   op  → OpenCode（默认 build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
 #   ops → OpenCode HPC/snsc 入口（默认 OPENCODE_BIN 指向 vscode-server 内部署路径）
 #   cos → Codex HPC/snsc 入口
 # prompt 单一来源：同目录 agent-prompt.txt（模板含 ${HOME}/${_PWD} 占位符；op 另支持 ${LIST_FILE}）
+# 配置来源：同目录 agent-config.json（通用）+ agent-custom.json 或 agent-custom.json.refer（个性化，
+#   存在 agent-custom.json 时替代后者）深度合并；模型途径、旗标模型表与共用参数均取自这两份配置
 
 # ---- 脚本定位：AGENT_SCRIPT_DIR 可在 /dev/fd/3 等场景注入真实目录；缺失时回退 BASH_SOURCE ----
 _SRC=${BASH_SOURCE[0]:-${0}}
@@ -132,6 +134,137 @@ _json_escape() {
     printf '%s' "${_s}"
 }
 
+# 配置键规整化：旗标（-m→M）与途径名（custom-gpt→CUSTOM_GPT）转成大写下划线，
+# 与 _agent_config_load 展开出的 _CFG_* 变量名保持一致
+_cfg_flag_key() {
+    printf '%s' "${1#-}" | tr '[:lower:]' '[:upper:]'
+}
+_cfg_provider_key() {
+    printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
+}
+
+# =====================================================================
+# 配置文件加载：agent-config.json（通用配置）与 agent-custom.json（个性化配置，
+# 缺失时回退 agent-custom.json.refer）深度合并后展开为一组 _CFG_* 变量。
+# 解析器用 python3（可用 AGENT_CONFIG_PYTHON 指定其他解释器）。
+# =====================================================================
+_agent_config_load() {
+    local _cfg="${_PATH}/agent-config.json"
+    local _custom="${_PATH}/agent-custom.json"
+    [[ -s "${_custom}" ]] || _custom="${_PATH}/agent-custom.json.refer"
+    if [[ ! -s "${_cfg}" ]]; then
+        echo "###${_NAME}: ERROR: 缺少通用配置 ${_cfg}###" >&2
+        exit 1
+    fi
+    if [[ ! -s "${_custom}" ]]; then
+        echo "###${_NAME}: ERROR: 缺少个性化配置（${_PATH}/agent-custom.json 与 agent-custom.json.refer 均不存在或为空）###" >&2
+        exit 1
+    fi
+    local _py="${AGENT_CONFIG_PYTHON:-}"
+    if [[ -z "${_py}" ]]; then
+        if command -v python3 >/dev/null 2>&1; then
+            _py=python3
+        elif command -v python >/dev/null 2>&1; then
+            _py=python
+        else
+            echo "###${_NAME}: ERROR: 解析配置文件需要 python3（或设置 AGENT_CONFIG_PYTHON）###" >&2
+            exit 1
+        fi
+    fi
+    local _dump
+    if ! _dump="$("${_py}" - "${_cfg}" "${_custom}" <<'PYEOF'
+import json
+import os
+import shlex
+import sys
+
+
+def deep_merge(base, override):
+    if isinstance(base, dict) and isinstance(override, dict):
+        merged = dict(base)
+        for key, value in override.items():
+            merged[key] = deep_merge(merged.get(key), value)
+        return merged
+    return override
+
+
+def flatten(node, prefix, out):
+    if isinstance(node, dict):
+        for key, value in node.items():
+            flatten(value, prefix + [str(key)], out)
+    elif isinstance(node, list):
+        out.append((prefix, json.dumps(node, ensure_ascii=False, separators=(",", ":"))))
+    elif isinstance(node, bool):
+        out.append((prefix, "true" if node else "false"))
+    elif node is None:
+        out.append((prefix, ""))
+    else:
+        out.append((prefix, str(node)))
+
+
+def variable_name(parts):
+    raw = "_".join(parts)
+    name = "".join(ch if ch.isalnum() else "_" for ch in raw).upper()
+    while "__" in name:
+        name = name.replace("__", "_")
+    return "_CFG_" + name.strip("_")
+
+
+def opencode_providers(cfg):
+    agents = cfg.get("agents") or {}
+    providers = cfg.get("providers") or {}
+    key_providers = (agents.get("opencode") or {}).get("key_providers") or []
+    blocks = {}
+    for name in key_providers:
+        provider = providers.get(name)
+        if not isinstance(provider, dict):
+            continue
+        env_key = str(provider.get("env_key") or "")
+        if not env_key or not os.environ.get(env_key):
+            continue
+        if name == "custom-gpt":
+            base_url = str(provider.get("base_url") or "")
+            if not base_url:
+                continue
+            meta = provider.get("opencode") or {}
+            models = {str(m): {} for m in (meta.get("models") or [])}
+            blocks[name] = {
+                "npm": str(meta.get("npm") or "@ai-sdk/openai"),
+                "name": str(provider.get("label") or name),
+                "options": {"baseURL": base_url, "apiKey": "{env:%s}" % env_key},
+                "models": models,
+            }
+        else:
+            blocks[name] = {"options": {"apiKey": "{env:%s}" % env_key}}
+    return blocks
+
+
+def main():
+    with open(sys.argv[1], encoding="utf-8") as fh:
+        base = json.load(fh)
+    with open(sys.argv[2], encoding="utf-8") as fh:
+        custom = json.load(fh)
+    if not isinstance(base, dict) or not isinstance(custom, dict):
+        raise SystemExit("config root must be a JSON object")
+    cfg = deep_merge(base, custom)
+    leaves = []
+    flatten(cfg, [], leaves)
+    lines = ["%s=%s" % (variable_name(parts), shlex.quote(value)) for parts, value in leaves]
+    provider_json = json.dumps(opencode_providers(cfg), ensure_ascii=False, separators=(",", ":"))
+    lines.append("_CFG_OPENCODE_PROVIDER_JSON=%s" % shlex.quote(provider_json))
+    # 以 UTF-8 字节写出：不受调用方 locale（如 LANG=C）影响，避免中文值编码错误
+    sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))
+
+
+main()
+PYEOF
+    )"; then
+        echo "###${_NAME}: ERROR: 解析配置失败（${_cfg} / ${_custom}）###" >&2
+        exit 1
+    fi
+    eval "${_dump}"
+}
+
 # 全局/工作区 SKILL.md 路径清单注入（co/cl 共用）：只列路径；去重
 _append_skill_list() {
     local _title="$1" _root _skill_path _found=0 _discovered=0
@@ -199,26 +332,45 @@ run_claude() {
         exit 127
     fi
 
-    # ---- DeepSeek Anthropic 兼容端点初始设置（明文定死，无条件覆盖外部同名变量） ----
-    # ANTHROPIC_AUTH_TOKEN 始终等于 ${DEEPSEEK_API_KEY}（缺失时清除并告警）。
-    ANTHROPIC_BASE_URL="https://api.deepseek.com/anthropic"
-    ANTHROPIC_MODEL="deepseek-flash[1m]"
-    ANTHROPIC_DEFAULT_OPUS_MODEL="deepseek-flash[1m]"
-    ANTHROPIC_DEFAULT_SONNET_MODEL="deepseek-flash[1m]"
-    ANTHROPIC_DEFAULT_HAIKU_MODEL="deepseek-flash"
-    CLAUDE_CODE_SUBAGENT_MODEL="deepseek-flash"
-    CLAUDE_CODE_EFFORT_LEVEL="max"
-    CLAUDE_CODE_AUTO_COMPACT_WINDOW="786432"
-    export ANTHROPIC_BASE_URL ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL \
-           ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL \
-           CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL \
-           CLAUDE_CODE_AUTO_COMPACT_WINDOW
-    if [[ -n "${DEEPSEEK_API_KEY:-}" ]]; then
-        ANTHROPIC_AUTH_TOKEN="${DEEPSEEK_API_KEY}"
+    # ---- 途径初始设置：Anthropic 兼容端点与 key 均取自 agent-config.json/agent-custom.json ----
+    # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
+    local _cl_provider="${CLAUDE_PROVIDER:-${_CFG_AGENTS_CLAUDE_PROVIDER}}"
+    local _CL_PERMISSION_MODE="${_CFG_AGENTS_CLAUDE_PERMISSION_MODE:-auto}"
+    local _cl_pkey _cl_var _cl_key_name _cl_key=""
+    _cl_pkey="$(_cfg_provider_key "${_cl_provider}")"
+    _cl_var="_CFG_PROVIDERS_${_cl_pkey}_ANTHROPIC_BASE_URL"
+    ANTHROPIC_BASE_URL="${!_cl_var:-}"
+    if [[ -z "${ANTHROPIC_BASE_URL}" ]]; then
+        echo "###${_NAME}: ERROR: 途径 '${_cl_provider}' 未定义 anthropic_base_url（见 agent-config.json / agent-custom.json）###" >&2
+        exit 64
+    fi
+    _cl_var="_CFG_PROVIDERS_${_cl_pkey}_ENV_KEY"
+    _cl_key_name="${!_cl_var:-}"
+    export ANTHROPIC_BASE_URL
+    local -a _cl_env_keys=(
+        ANTHROPIC_MODEL ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL
+        ANTHROPIC_DEFAULT_HAIKU_MODEL CLAUDE_CODE_SUBAGENT_MODEL
+        CLAUDE_CODE_EFFORT_LEVEL CLAUDE_CODE_AUTO_COMPACT_WINDOW
+    )
+    local _cl_env_key _cl_env_value
+    for _cl_env_key in "${_cl_env_keys[@]}"; do
+        _cl_var="_CFG_AGENTS_CLAUDE_ENV_${_cl_env_key}"
+        _cl_env_value="${!_cl_var:-}"
+        if [[ -n "${_cl_env_value}" ]]; then
+            printf -v "${_cl_env_key}" '%s' "${_cl_env_value}"
+            export "${_cl_env_key}"
+        else
+            unset "${_cl_env_key}"
+        fi
+    done
+    unset _cl_env_key _cl_env_value
+    [[ -n "${_cl_key_name}" ]] && _cl_key="${!_cl_key_name:-}"
+    if [[ -n "${_cl_key}" ]]; then
+        ANTHROPIC_AUTH_TOKEN="${_cl_key}"
         export ANTHROPIC_AUTH_TOKEN
     else
         unset ANTHROPIC_AUTH_TOKEN
-        echo "###${_NAME}: warning: 未设置 DEEPSEEK_API_KEY，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###" >&2
+        echo "###${_NAME}: warning: 未设置 ${_cl_key_name:-途径 key 环境变量}，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###" >&2
     fi
 
     # 用户级 settings.json 的 env 块（如 cc-switch 遗留的 ANTHROPIC_BASE_URL）优先级高于进程环境变量，
@@ -277,7 +429,7 @@ run_claude() {
     #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
     # 仅给模型旗标时保持原有 TUI 交互模式不变
-    local MODEL_FLAG="${CLAUDE_DEFAULT_MODEL_FLAG:--m}"
+    local MODEL_FLAG="${CLAUDE_DEFAULT_MODEL_FLAG:-${_CFG_AGENTS_CLAUDE_DEFAULT_FLAG:--m}}"
     local MODEL_OVERRIDE="${CLAUDE_MODEL:-}"
     local MODEL_ID MODEL_NAME DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
     local MODEL_EXPLICIT=0
@@ -338,19 +490,22 @@ run_claude() {
         exit 64
     fi
 
-    # 模型选择：默认接入 DeepSeek Anthropic 兼容端点——深度旗标（-m/-o/-p/-q/-g/-h）用 deepseek-flash[1m]，
-    # 速度旗标（-k/-f）用 deepseek-flash；默认 slug 可用 CLAUDE_MODEL_* 覆盖，CLAUDE_MODEL/--model 直接覆盖
+    # 模型选择：默认旗标与各旗标 slug 来自 agent-config.json/agent-custom.json；
+    # CLAUDE_MODEL_* 环境变量逐旗标覆盖，CLAUDE_MODEL/--model 直接覆盖
     case "${MODEL_FLAG}" in
-        -m) MODEL_ID="${CLAUDE_MODEL_M:-deepseek-flash[1m]}";;
-        -o) MODEL_ID="${CLAUDE_MODEL_O:-deepseek-flash[1m]}";;
-        -p) MODEL_ID="${CLAUDE_MODEL_P:-deepseek-flash[1m]}";;
-        -q) MODEL_ID="${CLAUDE_MODEL_Q:-deepseek-flash[1m]}";;
-        -k) MODEL_ID="${CLAUDE_MODEL_K:-deepseek-flash}";;
-        -g) MODEL_ID="${CLAUDE_MODEL_G:-deepseek-flash[1m]}";;
-        -f) MODEL_ID="${CLAUDE_MODEL_F:-deepseek-flash}";;
-        -h) MODEL_ID="${CLAUDE_MODEL_H:-deepseek-flash[1m]}";;
+        -m|-o|-p|-q|-k|-g|-f|-h) ;;
         *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
     esac
+    local _cl_flag _cl_model_env _cl_model_var
+    _cl_flag="$(_cfg_flag_key "${MODEL_FLAG}")"
+    _cl_model_env="CLAUDE_MODEL_${_cl_flag}"
+    _cl_model_var="_CFG_AGENTS_CLAUDE_FLAGS_${_cl_flag}_MODEL"
+    MODEL_ID="${!_cl_model_env:-}"
+    [[ -n "${MODEL_ID}" ]] || MODEL_ID="${!_cl_model_var:-}"
+    if [[ -z "${MODEL_ID}" ]]; then
+        echo "###${_NAME}: ERROR: 旗标 '${MODEL_FLAG}' 缺少模型配置（agent-config.json agents.claude.flags）###" >&2
+        exit 64
+    fi
     MODEL_NAME="${MODEL_ID}"
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
@@ -389,9 +544,9 @@ run_claude() {
     echo "============================================================"
 
     if (( ! DRIVE_MODE )); then
-        # 原 TUI 交互模式（--permission-mode auto 原语义保留）
+        # 原 TUI 交互模式（--permission-mode "${_CL_PERMISSION_MODE}" 原语义保留）
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" 2> "${LOG_FILE}"
+        "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" 2> "${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
@@ -441,7 +596,7 @@ run_claude() {
     else
         echo "---- drive: prompt round start $(date "+%F-%T") ----"
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
+        "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
         _drv_rc=$?
         if (( _drv_rc != 0 )); then
             _agent_runtime_turn_failure
@@ -461,7 +616,7 @@ run_claude() {
         _drv_instr="$(<"${DRIVE_FILE}")"
         echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "${_drv_instr}" \
+        "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${_drv_instr}" \
                 2>> "${LOG_FILE}"
         _drv_rc=$?
         if (( _drv_rc == 0 )); then
@@ -479,7 +634,7 @@ run_claude() {
     if (( ONCE_MODE )); then
         if [[ -n "${RESUME_RUN_ID}" && -z "${DRIVE_FILE}" ]]; then
             _agent_runtime_turn_begin
-            "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "继续" \
+            "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "继续" \
                     2>> "${LOG_FILE}"
             _drv_rc=$?
             if (( _drv_rc == 0 )); then
@@ -508,7 +663,7 @@ run_claude() {
             break
         fi
         _agent_runtime_turn_begin
-        if "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode auto --model "${MODEL_ID}" "继续" \
+        if "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "继续" \
                 2>> "${LOG_FILE}"; then
             _agent_runtime_turn_success
             _nudges=$((_nudges + 1))
@@ -542,7 +697,8 @@ run_opencode() {
         # snsc 上 opencode 通常手动部署在 vscode-server 目录内（升级后路径会变，请更新或设 OPENCODE_BIN）：
         #   mkdir -p /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/
         #   cp /public/home/zhangxin/.opencode/bin/opencode <上路径>/output_result_debug_Stable-.../
-        _OPENCODE_BIN="/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
+        # 该路径是机器相关项，取自 agent-custom.json 的 agents.opencode.snsc_binary
+        _OPENCODE_BIN="${_CFG_AGENTS_OPENCODE_SNSC_BINARY:-}"
     fi
     if [[ -z "${_OPENCODE_BIN}" ]]; then
         _OPENCODE_BIN="$(command -v opencode 2>/dev/null || true)"
@@ -560,10 +716,10 @@ run_opencode() {
     #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
     # 仅给模型旗标时保持原有 TUI 交互模式不变
-    local MODEL_FLAG="${OPENCODE_DEFAULT_MODEL_FLAG:--f}"
+    local MODEL_FLAG="${OPENCODE_DEFAULT_MODEL_FLAG:-${_CFG_AGENTS_OPENCODE_DEFAULT_FLAG:--f}}"
     local MODEL_OVERRIDE="${OPENCODE_MODEL:-}"
     local VARIANT_OVERRIDE="${OPENCODE_VARIANT:-}"
-    local MODEL_ID MODEL_NAME VARIANT="max" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
+    local MODEL_ID MODEL_NAME VARIANT="${_CFG_AGENTS_OPENCODE_VARIANT:-max}" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
     local MODEL_EXPLICIT=0 VARIANT_EXPLICIT=0
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
@@ -628,19 +784,29 @@ run_opencode() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认 -f DeepSeek V4.1 Flash (max)；-o Ox Alpha Free (Unlimited) / -h Hy3 (high) / -p Pro / -m Build auto·Muse Spark 1.2 Contributor OpenCode Go (xhigh) / -q Qwen3.8 Max / -k Kimi K3 / -g GPT-5.6 Luna
-    # 各旗标默认模型可用 OPENCODE_MODEL_M/O/P/Q/K/G/F/H 环境变量覆盖；OPENCODE_MODEL/--model 直接覆盖。
+    # 模型选择：默认旗标与各旗标模型/显示名/variant 来自 agent-config.json/agent-custom.json；
+    # OPENCODE_MODEL_* 环境变量逐旗标覆盖，OPENCODE_MODEL/--model 直接覆盖，--variant 覆盖等级。
     case "${MODEL_FLAG}" in
-        -m) MODEL_ID="${OPENCODE_MODEL_M:-opencode-go/muse-spark-1.2-contributor}"; MODEL_NAME="Build auto·Muse Spark 1.2 Contributor OpenCode Go"; VARIANT="xhigh";;
-        -o) MODEL_ID="${OPENCODE_MODEL_O:-opencode-go/ox-alpha-free}";    MODEL_NAME="Build auto · Ox Alpha Free (Unlimited) OpenCode Go";;
-        -p) MODEL_ID="${OPENCODE_MODEL_P:-opencode-go/deepseek-v4-pro}";  MODEL_NAME="DeepSeek V4 Pro (New)";;
-        -q) MODEL_ID="${OPENCODE_MODEL_Q:-opencode-go/qwen3.8-max}";      MODEL_NAME="Qwen3.8 Max";;
-        -k) MODEL_ID="${OPENCODE_MODEL_K:-opencode-go/kimi-k3}";          MODEL_NAME="Kimi K3";;
-        -g) MODEL_ID="${OPENCODE_MODEL_G:-opencode-go/gpt-5.6-luna}";     MODEL_NAME="GPT-5.6 Luna (2x usage)";;
-        -f) MODEL_ID="${OPENCODE_MODEL_F:-deepseek/deepseek-flash}"; MODEL_NAME="DeepSeek V4.1 Flash";;
-        -h) MODEL_ID="${OPENCODE_MODEL_H:-opencode-go/hy3}";              MODEL_NAME="Hy3"; VARIANT="high";;
+        -m|-o|-p|-q|-k|-g|-f|-h) ;;
         *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
     esac
+    local _op_flag _op_model_env _op_var _op_flag_variant
+    _op_flag="$(_cfg_flag_key "${MODEL_FLAG}")"
+    _op_model_env="OPENCODE_MODEL_${_op_flag}"
+    _op_var="_CFG_AGENTS_OPENCODE_FLAGS_${_op_flag}_MODEL"
+    MODEL_ID="${!_op_model_env:-}"
+    [[ -n "${MODEL_ID}" ]] || MODEL_ID="${!_op_var:-}"
+    _op_var="_CFG_AGENTS_OPENCODE_FLAGS_${_op_flag}_NAME"
+    MODEL_NAME="${!_op_var:-${MODEL_ID}}"
+    _op_var="_CFG_AGENTS_OPENCODE_FLAGS_${_op_flag}_VARIANT"
+    _op_flag_variant="${!_op_var:-}"
+    if [[ -n "${_op_flag_variant}" ]]; then
+        VARIANT="${_op_flag_variant}"
+    fi
+    if [[ -z "${MODEL_ID}" ]]; then
+        echo "###${_NAME}: ERROR: 旗标 '${MODEL_FLAG}' 缺少模型配置（agent-config.json agents.opencode.flags）###" >&2
+        exit 64
+    fi
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
@@ -663,10 +829,14 @@ run_opencode() {
     _load_prompt
     _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "" "$VARIANT"
 
-    export OPENCODE_CONFIG_CONTENT='{"lsp":true,"agent":{"build":{"model":"'"${MODEL_ID}"'","variant":"'"${VARIANT}"'"}}}'
+    local _OP_AGENT="${_CFG_AGENTS_OPENCODE_AGENT:-build}"
+    export OPENCODE_CONFIG_CONTENT
+    OPENCODE_CONFIG_CONTENT="$(printf '{"lsp":%s,"agent":{"%s":{"model":"%s","variant":"%s"}},"provider":%s}' \
+        "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" \
+        "${_CFG_OPENCODE_PROVIDER_JSON:-{}}")"
 
     echo "============================================================"
-    echo "  OpenCode: build | auto | ${MODEL_NAME} (${VARIANT})"
+    echo "  OpenCode: ${_OP_AGENT} | auto | ${MODEL_NAME} (${VARIANT})"
     echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"
     echo "  state: ${AGENT_MANIFEST_FILE}"
@@ -754,7 +924,7 @@ PYEOF
     if (( ! DRIVE_MODE )); then
         # 原有 TUI 交互模式（无驱动选项时保持原生交互）
         _agent_runtime_turn_begin
-        "${_OPENCODE_BIN}" --agent build --auto --prompt "${PROMPT}" \
+        "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}" \
                 --print-logs --log-level DEBUG \
                 2> "${LOG_FILE}"
         _run_rc=$?
@@ -786,7 +956,7 @@ PYEOF
         else
             echo "---- drive: prompt round start $(date "+%F-%T") ----"
             _agent_runtime_turn_begin
-            "${_OPENCODE_BIN}" run --agent build --auto --print-logs --log-level DEBUG "${PROMPT}" \
+            "${_OPENCODE_BIN}" run --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${PROMPT}" \
                     2> "${LOG_FILE}"
             _drv_rc=$?
             if (( _drv_rc != 0 )); then
@@ -807,7 +977,7 @@ PYEOF
             _drv_instr="$(<"${DRIVE_FILE}")"
             echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
             _agent_runtime_turn_begin
-            "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "${_drv_instr}" \
+            "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${_drv_instr}" \
                     2>> "${LOG_FILE}"
             _drv_rc=$?
             if (( _drv_rc == 0 )); then
@@ -825,7 +995,7 @@ PYEOF
         if (( ONCE_MODE )); then
             if [[ -n "${RESUME_RUN_ID}" && -z "${DRIVE_FILE}" ]]; then
                 _agent_runtime_turn_begin
-                "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
+                "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "继续" \
                         2>> "${LOG_FILE}"
                 _drv_rc=$?
                 if (( _drv_rc == 0 )); then
@@ -854,7 +1024,7 @@ PYEOF
                 break
             fi
             _agent_runtime_turn_begin
-            if "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent build --auto --print-logs --log-level DEBUG "继续" \
+            if "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "继续" \
                     2>> "${LOG_FILE}"; then
                 _agent_runtime_turn_success
                 _nudges=$((_nudges + 1))
@@ -936,11 +1106,11 @@ run_codex() {
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型，覆盖模型旗标；也可用 CODEX_MODEL 环境变量覆盖。
     #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra）。
-    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:--q}"
+    local MODEL_FLAG="${CODEX_DEFAULT_MODEL_FLAG:-${_CFG_AGENTS_CODEX_DEFAULT_FLAG:--q}}"
     local MODEL_OVERRIDE="${CODEX_MODEL:-}"
     local REASONING_OVERRIDE="${CODEX_REASONING_EFFORT:-}"
-    local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-danger-full-access}"
-    local CODEX_APPROVAL_POLICY="${CODEX_APPROVAL:-never}"
+    local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-${_CFG_AGENTS_CODEX_SANDBOX:-danger-full-access}}"
+    local CODEX_APPROVAL_POLICY="${CODEX_APPROVAL:-${_CFG_AGENTS_CODEX_APPROVAL:-never}}"
     local MODEL_ID MODEL_NAME REASONING_EFFORT DRIVE_INTERVAL="" DRIVE_MODE=0
     local MODEL_EXPLICIT=0 REASONING_EXPLICIT=0
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
@@ -985,7 +1155,7 @@ run_codex() {
             --help)
                 echo "用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "默认模型: gpt-6-astra max（默认旗标 ${MODEL_FLAG}；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
+                echo "默认模型: 旗标 ${MODEL_FLAG}（模型表见 agent-config.json/agent-custom.json；CODEX_DEFAULT_MODEL_FLAG 可覆盖）；只给模型旗标时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [-m|-o|-p|-q|-k|-g|-f|-h] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
         esac
@@ -1010,18 +1180,26 @@ run_codex() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择：默认 -q GPT-6 Astra (max)；可用 --model/CODEX_MODEL 覆盖，其余旗标保留快捷键习惯。
+    # 模型选择：默认旗标与各旗标模型/名称/reasoning 来自 agent-config.json/agent-custom.json；
+    # CODEX_MODEL_* 环境变量逐旗标覆盖，--model/CODEX_MODEL 与 --reasoning-effort 直接覆盖。
     case "${MODEL_FLAG}" in
-        -m) MODEL_ID="${CODEX_MODEL_M:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="max";;
-        -o) MODEL_ID="${CODEX_MODEL_O:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="max";;
-        -p) MODEL_ID="${CODEX_MODEL_P:-gpt-5.6-terra}"; MODEL_NAME="GPT-5.6-Terra"; REASONING_EFFORT="high";;
-        -q) MODEL_ID="${CODEX_MODEL_Q:-gpt-6-astra}";   MODEL_NAME="GPT-6 Astra";   REASONING_EFFORT="max";;
-        -k) MODEL_ID="${CODEX_MODEL_K:-gpt-5.4-mini}";  MODEL_NAME="GPT-5.4-Mini";  REASONING_EFFORT="high";;
-        -g) MODEL_ID="${CODEX_MODEL_G:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
-        -f) MODEL_ID="${CODEX_MODEL_F:-gpt-5.6-sol}";   MODEL_NAME="GPT-5.6-Sol";   REASONING_EFFORT="low";;
-        -h) MODEL_ID="${CODEX_MODEL_H:-gpt-5.6-luna}";  MODEL_NAME="GPT-5.6-Luna";  REASONING_EFFORT="high";;
+        -m|-o|-p|-q|-k|-g|-f|-h) ;;
         *) echo "###${_NAME}: ERROR: 不支持的默认模型旗标 '${MODEL_FLAG}'###" >&2; exit 64;;
     esac
+    local _cx_flag _cx_model_env _cx_var
+    _cx_flag="$(_cfg_flag_key "${MODEL_FLAG}")"
+    _cx_model_env="CODEX_MODEL_${_cx_flag}"
+    _cx_var="_CFG_AGENTS_CODEX_FLAGS_${_cx_flag}_MODEL"
+    MODEL_ID="${!_cx_model_env:-}"
+    [[ -n "${MODEL_ID}" ]] || MODEL_ID="${!_cx_var:-}"
+    _cx_var="_CFG_AGENTS_CODEX_FLAGS_${_cx_flag}_NAME"
+    MODEL_NAME="${!_cx_var:-${MODEL_ID}}"
+    _cx_var="_CFG_AGENTS_CODEX_FLAGS_${_cx_flag}_REASONING"
+    REASONING_EFFORT="${!_cx_var:-high}"
+    if [[ -z "${MODEL_ID}" ]]; then
+        echo "###${_NAME}: ERROR: 旗标 '${MODEL_FLAG}' 缺少模型配置（agent-config.json agents.codex.flags）###" >&2
+        exit 64
+    fi
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
         MODEL_NAME="${MODEL_OVERRIDE}（override）"
@@ -1042,19 +1220,28 @@ run_codex() {
     REASONING_EFFORT="${AGENT_RUNTIME_REASONING:-$REASONING_EFFORT}"
     _load_prompt
     _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "$REASONING_EFFORT" ""
-    local CODEX_PROVIDER_ID="${CODEX_PROVIDER_ID:-lqcd}"
-    local CODEX_PROVIDER_NAME="${CODEX_PROVIDER_NAME:-lqcd}"
-    local CODEX_PROVIDER_BASE_URL="${CODEX_PROVIDER_BASE_URL:-http://nat200.natappvip.cc/v1}"
-    local CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-LQCD_API_KEY}"
-    local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-1000000}"
-    local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}"
-    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-}"
-    local CODEX_FAST_MODE="${CODEX_FAST_MODE:-false}"
-    local CODEX_PERSONALITY="${CODEX_PERSONALITY:-pragmatic}"
-    local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-auto_review}"
-    local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-api}"
-    local CODEX_TUI_STATUS_LINE="${CODEX_TUI_STATUS_LINE:-[\"model-with-reasoning\",\"current-dir\",\"hostname\",\"branch-changes\",\"run-state\",\"permissions\",\"approval-mode\",\"context-used\",\"weekly-limit\",\"estimated-thread-cost\",\"thread-id\",\"fast-mode\",\"task-progress\"]}"
-    local CODEX_TUI_STATUS_LINE_USE_COLORS="${CODEX_TUI_STATUS_LINE_USE_COLORS:-true}"
+    local CODEX_PROVIDER_ID="${CODEX_PROVIDER_ID:-${_CFG_AGENTS_CODEX_PROVIDER}}"
+    local _cx_pkey _cx_pvar
+    _cx_pkey="$(_cfg_provider_key "${CODEX_PROVIDER_ID}")"
+    _cx_pvar="_CFG_PROVIDERS_${_cx_pkey}_ENV_KEY"
+    local CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-${!_cx_pvar:-}}"
+    _cx_pvar="_CFG_PROVIDERS_${_cx_pkey}_BASE_URL"
+    local CODEX_PROVIDER_BASE_URL="${CODEX_PROVIDER_BASE_URL:-${!_cx_pvar:-}}"
+    _cx_pvar="_CFG_PROVIDERS_${_cx_pkey}_WIRE_API"
+    local CODEX_PROVIDER_WIRE_API="${CODEX_PROVIDER_WIRE_API:-${!_cx_pvar:-responses}}"
+    local CODEX_PROVIDER_NAME="${CODEX_PROVIDER_NAME:-${CODEX_PROVIDER_ID}}"
+    if [[ -z "${CODEX_PROVIDER_BASE_URL}" ]]; then
+        echo "###${_NAME}: warning: 途径 '${CODEX_PROVIDER_ID}' 未配置 base_url（见 agent-config.json / agent-custom.json）###" >&2
+    fi
+    local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-${_CFG_AGENTS_CODEX_CONFIG_MODEL_CONTEXT_WINDOW:-1000000}}"
+    local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-${_CFG_AGENTS_CODEX_CONFIG_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}}"
+    local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-${_CFG_AGENTS_CODEX_CONFIG_SERVICE_TIER:-}}"
+    local CODEX_FAST_MODE="${CODEX_FAST_MODE:-${_CFG_AGENTS_CODEX_CONFIG_FEATURES_FAST_MODE:-false}}"
+    local CODEX_PERSONALITY="${CODEX_PERSONALITY:-${_CFG_AGENTS_CODEX_CONFIG_PERSONALITY:-pragmatic}}"
+    local CODEX_APPROVALS_REVIEWER="${CODEX_APPROVALS_REVIEWER:-${_CFG_AGENTS_CODEX_CONFIG_APPROVALS_REVIEWER:-auto_review}}"
+    local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-${_CFG_AGENTS_CODEX_CONFIG_FORCED_LOGIN_METHOD:-api}}"
+    local CODEX_TUI_STATUS_LINE="${CODEX_TUI_STATUS_LINE:-${_CFG_AGENTS_CODEX_CONFIG_TUI_STATUS_LINE:-[\"model-with-reasoning\",\"current-dir\",\"hostname\",\"branch-changes\",\"run-state\",\"permissions\",\"approval-mode\",\"context-used\",\"weekly-limit\",\"estimated-thread-cost\",\"thread-id\",\"fast-mode\",\"task-progress\"]}}"
+    local CODEX_TUI_STATUS_LINE_USE_COLORS="${CODEX_TUI_STATUS_LINE_USE_COLORS:-${_CFG_AGENTS_CODEX_CONFIG_TUI_STATUS_LINE_USE_COLORS:-true}}"
 
     # 构造数组，避免工作目录、模型名和 prompt 中的空格/特殊字符被重新分词。
     local -a CODEX_COMMON_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
@@ -1069,7 +1256,7 @@ run_codex() {
         --config "model_providers.${CODEX_PROVIDER_ID}.name=\"${CODEX_PROVIDER_NAME}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.base_url=\"${CODEX_PROVIDER_BASE_URL}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.env_key=\"${CODEX_PROVIDER_ENV_KEY}\""
-        --config "model_providers.${CODEX_PROVIDER_ID}.wire_api=\"responses\""
+        --config "model_providers.${CODEX_PROVIDER_ID}.wire_api=\"${CODEX_PROVIDER_WIRE_API}\""
         --config "model_providers.${CODEX_PROVIDER_ID}.supports_websockets=true"
         --config "tui.status_line=${CODEX_TUI_STATUS_LINE}"
         --config "tui.status_line_use_colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
@@ -1288,6 +1475,8 @@ PY
     echo "logs -> ${LOG_FILE}"
     return "${_run_rc:-0}"
 }
+
+_agent_config_load
 
 case "${_AGENT}" in
     claude)   run_claude "$@";;
