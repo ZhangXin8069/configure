@@ -103,6 +103,18 @@ function Format-Segment {
             }
             return "${cDim}ctx $percent%$cReset"
         }
+        'context-window-size' {
+            # 上下文窗口容量（tokens）：官方 context_window.context_window_size，
+            # 默认 200000，扩展上下文模型为 1000000。与 context-used 相互独立。
+            $size = $payload.context_window.context_window_size
+            if ($null -eq $size) { return '' }
+            $tokens = [int64][double]$size
+            if ($tokens -le 0) { return '' }
+            if ($tokens -ge 1000000 -and ($tokens % 1000000) -eq 0) {
+                return "${cDim}ctx-max $([int64]($tokens / 1000000))M$cReset"
+            }
+            return "${cDim}ctx-max $([int64]($tokens / 1000))k$cReset"
+        }
         'weekly-limit' {
             $used = $payload.rate_limits.seven_day.used_percentage
             if ($null -eq $used) { return '' }
