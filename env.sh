@@ -39,7 +39,7 @@ esac
 # 防重复: 已含仓库 bin 前缀则跳过（env.sh 可能被多次 source，避免 PATH 无限拼接）
 case ":${PATH}:" in
 *":${_PATH}/bin:"*) : ;;
-*) export PATH=${_PATH}/bin:${HOME}/.opencode/bin:${HOME}/.local/bin:${HOME}/sbin:${HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH} ;;
+*) export PATH=${_PATH}/bin:${HOME}/.local/bin:${HOME}/sbin:${HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH} ;;
 esac
 # @@LD_LIBRARY_PATH@@
 # 防重复: 已含仓库 lib 前缀则跳过

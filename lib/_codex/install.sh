@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
-# Install Codex CLI (Linux / macOS) from GitHub releases into ~/.codex/bin
+# Install Codex CLI (Linux / macOS) from GitHub releases into ~/.local/bin
 # Usage: bash install.sh [VERSION]   (default: latest)
+# Env:   CODEX_INSTALL_DIR  安装目录（默认 $HOME/.local/bin）
 
 set -euo pipefail
 
 APP="codex"
-INSTALL_DIR="$HOME/.codex/bin"
+INSTALL_DIR="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
 REPO="https://github.com/openai/codex/releases"
 
 # --- 依赖检查 ---

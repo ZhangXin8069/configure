@@ -1,8 +1,13 @@
 @echo off
-rem Install opencode (Windows x64) from GitHub releases into %USERPROFILE%\.opencode\bin
+rem Install opencode (Windows x64) from GitHub releases into %USERPROFILE%\.local\bin
 rem Usage: install.bat [VERSION]   (default: latest)
+rem Env:   OPENCODE_INSTALL_DIR  install directory (default %USERPROFILE%\.local\bin)
 
 setlocal EnableExtensions EnableDelayedExpansion
+
+rem ---- 安装目录 ----
+set "INSTALL_DIR=%USERPROFILE%\.local\bin"
+if defined OPENCODE_INSTALL_DIR set "INSTALL_DIR=%OPENCODE_INSTALL_DIR%"
 
 title OpenCode Installer
 
@@ -61,24 +66,24 @@ if errorlevel 1 (
 
 rem ---- 安装 ----
 echo   Installing...
-if not exist "%USERPROFILE%\.opencode\bin" mkdir "%USERPROFILE%\.opencode\bin"
+if not exist "%INSTALL_DIR%" mkdir "%INSTALL_DIR%"
 if exist "%EXTRACT_DIR%\opencode.exe" (
-    move /y "%EXTRACT_DIR%\opencode.exe" "%USERPROFILE%\.opencode\bin\opencode.exe" >nul
+    move /y "%EXTRACT_DIR%\opencode.exe" "%INSTALL_DIR%\opencode.exe" >nul
 ) else (
-    move /y "%EXTRACT_DIR%\opencode" "%USERPROFILE%\.opencode\bin\opencode.exe" >nul
+    move /y "%EXTRACT_DIR%\opencode" "%INSTALL_DIR%\opencode.exe" >nul
 )
 del /q "%TEMP%\opencode-install.zip" 2>nul
 rmdir /s /q "%EXTRACT_DIR%" 2>nul
 
 rem ---- 验证 ----
-"%USERPROFILE%\.opencode\bin\opencode.exe" --version
+"%INSTALL_DIR%\opencode.exe" --version
 if errorlevel 1 (
     echo   ERROR: installed binary failed to run.
     exit /b 1
 )
 
 rem ---- 写入用户 PATH（幂等，保留 REG_EXPAND_SZ）----
-set "BIN_DIR=%USERPROFILE%\.opencode\bin"
+set "BIN_DIR=%INSTALL_DIR%"
 echo %PATH% | find /i "%BIN_DIR%" >nul
 if errorlevel 1 (
     set "CUR_PATH="
@@ -94,7 +99,7 @@ if errorlevel 1 (
 )
 
 echo.
-echo   OpenCode installed: %USERPROFILE%\.opencode\bin\opencode.exe
+echo   OpenCode installed: %INSTALL_DIR%\opencode.exe
 echo   Reopen the terminal, then run: opencode
 endlocal
 exit /b 0
