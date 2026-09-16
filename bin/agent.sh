@@ -13,8 +13,26 @@
 #   消除 Codex ≥0.154 的「Model metadata ... not found」告警；缓存于 data/cache，可用 CODEX_MODEL_CATALOG 覆盖
 
 # ---- 脚本定位：AGENT_SCRIPT_DIR 可在 /dev/fd/3 等场景注入真实目录；缺失时回退 BASH_SOURCE ----
+# 软链接调用（把 cl/op/co 链到 PATH 中其他目录）时解析出脚本真实位置，否则同目录的
+# agent-runtime.sh / agent-config.json / agent-prompt.txt 都找不到；_NAME 仍取调用名，
+# 身份（cl/op/co）不受解析影响。readlink 不带 -f，兼容 macOS/HPC 老环境。
 _SRC=${BASH_SOURCE[0]:-${0}}
-case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+_SRC_REAL="${_SRC}"
+case "${_SRC}" in
+    */*)
+        _HOPS=0
+        while [[ -L "${_SRC_REAL}" && ${_HOPS} -lt 40 ]]; do
+            _LINK_DIR="${_SRC_REAL%/*}"
+            [ -z "${_LINK_DIR}" ] && _LINK_DIR="/"
+            _LINK_DIR="$(cd -- "${_LINK_DIR}" 2>/dev/null && pwd)" || break
+            _LINK_TARGET="$(readlink "${_SRC_REAL}" 2>/dev/null)" || break
+            [[ "${_LINK_TARGET}" == /* ]] || _LINK_TARGET="${_LINK_DIR}/${_LINK_TARGET}"
+            _SRC_REAL="${_LINK_TARGET}"
+            _HOPS=$((_HOPS + 1))
+        done
+        ;;
+esac
+case "${_SRC_REAL}" in */*) _DIR=${_SRC_REAL%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
 if [[ -n "${AGENT_SCRIPT_DIR:-}" ]]; then
     _PATH="${AGENT_SCRIPT_DIR}"
 else
@@ -96,12 +114,13 @@ _prepare_secure_binary() {
         printf '%s\n' "${_target}"
         return 0
     fi
-    local _source
-    _source="$(command -v "${_agent_name}" 2>/dev/null || true)"
-    case "${_source}" in
-        /*) ;;
-        *) _source="";;
-    esac
+    local _source=""
+    _source="$(_agent_runtime_locate_binary "${_agent_name}")" || _source=""
+    if [[ -z "${_source}" ]]; then
+        # 源二进制尚未安装：先按 agent 系列约定自动安装，再重新探测（安装目录已前置到 PATH）
+        _agent_runtime_ensure_agent "${_agent_name}" || true
+        _source="$(_agent_runtime_locate_binary "${_agent_name}")" || _source=""
+    fi
     if [[ -z "${_source}" ]]; then
         echo "###${_NAME}: ERROR: secure_binary 不存在且 PATH 中未找到 ${_agent_name}，请安装或设置 ${_env_var}###" >&2
         return 127
@@ -141,6 +160,8 @@ _load_prompt() {
         exit 1
     fi
     PROMPT="$(<"${_pf}")"
+    # ${CONFIGURE_ROOT} = configure 部署根（非 ${HOME}/configure 的部署下同样正确）
+    PROMPT="${PROMPT//\$\{CONFIGURE_ROOT\}/${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}}"
     PROMPT="${PROMPT//\$\{HOME\}/${HOME:-}}"
     PROMPT="${PROMPT//\$\{_PWD\}/$_PWD}"
     PROMPT="${PROMPT//\$\{LIST_FILE\}/${LIST_FILE:-}}"
@@ -433,6 +454,11 @@ run_claude() {
         _CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
     fi
     if [[ -z "${_CLAUDE_BIN}" ]]; then
+        # 环境里还没装：按 agent 系列约定运行部署内安装脚本，再重新探测一次
+        _agent_runtime_ensure_agent claude || true
+        _CLAUDE_BIN="$(_agent_runtime_locate_binary claude)" || _CLAUDE_BIN=""
+    fi
+    if [[ -z "${_CLAUDE_BIN}" ]]; then
         echo "###${_NAME}: ERROR: 未找到 claude，请安装 Claude Code 或设置 CLAUDE_BIN###" >&2
         exit 127
     fi
@@ -440,7 +466,7 @@ run_claude() {
     # ---- 途径设置与 --settings 生成在模型选择之后执行（供应商快捷词需要先解析） ----
 
     # 与 co 相同的注入：全局 agent 配置目录 + skill 清单
-    local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
+    local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
     local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
     _agent_config_dirs=(
         "${_configure_agent_root}/skills"
@@ -873,6 +899,11 @@ run_opencode() {
         _OPENCODE_BIN="$(command -v opencode 2>/dev/null || true)"
     fi
     if [[ -z "${_OPENCODE_BIN}" ]]; then
+        # 环境里还没装：按 agent 系列约定运行部署内安装脚本，再重新探测一次
+        _agent_runtime_ensure_agent opencode || true
+        _OPENCODE_BIN="$(_agent_runtime_locate_binary opencode)" || _OPENCODE_BIN=""
+    fi
+    if [[ -z "${_OPENCODE_BIN}" ]]; then
         echo "###${_NAME}: ERROR: 未找到 opencode，请安装 opencode 或设置 OPENCODE_BIN###" >&2
         exit 127
     fi
@@ -1014,7 +1045,7 @@ run_opencode() {
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
     VARIANT="${AGENT_RUNTIME_VARIANT:-$VARIANT}"
     _load_prompt
-    local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
+    local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
     local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
     _agent_config_dirs=(
         "${_configure_agent_root}/skills"
@@ -1290,7 +1321,11 @@ _codex_model_catalog() {
     local _py="${_AGENT_PYTHON:-python3}"
     command -v "${_py}" >/dev/null 2>&1 || return 0
     [[ -n "${_bin}" && -x "${_bin}" && -n "${_model}" ]] || return 0
-    local _cache_dir="${AGENT_DATA_ROOT:-${HOME:-}/configure/data}/cache"
+    # 数据根由 _agent_runtime_init 解析（部署自洽 + HOME 回退）；拿不到时不注入模型目录
+    local _data_root="${AGENT_DATA_ROOT:-}"
+    [[ -n "$_data_root" ]] || _data_root="$(_agent_runtime_resolve_data_root 2>/dev/null || true)"
+    [[ -n "$_data_root" ]] || return 0
+    local _cache_dir="${_data_root}/cache"
     local _ver
     _ver="$("${_bin}" --version 2>/dev/null | head -n 1)" || return 0
     [[ -n "${_ver}" ]] || return 0
@@ -1403,13 +1438,18 @@ run_codex() {
         _CODEX_BIN="$(command -v codex 2>/dev/null || true)"
     fi
     if [[ -z "${_CODEX_BIN}" ]]; then
+        # 环境里还没装：按 agent 系列约定运行部署内安装脚本，再重新探测一次
+        _agent_runtime_ensure_agent codex || true
+        _CODEX_BIN="$(_agent_runtime_locate_binary codex)" || _CODEX_BIN=""
+    fi
+    if [[ -z "${_CODEX_BIN}" ]]; then
         echo "###${_NAME}: ERROR: 未找到 codex，请安装 Codex CLI 或设置 CODEX_BIN###" >&2
         exit 127
     fi
 
     # 初始注入包含固定 prompt、全局 agent 配置目录清单以及全局/工作区 skill 清单。
     # 这里只列出路径，不读取配置内容；模型需要时再按需读取。
-    local _configure_agent_root="${HOME:-}/configure" _git_root _workspace_root
+    local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
     local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
     _agent_config_dirs=(
         "${_configure_agent_root}/skills"

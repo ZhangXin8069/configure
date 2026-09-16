@@ -36,6 +36,7 @@ $script:LockStream = $null
 $script:RunId = ''
 $script:RunDir = ''
 $script:DataRoot = ''
+$script:ConfigureRoot = ''
 $script:WorkspaceRoot = ''
 $script:LogFile = ''
 $script:ListFile = ''
@@ -108,19 +109,109 @@ function Resolve-FullPath {
     return [System.IO.Path]::GetFullPath((Join-Path $script:WorkDir $Path))
 }
 
+function Get-HomeRoot {
+    $homeRoot = [Environment]::GetEnvironmentVariable('HOME')
+    if ([string]::IsNullOrWhiteSpace($homeRoot)) {
+        $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
+    }
+    return $homeRoot
+}
+
+# 判定目录是否为 configure 根：含 skills/tools/hooks/plugins 任一子目录
+function Test-IsConfigureRoot {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Container)) {
+        return $false
+    }
+    foreach ($name in @('skills', 'tools', 'hooks', 'plugins')) {
+        if (Test-Path -LiteralPath (Join-Path $Path $name) -PathType Container) { return $true }
+    }
+    return $false
+}
+
+# 目录是否可写：写探针文件（ACL 感知），成功即清理
+function Test-WritableDirectory {
+    param([Parameter(Mandatory = $true)][string]$Path)
+
+    $probe = Join-Path $Path ('.agent-write-probe-' + [System.Guid]::NewGuid().ToString('N'))
+    try {
+        [System.IO.File]::WriteAllText($probe, '')
+        Remove-Item -LiteralPath $probe -Force -ErrorAction SilentlyContinue
+        return $true
+    } catch {
+        return $false
+    }
+}
+
+# configure 根解析（与 Unix 端 agent-runtime.sh 语义一致，结果缓存于 $script:ConfigureRoot）：
+# 1) AGENT_CONFIGURE_ROOT 显式即权威 2) 脚本目录的父目录（部署自洽）3) $HOME\configure。
+# 仓库部署在 $HOME\configure 之外（共享部署、多用户共用、CI 检出）时同样自洽。
+function Get-ConfigureRoot {
+    if (-not [string]::IsNullOrWhiteSpace($script:ConfigureRoot)) {
+        return $script:ConfigureRoot
+    }
+    $explicit = [Environment]::GetEnvironmentVariable('AGENT_CONFIGURE_ROOT')
+    if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+        $script:ConfigureRoot = Resolve-FullPath $explicit
+        return $script:ConfigureRoot
+    }
+    $scriptRoot = ''
+    if (-not [string]::IsNullOrWhiteSpace($script:ScriptDir)) {
+        $scriptRoot = Split-Path -Parent ([System.IO.Path]::GetFullPath($script:ScriptDir))
+    }
+    $homeRoot = Get-HomeRoot
+    $candidates = @()
+    if (-not [string]::IsNullOrWhiteSpace($scriptRoot)) { $candidates += $scriptRoot }
+    if (-not [string]::IsNullOrWhiteSpace($homeRoot)) { $candidates += (Join-Path $homeRoot 'configure') }
+    foreach ($candidate in $candidates) {
+        if (Test-IsConfigureRoot $candidate) {
+            $script:ConfigureRoot = $candidate
+            return $script:ConfigureRoot
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($scriptRoot)) { $script:ConfigureRoot = $scriptRoot }
+    return $script:ConfigureRoot
+}
+
+# 数据根（runs/cache 等可写状态）解析：1) AGENT_DATA_DIR / CONFIGURE_AGENT_DATA_DIR（显式，
+# 无条件采用）2) <configure 根>\data 3) $HOME\configure\data。「已存在且可写」优先于
+# 「需新建」，避免升级后既有 run 历史与 --resume 失联；全部不可用时返回 $HOME 路径，
+# 由调用方创建失败时给出明确报错。
 function Resolve-AgentDataRoot {
     $candidate = [Environment]::GetEnvironmentVariable('AGENT_DATA_DIR')
     if ([string]::IsNullOrWhiteSpace($candidate)) {
         $candidate = [Environment]::GetEnvironmentVariable('CONFIGURE_AGENT_DATA_DIR')
     }
-    if ([string]::IsNullOrWhiteSpace($candidate)) {
-        $homeRoot = [Environment]::GetEnvironmentVariable('HOME')
-        if ([string]::IsNullOrWhiteSpace($homeRoot)) {
-            $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
-        }
-        $candidate = Join-Path $homeRoot 'configure\data'
+    if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+        return Resolve-FullPath $candidate
     }
-    return Resolve-FullPath $candidate
+    $candidates = @()
+    $configRoot = Get-ConfigureRoot
+    if (-not [string]::IsNullOrWhiteSpace($configRoot)) {
+        $candidates += (Join-Path $configRoot 'data')
+    }
+    $homeRoot = Get-HomeRoot
+    $homeData = ''
+    if (-not [string]::IsNullOrWhiteSpace($homeRoot)) {
+        $homeData = Join-Path $homeRoot 'configure\data'
+        if ($candidates -notcontains $homeData) { $candidates += $homeData }
+    }
+    foreach ($path in $candidates) {
+        if ((Test-Path -LiteralPath $path -PathType Container) -and (Test-WritableDirectory $path)) {
+            return Resolve-FullPath $path
+        }
+    }
+    foreach ($path in $candidates) {
+        try {
+            New-Item -ItemType Directory -Force -Path $path -ErrorAction Stop | Out-Null
+            return Resolve-FullPath $path
+        } catch {
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($homeData)) { return Resolve-FullPath $homeData }
+    if ($candidates.Count -gt 0) { return Resolve-FullPath $candidates[0] }
+    return ''
 }
 
 # JSON 配置深度合并：agents/flags 等对象逐键递归，标量与数组以 Override 优先
@@ -871,15 +962,14 @@ function Build-Prompt {
         return $null
     }
     $prompt = [System.IO.File]::ReadAllText($promptPath)
-    $homeRoot = [Environment]::GetEnvironmentVariable('HOME')
-    if ([string]::IsNullOrWhiteSpace($homeRoot)) {
-        $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
-    }
+    $homeRoot = Get-HomeRoot
+    # ${CONFIGURE_ROOT} = configure 部署根（部署在 $HOME\configure 之外时同样正确）
+    $prompt = $prompt.Replace('${CONFIGURE_ROOT}', (Get-ConfigureRoot))
     $prompt = $prompt.Replace('${HOME}', $homeRoot)
     $prompt = $prompt.Replace('${_PWD}', $script:WorkDir)
     $prompt = $prompt.Replace('${LIST_FILE}', $script:ListFile)
 
-    $configRoot = Join-Path $homeRoot 'configure'
+    $configRoot = Get-ConfigureRoot
     $agentDirs = @(
         (Join-Path $configRoot 'skills')
         (Join-Path $configRoot 'tools')
@@ -1016,6 +1106,131 @@ function Expand-HomePath {
 
 # secure 变体（cls/ops/cos）二进制准备：目标存在则直接使用；缺失时从 PATH 中
 # 同名可执行文件完整复制（非符号链接）过去，供 vscode-server 升级后自愈。
+# ---- 缺失可执行文件的自动安装（与 Unix 端 agent-runtime.sh 语义一致）----
+# 换机、全新 Windows 环境等场景下 agent CLI 往往还没装：此时运行部署内
+# lib\_<组件>\install.bat（默认装入 %USERPROFILE%\.local\bin），再把安装目录前置到
+# 当前进程 PATH，使随后的 Get-Command 立即命中并继续执行，无需重启启动器。
+# 开关：AGENT_AUTO_INSTALL=0 关闭；AGENT_INSTALL_DIR 覆盖安装目录。
+
+function Get-AgentInstallScript {
+    param([Parameter(Mandatory = $true)][string]$AgentName)
+
+    switch ($AgentName) {
+        'claude' { $sub = '_claude-code' }
+        'opencode' { $sub = '_opencode' }
+        'codex' { $sub = '_codex' }
+        default { return '' }
+    }
+    $root = Get-ConfigureRoot
+    if ([string]::IsNullOrWhiteSpace($root)) {
+        return ''
+    }
+    foreach ($name in @('install.bat', 'install.ps1', 'install.sh')) {
+        $candidate = Join-Path (Join-Path (Join-Path $root 'lib') $sub) $name
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+            return $candidate
+        }
+    }
+    return ''
+}
+
+function Add-AgentPathEntry {
+    param([Parameter(Mandatory = $true)][string]$Directory)
+
+    if (-not (Test-Path -LiteralPath $Directory -PathType Container)) {
+        return $false
+    }
+    foreach ($entry in @($env:PATH -split ';')) {
+        if (-not [string]::IsNullOrWhiteSpace($entry) -and
+            $entry.TrimEnd('\') -ieq $Directory.TrimEnd('\')) {
+            return $true
+        }
+    }
+    $env:PATH = $Directory + ';' + $env:PATH
+    return $true
+}
+
+# 确保 agent 可执行文件可用。查找顺序：PATH 命中 → 安装目录命中（已装但未入 PATH 的常见情形）
+# → 运行部署内安装脚本 → 重新探测。已可用时零开销返回 $true。
+function Install-AgentExecutable {
+    param([Parameter(Mandatory = $true)][string]$AgentName)
+
+    $found = Get-Command $AgentName -ErrorAction SilentlyContinue
+    if ($found -and -not [string]::IsNullOrWhiteSpace($found.Source)) {
+        return $true
+    }
+
+    $installDir = [Environment]::GetEnvironmentVariable('AGENT_INSTALL_DIR')
+    if ([string]::IsNullOrWhiteSpace($installDir)) {
+        $homeRoot = Get-HomeRoot
+        if (-not [string]::IsNullOrWhiteSpace($homeRoot)) {
+            $installDir = Join-Path $homeRoot '.local\bin'
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($installDir)) {
+        Add-AgentPathEntry -Directory $installDir | Out-Null
+        $found = Get-Command $AgentName -ErrorAction SilentlyContinue
+        if ($found -and -not [string]::IsNullOrWhiteSpace($found.Source)) {
+            return $true
+        }
+    }
+
+    $autoInstall = [Environment]::GetEnvironmentVariable('AGENT_AUTO_INSTALL')
+    if ([string]::IsNullOrWhiteSpace($autoInstall)) {
+        $autoInstall = '1'
+    }
+    if (@('0', 'off', 'no', 'false') -contains $autoInstall.ToLower()) {
+        Write-ErrorLine "###$($script:LauncherName): 未找到 $AgentName，已按 AGENT_AUTO_INSTALL=$autoInstall 跳过自动安装###"
+        return $false
+    }
+    if (-not [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable('AGENT_AUTO_INSTALL_DONE'))) {
+        Write-ErrorLine "###$($script:LauncherName): 未找到 $AgentName，且自动安装已尝试过（AGENT_AUTO_INSTALL_DONE 已置位）###"
+        return $false
+    }
+
+    $scriptPath = Get-AgentInstallScript -AgentName $AgentName
+    if ([string]::IsNullOrWhiteSpace($scriptPath)) {
+        Write-ErrorLine "###$($script:LauncherName): 提示: 未找到 $AgentName，部署内也没有安装脚本（lib\_*\install.bat）###"
+        return $false
+    }
+
+    Write-Host "###$($script:LauncherName): 未找到 $AgentName，自动运行安装脚本：$scriptPath###"
+    # 防重入：安装脚本自身若再触发 agent 系列，不再递归安装
+    $env:AGENT_AUTO_INSTALL_DONE = '1'
+    $rc = 1
+    try {
+        # Out-Host：安装脚本的输出直接进控制台，不混入本函数的返回值
+        # （真实安装脚本会打印下载进度，混入会污染解析到的二进制路径）
+        if ($scriptPath.EndsWith('.bat')) {
+            & cmd.exe /c "`"$scriptPath`"" | Out-Host
+        } elseif ($scriptPath.EndsWith('.ps1')) {
+            & powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File $scriptPath | Out-Host
+        } else {
+            & bash $scriptPath | Out-Host
+        }
+        $rc = $LASTEXITCODE
+    } catch {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 自动安装失败：$($_.Exception.Message)###"
+        return $false
+    }
+    if ($rc -ne 0) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 自动安装失败（退出码 $rc）：$scriptPath###"
+        Write-ErrorLine "###$($script:LauncherName): 可手动运行该脚本后重试；离线环境请先准备好安装包或设置 AGENT_AUTO_INSTALL=0###"
+        return $false
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($installDir)) {
+        Add-AgentPathEntry -Directory $installDir | Out-Null
+    }
+    $found = Get-Command $AgentName -ErrorAction SilentlyContinue
+    if ($found -and -not [string]::IsNullOrWhiteSpace($found.Source)) {
+        Write-Host "###$($script:LauncherName): $AgentName 安装完成：$($found.Source)###"
+        return $true
+    }
+    Write-ErrorLine "###$($script:LauncherName): ERROR: 安装脚本已执行，但仍未找到 $AgentName（安装目录可能不在 $installDir，请检查上方安装输出）###"
+    return $false
+}
+
 function Initialize-SecureBinary {
     param(
         [Parameter(Mandatory = $true)][string]$AgentName,
@@ -1028,6 +1243,11 @@ function Initialize-SecureBinary {
         return $target
     }
     $command = Get-Command $AgentName -ErrorAction SilentlyContinue
+    if ($null -eq $command -or [string]::IsNullOrWhiteSpace($command.Source)) {
+        # 源二进制尚未安装：先按 agent 系列约定自动安装，再重新探测
+        Install-AgentExecutable -AgentName $AgentName | Out-Null
+        $command = Get-Command $AgentName -ErrorAction SilentlyContinue
+    }
     if ($null -eq $command -or [string]::IsNullOrWhiteSpace($command.Source)) {
         Write-ErrorLine "###$($script:LauncherName): ERROR: secure_binary 不存在且 PATH 中未找到 $AgentName，请安装或设置 $EnvironmentName###"
         $script:FailureCode = 127
@@ -1066,6 +1286,12 @@ function Resolve-Executable {
             return (Initialize-SecureBinary -AgentName $SecureAgentName -ConfiguredPath $secureConfigured -EnvironmentName $EnvironmentName)
         }
     }
+    $command = Get-Command $DefaultName -ErrorAction SilentlyContinue
+    if ($command) {
+        return $command.Source
+    }
+    # 环境里还没装：按 agent 系列约定运行部署内安装脚本，再重新探测一次
+    Install-AgentExecutable -AgentName $DefaultName | Out-Null
     $command = Get-Command $DefaultName -ErrorAction SilentlyContinue
     if ($command) {
         return $command.Source
@@ -1620,10 +1846,6 @@ function Run-Codex {
     if ($null -eq $prompt) {
         return $script:FailureCode
     }
-    $homeRoot = [Environment]::GetEnvironmentVariable('HOME')
-    if ([string]::IsNullOrWhiteSpace($homeRoot)) {
-        $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
-    }
     $codexConfig = $script:AgentConfig.agents.codex
     $providerId = $script:ProviderOverride
     if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$codexConfig.provider }
@@ -1744,11 +1966,12 @@ function Run-Codex {
     if (-not [string]::IsNullOrWhiteSpace($catalogPath)) {
         $common += @('--config', "model_catalog_json=`"$catalogPath`"")
     }
+    $configRoot = Get-ConfigureRoot
     $agentDirs = @(
-        (Join-Path $homeRoot 'configure\skills')
-        (Join-Path $homeRoot 'configure\tools')
-        (Join-Path $homeRoot 'configure\hooks')
-        (Join-Path $homeRoot 'configure\plugins')
+        (Join-Path $configRoot 'skills')
+        (Join-Path $configRoot 'tools')
+        (Join-Path $configRoot 'hooks')
+        (Join-Path $configRoot 'plugins')
     )
     foreach ($dir in $agentDirs) {
         if (Test-Path -LiteralPath $dir -PathType Container) {
