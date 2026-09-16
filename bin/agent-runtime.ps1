@@ -997,15 +997,74 @@ function Invoke-Logged {
     }
 }
 
+function Expand-HomePath {
+    param([Parameter(Mandatory = $true)][string]$PathValue)
+
+    $homeRoot = [Environment]::GetEnvironmentVariable('HOME')
+    if ([string]::IsNullOrWhiteSpace($homeRoot)) {
+        $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
+    }
+    if ([string]::IsNullOrWhiteSpace($homeRoot)) {
+        $homeRoot = ''
+    }
+    $expanded = $PathValue.Replace('${HOME}', $homeRoot).Replace('$HOME', $homeRoot)
+    if ($expanded.StartsWith('~')) {
+        $expanded = $homeRoot + $expanded.Substring(1)
+    }
+    return $expanded
+}
+
+# secure 变体（cls/ops/cos）二进制准备：目标存在则直接使用；缺失时从 PATH 中
+# 同名可执行文件完整复制（非符号链接）过去，供 vscode-server 升级后自愈。
+function Initialize-SecureBinary {
+    param(
+        [Parameter(Mandatory = $true)][string]$AgentName,
+        [Parameter(Mandatory = $true)][string]$ConfiguredPath,
+        [Parameter(Mandatory = $true)][string]$EnvironmentName
+    )
+
+    $target = Expand-HomePath $ConfiguredPath
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+        return $target
+    }
+    $command = Get-Command $AgentName -ErrorAction SilentlyContinue
+    if ($null -eq $command -or [string]::IsNullOrWhiteSpace($command.Source)) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: secure_binary 不存在且 PATH 中未找到 $AgentName，请安装或设置 $EnvironmentName###"
+        $script:FailureCode = 127
+        return $null
+    }
+    try {
+        $targetDir = Split-Path -Parent $target
+        if (-not [string]::IsNullOrWhiteSpace($targetDir)) {
+            New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+        }
+        Remove-Item -LiteralPath $target -Force -ErrorAction SilentlyContinue
+        Copy-Item -LiteralPath $command.Source -Destination $target -Force
+    } catch {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 无法将 $($command.Source) 复制到 secure_binary：$target###"
+        $script:FailureCode = 1
+        return $null
+    }
+    Write-Host "###$($script:LauncherName): secure_binary 缺失，已从 $($command.Source) 完整复制到 $target###"
+    return $target
+}
+
 function Resolve-Executable {
     param(
         [Parameter(Mandatory = $true)][string]$EnvironmentName,
-        [Parameter(Mandatory = $true)][string]$DefaultName
+        [Parameter(Mandatory = $true)][string]$DefaultName,
+        [string]$SecureAgentName = ''
     )
 
     $candidate = [Environment]::GetEnvironmentVariable($EnvironmentName)
     if (-not [string]::IsNullOrWhiteSpace($candidate)) {
         return $candidate
+    }
+    if ($script:Secure -eq '1' -and -not [string]::IsNullOrWhiteSpace($SecureAgentName)) {
+        $secureConfigured = [string]$script:AgentConfig.agents.$SecureAgentName.secure_binary
+        if (-not [string]::IsNullOrWhiteSpace($secureConfigured)) {
+            return (Initialize-SecureBinary -AgentName $SecureAgentName -ConfiguredPath $secureConfigured -EnvironmentName $EnvironmentName)
+        }
     }
     $command = Get-Command $DefaultName -ErrorAction SilentlyContinue
     if ($command) {
@@ -1168,7 +1227,7 @@ function New-ClaudeSettingsFile {
 }
 
 function Run-Claude {
-    $executable = Resolve-Executable 'CLAUDE_BIN' 'claude'
+    $executable = Resolve-Executable 'CLAUDE_BIN' 'claude' 'claude'
     if ([string]::IsNullOrWhiteSpace($executable)) {
         return 127
     }
@@ -1314,7 +1373,7 @@ function Run-Claude {
 }
 
 function Run-OpenCode {
-    $executable = Resolve-Executable 'OPENCODE_BIN' 'opencode'
+    $executable = Resolve-Executable 'OPENCODE_BIN' 'opencode' 'opencode'
     if ([string]::IsNullOrWhiteSpace($executable)) {
         return 127
     }
@@ -1457,8 +1516,103 @@ function Run-OpenCode {
     }
 }
 
+function Get-CodexModelCatalogPath {
+    # Codex 内置模型目录只含 OpenAI 系模型，三方模型（deepseek 等）启动时会告警
+    # 「Model metadata for `X` not found…」。这里以 `codex debug models` 导出的内置目录为底，
+    # 克隆模板条目补一条自定义元数据，缓存于 data\cache 并返回文件路径（经 model_catalog_json 注入）。
+    # 模型已在内置目录中、或条件不具备时返回空：不注入、保持 Codex 原生行为。
+    param(
+        [string]$Bin,
+        [string]$Model,
+        [string]$DisplayName,
+        [string]$Template,
+        [string]$ContextWindow,
+        [string]$CompactLimit
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Bin) -or [string]::IsNullOrWhiteSpace($Model)) { return '' }
+    if (-not (Test-Path -LiteralPath $Bin -PathType Leaf)) { return '' }
+    $cacheDir = Join-Path $script:DataRoot 'cache'
+    try {
+        $version = (& $Bin --version 2>$null | Select-Object -First 1)
+        if ([string]::IsNullOrWhiteSpace($version)) { return '' }
+        $versionKey = ($version -replace '[^A-Za-z0-9._-]', '-')
+        if ([string]::IsNullOrWhiteSpace($versionKey)) { return '' }
+        if (-not (Test-Path -LiteralPath $cacheDir)) {
+            New-Item -ItemType Directory -Force -Path $cacheDir | Out-Null
+        }
+        $basePath = Join-Path $cacheDir "codex-models-$versionKey.json"
+        if (-not (Test-Path -LiteralPath $basePath -PathType Leaf)) {
+            $dump = (& $Bin debug models 2>$null | Out-String)
+            if ([string]::IsNullOrWhiteSpace($dump)) { return '' }
+            Write-Utf8 $basePath $dump
+        }
+        $catalog = (Get-Content -LiteralPath $basePath -Raw) | ConvertFrom-Json
+        $models = @($catalog.models)
+        if ($models.Count -eq 0) { return '' }
+        if ($models | Where-Object { $_.slug -eq $Model }) { return '' }
+        $templateEntry = $models | Where-Object { $_.slug -eq $Template } | Select-Object -First 1
+        if ($null -eq $templateEntry) {
+            $templateEntry = $models | Where-Object { $_.base_instructions -or $_.model_messages } | Select-Object -First 1
+        }
+        if ($null -eq $templateEntry) { return '' }
+        $levels = @{}
+        foreach ($modelEntry in $models) {
+            foreach ($level in @($modelEntry.supported_reasoning_levels)) {
+                if ($null -ne $level -and -not [string]::IsNullOrWhiteSpace([string]$level.effort)) {
+                    if (-not $levels.ContainsKey([string]$level.effort)) { $levels[[string]$level.effort] = $level }
+                }
+            }
+        }
+        $order = @('minimal', 'low', 'medium', 'high', 'xhigh', 'max', 'ultra')
+        $orderedLevels = @()
+        foreach ($levelName in $order) {
+            if ($levels.ContainsKey($levelName)) { $orderedLevels += $levels[$levelName] }
+        }
+        foreach ($levelName in @($levels.Keys | Sort-Object)) {
+            if ($order -notcontains $levelName) { $orderedLevels += $levels[$levelName] }
+        }
+        $entry = ($templateEntry | ConvertTo-Json -Depth 100) | ConvertFrom-Json
+        $entry.slug = $Model
+        if ([string]::IsNullOrWhiteSpace($DisplayName)) { $entry.display_name = $Model } else { $entry.display_name = $DisplayName }
+        $entry.description = "$($entry.display_name)（自定义模型目录条目）"
+        $entry.priority = 50
+        $entry.upgrade = $null
+        $targetWindow = $templateEntry.context_window
+        if (-not [string]::IsNullOrWhiteSpace($ContextWindow)) { $targetWindow = [int]$ContextWindow }
+        $entry.context_window = $targetWindow
+        $entry.max_context_window = $targetWindow
+        $entry.auto_compact_token_limit = if ([string]::IsNullOrWhiteSpace($CompactLimit)) { 900000 } else { [int]$CompactLimit }
+        if ($orderedLevels.Count -gt 0) { $entry.supported_reasoning_levels = $orderedLevels }
+        $hashInput = "$versionKey|$Model|$($entry.display_name)|$Template|$ContextWindow|$CompactLimit"
+        $sha1 = [System.Security.Cryptography.SHA1]::Create()
+        try {
+            $key = ([BitConverter]::ToString($sha1.ComputeHash([System.Text.Encoding]::UTF8.GetBytes($hashInput))) -replace '-', '').Substring(0, 12).ToLowerInvariant()
+        } finally {
+            $sha1.Dispose()
+        }
+        $safeModel = ($Model -replace '[^A-Za-z0-9._-]+', '_').Trim('_')
+        if ([string]::IsNullOrWhiteSpace($safeModel)) { $safeModel = 'model' }
+        $outPath = Join-Path $cacheDir "codex-models-$versionKey-$safeModel-$key.json"
+        if (-not (Test-Path -LiteralPath $outPath -PathType Leaf)) {
+            $catalog.models = @($models) + @($entry)
+            Write-Utf8Atomic $outPath (($catalog | ConvertTo-Json -Depth 100))
+        }
+        # 最小自检：本次 Codex 必须能加载该目录，否则不注入（避免版本差异下未知配置项拖垮启动）
+        & $Bin debug models -c "model_catalog_json=`"$outPath`"" 2>$null | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            Write-ErrorLine "###$($script:LauncherName): warning: Codex 无法加载模型目录 $outPath，本次不注入###"
+            return ''
+        }
+        return $outPath
+    } catch {
+        Write-ErrorLine "###$($script:LauncherName): warning: Codex 模型目录生成失败，保留内置 fallback 元数据###"
+        return ''
+    }
+}
+
 function Run-Codex {
-    $executable = Resolve-Executable 'CODEX_BIN' 'codex'
+    $executable = Resolve-Executable 'CODEX_BIN' 'codex' 'codex'
     if ([string]::IsNullOrWhiteSpace($executable)) {
         return 127
     }
@@ -1498,6 +1652,28 @@ function Run-Codex {
     $compactLimit = [Environment]::GetEnvironmentVariable('CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT')
     if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = [string]$codexConfig.config.model_auto_compact_token_limit }
     if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = '900000' }
+    # 模型元数据目录：为内置目录之外的模型（deepseek 等）补齐元数据，消除启动告警
+    $catalogPath = [Environment]::GetEnvironmentVariable('CODEX_MODEL_CATALOG')
+    if ([string]::IsNullOrWhiteSpace($catalogPath)) {
+        $catalogEnabled = $true
+        if ($null -ne $codexConfig.model_catalog -and $null -ne $codexConfig.model_catalog.enabled) {
+            $catalogEnabled = [bool]$codexConfig.model_catalog.enabled
+        }
+        if ($catalogEnabled) {
+            $catalogDisplay = ''
+            if ($null -ne $codexConfig.model_catalog -and $null -ne $codexConfig.model_catalog.display_names) {
+                $nameProperty = $codexConfig.model_catalog.display_names.PSObject.Properties[$script:Model]
+                if ($null -ne $nameProperty) { $catalogDisplay = [string]$nameProperty.Value }
+            }
+            $catalogTemplate = 'gpt-5.4-mini'
+            if ($null -ne $codexConfig.model_catalog -and
+                -not [string]::IsNullOrWhiteSpace([string]$codexConfig.model_catalog.clone_template)) {
+                $catalogTemplate = [string]$codexConfig.model_catalog.clone_template
+            }
+            $catalogPath = Get-CodexModelCatalogPath -Bin $executable -Model $script:Model -DisplayName $catalogDisplay `
+                -Template $catalogTemplate -ContextWindow $contextWindow -CompactLimit $compactLimit
+        }
+    }
     $serviceTier = [Environment]::GetEnvironmentVariable('CODEX_SERVICE_TIER')
     if ([string]::IsNullOrWhiteSpace($serviceTier)) { $serviceTier = [string]$codexConfig.config.service_tier }
     $fastMode = [Environment]::GetEnvironmentVariable('CODEX_FAST_MODE')
@@ -1565,6 +1741,9 @@ function Run-Codex {
     if (-not [string]::IsNullOrWhiteSpace($serviceTier)) {
         $common += @('--config', "service_tier=`"$serviceTier`"")
     }
+    if (-not [string]::IsNullOrWhiteSpace($catalogPath)) {
+        $common += @('--config', "model_catalog_json=`"$catalogPath`"")
+    }
     $agentDirs = @(
         (Join-Path $homeRoot 'configure\skills')
         (Join-Path $homeRoot 'configure\tools')
@@ -1580,6 +1759,9 @@ function Run-Codex {
     Write-Host "  Codex: $($script:Model) | reasoning=$($script:Reasoning)"
     $displayTier = if ([string]::IsNullOrWhiteSpace($serviceTier)) { 'standard' } else { $serviceTier }
     Write-Host "  provider: $providerId | tier=$displayTier | personality=$personality"
+    if (-not [string]::IsNullOrWhiteSpace($catalogPath)) {
+        Write-Host "  catalog: 注入自定义模型元数据（$($script:Model)）"
+    }
     if (-not [string]::IsNullOrWhiteSpace($providerKey) -and
         [string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $providerKey))) {
         Write-Host "  auth: $providerKey 未设置 —— 请先 export 该变量（缺失时请求会 401）"
