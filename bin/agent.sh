@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # 统一 agent 启动器：cl/cls/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
 #   cl  → Claude Code（默认 deepseek-pay 途径的 Anthropic 兼容端点；TUI 权限模式见配置；驱动：claude -p → --resume 链）
-#   cls → Claude Code HPC/secure 入口
+#   cls → Claude Code HPC/secure 入口（agents.claude.secure_binary 部署路径，缺失时自动完整复制）
 #   op  → OpenCode（默认 build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
-#   ops → OpenCode HPC/secure 入口（默认 OPENCODE_BIN 指向 vscode-server 内部署路径）
-#   cos → Codex HPC/secure 入口
+#   ops → OpenCode HPC/secure 入口（agents.opencode.secure_binary 部署路径，缺失时自动完整复制）
+#   cos → Codex HPC/secure 入口（agents.codex.secure_binary 部署路径，缺失时自动完整复制）
 # prompt 单一来源：同目录 agent-prompt.txt（模板含 ${HOME}/${_PWD} 占位符；op 另支持 ${LIST_FILE}）
 # 配置来源：同目录 agent-config.json（通用）+ agent-custom.json 或 agent-custom.json.refer（个性化，
 #   存在 agent-custom.json 时替代后者）深度合并；模型途径、各途径/各 agent 默认模型与强度、共用参数均取自这两份配置
+# 模型元数据：co 对内置目录之外的模型（deepseek 等）自动生成 model_catalog_json 注入（见 _codex_model_catalog），
+#   消除 Codex ≥0.154 的「Model metadata ... not found」告警；缓存于 data/cache，可用 CODEX_MODEL_CATALOG 覆盖
 
 # ---- 脚本定位：AGENT_SCRIPT_DIR 可在 /dev/fd/3 等场景注入真实目录；缺失时回退 BASH_SOURCE ----
 _SRC=${BASH_SOURCE[0]:-${0}}
@@ -80,6 +82,54 @@ _parse_runtime_limit() {
         return 0
     }
     _parse_interval "$value"
+}
+
+# secure 变体（cls/ops/cos）二进制准备：入参为 agents.<agent>.secure_binary 配置值
+# （支持 ${HOME} / ~ 占位符）。目标存在且可执行时直接使用；否则视为待部署路径，
+# 从 PATH 中同名的可执行文件完整复制（非符号链接）过去，供 vscode-server 升级后自愈。
+# stdout 输出最终可用路径；无法准备时明确报错并退出，不做静默回退。
+_prepare_secure_binary() {
+    local _agent_name="$1" _target="$2" _env_var="$3"
+    _target="${_target//\$\{HOME\}/${HOME:-}}"
+    _target="${_target/#\~/${HOME:-}}"
+    if [[ -f "${_target}" && -x "${_target}" ]]; then
+        printf '%s\n' "${_target}"
+        return 0
+    fi
+    local _source
+    _source="$(command -v "${_agent_name}" 2>/dev/null || true)"
+    case "${_source}" in
+        /*) ;;
+        *) _source="";;
+    esac
+    if [[ -z "${_source}" ]]; then
+        echo "###${_NAME}: ERROR: secure_binary 不存在且 PATH 中未找到 ${_agent_name}，请安装或设置 ${_env_var}###" >&2
+        return 127
+    fi
+    local _target_dir
+    _target_dir="$(dirname -- "${_target}")"
+    if ! mkdir -p -- "${_target_dir}"; then
+        echo "###${_NAME}: ERROR: 无法创建 secure_binary 目录：${_target_dir}###" >&2
+        return 1
+    fi
+    if [[ -e "${_source}" && "${_source}" -ef "${_target}" ]]; then
+        printf '%s\n' "${_target}"
+        return 0
+    fi
+    if [[ -d "${_target}" && ! -L "${_target}" ]]; then
+        echo "###${_NAME}: ERROR: secure_binary 路径被目录占用：${_target}###" >&2
+        return 1
+    fi
+    local _tmp="${_target}.tmp.$$"
+    rm -f -- "${_tmp}" 2>/dev/null || true
+    if ! cp -f -- "${_source}" "${_tmp}" || ! chmod +x -- "${_tmp}" \
+        || ! rm -f -- "${_target}" || ! mv -f -- "${_tmp}" "${_target}"; then
+        rm -f -- "${_tmp}" 2>/dev/null || true
+        echo "###${_NAME}: ERROR: 无法将 ${_source} 复制到 secure_binary：${_target}###" >&2
+        return 1
+    fi
+    echo "###${_NAME}: secure_binary 缺失，已从 ${_source} 完整复制到 ${_target}###" >&2
+    printf '%s\n' "${_target}"
 }
 
 # prompt 基础读取：agent-prompt.txt 单一来源，替换 ${HOME}/${_PWD} 占位符；
@@ -181,6 +231,16 @@ _cfg_provider_default_strength() {
     printf '%s' "${!_var:-}"
 }
 
+# Codex 模型展示名（通用配置 agents.codex.model_catalog.display_names.<slug>），未配置输出空
+_cfg_codex_model_display_name() {
+    local _var
+    _var="_CFG_AGENTS_CODEX_MODEL_CATALOG_DISPLAY_NAMES_$(printf '%s' "$1" | tr -c 'A-Za-z0-9' '_' | tr '[:lower:]' '[:upper:]')"
+    while [[ "${_var}" == *__* ]]; do
+        _var="${_var//__/_}"
+    done
+    printf '%s' "${!_var:-}"
+}
+
 # =====================================================================
 # 配置文件加载：agent-config.json（通用配置）与 agent-custom.json（个性化配置，
 # 缺失时回退 agent-custom.json.refer）深度合并后展开为一组 _CFG_* 变量。
@@ -209,6 +269,7 @@ _agent_config_load() {
             exit 1
         fi
     fi
+    _AGENT_PYTHON="${_py}" # 供后续 helper（如 Codex 模型目录）复用同一解释器
     local _dump
     if ! _dump="$("${_py}" - "${_cfg}" "${_custom}" <<'PYEOF'
 import json
@@ -363,6 +424,11 @@ trap '_terminate' TERM
 # =====================================================================
 run_claude() {
     local _CLAUDE_BIN="${CLAUDE_BIN:-}"
+    if (( _SECURE )) && [[ -z "${_CLAUDE_BIN}" && -n "${_CFG_AGENTS_CLAUDE_SECURE_BINARY:-}" ]]; then
+        # HPC/secure 变体：优先使用 agent-custom.json 的 agents.claude.secure_binary 部署路径，
+        # 缺失时由 _prepare_secure_binary 从 PATH 中的 claude 完整复制（非符号链接）
+        _CLAUDE_BIN="$(_prepare_secure_binary claude "${_CFG_AGENTS_CLAUDE_SECURE_BINARY}" CLAUDE_BIN)" || exit $?
+    fi
     if [[ -z "${_CLAUDE_BIN}" ]]; then
         _CLAUDE_BIN="$(command -v claude 2>/dev/null || true)"
     fi
@@ -796,11 +862,12 @@ run_claude() {
 run_opencode() {
     local _OPENCODE_BIN="${OPENCODE_BIN:-}"
     if (( _SECURE )) && [[ -z "${_OPENCODE_BIN}" ]]; then
-        # HPC/secure 变体下 opencode 通常手动部署在 vscode-server 目录内（升级后路径会变，请更新或设 OPENCODE_BIN）：
-        #   mkdir -p /public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/
-        #   cp /public/home/zhangxin/.opencode/bin/opencode <上路径>/output_result_debug_Stable-.../
-        # 该路径是机器相关项，取自 agent-custom.json 的 agents.opencode.secure_binary
-        _OPENCODE_BIN="${_CFG_AGENTS_OPENCODE_SECURE_BINARY:-}"
+        # HPC/secure 变体：opencode 部署在 vscode-server 目录内（升级后路径会变，请更新或设 OPENCODE_BIN）；
+        # 机器相关路径取自 agent-custom.json 的 agents.opencode.secure_binary，
+        # 缺失时由 _prepare_secure_binary 从 PATH 中的 opencode 完整复制（非符号链接）
+        if [[ -n "${_CFG_AGENTS_OPENCODE_SECURE_BINARY:-}" ]]; then
+            _OPENCODE_BIN="$(_prepare_secure_binary opencode "${_CFG_AGENTS_OPENCODE_SECURE_BINARY}" OPENCODE_BIN)" || exit $?
+        fi
     fi
     if [[ -z "${_OPENCODE_BIN}" ]]; then
         _OPENCODE_BIN="$(command -v opencode 2>/dev/null || true)"
@@ -1212,8 +1279,126 @@ PYEOF
 # =====================================================================
 # Codex 分支（co/cos）：TUI 或 exec → exec resume 驱动链；注入 skill 清单
 # =====================================================================
+
+# Codex 模型元数据目录：Codex 内置目录只含 OpenAI 系模型，三方模型（deepseek 等）启动时
+# 会告警「Model metadata for `X` not found. Defaulting to fallback metadata…」。这里以
+# `codex debug models` 导出的内置目录为底，克隆模板条目补一条自定义元数据，缓存于
+# data/cache/ 并输出文件路径（经 --config model_catalog_json 注入）。模型已在内置目录中、
+# 或条件不具备（无 python3 等）时输出空：不注入、保持 Codex 原生行为。
+_codex_model_catalog() {
+    local _bin="$1" _model="$2" _display="$3" _template="$4" _ctx="$5" _compact="$6"
+    local _py="${_AGENT_PYTHON:-python3}"
+    command -v "${_py}" >/dev/null 2>&1 || return 0
+    [[ -n "${_bin}" && -x "${_bin}" && -n "${_model}" ]] || return 0
+    local _cache_dir="${AGENT_DATA_ROOT:-${HOME:-}/configure/data}/cache"
+    local _ver
+    _ver="$("${_bin}" --version 2>/dev/null | head -n 1)" || return 0
+    [[ -n "${_ver}" ]] || return 0
+    _ver="$(printf '%s' "${_ver}" | tr -c 'A-Za-z0-9._-' '-')"
+    [[ -n "${_ver}" ]] || return 0
+    local _base="${_cache_dir}/codex-models-${_ver}.json"
+    if [[ ! -s "${_base}" ]]; then
+        mkdir -p -- "${_cache_dir}" 2>/dev/null || return 0
+        local _tmp
+        _tmp="$(mktemp "${_cache_dir}/.codex-models.XXXXXX")" || return 0
+        if "${_bin}" debug models >"${_tmp}" 2>/dev/null && [[ -s "${_tmp}" ]]; then
+            mv -f -- "${_tmp}" "${_base}" 2>/dev/null || true
+        else
+            rm -f -- "${_tmp}" 2>/dev/null || true
+            return 0
+        fi
+        [[ -s "${_base}" ]] || return 0
+    fi
+    local _out
+    if ! _out="$("${_py}" - "${_base}" "${_cache_dir}" "${_ver}" "${_model}" "${_display}" "${_template}" "${_ctx}" "${_compact}" <<'PYEOF' 2>/dev/null
+import hashlib
+import json
+import os
+import re
+import sys
+
+base_path, cache_dir, version, model, display, template, ctx, compact = sys.argv[1:9]
+
+def sanitize(text):
+    cleaned = re.sub(r"[^A-Za-z0-9._-]+", "_", text).strip("_")
+    return cleaned or "model"
+
+def as_int(value, fallback):
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return fallback
+
+try:
+    with open(base_path, encoding="utf-8") as handle:
+        catalog = json.load(handle)
+except Exception as exc:
+    raise SystemExit("无法读取内置模型目录 %s：%s" % (base_path, exc))
+
+models = catalog.get("models") if isinstance(catalog, dict) else None
+if not isinstance(models, list) or not models:
+    sys.exit(0)
+
+if any(entry.get("slug") == model for entry in models):
+    sys.exit(0)  # 内置目录已含该模型：不注入，保持原生行为
+
+tmpl = next((entry for entry in models if entry.get("slug") == template), None)
+if tmpl is None:  # 模板缺失时回退到任一含指令文本的条目
+    tmpl = next((entry for entry in models if entry.get("base_instructions") or entry.get("model_messages")), None)
+if tmpl is None:
+    sys.exit(0)
+
+levels = {}
+for entry in models:
+    for level in entry.get("supported_reasoning_levels") or []:
+        if isinstance(level, dict) and level.get("effort"):
+            levels.setdefault(level["effort"], level)
+order = ["minimal", "low", "medium", "high", "xhigh", "max", "ultra"]
+ordered = sorted(levels, key=lambda name: (order.index(name) if name in order else len(order), name))
+
+entry = json.loads(json.dumps(tmpl))
+entry.update({
+    "slug": model,
+    "display_name": display or model,
+    "description": "%s（自定义模型目录条目）" % (display or model),
+    "priority": 50,
+    "upgrade": None,
+    "context_window": as_int(ctx, entry.get("context_window")),
+    "max_context_window": as_int(ctx, entry.get("max_context_window") or entry.get("context_window")),
+    "auto_compact_token_limit": as_int(compact, entry.get("auto_compact_token_limit")),
+    "supported_reasoning_levels": [levels[name] for name in ordered] or entry.get("supported_reasoning_levels"),
+})
+
+key = hashlib.sha1("|".join([version, model, display or "", template or "", str(ctx), str(compact)]).encode("utf-8")).hexdigest()[:12]
+out_path = os.path.join(cache_dir, "codex-models-%s-%s-%s.json" % (sanitize(version), sanitize(model), key))
+if not os.path.exists(out_path):
+    catalog["models"] = list(models) + [entry]
+    tmp_path = "%s.tmp.%d" % (out_path, os.getpid())
+    with open(tmp_path, "w", encoding="utf-8") as handle:
+        json.dump(catalog, handle, ensure_ascii=False)
+    os.replace(tmp_path, out_path)
+print(out_path)
+PYEOF
+    )"; then
+        echo "###${_NAME}: warning: Codex 模型目录生成失败，保留内置 fallback 元数据###" >&2
+        return 0
+    fi
+    [[ -n "${_out}" && -f "${_out}" ]] || return 0
+    # 最小自检：本次 Codex 必须能加载该目录，否则不注入（避免版本差异下未知配置项拖垮启动）
+    if ! "${_bin}" debug models -c "model_catalog_json=\"${_out}\"" >/dev/null 2>&1; then
+        echo "###${_NAME}: warning: Codex 无法加载模型目录 ${_out}，本次不注入###" >&2
+        return 0
+    fi
+    printf '%s\n' "${_out}"
+}
+
 run_codex() {
     local _CODEX_BIN="${CODEX_BIN:-}"
+    if (( _SECURE )) && [[ -z "${_CODEX_BIN}" && -n "${_CFG_AGENTS_CODEX_SECURE_BINARY:-}" ]]; then
+        # HPC/secure 变体：优先使用 agent-custom.json 的 agents.codex.secure_binary 部署路径，
+        # 缺失时由 _prepare_secure_binary 从 PATH 中的 codex 完整复制（非符号链接）
+        _CODEX_BIN="$(_prepare_secure_binary codex "${_CFG_AGENTS_CODEX_SECURE_BINARY}" CODEX_BIN)" || exit $?
+    fi
     if [[ -z "${_CODEX_BIN}" ]]; then
         _CODEX_BIN="$(command -v codex 2>/dev/null || true)"
     fi
@@ -1402,6 +1587,15 @@ run_codex() {
     local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-${_CFG_AGENTS_CODEX_CONFIG_MODEL_CONTEXT_WINDOW:-1000000}}"
     local CODEX_CHECK_FOR_UPDATE_ON_STARTUP="${CODEX_CHECK_FOR_UPDATE_ON_STARTUP:-${_CFG_AGENTS_CODEX_CONFIG_CHECK_FOR_UPDATE_ON_STARTUP:-false}}"
     local CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT="${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-${_CFG_AGENTS_CODEX_CONFIG_MODEL_AUTO_COMPACT_TOKEN_LIMIT:-900000}}"
+    # 模型元数据目录：为内置目录之外的模型（deepseek 等）补齐元数据，消除启动告警
+    local CODEX_MODEL_CATALOG="${CODEX_MODEL_CATALOG:-}"
+    if [[ -z "${CODEX_MODEL_CATALOG}" && "${_CFG_AGENTS_CODEX_MODEL_CATALOG_ENABLED:-true}" != "false" ]]; then
+        CODEX_MODEL_CATALOG="$(_codex_model_catalog \
+            "${_CODEX_BIN}" "${MODEL_ID}" \
+            "$(_cfg_codex_model_display_name "${MODEL_ID}")" \
+            "${_CFG_AGENTS_CODEX_MODEL_CATALOG_CLONE_TEMPLATE:-gpt-5.4-mini}" \
+            "${CODEX_MODEL_CONTEXT_WINDOW}" "${CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT}")"
+    fi
     local CODEX_SERVICE_TIER="${CODEX_SERVICE_TIER:-${_CFG_AGENTS_CODEX_CONFIG_SERVICE_TIER:-}}"
     local CODEX_FAST_MODE="${CODEX_FAST_MODE:-${_CFG_AGENTS_CODEX_CONFIG_FEATURES_FAST_MODE:-false}}"
     local CODEX_PERSONALITY="${CODEX_PERSONALITY:-${_CFG_AGENTS_CODEX_CONFIG_PERSONALITY:-pragmatic}}"
@@ -1436,6 +1630,9 @@ run_codex() {
     if [[ -n "${CODEX_SERVICE_TIER}" ]]; then
         CODEX_COMMON_ARGS+=(--config "service_tier=\"${CODEX_SERVICE_TIER}\"")
     fi
+    if [[ -n "${CODEX_MODEL_CATALOG}" ]]; then
+        CODEX_COMMON_ARGS+=(--config "model_catalog_json=\"${CODEX_MODEL_CATALOG}\"")
+    fi
     for _agent_dir in "${_agent_config_dirs[@]}"; do
         [[ -d "${_agent_dir}" ]] || continue
         CODEX_AGENT_DIR_ARGS+=(--add-dir "${_agent_dir}")
@@ -1449,6 +1646,9 @@ run_codex() {
     echo "============================================================"
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
     echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER:-standard} | personality=${CODEX_PERSONALITY}"
+    if [[ -n "${CODEX_MODEL_CATALOG}" ]]; then
+        echo "  catalog: 注入自定义模型元数据（${MODEL_ID}）"
+    fi
     if [[ -n "${CODEX_PROVIDER_ENV_KEY}" && -z "${!CODEX_PROVIDER_ENV_KEY:-}" ]]; then
         echo "  auth: ${CODEX_PROVIDER_ENV_KEY} 未设置 —— 请先 export 该变量（缺失时请求会 401）"
     fi

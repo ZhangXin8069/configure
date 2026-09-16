@@ -69,6 +69,13 @@ assert_not_contains "$runtime" '$agentConfig.flags'
 assert_not_contains "$runtime" 'DEFAULT_MODEL_FLAG'
 assert_contains "$runtime" '$permissionMode'
 assert_contains "$runtime" 'agents.opencode.agent'
+assert_contains "$runtime" 'function Initialize-SecureBinary'
+assert_contains "$runtime" 'function Expand-HomePath'
+assert_contains "$runtime" 'agents.$SecureAgentName.secure_binary'
+assert_contains "$runtime" "Resolve-Executable 'CLAUDE_BIN' 'claude' 'claude'"
+assert_contains "$runtime" "Resolve-Executable 'OPENCODE_BIN' 'opencode' 'opencode'"
+assert_contains "$runtime" "Resolve-Executable 'CODEX_BIN' 'codex' 'codex'"
+assert_contains "$runtime" 'secure_binary 缺失，已从'
 assert_contains "$runtime" 'model_providers.$providerId.env_key'
 assert_contains "$runtime" 'model_providers.$providerId.wire_api'
 assert_contains "$runtime" 'features.fast_mode=$fastMode'
@@ -97,6 +104,12 @@ assert_contains "$runtime" 'check_for_update_on_startup'
 assert_contains "$runtime" 'DISABLE_AUTOUPDATER'
 assert_contains "$runtime" 'OPENCODE_AUTOUPDATE'
 assert_contains "$runtime" 'autoupdate'
+assert_contains "$runtime" 'function Get-CodexModelCatalogPath'
+assert_contains "$runtime" '& $Bin debug models'
+assert_contains "$runtime" 'model_catalog_json'
+assert_contains "$runtime" 'codex-models-$versionKey-$safeModel-$key.json'
+assert_contains "$runtime" 'CODEX_MODEL_CATALOG'
+assert_contains "$runtime" '$codexConfig.model_catalog'
 
 if command -v powershell.exe >/dev/null 2>&1; then
     ps_cmd=powershell.exe
