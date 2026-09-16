@@ -185,7 +185,7 @@ default_codex_output=$(CODEX_MODEL= CODEX_REASONING_EFFORT= CODEX_SERVICE_TIER= 
 default_codex_status=$?
 set -e
 (( default_codex_status == 0 )) || fail "Codex 默认配置 fake launcher 失败：$default_codex_output"
-assert_contains "$default_codex_output" 'Codex: gpt-6-astra | reasoning=max'
+assert_contains "$default_codex_output" 'Codex: gpt-6-astra（途径默认） | reasoning=max'
 assert_contains "$default_codex_output" 'provider: custom-gpt | tier=standard'
 assert_file_contains "$call_log" '--model gpt-6-astra'
 assert_file_contains "$call_log" 'features.fast_mode=false'
@@ -340,7 +340,8 @@ printf '%s' "$op_config_json" | python3 -c 'import json,sys; json.load(sys.stdin
 printf 'PASS: OpenCode --once、三途径 key 注入、custom-gpt 注册、数据目录隔离\n'
 
 set +e
-cl_output=$(run_launcher cl "$fake_claude" --once --file "$repo/first.txt" 2>&1)
+# 未显式选途径：途径取 agents.claude.provider=opencode-go，模型取 agent 层 agents.claude.model
+cl_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --once --file "$repo/first.txt" 2>&1)
 cl_status=$?
 set -e
 (( cl_status == 0 )) || fail "Claude fake launcher 失败：$cl_output"
@@ -348,25 +349,20 @@ cl_run_id=$(printf '%s\n' "$cl_output" | sed -n 's/^  run: //p' | head -1)
 cl_run="$data/runs/$cl_run_id"
 assert_file_contains "$cl_run/manifest.env" 'agent=claude'
 assert_file_contains "$cl_run/manifest.env" 'session_id=session-fake'
-assert_file_contains "$cl_run/manifest.env" 'model=deepseek-flash[1m]'
+assert_file_contains "$cl_run/manifest.env" 'model=glm-5.3-flash'
 assert_file_contains "$cl_run/events.jsonl" '"event":"session-bound"'
-assert_file_contains "$call_log" '--model deepseek-flash[1m]'
-assert_file_contains "$call_log" 'claude-env ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic ANTHROPIC_MODEL=deepseek-flash[1m]'
-assert_file_contains "$call_log" 'ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-flash[1m]'
-assert_file_contains "$call_log" 'ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-flash[1m]'
-assert_file_contains "$call_log" 'ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash '
-assert_file_contains "$call_log" 'ANTHROPIC_AUTH_TOKEN=test-deepseek-key'
-assert_file_contains "$call_log" 'CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash'
-assert_file_contains "$call_log" 'CLAUDE_CODE_EFFORT_LEVEL=max'
-assert_file_contains "$call_log" 'CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432'
+assert_file_contains "$call_log" '--model glm-5.3-flash'
+assert_file_contains "$call_log" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go ANTHROPIC_MODEL=glm-5.3-flash ANTHROPIC_DEFAULT_OPUS_MODEL=glm-5.3-flash ANTHROPIC_DEFAULT_SONNET_MODEL=glm-5.3-flash ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash ANTHROPIC_AUTH_TOKEN= ANTHROPIC_API_KEY=test-go-key CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash CLAUDE_CODE_EFFORT_LEVEL=max CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432'
 assert_file_not_contains "$call_log" 'ANTHROPIC_MODEL=external-model'
 assert_file_not_contains "$call_log" 'ANTHROPIC_BASE_URL=https://external.invalid/anthropic'
 assert_file_not_contains "$call_log" 'ANTHROPIC_AUTH_TOKEN=external-token'
+assert_file_not_contains "$call_log" 'CLAUDE_CODE_EFFORT_LEVEL=low'
+assert_file_not_contains "$call_log" 'CLAUDE_CODE_AUTO_COMPACT_WINDOW=123'
 assert_file_contains "$call_log" '--settings'
 settings_line=$(sed -n 's/^claude-settings: //p' "$call_log" | head -1)
-assert_contains "$settings_line" '"ANTHROPIC_BASE_URL":"https://api.deepseek.com/anthropic"'
-assert_contains "$settings_line" '"ANTHROPIC_AUTH_TOKEN":"test-deepseek-key"'
-assert_contains "$settings_line" '"ANTHROPIC_MODEL":"deepseek-flash[1m]"'
+assert_contains "$settings_line" '"ANTHROPIC_BASE_URL":"https://opencode.ai/zen/go"'
+assert_contains "$settings_line" '"ANTHROPIC_API_KEY":"test-go-key","ANTHROPIC_AUTH_TOKEN":""'
+assert_contains "$settings_line" '"ANTHROPIC_MODEL":"glm-5.3-flash"'
 assert_contains "$settings_line" '"CLAUDE_CODE_AUTO_COMPACT_WINDOW":"786432"'
 assert_contains "$settings_line" '"DISABLE_AUTOUPDATER":"1"'
 assert_contains "$settings_line" '"statusLine":{"type":"command","command":'
@@ -380,7 +376,7 @@ settings_path=$(sed -n 's/^claude-settings-path: //p' "$call_log" | head -1)
 assert_file_contains "$call_log" "### 全局 Agent 配置目录（按需读取） ###"
 assert_file_contains "$call_log" "### 全局技能（${HOME}/configure/skills） ###"
 assert_file_contains "$call_log" '### configure Agent Runtime Contract v1 ###'
-printf 'PASS: Claude --once、session 绑定、DeepSeek 明文定死环境注入（env+--settings）和持久事件\n'
+printf 'PASS: Claude --once、session 绑定、opencode-go 端点定死环境注入（env+--settings）和持久事件\n'
 
 tui_cl_before=$(wc -l < "$call_log")
 set +e
@@ -529,7 +525,7 @@ assert_contains "$custom_cl_new" 'ANTHROPIC_AUTH_TOKEN= '
 assert_contains "$custom_cl_new" 'ANTHROPIC_DEFAULT_OPUS_MODEL=custom-claude-model'
 assert_contains "$custom_cl_new" 'ANTHROPIC_DEFAULT_SONNET_MODEL=custom-claude-model'
 assert_contains "$custom_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=medium'
-printf 'PASS: 个性化 cl 切换途径为 opencode-go（x-api-key 认证），模型别名跟随解析链、强度取途径默认\n'
+printf 'PASS: 个性化 cl 切途径为 opencode-go（x-api-key 认证），模型别名跟随解析链、agent 层未配置时模型/强度回退途径默认\n'
 
 custom_op_before=$(wc -l < "$call_log")
 set +e
@@ -544,7 +540,7 @@ assert_contains "$custom_op_new" '"opencode-go":{"options":{"apiKey":"{env:OPENC
 case "$custom_op_new" in
     *DEEPSEEK_PAY_API_KEY*|*CUSTOM_GPT_API_KEY*) fail 'custom op 不应注入 key 缺失的途径' ;;
 esac
-printf 'PASS: 个性化 op 覆盖模型，旧键 variant 优先于途径默认强度，缺 key 途径不注入\n'
+printf 'PASS: 个性化 op 覆盖模型，未显式选途径时旧键 variant 优先于途径默认强度，缺 key 途径不注入\n'
 
 custom_co_before=$(wc -l < "$call_log")
 set +e
@@ -560,7 +556,7 @@ assert_contains "$custom_co_new" 'model_providers.deepseek-pay.base_url="https:/
 assert_contains "$custom_co_new" 'model_providers.deepseek-pay.env_key="DEEPSEEK_PAY_API_KEY"'
 assert_contains "$custom_co_new" 'model_providers.deepseek-pay.wire_api="responses"'
 assert_contains "$custom_co_new" 'model_reasoning_effort="high"'
-printf 'PASS: 个性化 co 切换途径为 deepseek-pay，旧键 reasoning 优先于途径默认强度\n'
+printf 'PASS: 个性化 co 切途径为 deepseek-pay，未显式选途径时旧键 reasoning 优先于途径默认强度\n'
 
 # ---- agent 层默认优先于供应商层（两层相互独立；命令行显式模型 > agent 默认 > 途径默认） ----
 alt2_dir="$test_root/altbin2"
@@ -624,7 +620,7 @@ assert_contains "$alt2_cl_new" 'ANTHROPIC_MODEL=agent-claude-model'
 assert_contains "$alt2_cl_new" 'ANTHROPIC_DEFAULT_OPUS_MODEL=agent-claude-model'
 assert_contains "$alt2_cl_new" 'ANTHROPIC_DEFAULT_SONNET_MODEL=agent-claude-model'
 assert_contains "$alt2_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=high'
-printf 'PASS: 个性化 cl 的 agent 默认模型/强度优先于途径默认值\n'
+printf 'PASS: 未显式选途径时 cl 取 agent 层默认模型/强度（优先于途径默认值）\n'
 
 alt2_op_before=$(wc -l < "$call_log")
 set +e
@@ -635,7 +631,7 @@ set -e
 (( alt2_op_status == 0 )) || fail "agent 层 op 默认失败：$alt2_op_output"
 alt2_op_new=$(tail -n +$((alt2_op_before + 1)) "$call_log")
 assert_contains "$alt2_op_new" '"model":"agent-op-model","variant":"xhigh"'
-printf 'PASS: 个性化 op 的 agent 默认模型/强度优先于途径默认值\n'
+printf 'PASS: 未显式选途径时 op 取 agent 层默认模型/强度（优先于途径默认值）\n'
 
 alt2_co_before=$(wc -l < "$call_log")
 set +e
@@ -647,7 +643,7 @@ alt2_co_new=$(tail -n +$((alt2_co_before + 1)) "$call_log")
 assert_contains "$alt2_co_new" '--model agent-codex-model'
 assert_contains "$alt2_co_new" 'model_provider="deepseek-pay"'
 assert_contains "$alt2_co_new" 'model_reasoning_effort="high"'
-printf 'PASS: 个性化 co 的 agent 默认模型/强度优先于途径默认值\n'
+printf 'PASS: 未显式选途径时 co 取 agent 层默认模型/强度（优先于途径默认值）\n'
 
 alt2_co_switch_before=$(wc -l < "$call_log")
 set +e
@@ -657,10 +653,11 @@ alt2_co_switch_status=$?
 set -e
 (( alt2_co_switch_status == 0 )) || fail "agent 层 co 显式切途径失败：$alt2_co_switch_output"
 alt2_co_switch_new=$(tail -n +$((alt2_co_switch_before + 1)) "$call_log")
-assert_contains "$alt2_co_switch_new" '--model agent-codex-model'
+# 显式选途径（快捷词 gpt）→ providers 层优先于 agent 层，强度同序
+assert_contains "$alt2_co_switch_new" '--model provider-gpt-codex-model'
 assert_contains "$alt2_co_switch_new" 'model_provider="custom-gpt"'
-assert_contains "$alt2_co_switch_new" 'model_reasoning_effort="high"'
-printf 'PASS: agent 层模型/强度与途径相互独立（显式切途径仍以 agent 默认为准）\n'
+assert_contains "$alt2_co_switch_new" 'model_reasoning_effort="medium"'
+printf 'PASS: 显式切途径（co gpt）时 providers 层默认模型/强度优先于 agent 层\n'
 
 alt2_co_override_before=$(wc -l < "$call_log")
 set +e
@@ -673,6 +670,73 @@ alt2_co_override_new=$(tail -n +$((alt2_co_override_before + 1)) "$call_log")
 assert_contains "$alt2_co_override_new" '--model cli-model'
 assert_contains "$alt2_co_override_new" 'model_reasoning_effort="ultra"'
 printf 'PASS: 命令行模型/强度覆盖优先于 agent 层默认\n'
+
+# ---- 显式选途径的两个入口一视同仁（快捷词 / *_PROVIDER 环境变量）：providers 层优先 ----
+alt2_cl_env_before=$(wc -l < "$call_log")
+set +e
+alt2_cl_env_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" CLAUDE_PROVIDER=pay DEEPSEEK_PAY_API_KEY=test-deepseek-key \
+    run_launcher cl "$fake_claude" --once 2>&1)
+alt2_cl_env_status=$?
+set -e
+(( alt2_cl_env_status == 0 )) || fail "环境变量选途径 cl 失败：$alt2_cl_env_output"
+alt2_cl_env_new=$(tail -n +$((alt2_cl_env_before + 1)) "$call_log")
+# CLAUDE_PROVIDER=pay 经别名规整为 deepseek-pay，且与 cl pay 等价地视为显式选途径
+assert_contains "$alt2_cl_env_new" '--model provider-claude-model'
+assert_contains "$alt2_cl_env_new" 'ANTHROPIC_MODEL=provider-claude-model'
+assert_contains "$alt2_cl_env_new" 'ANTHROPIC_BASE_URL=https://api.deepseek.com/anthropic'
+assert_contains "$alt2_cl_env_new" 'CLAUDE_CODE_EFFORT_LEVEL=low'
+printf 'PASS: CLAUDE_PROVIDER=pay 等价于 cl pay（别名规整 + providers 层优先）\n'
+
+alt2_op_env_before=$(wc -l < "$call_log")
+set +e
+alt2_op_env_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" OPENCODE_PROVIDER=pay DEEPSEEK_PAY_API_KEY=test-deepseek-key \
+    run_launcher op "$fake_opencode" --once 2>&1)
+alt2_op_env_status=$?
+set -e
+(( alt2_op_env_status == 0 )) || fail "环境变量选途径 op 失败：$alt2_op_env_output"
+alt2_op_env_new=$(tail -n +$((alt2_op_env_before + 1)) "$call_log")
+assert_contains "$alt2_op_env_new" '"model":"deepseek/provider-op-model","variant":"low"'
+printf 'PASS: OPENCODE_PROVIDER=pay 显式选途径时取 providers 层模型与强度\n'
+
+# ---- 显式选途径但该途径未配置此 agent：回退 agent 层（custom-gpt 只配了 codex） ----
+alt2_op_gpt_before=$(wc -l < "$call_log")
+set +e
+alt2_op_gpt_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" CUSTOM_GPT_API_KEY=test-custom-key \
+    run_launcher op "$fake_opencode" gpt --once 2>&1)
+alt2_op_gpt_status=$?
+set -e
+(( alt2_op_gpt_status == 0 )) || fail "显式途径缺该 agent 默认值、回退 agent 层失败：$alt2_op_gpt_output"
+alt2_op_gpt_new=$(tail -n +$((alt2_op_gpt_before + 1)) "$call_log")
+assert_contains "$alt2_op_gpt_new" '"model":"agent-op-model","variant":"xhigh"'
+printf 'PASS: 显式途径未给该 agent 配 default_models/default_strengths 时回退 agent 层\n'
+
+# ---- 两层皆空：明确报错退出 64 ----
+empty_dir="$test_root/altbin3"
+mkdir -p "$empty_dir"
+ln -sf "$script_dir/agent-runtime.sh" "$empty_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-prompt.txt" "$empty_dir/agent-prompt.txt"
+cp -- "$script_dir/agent-config.json" "$empty_dir/agent-config.json"
+cat > "$empty_dir/agent-custom.json" <<'EOF'
+{
+  "providers": {
+    "deepseek-pay": {
+      "default_models": { "opencode": "deepseek/provider-op-model" },
+      "default_strengths": { "opencode": "low" }
+    }
+  },
+  "agents": {
+    "claude": { "provider": "deepseek-pay", "model": "", "strength": "" }
+  }
+}
+EOF
+set +e
+empty_cl_output=$(AGENT_TEST_SCRIPT_DIR="$empty_dir" DEEPSEEK_PAY_API_KEY=test-deepseek-key \
+    run_launcher cl "$fake_claude" pay --once 2>&1)
+empty_cl_status=$?
+set -e
+(( empty_cl_status == 64 )) || fail "两层皆空应返回 64，实际 ${empty_cl_status}：$empty_cl_output"
+assert_contains "$empty_cl_output" "途径 'deepseek-pay' 未定义 claude 默认模型"
+printf 'PASS: providers 层与 agent 层皆未配置模型时单一报错退出 64\n'
 
 # ---- 供应商快捷词：cl go / op gpt / op pay / co pay ----
 switch_cl_before=$(wc -l < "$call_log")
@@ -861,14 +925,14 @@ set +e
 legacy_output=$(cd "$repo/nested" && env -u DEEPSEEK_PAY_API_KEY -u CUSTOM_GPT_API_KEY \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
     CLAUDE_BIN="$fake_claude" DEEPSEEK_API_KEY=legacy-key-xyz \
-    "$test_root/cl" --once 2>&1)
+    "$test_root/cl" pay --once 2>&1)
 legacy_status=$?
 set -e
 (( legacy_status == 0 )) || fail "旧 key 回退 cl 失败：$legacy_output"
 assert_contains "$legacy_output" '回退使用旧变量 DEEPSEEK_API_KEY'
 legacy_new=$(tail -n +$((legacy_before + 1)) "$call_log")
 assert_contains "$legacy_new" 'ANTHROPIC_AUTH_TOKEN=legacy-key-xyz'
-printf 'PASS: 旧 key 环境变量名自动回退\n'
+printf 'PASS: 旧 key 环境变量名自动回退（cl pay 显式走 deepseek-pay）\n'
 
 # ---- cl 快捷词切到无 Anthropic 端点的途径：单一明确报错 ----
 set +e
@@ -959,7 +1023,7 @@ set -e
 assert_contains "$cos_secure_output" '完整复制'
 [[ -f "$secure_cos" && -x "$secure_cos" && ! -L "$secure_cos" ]] || fail "cos secure_binary 未生成或不是普通文件：$secure_cos"
 cmp -s "$secure_src_dir/codex" "$secure_cos" || fail 'cos secure_binary 复制内容与源不一致'
-cos_secure_exec=$(tail -n +$((cos_secure_before + 1)) "$call_log" | head -1)
+cos_secure_exec=$(sed -n "$((cos_secure_before + 1))p" "$call_log")
 assert_contains "$cos_secure_exec" "$secure_cos"
 
 set +e
@@ -989,7 +1053,7 @@ set -e
 assert_contains "$cls_secure_output" '完整复制'
 [[ -f "$secure_cls" && -x "$secure_cls" && ! -L "$secure_cls" ]] || fail "cls secure_binary 未生成或不是普通文件：$secure_cls"
 cmp -s "$secure_src_dir/claude" "$secure_cls" || fail 'cls secure_binary 复制内容与源不一致'
-cls_secure_exec=$(tail -n +$((cls_secure_before + 1)) "$call_log" | head -1)
+cls_secure_exec=$(sed -n "$((cls_secure_before + 1))p" "$call_log")
 assert_contains "$cls_secure_exec" "$secure_cls"
 
 ln -sf "$launcher" "$test_root/ops"
@@ -1006,7 +1070,7 @@ set -e
 assert_contains "$ops_secure_output" '完整复制'
 [[ -f "$secure_ops" && -x "$secure_ops" && ! -L "$secure_ops" ]] || fail "ops secure_binary 未生成或不是普通文件：$secure_ops"
 cmp -s "$secure_src_dir/opencode" "$secure_ops" || fail 'ops secure_binary 复制内容与源不一致'
-ops_secure_exec=$(tail -n +$((ops_secure_before + 1)) "$call_log" | head -1)
+ops_secure_exec=$(sed -n "$((ops_secure_before + 1))p" "$call_log")
 assert_contains "$ops_secure_exec" "$secure_ops"
 printf 'PASS: secure 变体（cls/ops/cos）缺失时从 PATH 完整复制 secure_binary\n'
 

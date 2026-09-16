@@ -62,6 +62,7 @@ $script:State = 'created'
 $script:LastExit = ''
 $script:LastReason = ''
 $script:Model = ''
+$script:ModelName = ''
 $script:ModelExplicit = $false
 $script:Reasoning = ''
 $script:ReasoningExplicit = $false
@@ -82,7 +83,7 @@ $script:StopFileArg = ''
 $script:Drive = $false
 $script:AgentConfig = $null
 $script:ProviderOverride = ''
-$script:ProviderCli = $false
+$script:ProviderExplicit = $false
 
 function Write-Info {
     param([string]$Message)
@@ -1056,7 +1057,7 @@ function Parse-Interval {
 function Show-Usage {
     Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
     Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 cl.bat go）。'
-    Write-Host '模型：默认取 agents.<agent>.model，未配置则取当前途径的 providers.<途径>.default_models.<agent>；--model/{CLAUDE,OPENCODE,CODEX}_MODEL 直接覆盖。'
+    Write-Host '模型：显式指定途径时（快捷词 pay|go|gpt 或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
@@ -1482,7 +1483,7 @@ function Run-Claude {
         return $script:FailureCode
     }
     Write-Host '============================================================'
-    Write-Host "  Claude Code: $($script:Model) | provider=$providerId | permission-mode $permissionMode"
+    Write-Host "  Claude Code: $($script:ModelName) | provider=$providerId | permission-mode $permissionMode"
     $claudeProvider = $script:AgentConfig.providers.$providerId
     $claudeKeyName = ''
     if ($null -ne $claudeProvider) { $claudeKeyName = [string]$claudeProvider.env_key }
@@ -1632,7 +1633,7 @@ function Run-OpenCode {
     }
     $env:OPENCODE_CONFIG_CONTENT = ($config | ConvertTo-Json -Compress -Depth 8)
     Write-Host '============================================================'
-    Write-Host "  OpenCode: $agentName | auto | $($script:Model) ($($script:Variant))"
+    Write-Host "  OpenCode: $agentName | auto | $($script:ModelName) ($($script:Variant))"
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -1979,7 +1980,7 @@ function Run-Codex {
         }
     }
     Write-Host '============================================================'
-    Write-Host "  Codex: $($script:Model) | reasoning=$($script:Reasoning)"
+    Write-Host "  Codex: $($script:ModelName) | reasoning=$($script:Reasoning)"
     $displayTier = if ([string]::IsNullOrWhiteSpace($serviceTier)) { 'standard' } else { $serviceTier }
     Write-Host "  provider: $providerId | tier=$displayTier | personality=$personality"
     if (-not [string]::IsNullOrWhiteSpace($catalogPath)) {
@@ -2107,8 +2108,12 @@ function Parse-Arguments {
         default { 'CODEX_PROVIDER_ID' }
     }
     $providerOverride = [Environment]::GetEnvironmentVariable($providerVariable)
-    if ([string]::IsNullOrWhiteSpace($providerOverride)) { $providerOverride = '' }
-    $providerCli = $false
+    # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go
+    if (-not [string]::IsNullOrWhiteSpace($providerOverride)) {
+        $providerOverride = Resolve-ProviderAlias $providerOverride
+    } else {
+        $providerOverride = ''
+    }
     $variantOverride = [Environment]::GetEnvironmentVariable('OPENCODE_VARIANT')
     $reasoningOverride = [Environment]::GetEnvironmentVariable('CODEX_REASONING_EFFORT')
     $sandbox = [Environment]::GetEnvironmentVariable('CODEX_SANDBOX')
@@ -2131,7 +2136,6 @@ function Parse-Arguments {
         $option = [string]$cliArgs[$i]
         if ($option -in @('pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt')) {
             $providerOverride = Resolve-ProviderAlias $option
-            $providerCli = $true
             continue
         }
         switch ($option.ToLowerInvariant()) {
@@ -2257,7 +2261,10 @@ function Parse-Arguments {
     $script:StopFileArg = $stopFileArg
     $script:ResumeRunId = $resumeRunId
     $script:ProviderOverride = $providerOverride
-    $script:ProviderCli = $providerCli
+    # 是否由用户显式指定途径（命令行快捷词或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量，
+    # 两者一视同仁）：决定两层默认谁优先——显式时 providers 层优先，否则 agent 层优先。
+    $providerExplicit = -not [string]::IsNullOrWhiteSpace($providerOverride)
+    $script:ProviderExplicit = $providerExplicit
     $script:Mode = if ($resumeRunId) { 'resume' } elseif ($drive) { 'drive' } else { 'tui' }
     $script:Role = [Environment]::GetEnvironmentVariable('AGENT_ROLE')
     $script:Tier = [Environment]::GetEnvironmentVariable('AGENT_TIER')
@@ -2268,7 +2275,9 @@ function Parse-Arguments {
         $script:Posture = if ($script:Agent -eq 'codex') { 'frontier-orchestrator' } else { 'deep-worker' }
     }
 
-    # 途径来自命令行快捷词（pay/go/gpt）或个性化配置 agents.<agent>.provider
+    # 途径来自命令行快捷词（pay/go/gpt）、{CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量
+    #（env 值已在 2109-2115 过别名规整），或个性化配置 agents.<agent>.provider。
+    # 三者中前两者属「显式选途径」，决定两层默认谁优先。
     $providerForModel = if (-not [string]::IsNullOrWhiteSpace($providerOverride)) {
         $providerOverride
     } else {
@@ -2285,40 +2294,55 @@ function Parse-Arguments {
             return $false
         }
     }
-    # 模型（两层默认相互独立，agent 层优先）：--model/{AGENT}_MODEL > agents.<agent>.model > providers.<途径>.default_models.<agent>
+    # 模型（两层默认：显式选途径时 providers 层优先，否则 agent 层优先；高优先层缺值回退另一层）：
+    #   --model/{AGENT}_MODEL > 〔显式途径 ? providers.<途径>.default_models.<agent> : agents.<agent>.model〕> 另一层 > 报错
+    $agentModel = [string]$agentConfig.model
+    $providerModel = Get-ProviderDefaultModel $providerForModel $agentKey
+    $modelLabel = '（途径默认）'
     if (-not [string]::IsNullOrWhiteSpace($modelOverride)) {
         $script:Model = $modelOverride
-    } elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.model)) {
-        $script:Model = [string]$agentConfig.model
+        $modelLabel = '（override）'
+    } elseif ($providerExplicit -and -not [string]::IsNullOrWhiteSpace($providerModel)) {
+        $script:Model = $providerModel
+    } elseif (-not [string]::IsNullOrWhiteSpace($agentModel)) {
+        $script:Model = $agentModel
+        $modelLabel = '（agent 默认）'
     } else {
-        $providerDefault = Get-ProviderDefaultModel $providerForModel $agentKey
-        if ([string]::IsNullOrWhiteSpace($providerDefault)) {
-            Fail-Parse "###$($script:LauncherName): ERROR: 途径 '$providerForModel' 未定义 $agentKey 默认模型（见 agent-custom.json agents.$agentKey.model 或 providers.$providerForModel.default_models.$agentKey）###"
-            return $false
-        }
-        $script:Model = $providerDefault
+        $script:Model = $providerModel
     }
-    # 强度（同两层优先级）：覆盖 > agents.<agent>.strength > 旧键 variant/reasoning > providers.<途径>.default_strengths.<agent> > max
+    if ([string]::IsNullOrWhiteSpace($script:Model)) {
+        Fail-Parse "###$($script:LauncherName): ERROR: 途径 '$providerForModel' 未定义 $agentKey 默认模型（见 agent-custom.json agents.$agentKey.model 或 providers.$providerForModel.default_models.$agentKey）###"
+        return $false
+    }
+    $script:ModelName = "$($script:Model)$modelLabel"
+    # 强度（与模型同两层优先级）：覆盖 > 〔显式途径 ? providers.<途径>.default_strengths.<agent> : agent 层〕> 另一层 > max
+    #   agent 层内部顺序不变：agents.<agent>.strength > 旧键 variant/reasoning
+    #   注意：providerStrength 不预先兜底为 max，否则显式途径时 agent 层强度永远无法回退
     $agentStrength = [string]$agentConfig.strength
     $providerStrength = Get-ProviderDefaultStrength $providerForModel $agentKey
-    if ([string]::IsNullOrWhiteSpace($providerStrength)) { $providerStrength = 'max' }
+    if ($script:Agent -eq 'codex') {
+        $agentLegacyStrength = [string]$agentConfig.reasoning
+    } elseif ($script:Agent -eq 'opencode') {
+        $agentLegacyStrength = [string]$agentConfig.variant
+    } else {
+        $agentLegacyStrength = [string]$agentConfig.env.CLAUDE_CODE_EFFORT_LEVEL
+    }
+    if ([string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength = $agentLegacyStrength }
+    $pickedStrength = if ($providerExplicit -and -not [string]::IsNullOrWhiteSpace($providerStrength)) {
+        $providerStrength
+    } elseif (-not [string]::IsNullOrWhiteSpace($agentStrength)) {
+        $agentStrength
+    } else {
+        $providerStrength
+    }
+    if ([string]::IsNullOrWhiteSpace($pickedStrength)) { $pickedStrength = 'max' }
     $script:Reasoning = if ($script:Agent -eq 'codex') {
-        if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) { $reasoningOverride }
-        elseif (-not [string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength }
-        elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.reasoning)) { [string]$agentConfig.reasoning }
-        else { $providerStrength }
+        if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) { $reasoningOverride } else { $pickedStrength }
     } else { '' }
     $script:Variant = if ($script:Agent -eq 'opencode') {
-        if (-not [string]::IsNullOrWhiteSpace($variantOverride)) { $variantOverride }
-        elseif (-not [string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength }
-        elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.variant)) { [string]$agentConfig.variant }
-        else { $providerStrength }
+        if (-not [string]::IsNullOrWhiteSpace($variantOverride)) { $variantOverride } else { $pickedStrength }
     } else { '' }
-    $script:ClaudeStrength = if ($script:Agent -eq 'claude') {
-        if (-not [string]::IsNullOrWhiteSpace($agentStrength)) { $agentStrength }
-        elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.env.CLAUDE_CODE_EFFORT_LEVEL)) { [string]$agentConfig.env.CLAUDE_CODE_EFFORT_LEVEL }
-        else { $providerStrength }
-    } else { '' }
+    $script:ClaudeStrength = if ($script:Agent -eq 'claude') { $pickedStrength } else { '' }
     if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) {
         $script:ReasoningExplicit = $true
     }
