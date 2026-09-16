@@ -33,6 +33,8 @@ assert_file "$bat"
 assert_file "$runtime"
 assert_file "$script_dir/agent-statusline.ps1"
 assert_contains "$script_dir/agent-statusline.ps1" 'context_window.used_percentage'
+assert_contains "$script_dir/agent-statusline.ps1" 'context_window.context_window_size'
+assert_contains "$script_dir/agent-statusline.ps1" "'context-window-size'"
 assert_contains "$script_dir/agent-statusline.ps1" 'rate_limits.seven_day'
 assert_contains "$script_dir/agent-statusline.ps1" 'fast_mode'
 
