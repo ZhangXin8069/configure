@@ -493,8 +493,8 @@ run_claude() {
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
     # 用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
-    #                       未指定时取 agent 自身默认模型（agents.claude.model），再回退当前途径的
-    #                       默认模型（providers.<途径>.default_models.claude）。
+    #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
+    #                       providers.<途径>.default_models.claude 与 agents.claude.model 互为一层，高优先层缺值回退另一层。
     #   -file/--file PATH : 驱动模式——prompt 回合完成后以文件内容为第一条指令，
     #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
@@ -519,7 +519,7 @@ run_claude() {
             --help)
                 echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time DUR]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} go）。"
-                echo "模型: 默认取 agents.claude.model，未配置则取当前途径的 providers.<途径>.default_models.claude；--model/CLAUDE_MODEL 直接覆盖。"
+                echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
                 exit 0;;
             -file|--file)
@@ -564,12 +564,17 @@ run_claude() {
 
     # ---- 途径设置：Anthropic 兼容端点与 key 均取自 agent-config.json/agent-custom.json ----
     # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
-    # 途径来自命令行快捷词（pay/go/gpt）或个性化配置 agents.claude.provider。
-    local _cl_provider="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}"
+    # 途径来自命令行快捷词（pay/go/gpt）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
+    # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go。
+    local _cl_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}")"
     if [[ -z "${_cl_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.claude.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
         exit 64
     fi
+    # 是否由用户显式指定途径（命令行快捷词或 CLAUDE_PROVIDER 环境变量，两者一视同仁）：
+    # 决定两层默认谁优先——显式时 providers 层优先，否则 agent 层优先。
+    local PROVIDER_EXPLICIT=0
+    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
     local _CL_PERMISSION_MODE="${_CFG_AGENTS_CLAUDE_PERMISSION_MODE:-auto}"
     local _cl_pkey _cl_var _cl_key_name _cl_key=""
     _cl_pkey="$(_cfg_provider_key "${_cl_provider}")"
@@ -583,30 +588,47 @@ run_claude() {
     _cl_key_name="${!_cl_var:-}"
     export ANTHROPIC_BASE_URL
 
-    # 模型选择（两层默认相互独立，agent 层优先）：
+    # 模型选择（两层默认：显式选途径时 providers 层优先，否则 agent 层优先；高优先层缺值回退另一层）：
     #   1) --model/CLAUDE_MODEL 显式覆盖；
-    #   2) agents.claude.model —— agent 自身默认模型，不随途径切换变化；
-    #   3) providers.<途径>.default_models.claude —— 当前途径下 claude 的默认模型。
-    # 未配置 2)/3) 时启动报错，避免模型与端点脱钩。
+    #   2) 显式途径时取 providers.<途径>.default_models.claude，缺省回退 agents.claude.model；
+    #   3) 途径来自 agents.claude.provider 时取 agents.claude.model，缺省回退途径默认模型。
+    # 两层皆空时启动报错，避免模型与端点脱钩。
+    local _cl_agent_model="${_CFG_AGENTS_CLAUDE_MODEL:-}"
+    local _cl_provider_model
+    _cl_provider_model="$(_cfg_provider_default_model "${_cl_provider}" claude)"
+    local _cl_model_label="（途径默认）"
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
-        MODEL_NAME="${MODEL_OVERRIDE}（override）"
-    elif [[ -n "${_CFG_AGENTS_CLAUDE_MODEL:-}" ]]; then
-        MODEL_ID="${_CFG_AGENTS_CLAUDE_MODEL}"
-        MODEL_NAME="${MODEL_ID}（agent 默认）"
+        _cl_model_label="（override）"
+    elif (( PROVIDER_EXPLICIT )) && [[ -n "${_cl_provider_model}" ]]; then
+        MODEL_ID="${_cl_provider_model}"
+    elif [[ -n "${_cl_agent_model}" ]]; then
+        MODEL_ID="${_cl_agent_model}"
+        _cl_model_label="（agent 默认）"
     else
-        MODEL_ID="$(_cfg_provider_default_model "${_cl_provider}" claude)"
-        MODEL_NAME="${MODEL_ID}"
-        if [[ -z "${MODEL_ID}" ]]; then
-            echo "###${_NAME}: ERROR: 途径 '${_cl_provider}' 未定义 claude 默认模型（见 agent-custom.json agents.claude.model 或 providers.${_cl_provider}.default_models.claude）###" >&2
-            exit 64
-        fi
+        MODEL_ID="${_cl_provider_model}"
     fi
-    # 强度选择（同两层优先级）：agents.claude.strength > 旧键 agents.claude.env.CLAUDE_CODE_EFFORT_LEVEL
-    #   > providers.<途径>.default_strengths.claude > max（内置兜底）
-    local CLAUDE_STRENGTH="${_CFG_AGENTS_CLAUDE_STRENGTH:-}"
-    [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="${_CFG_AGENTS_CLAUDE_ENV_CLAUDE_CODE_EFFORT_LEVEL:-}"
-    [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="$(_cfg_provider_default_strength "${_cl_provider}" claude)"
+    if [[ -z "${MODEL_ID}" ]]; then
+        echo "###${_NAME}: ERROR: 途径 '${_cl_provider}' 未定义 claude 默认模型（见 agent-custom.json agents.claude.model 或 providers.${_cl_provider}.default_models.claude）###" >&2
+        exit 64
+    fi
+    MODEL_NAME="${MODEL_ID}${_cl_model_label}"
+    # 强度选择（与模型同两层优先级；cl 无强度覆盖入口，故无 override 槽）：
+    #   显式途径时 providers.<途径>.default_strengths.claude 优先，否则 agent 层优先；
+    #   agent 层内部顺序不变：agents.claude.strength > 旧键 agents.claude.env.CLAUDE_CODE_EFFORT_LEVEL；
+    #   高优先层缺值回退另一层，皆空则 max（内置兜底）。
+    local CLAUDE_STRENGTH=""
+    local _cl_agent_strength="${_CFG_AGENTS_CLAUDE_STRENGTH:-}"
+    [[ -n "${_cl_agent_strength}" ]] || _cl_agent_strength="${_CFG_AGENTS_CLAUDE_ENV_CLAUDE_CODE_EFFORT_LEVEL:-}"
+    local _cl_provider_strength
+    _cl_provider_strength="$(_cfg_provider_default_strength "${_cl_provider}" claude)"
+    if (( PROVIDER_EXPLICIT )) && [[ -n "${_cl_provider_strength}" ]]; then
+        CLAUDE_STRENGTH="${_cl_provider_strength}"
+    elif [[ -n "${_cl_agent_strength}" ]]; then
+        CLAUDE_STRENGTH="${_cl_agent_strength}"
+    else
+        CLAUDE_STRENGTH="${_cl_provider_strength}"
+    fi
     [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="max"
     # 状态栏（与 co 同款的通用 statusline 配置，经 agent-statusline.sh 渲染）
     export AGENT_STATUSLINE_SEGMENTS="${_CFG_STATUSLINE_SEGMENTS:-[]}"
@@ -911,8 +933,8 @@ run_opencode() {
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
     # 用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
-    #                       未指定时取 agent 自身默认模型（agents.opencode.model），再回退当前途径的
-    #                       默认模型（providers.<途径>.default_models.opencode）。
+    #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
+    #                       providers.<途径>.default_models.opencode 与 agents.opencode.model 互为一层，高优先层缺值回退另一层。
     #   --variant LEVEL   : 直接指定 build agent 的 variant（max/xhigh/high/low 等）。
     #   -file/--file PATH : 驱动模式——prompt 回合完成后以文件内容为第一条指令，
     #                       之后每 --time 间隔向同一会话发送「继续」，直至 Ctrl+C 或连续 3 次失败
@@ -920,7 +942,7 @@ run_opencode() {
     # 不给驱动选项时保持原有 TUI 交互模式不变
     local MODEL_OVERRIDE="${OPENCODE_MODEL:-}"
     local VARIANT_OVERRIDE="${OPENCODE_VARIANT:-}"
-    local PROVIDER_OVERRIDE="${OPENCODE_PROVIDER:-}" PROVIDER_CLI=0
+    local PROVIDER_OVERRIDE="${OPENCODE_PROVIDER:-}"
     local MODEL_ID MODEL_NAME VARIANT="" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
     local MODEL_EXPLICIT=0 VARIANT_EXPLICIT=0
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
@@ -933,7 +955,7 @@ run_opencode() {
     while (( $# )); do
         case "$1" in
             pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
-                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; PROVIDER_CLI=1; shift;;
+                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
@@ -943,7 +965,7 @@ run_opencode() {
             --help)
                 echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} gpt）。"
-                echo "模型: 默认取 agents.opencode.model，未配置则取当前途径的 providers.<途径>.default_models.opencode；--model/OPENCODE_MODEL 直接覆盖。"
+                echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
                 exit 0;;
             -file|--file)
@@ -989,45 +1011,64 @@ run_opencode() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择（两层默认相互独立，agent 层优先）：
+    # 模型选择（两层默认：显式选途径时 providers 层优先，否则 agent 层优先；高优先层缺值回退另一层）：
     #   1) --model/OPENCODE_MODEL 显式覆盖；
-    #   2) agents.opencode.model —— agent 自身默认模型，不随途径切换变化；
-    #   3) providers.<途径>.default_models.opencode —— 当前途径下 opencode 的默认模型。
-    # 强度（variant）同理：agents.opencode.strength > 旧键 agents.opencode.variant
-    #   > providers.<途径>.default_strengths.opencode > max（内置兜底）。
-    local _op_provider="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}"
+    #   2) 显式途径时取 providers.<途径>.default_models.opencode，缺省回退 agents.opencode.model；
+    #   3) 途径来自 agents.opencode.provider 时取 agents.opencode.model，缺省回退途径默认模型。
+    # 两层皆空时启动报错。
+    local _op_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}")"
     if [[ -z "${_op_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.opencode.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
+    # 是否由用户显式指定途径（命令行快捷词或 OPENCODE_PROVIDER 环境变量，两者一视同仁）
+    local PROVIDER_EXPLICIT=0
+    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
+    local _op_agent_model="${_CFG_AGENTS_OPENCODE_MODEL:-}"
+    local _op_provider_model
+    _op_provider_model="$(_cfg_provider_default_model "${_op_provider}" opencode)"
+    local _op_model_label="（途径默认）"
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
-        MODEL_NAME="${MODEL_OVERRIDE}（override）"
-    elif [[ -n "${_CFG_AGENTS_OPENCODE_MODEL:-}" ]]; then
-        MODEL_ID="${_CFG_AGENTS_OPENCODE_MODEL}"
-        MODEL_NAME="${MODEL_ID}（agent 默认）"
+        _op_model_label="（override）"
+    elif (( PROVIDER_EXPLICIT )) && [[ -n "${_op_provider_model}" ]]; then
+        MODEL_ID="${_op_provider_model}"
+    elif [[ -n "${_op_agent_model}" ]]; then
+        MODEL_ID="${_op_agent_model}"
+        _op_model_label="（agent 默认）"
     else
-        MODEL_ID="$(_cfg_provider_default_model "${_op_provider}" opencode)"
-        MODEL_NAME="${MODEL_ID}"
-        if [[ -z "${MODEL_ID}" ]]; then
-            echo "###${_NAME}: ERROR: 途径 '${_op_provider}' 未定义 opencode 默认模型（见 agent-custom.json agents.opencode.model 或 providers.${_op_provider}.default_models.opencode）###" >&2
-            exit 64
-        fi
+        MODEL_ID="${_op_provider_model}"
     fi
-    VARIANT="${_CFG_AGENTS_OPENCODE_STRENGTH:-}"
-    [[ -n "${VARIANT}" ]] || VARIANT="${_CFG_AGENTS_OPENCODE_VARIANT:-}"
-    [[ -n "${VARIANT}" ]] || VARIANT="$(_cfg_provider_default_strength "${_op_provider}" opencode)"
+    if [[ -z "${MODEL_ID}" ]]; then
+        echo "###${_NAME}: ERROR: 途径 '${_op_provider}' 未定义 opencode 默认模型（见 agent-custom.json agents.opencode.model 或 providers.${_op_provider}.default_models.opencode）###" >&2
+        exit 64
+    fi
+    MODEL_NAME="${MODEL_ID}${_op_model_label}"
+    # 强度（variant，与模型同两层优先级）：override 仍在链尾最后赋值取胜
+    #   agent 层内部顺序不变：agents.opencode.strength > 旧键 agents.opencode.variant
+    local _op_agent_variant="${_CFG_AGENTS_OPENCODE_STRENGTH:-}"
+    [[ -n "${_op_agent_variant}" ]] || _op_agent_variant="${_CFG_AGENTS_OPENCODE_VARIANT:-}"
+    local _op_provider_variant
+    _op_provider_variant="$(_cfg_provider_default_strength "${_op_provider}" opencode)"
+    if (( PROVIDER_EXPLICIT )) && [[ -n "${_op_provider_variant}" ]]; then
+        VARIANT="${_op_provider_variant}"
+    elif [[ -n "${_op_agent_variant}" ]]; then
+        VARIANT="${_op_agent_variant}"
+    else
+        VARIANT="${_op_provider_variant}"
+    fi
     [[ -n "${VARIANT}" ]] || VARIANT="max"
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT="${VARIANT_OVERRIDE}"
 
-    # 供应商快捷词：提示该途径 key 未设置（op 仅注册 key 已设置的途径）
-    if (( PROVIDER_CLI )); then
+    # 显式指定途径时提示该途径 key 未设置（op 仅注册 key 已设置的途径；显式途径下模型取自 providers 层，
+    # 该途径若因缺 key 未注册，模型就落空了）——命令行快捷词与环境变量一视同仁
+    if (( PROVIDER_EXPLICIT )); then
         local _op_pkey _op_key_var _op_key_name
-        _op_pkey="$(_cfg_provider_key "${PROVIDER_OVERRIDE}")"
+        _op_pkey="$(_cfg_provider_key "${_op_provider}")"
         _op_key_var="_CFG_PROVIDERS_${_op_pkey}_ENV_KEY"
         _op_key_name="${!_op_key_var:-}"
         if [[ -n "${_op_key_name}" && -z "${!_op_key_name:-}" ]]; then
-            echo "###${_NAME}: warning: 途径 '${PROVIDER_OVERRIDE}' 的 key 环境变量 ${_op_key_name} 未设置，opencode 将无法请求该途径###" >&2
+            echo "###${_NAME}: warning: 途径 '${_op_provider}' 的 key 环境变量 ${_op_key_name} 未设置，opencode 将无法请求该途径###" >&2
         fi
     fi
 
@@ -1478,10 +1519,10 @@ run_codex() {
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
-    #                       未指定时取 agent 自身默认模型（agents.codex.model），再回退当前途径的
-    #                       默认模型（providers.<途径>.default_models.codex）。
+    #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
+    #                       providers.<途径>.default_models.codex 与 agents.codex.model 互为一层，高优先层缺值回退另一层。
     #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra），
-    #                              默认取 agents.codex.strength，再回退途径默认强度。
+    #                              同两层优先级：途径默认强度与 agents.codex.strength 互为一层，缺值回退另一层。
     local MODEL_OVERRIDE="${CODEX_MODEL:-}"
     local REASONING_OVERRIDE="${CODEX_REASONING_EFFORT:-}"
     local PROVIDER_OVERRIDE="${CODEX_PROVIDER_ID:-}"
@@ -1533,7 +1574,7 @@ run_codex() {
                 echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} pay）。"
-                echo "模型: 默认取 agents.codex.model，未配置则取当前途径的 providers.<途径>.default_models.codex；--model/CODEX_MODEL 直接覆盖。"
+                echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
@@ -1559,34 +1600,52 @@ run_codex() {
     fi
     unset _max_turns_input _max_runtime_input
 
-    # 模型选择（两层默认相互独立，agent 层优先）：
+    # 模型选择（两层默认：显式选途径时 providers 层优先，否则 agent 层优先；高优先层缺值回退另一层）：
     #   1) --model/CODEX_MODEL 显式覆盖；
-    #   2) agents.codex.model —— agent 自身默认模型，不随途径切换变化；
-    #   3) providers.<途径>.default_models.codex —— 当前途径下 codex 的默认模型。
-    # 强度（reasoning）：agents.codex.strength > 旧键 agents.codex.reasoning
-    #   > providers.<途径>.default_strengths.codex > max（内置兜底）。
-    local _cx_provider="${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}"
+    #   2) 显式途径时取 providers.<途径>.default_models.codex，缺省回退 agents.codex.model；
+    #   3) 途径来自 agents.codex.provider 时取 agents.codex.model，缺省回退途径默认模型。
+    # 两层皆空时启动报错。
+    local _cx_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}")"
     if [[ -z "${_cx_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.codex.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
+    # 是否由用户显式指定途径（命令行快捷词或 CODEX_PROVIDER_ID 环境变量，两者一视同仁）
+    local PROVIDER_EXPLICIT=0
+    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
+    local _cx_agent_model="${_CFG_AGENTS_CODEX_MODEL:-}"
+    local _cx_provider_model
+    _cx_provider_model="$(_cfg_provider_default_model "${_cx_provider}" codex)"
+    local _cx_model_label="（途径默认）"
     if [[ -n "${MODEL_OVERRIDE}" ]]; then
         MODEL_ID="${MODEL_OVERRIDE}"
-        MODEL_NAME="${MODEL_OVERRIDE}（override）"
-    elif [[ -n "${_CFG_AGENTS_CODEX_MODEL:-}" ]]; then
-        MODEL_ID="${_CFG_AGENTS_CODEX_MODEL}"
-        MODEL_NAME="${MODEL_ID}（agent 默认）"
+        _cx_model_label="（override）"
+    elif (( PROVIDER_EXPLICIT )) && [[ -n "${_cx_provider_model}" ]]; then
+        MODEL_ID="${_cx_provider_model}"
+    elif [[ -n "${_cx_agent_model}" ]]; then
+        MODEL_ID="${_cx_agent_model}"
+        _cx_model_label="（agent 默认）"
     else
-        MODEL_ID="$(_cfg_provider_default_model "${_cx_provider}" codex)"
-        MODEL_NAME="${MODEL_ID}"
-        if [[ -z "${MODEL_ID}" ]]; then
-            echo "###${_NAME}: ERROR: 途径 '${_cx_provider}' 未定义 codex 默认模型（见 agent-custom.json agents.codex.model 或 providers.${_cx_provider}.default_models.codex）###" >&2
-            exit 64
-        fi
+        MODEL_ID="${_cx_provider_model}"
     fi
-    REASONING_EFFORT="${_CFG_AGENTS_CODEX_STRENGTH:-}"
-    [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="${_CFG_AGENTS_CODEX_REASONING:-}"
-    [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="$(_cfg_provider_default_strength "${_cx_provider}" codex)"
+    if [[ -z "${MODEL_ID}" ]]; then
+        echo "###${_NAME}: ERROR: 途径 '${_cx_provider}' 未定义 codex 默认模型（见 agent-custom.json agents.codex.model 或 providers.${_cx_provider}.default_models.codex）###" >&2
+        exit 64
+    fi
+    MODEL_NAME="${MODEL_ID}${_cx_model_label}"
+    # 强度（reasoning，与模型同两层优先级）：override 仍在链尾最后赋值取胜
+    #   agent 层内部顺序不变：agents.codex.strength > 旧键 agents.codex.reasoning
+    local _cx_agent_reasoning="${_CFG_AGENTS_CODEX_STRENGTH:-}"
+    [[ -n "${_cx_agent_reasoning}" ]] || _cx_agent_reasoning="${_CFG_AGENTS_CODEX_REASONING:-}"
+    local _cx_provider_reasoning
+    _cx_provider_reasoning="$(_cfg_provider_default_strength "${_cx_provider}" codex)"
+    if (( PROVIDER_EXPLICIT )) && [[ -n "${_cx_provider_reasoning}" ]]; then
+        REASONING_EFFORT="${_cx_provider_reasoning}"
+    elif [[ -n "${_cx_agent_reasoning}" ]]; then
+        REASONING_EFFORT="${_cx_agent_reasoning}"
+    else
+        REASONING_EFFORT="${_cx_provider_reasoning}"
+    fi
     [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="max"
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
 
