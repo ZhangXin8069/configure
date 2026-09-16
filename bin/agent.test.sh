@@ -1007,3 +1007,313 @@ cmp -s "$secure_src_dir/opencode" "$secure_ops" || fail 'ops secure_binary 复�
 ops_secure_exec=$(tail -n +$((ops_secure_before + 1)) "$call_log" | head -1)
 assert_contains "$ops_secure_exec" "$secure_ops"
 printf 'PASS: secure 变体（cls/ops/cos）缺失时从 PATH 完整复制 secure_binary\n'
+
+# =====================================================================
+# 多场景部署：仓库部署在 ${HOME}/configure 之外
+# （服务器共享部署、多用户共用、容器/CI 内 HOME 不可写或未设置）
+# =====================================================================
+deploy_home="$test_root/deploy-home"
+deploy_root="$test_root/deploy/configure"
+mkdir -p "$deploy_home" "$deploy_root/skills"
+cp -a "$script_dir/." "$deploy_root/bin/"
+deploy_call_log="$test_root/deploy-calls.log"
+: > "$deploy_call_log"
+
+run_deploy() { # launcher 名 + 额外 env 赋值（HOME 由调用方给）
+    local name="$1"
+    shift
+    (cd "$repo/nested" && env -u AGENT_DATA_DIR -u CONFIGURE_AGENT_DATA_DIR \
+        -u AGENT_SCRIPT_DIR -u AGENT_CONFIGURE_ROOT "$@" \
+        FAKE_CALL_LOG="$deploy_call_log" CODEX_BIN="$fake_codex" \
+        DEEPSEEK_API_KEY= LQCD_API_KEY= \
+        "$deploy_root/bin/$name" --once 2>&1)
+}
+
+latest_manifest() { # 数据根下是否存在 run manifest
+    find "$1/runs" -mindepth 2 -maxdepth 2 -name manifest.env -print -quit 2>/dev/null
+}
+
+# --- 部署自洽：配置根与数据根都跟随部署位置，不写回 ${HOME}/configure ---
+set +e
+deploy_out=$(run_deploy co HOME="$deploy_home")
+deploy_rc=$?
+set -e
+(( deploy_rc == 0 )) || fail "部署在 \${HOME}/configure 之外时启动失败（rc=$deploy_rc）：$deploy_out"
+assert_contains "$deploy_out" "agent config: ${deploy_root}/{skills,tools,hooks,plugins}"
+assert_file_contains "$deploy_call_log" "${deploy_root}/skills"
+if rg -Fq '${CONFIGURE_ROOT}' "$deploy_call_log"; then
+    fail 'prompt 中 ${CONFIGURE_ROOT} 占位符未被替换'
+fi
+[[ -n "$(latest_manifest "$deploy_root/data")" ]] \
+    || fail "数据未写入部署内 data 目录：$deploy_root/data"
+[[ ! -d "$deploy_home/configure/data" ]] \
+    || fail "数据不应写回 \${HOME}/configure/data：$deploy_home/configure/data"
+printf 'PASS: 部署在 ${HOME}/configure 之外时配置根与数据根跟随部署位置\n'
+
+# --- 跨目录软链接调用：cl 链到 PATH 中其他目录，仍解析到真实部署 ---
+mkdir -p "$test_root/pathtools"
+ln -sf "$deploy_root/bin/agent.sh" "$test_root/pathtools/cl"
+set +e
+shim_out=$(cd "$repo/nested" && env -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR -u AGENT_CONFIGURE_ROOT \
+    HOME="$deploy_home" FAKE_CALL_LOG="$deploy_call_log" CLAUDE_BIN="$fake_claude" \
+    DEEPSEEK_PAY_API_KEY=test-deepseek-key DEEPSEEK_API_KEY= LQCD_API_KEY= \
+    "$test_root/pathtools/cl" --once 2>&1)
+shim_rc=$?
+set -e
+(( shim_rc == 0 )) || fail "跨目录软链接调用失败（rc=$shim_rc）：$shim_out"
+# --settings 里的 statusLine 路径由 _PATH 拼出：指向真实部署即证明软链接已解析到 agent.sh 所在目录
+assert_file_contains "$deploy_call_log" "${deploy_root}/bin/agent-statusline.sh"
+printf 'PASS: 跨目录软链接调用解析到真实部署（agent-runtime/config/prompt 可寻）\n'
+
+# --- HOME 未设置：按部署位置解析，不产生 /configure 之类的根路径 ---
+set +e
+nohome_out=$(cd "$repo/nested" && env -u HOME -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR \
+    -u AGENT_CONFIGURE_ROOT FAKE_CALL_LOG="$deploy_call_log" CODEX_BIN="$fake_codex" \
+    DEEPSEEK_API_KEY= LQCD_API_KEY= \
+    "$deploy_root/bin/co" --once 2>&1)
+nohome_rc=$?
+set -e
+(( nohome_rc == 0 )) || fail "HOME 未设置时启动失败（rc=$nohome_rc）：$nohome_out"
+assert_contains "$nohome_out" "agent config: ${deploy_root}/{skills,tools,hooks,plugins}"
+printf 'PASS: HOME 未设置（cron/容器/服务账号）时按部署位置解析\n'
+
+# --- AGENT_CONFIGURE_ROOT 显式覆盖：配置根与数据根一并跟随 ---
+custom_root="$test_root/custom-root"
+mkdir -p "$custom_root/skills"
+set +e
+override_out=$(run_deploy co HOME="$deploy_home" AGENT_CONFIGURE_ROOT="$custom_root")
+override_rc=$?
+set -e
+(( override_rc == 0 )) || fail "AGENT_CONFIGURE_ROOT 覆盖失败（rc=$override_rc）：$override_out"
+assert_contains "$override_out" "agent config: ${custom_root}/{skills,tools,hooks,plugins}"
+[[ -n "$(latest_manifest "$custom_root/data")" ]] \
+    || fail "数据根应随配置根走：$custom_root/data"
+printf 'PASS: AGENT_CONFIGURE_ROOT 显式覆盖配置根与数据根\n'
+
+# --- CONFIGURE_AGENT_DATA_DIR 旧变量名仍生效（向后兼容） ---
+legacy_data="$test_root/legacy-data"
+set +e
+legacy_out=$(run_deploy co HOME="$deploy_home" CONFIGURE_AGENT_DATA_DIR="$legacy_data")
+legacy_rc=$?
+set -e
+(( legacy_rc == 0 )) || fail "CONFIGURE_AGENT_DATA_DIR 兼容失败（rc=$legacy_rc）：$legacy_out"
+[[ -n "$(latest_manifest "$legacy_data")" ]] \
+    || fail "CONFIGURE_AGENT_DATA_DIR 应被采用：$legacy_data"
+printf 'PASS: CONFIGURE_AGENT_DATA_DIR 旧变量名仍生效\n'
+
+# --- agent-status.sh 与 agent.sh 用同一数据根（否则查不到刚产生的 run） ---
+set +e
+status_out=$(env -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR -u AGENT_CONFIGURE_ROOT \
+    HOME="$deploy_home" "$deploy_root/bin/agent-status.sh" --all 2>&1)
+status_rc=$?
+set -e
+(( status_rc == 0 )) || fail "agent-status.sh 在部署场景下失败：$status_out"
+assert_contains "$status_out" 'run='
+assert_contains "$status_out" "$deploy_root/data"
+[[ "$status_out" != *'未找到运行记录'* ]] || fail "agent-status.sh 未找到部署内的 run：$status_out"
+printf 'PASS: agent-status.sh 与 agent.sh 数据根一致（只读查询不建目录）\n'
+
+# --- 部署内 data 不可用时回退 ${HOME}/configure/data（共享只读部署） ---
+# 用独立部署副本，避免触碰上一段已建立的数据目录
+deploy2_root="$test_root/deploy2/configure"
+mkdir -p "$deploy2_root/skills"
+cp -a "$script_dir/." "$deploy2_root/bin/"
+: > "$deploy2_root/data"         # 普通文件占位，等价于该位置不可写/被占用
+mkdir -p "$deploy_home/configure/data"
+set +e
+fallback_out=$(cd "$repo/nested" && env -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR \
+    -u AGENT_CONFIGURE_ROOT HOME="$deploy_home" FAKE_CALL_LOG="$deploy_call_log" \
+    CODEX_BIN="$fake_codex" DEEPSEEK_API_KEY= LQCD_API_KEY= \
+    "$deploy2_root/bin/co" --once 2>&1)
+fallback_rc=$?
+set -e
+(( fallback_rc == 0 )) || fail "数据根回退失败（rc=$fallback_rc）：$fallback_out"
+[[ -n "$(latest_manifest "$deploy_home/configure/data")" ]] \
+    || fail "部署内 data 不可用时应回退 \${HOME}/configure/data"
+[[ -f "$deploy2_root/data" ]] || fail "占位文件被误删：$deploy2_root/data"
+printf 'PASS: 部署内 data 不可用时回退 ${HOME}/configure/data（占位文件未被破坏）\n'
+
+# =====================================================================
+# 环境里没有 agent 可执行文件时自动安装
+# （新机器、非 root 服务器、只读共享部署首次使用）
+# =====================================================================
+# 受限 PATH：真实 PATH 去掉所有含 agent 可执行文件的目录。本机已装三系
+# （~/.local/bin），不去掉就构造不出「环境里没有对应 agent 可执行文件」这个前置条件；
+# 保留其余目录，使启动器所需的 python3/wc/tee 等工具仍可用。
+make_min_path() {
+    local out="" entry bin keep
+    while IFS= read -r entry; do
+        [[ -n "$entry" && -d "$entry" ]] || continue
+        keep=1
+        for bin in codex claude opencode; do
+            if [[ -e "$entry/$bin" ]]; then
+                keep=0
+            fi
+        done
+        (( keep )) || continue
+        out="${out:+${out}:}${entry}"
+    done <<< "$(printf '%s' "$PATH" | tr ':' '\n')"
+    printf '%s\n' "$out"
+}
+
+min_path="$(make_min_path)"
+for missing in codex claude opencode; do
+    if PATH="$min_path" command -v "$missing" >/dev/null 2>&1; then
+        fail "受限 PATH 中不应存在 $missing（测试前置条件不成立）：$min_path"
+    fi
+done
+
+# 安装脚本要装入的「名为 <agent>、转发到对应 fake」的可执行文件
+ai_src_dir="$test_root/autinstall-src"
+mkdir -p "$ai_src_dir"
+for pair in "codex:$fake_codex" "claude:$fake_claude" "opencode:$fake_opencode"; do
+    ai_name="${pair%%:*}"
+    ai_fake="${pair##*:}"
+    cat > "$ai_src_dir/$ai_name" <<EOF
+#!/usr/bin/env bash
+printf '%s\t%s\n' "\$0" "\$*" >> "\$FAKE_CALL_LOG"
+exec "$ai_fake" "\$@"
+EOF
+    chmod 0755 "$ai_src_dir/$ai_name"
+done
+
+# 在部署内伪造 lib/_<组件>/install.sh：默认把二进制装入 \${HOME}/.local/bin
+# （与三系真实安装脚本的默认位置一致），并记录每次调用
+make_install_sh() { # 部署根 agent 名 [退出码]
+    local root="$1" agent="$2" rc="${3:-0}" sub=""
+    case "$agent" in
+        claude) sub="_claude-code";;
+        opencode) sub="_opencode";;
+        codex) sub="_codex";;
+    esac
+    mkdir -p "$root/lib/$sub"
+    cat > "$root/lib/$sub/install.sh" <<EOF
+#!/usr/bin/env bash
+printf 'install:%s reentry=%s\n' "$agent" "\${AGENT_AUTO_INSTALL_DONE:-none}" >> "\${FAKE_INSTALL_LOG:-/dev/null}"
+if (( $rc != 0 )); then
+    printf 'simulated install failure\n' >&2
+    exit $rc
+fi
+mkdir -p "\${HOME}/.local/bin"
+cp -f "$ai_src_dir/$agent" "\${HOME}/.local/bin/$agent"
+chmod 0755 "\${HOME}/.local/bin/$agent"
+# 故意写 stdout：真实 install.sh 也把下载进度写 stdout，此处的输出若混入
+# _prepare_secure_binary 的命令替换会污染 secure_binary 路径，需被用例覆盖
+printf 'installed %s\n' "$agent"
+EOF
+    chmod 0755 "$root/lib/$sub/install.sh"
+}
+
+ai_home="$test_root/autinstall-home"
+ai_root="$test_root/autinstall/configure"
+mkdir -p "$ai_home" "$ai_root/skills"
+cp -a "$script_dir/." "$ai_root/bin/"
+ai_call_log="$test_root/autinstall-calls.log"
+ai_install_log="$test_root/autinstall-install.log"
+
+run_ai() { # 启动器名 + 额外 env 赋值
+    local name="$1"
+    shift
+    : > "$ai_call_log"
+    : > "$ai_install_log"
+    (cd "$repo/nested" && env -i PATH="$min_path" HOME="$ai_home" \
+        FAKE_CALL_LOG="$ai_call_log" FAKE_INSTALL_LOG="$ai_install_log" \
+        DEEPSEEK_API_KEY= LQCD_API_KEY= DEEPSEEK_PAY_API_KEY= CUSTOM_GPT_API_KEY= \
+        "$@" "$ai_root/bin/$name" --once 2>&1)
+}
+
+install_calls() { # 安装脚本被调用次数
+    local n=""
+    n="$(grep -c '^install:' "$ai_install_log" 2>/dev/null || true)"
+    printf '%s\n' "${n:-0}"
+}
+
+# --- 缺失 codex：自动运行部署内安装脚本后照常启动 ---
+make_install_sh "$ai_root" codex
+set +e
+ai_out=$(run_ai co)
+ai_rc=$?
+set -e
+(( ai_rc == 0 )) || fail "缺 codex 时自动安装后仍启动失败（rc=$ai_rc）：$ai_out"
+assert_contains "$ai_out" "未找到 codex，自动运行安装脚本：${ai_root}/lib/_codex/install.sh"
+assert_contains "$ai_out" 'codex 安装完成'
+[[ -x "$ai_home/.local/bin/codex" ]] || fail "安装脚本未装入 \${HOME}/.local/bin/codex"
+[[ "$(install_calls)" == 1 ]] || fail "安装脚本应恰好被调用一次，实际：$(install_calls)"
+# 防重入标记已传给安装脚本（安装脚本自身再触发 agent 系列时不再递归安装）
+assert_file_contains "$ai_install_log" 'reentry=1'
+# 安装后的二进制确实被用于本次运行
+grep -q -- "^${ai_home}/.local/bin/codex" "$ai_call_log" \
+    || fail "自动安装的 codex 未被实际执行：$(cat "$ai_call_log")"
+printf 'PASS: 缺 codex 时自动运行 lib/_codex/install.sh 并继续启动\n'
+
+# --- 已装在 ${HOME}/.local/bin 但不在 PATH：直接前置 PATH，不重复安装 ---
+: > "$ai_install_log"
+set +e
+ai_path_out=$(run_ai co)
+ai_path_rc=$?
+set -e
+(( ai_path_rc == 0 )) || fail "已安装但不在 PATH 时启动失败（rc=$ai_path_rc）：$ai_path_out"
+[[ "$(install_calls)" == 0 ]] || fail "已存在于 \${HOME}/.local/bin 时不应再装"
+case "$ai_path_out" in
+    *'自动运行安装脚本'*) fail "已安装却仍触发了安装：$ai_path_out" ;;
+esac
+printf 'PASS: 已装在 ${HOME}/.local/bin 但不在 PATH 时直接前置 PATH\n'
+
+# --- 安装脚本失败：明确报错、只尝试一次、不静默回退 ---
+rm -f "$ai_home/.local/bin/codex"
+make_install_sh "$ai_root" codex 7
+set +e
+ai_fail_out=$(run_ai co)
+ai_fail_rc=$?
+set -e
+(( ai_fail_rc == 127 )) || fail "安装失败后应沿用原有 127 报错，实际 rc=$ai_fail_rc：$ai_fail_out"
+assert_contains "$ai_fail_out" 'ERROR: 自动安装失败（退出码 7）'
+assert_contains "$ai_fail_out" '未找到 codex'
+[[ "$(install_calls)" == 1 ]] || fail "安装失败不应重试，实际调用：$(install_calls)"
+# 安装脚本自身的报错应原样透出给用户（而非被吞掉）
+assert_contains "$ai_fail_out" 'simulated install failure'
+printf 'PASS: 安装脚本失败时明确报错且只尝试一次\n'
+
+# --- AGENT_AUTO_INSTALL=0：关闭自动安装，保持原有报错 ---
+make_install_sh "$ai_root" codex
+set +e
+ai_off_out=$(run_ai co AGENT_AUTO_INSTALL=0)
+ai_off_rc=$?
+set -e
+(( ai_off_rc == 127 )) || fail "关闭自动安装后应 rc=127，实际 rc=$ai_off_rc：$ai_off_out"
+assert_contains "$ai_off_out" '已按 AGENT_AUTO_INSTALL=0 跳过自动安装'
+[[ "$(install_calls)" == 0 ]] || fail "AGENT_AUTO_INSTALL=0 时不应运行安装脚本"
+printf 'PASS: AGENT_AUTO_INSTALL=0 关闭自动安装\n'
+
+# --- 部署内没有安装脚本：给出明确提示，不静默失败 ---
+rm -rf "$ai_root/lib"
+set +e
+ai_noscript_out=$(run_ai co)
+ai_noscript_rc=$?
+set -e
+(( ai_noscript_rc == 127 )) || fail "无安装脚本时应 rc=127，实际 rc=$ai_noscript_rc：$ai_noscript_out"
+assert_contains "$ai_noscript_out" '部署内也没有安装脚本'
+assert_contains "$ai_noscript_out" '未找到 codex'
+printf 'PASS: 部署内无安装脚本时给出明确提示\n'
+
+# --- 用户给的场景：cos 缺 secure_binary 且环境无 codex → 安装 → 生成 secure_binary → 启动 ---
+make_install_sh "$ai_root" codex
+ai_secure_home="$test_root/autinstall-secure-home"
+rm -rf "$ai_secure_home"
+mkdir -p "$ai_secure_home"
+ai_secure_rel=".vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
+ai_secure_cos="$ai_secure_home/$ai_secure_rel/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d711"
+set +e
+ai_secure_out=$(cd "$repo/nested" && env -i PATH="$min_path" HOME="$ai_secure_home" \
+    FAKE_CALL_LOG="$ai_call_log" FAKE_INSTALL_LOG="$ai_install_log" \
+    DEEPSEEK_API_KEY= LQCD_API_KEY= CUSTOM_GPT_API_KEY=test-custom-key \
+    "$ai_root/bin/cos" --once 2>&1)
+ai_secure_rc=$?
+set -e
+(( ai_secure_rc == 0 )) || fail "cos 自动安装后启动失败（rc=$ai_secure_rc）：$ai_secure_out"
+assert_contains "$ai_secure_out" '未找到 codex，自动运行安装脚本'
+assert_contains "$ai_secure_out" 'secure_binary 缺失，已从'
+[[ -f "$ai_secure_cos" && -x "$ai_secure_cos" && ! -L "$ai_secure_cos" ]] \
+    || fail "自动安装后未按 agent 系列要求生成 secure_binary：$ai_secure_cos"
+assert_contains "$(head -1 "$ai_call_log")" "$ai_secure_cos"
+printf 'PASS: cos 缺 secure_binary 且环境无 codex 时自动安装并生成 secure_binary\n'
