@@ -141,7 +141,8 @@ _prepare_secure_binary() {
     fi
     local _tmp="${_target}.tmp.$$"
     rm -f -- "${_tmp}" 2>/dev/null || true
-    if ! cp -f -- "${_source}" "${_tmp}" || ! chmod +x -- "${_tmp}" \
+    # macOS/BSD 的 chmod 不支持 GNU 风格 -- 选项终止符（_tmp 恒为绝对路径，无需它）
+    if ! cp -f -- "${_source}" "${_tmp}" || ! chmod +x "${_tmp}" \
         || ! rm -f -- "${_target}" || ! mv -f -- "${_tmp}" "${_target}"; then
         rm -f -- "${_tmp}" 2>/dev/null || true
         echo "###${_NAME}: ERROR: 无法将 ${_source} 复制到 secure_binary：${_target}###" >&2
