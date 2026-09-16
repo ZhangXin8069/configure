@@ -6,6 +6,21 @@
 
 $ErrorActionPreference = 'Stop'
 
+# 控制台统一 UTF-8：agent.bat 已 chcp 65001，这里同步 .NET 侧编码，
+# 避免中文界面消息（状态/警告/错误）在系统代码页下乱码
+try {
+    [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+} catch {
+}
+try {
+    [Console]::InputEncoding = New-Object System.Text.UTF8Encoding($false)
+} catch {
+}
+try {
+    $OutputEncoding = New-Object System.Text.UTF8Encoding($false)
+} catch {
+}
+
 $script:Utf8NoBom = New-Object System.Text.UTF8Encoding($false)
 $script:CliArgs = @($args)
 $script:LauncherName = [Environment]::GetEnvironmentVariable('AGENT_BAT_LAUNCHER_NAME')
@@ -63,6 +78,7 @@ $script:ResumeRunId = ''
 $script:DriveFile = ''
 $script:StopFileArg = ''
 $script:Drive = $false
+$script:AgentConfig = $null
 
 function Write-Info {
     param([string]$Message)
@@ -104,10 +120,116 @@ function Resolve-AgentDataRoot {
     return Resolve-FullPath $candidate
 }
 
+# JSON 配置深度合并：agents/flags 等对象逐键递归，标量与数组以 Override 优先
+function Merge-JsonNode {
+    param($Base, $Override)
+
+    if ($null -eq $Override) { return $Base }
+    if ($Base -is [System.Management.Automation.PSCustomObject] -and
+        $Override -is [System.Management.Automation.PSCustomObject]) {
+        $merged = [ordered]@{}
+        foreach ($property in $Base.PSObject.Properties) {
+            $merged[$property.Name] = $property.Value
+        }
+        foreach ($property in $Override.PSObject.Properties) {
+            if ($merged.Contains($property.Name)) {
+                $merged[$property.Name] = Merge-JsonNode $merged[$property.Name] $property.Value
+            } else {
+                $merged[$property.Name] = $property.Value
+            }
+        }
+        return [pscustomobject]$merged
+    }
+    return $Override
+}
+
+# 配置文件加载：agent-config.json（通用）+ agent-custom.json（个性化，缺失或为空时
+# 回退 agent-custom.json.refer）深度合并；结果放入 $script:AgentConfig
+function Import-AgentConfig {
+    param([Parameter(Mandatory = $true)][string]$ScriptDir)
+
+    $configPath = Join-Path $ScriptDir 'agent-config.json'
+    $customPath = Join-Path $ScriptDir 'agent-custom.json'
+    $configInfo = Get-Item -LiteralPath $configPath -ErrorAction SilentlyContinue
+    $customInfo = Get-Item -LiteralPath $customPath -ErrorAction SilentlyContinue
+    if ($null -eq $customInfo -or $customInfo.Length -eq 0) {
+        $customPath = Join-Path $ScriptDir 'agent-custom.json.refer'
+        $customInfo = Get-Item -LiteralPath $customPath -ErrorAction SilentlyContinue
+    }
+    if ($null -eq $configInfo -or $configInfo.Length -eq 0) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 缺少通用配置 $configPath###"
+        return $false
+    }
+    if ($null -eq $customInfo -or $customInfo.Length -eq 0) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 缺少个性化配置（$ScriptDir\agent-custom.json 与 agent-custom.json.refer 均不存在或为空）###"
+        return $false
+    }
+    try {
+        $baseText = [System.IO.File]::ReadAllText($configPath, [System.Text.Encoding]::UTF8)
+        $customText = [System.IO.File]::ReadAllText($customPath, [System.Text.Encoding]::UTF8)
+        $base = $baseText | ConvertFrom-Json
+        $custom = $customText | ConvertFrom-Json
+    } catch {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 解析配置失败（$configPath / $customPath）：$($_.Exception.Message)###"
+        return $false
+    }
+    if ($null -eq $base -or $null -eq $custom -or
+        $base -isnot [System.Management.Automation.PSCustomObject] -or
+        $custom -isnot [System.Management.Automation.PSCustomObject]) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 配置根节点必须是 JSON 对象（$configPath / $customPath）###"
+        return $false
+    }
+    $script:AgentConfig = Merge-JsonNode $base $custom
+    return $true
+}
+
+# 读取配置引用的环境变量（env_key/value_from_env 等），缺失返回空串
+function Get-ConfigEnvironmentValue {
+    param([string]$Name)
+
+    if ([string]::IsNullOrWhiteSpace($Name)) { return '' }
+    $value = [Environment]::GetEnvironmentVariable($Name)
+    if ($null -eq $value) { return '' }
+    return $value
+}
+
+# OpenCode provider 注入块：仅注入 key 环境变量存在的途径；custom-gpt 额外注册端点与模型
+function Get-OpenCodeProviderConfig {
+    $result = [ordered]@{}
+    $agentConfig = $script:AgentConfig.agents.opencode
+    foreach ($name in @($agentConfig.key_providers)) {
+        if ([string]::IsNullOrWhiteSpace([string]$name)) { continue }
+        $provider = $script:AgentConfig.providers.$name
+        if ($null -eq $provider) { continue }
+        $envKey = [string]$provider.env_key
+        if ([string]::IsNullOrWhiteSpace($envKey)) { continue }
+        if ([string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $envKey))) { continue }
+        if ($name -eq 'custom-gpt') {
+            $baseUrl = [string]$provider.base_url
+            if ([string]::IsNullOrWhiteSpace($baseUrl)) { continue }
+            $models = [ordered]@{}
+            foreach ($model in @($provider.opencode.models)) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$model)) {
+                    $models[[string]$model] = [ordered]@{}
+                }
+            }
+            $result[$name] = [ordered]@{
+                npm     = [string]$provider.opencode.npm
+                name    = [string]$provider.label
+                options = [ordered]@{ baseURL = $baseUrl; apiKey = "{env:$envKey}" }
+                models  = $models
+            }
+        } else {
+            $result[$name] = [ordered]@{ options = [ordered]@{ apiKey = "{env:$envKey}" } }
+        }
+    }
+    return $result
+}
+
 function Write-Utf8 {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Text
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text
     )
 
     $parent = Split-Path -Parent $Path
@@ -120,7 +242,7 @@ function Write-Utf8 {
 function Append-Utf8 {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
-        [Parameter(Mandatory = $true)][string]$Text
+        [Parameter(Mandatory = $true)][AllowEmptyString()][string]$Text
     )
 
     $parent = Split-Path -Parent $Path
@@ -896,21 +1018,36 @@ function Record-FirstInstruction {
 }
 
 function Set-ClaudeDefaults {
-    $env:ANTHROPIC_BASE_URL = 'https://api.deepseek.com/anthropic'
-    $env:ANTHROPIC_MODEL = 'deepseek-flash[1m]'
-    $env:ANTHROPIC_DEFAULT_OPUS_MODEL = 'deepseek-flash[1m]'
-    $env:ANTHROPIC_DEFAULT_SONNET_MODEL = 'deepseek-flash[1m]'
-    $env:ANTHROPIC_DEFAULT_HAIKU_MODEL = 'deepseek-flash'
-    $env:CLAUDE_CODE_SUBAGENT_MODEL = 'deepseek-flash'
-    $env:CLAUDE_CODE_EFFORT_LEVEL = 'max'
-    $env:CLAUDE_CODE_AUTO_COMPACT_WINDOW = '786432'
-    $deepseekKey = [Environment]::GetEnvironmentVariable('DEEPSEEK_API_KEY')
-    if ([string]::IsNullOrWhiteSpace($deepseekKey)) {
-        Remove-Item -Path 'Env:ANTHROPIC_AUTH_TOKEN' -ErrorAction SilentlyContinue
-        Write-ErrorLine "###$($script:LauncherName): warning: 未设置 DEEPSEEK_API_KEY，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###"
-    } else {
-        $env:ANTHROPIC_AUTH_TOKEN = $deepseekKey
+    $agentConfig = $script:AgentConfig.agents.claude
+    $providerId = [Environment]::GetEnvironmentVariable('CLAUDE_PROVIDER')
+    if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$agentConfig.provider }
+    $provider = $script:AgentConfig.providers.$providerId
+    if ($null -eq $provider -or [string]::IsNullOrWhiteSpace([string]$provider.anthropic_base_url)) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 途径 '$providerId' 未定义 anthropic_base_url（见 agent-config.json / agent-custom.json）###"
+        return $false
     }
+    $env:ANTHROPIC_BASE_URL = [string]$provider.anthropic_base_url
+    foreach ($keyName in @(
+        'ANTHROPIC_MODEL', 'ANTHROPIC_DEFAULT_OPUS_MODEL', 'ANTHROPIC_DEFAULT_SONNET_MODEL',
+        'ANTHROPIC_DEFAULT_HAIKU_MODEL', 'CLAUDE_CODE_SUBAGENT_MODEL',
+        'CLAUDE_CODE_EFFORT_LEVEL', 'CLAUDE_CODE_AUTO_COMPACT_WINDOW'
+    )) {
+        $value = [string]$agentConfig.env.$keyName
+        if ([string]::IsNullOrWhiteSpace($value)) {
+            Remove-Item -Path "Env:$keyName" -ErrorAction SilentlyContinue
+        } else {
+            Set-Item -Path "Env:$keyName" -Value $value
+        }
+    }
+    $keyName = [string]$provider.env_key
+    $keyValue = Get-ConfigEnvironmentValue $keyName
+    if ([string]::IsNullOrWhiteSpace($keyValue)) {
+        Remove-Item -Path 'Env:ANTHROPIC_AUTH_TOKEN' -ErrorAction SilentlyContinue
+        Write-ErrorLine "###$($script:LauncherName): warning: 未设置 $keyName，ANTHROPIC_AUTH_TOKEN 已清除，Claude Code 可能无法认证###"
+    } else {
+        $env:ANTHROPIC_AUTH_TOKEN = $keyValue
+    }
+    return $true
 }
 
 function New-ClaudeSettingsFile {
@@ -938,14 +1075,18 @@ function Run-Claude {
     if ([string]::IsNullOrWhiteSpace($executable)) {
         return 127
     }
-    Set-ClaudeDefaults
+    if (-not (Set-ClaudeDefaults)) {
+        return 64
+    }
+    $permissionMode = [string]$script:AgentConfig.agents.claude.permission_mode
+    if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = 'auto' }
     $script:ClaudeSettingsFile = New-ClaudeSettingsFile
     $prompt = Build-Prompt
     if ($null -eq $prompt) {
         return $script:FailureCode
     }
     Write-Host '============================================================'
-    Write-Host "  Claude Code: $($script:Model) | permission-mode auto"
+    Write-Host "  Claude Code: $($script:Model) | permission-mode $permissionMode"
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -956,7 +1097,7 @@ function Run-Claude {
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
         Turn-Begin
-        $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model)
+        $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model)
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -982,7 +1123,7 @@ function Run-Claude {
     } else {
         Write-Host "---- drive: prompt round start $(Get-Date -Format 'yyyy-MM-dd-HH:mm:ss') ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('-p', '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, $prompt) $true
+        $rc = Invoke-Logged $executable @('-p', '--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, $prompt) $true
         if ($rc -ne 0) {
             Turn-Failure
             Write-ErrorLine "###$($script:LauncherName): ERROR: prompt 回合失败（退出码 $rc），驱动终止###"
@@ -1002,7 +1143,7 @@ function Run-Claude {
         $instruction = [System.IO.File]::ReadAllText($script:DriveFile)
         Write-Host "---- drive: first instruction <- $($script:DriveFile) ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, $instruction) $true
+        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, $instruction) $true
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         if ($rc -ne 0) {
             Write-ErrorLine "###$($script:LauncherName): warning: 首条指令回合退出码 $rc，仍进入继续循环###"
@@ -1012,7 +1153,7 @@ function Run-Claude {
         if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId) -and
             [string]::IsNullOrWhiteSpace($script:DriveFile)) {
             Turn-Begin
-            $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, '继续') $true
+            $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, '继续') $true
             if ($rc -eq 0) {
                 Turn-Success
                 Mark-State 'finished' 'resume once' ''
@@ -1036,7 +1177,7 @@ function Run-Claude {
             return 0
         }
         Turn-Begin
-        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', 'auto', '--model', $script:Model, '继续') $true
+        $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, '继续') $true
         if ($rc -eq 0) {
             Turn-Success
             $nudges++
@@ -1064,18 +1205,23 @@ function Run-OpenCode {
     if ($null -eq $prompt) {
         return $script:FailureCode
     }
-    $config = [ordered]@{
-        lsp = $true
-        agent = [ordered]@{
-            build = [ordered]@{
-                model = $script:Model
-                variant = $script:Variant
-            }
-        }
+    $agentName = [string]$script:AgentConfig.agents.opencode.agent
+    if ([string]::IsNullOrWhiteSpace($agentName)) { $agentName = 'build' }
+    $lspEnabled = $script:AgentConfig.agents.opencode.lsp
+    if ($null -eq $lspEnabled) { $lspEnabled = $true }
+    $agentBlock = [ordered]@{}
+    $agentBlock[$agentName] = [ordered]@{
+        model = $script:Model
+        variant = $script:Variant
     }
-    $env:OPENCODE_CONFIG_CONTENT = ($config | ConvertTo-Json -Compress -Depth 5)
+    $config = [ordered]@{
+        lsp = [bool]$lspEnabled
+        agent = $agentBlock
+        provider = Get-OpenCodeProviderConfig
+    }
+    $env:OPENCODE_CONFIG_CONTENT = ($config | ConvertTo-Json -Compress -Depth 8)
     Write-Host '============================================================'
-    Write-Host "  OpenCode: build | auto | $($script:Model) ($($script:Variant))"
+    Write-Host "  OpenCode: $agentName | auto | $($script:Model) ($($script:Variant))"
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -1087,7 +1233,7 @@ function Run-OpenCode {
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
         Turn-Begin
-        $rc = Invoke-Logged $executable @('--agent', 'build', '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'DEBUG')
+        $rc = Invoke-Logged $executable @('--agent', $agentName, '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'DEBUG')
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -1112,7 +1258,7 @@ function Run-OpenCode {
     } else {
         Write-Host "---- drive: prompt round start $(Get-Date -Format 'yyyy-MM-dd-HH:mm:ss') ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('run', '--agent', 'build', '--auto', '--print-logs', '--log-level', 'DEBUG', $prompt) $true
+        $rc = Invoke-Logged $executable @('run', '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', $prompt) $true
         if ($rc -ne 0) {
             Turn-Failure
             Write-ErrorLine "###$($script:LauncherName): ERROR: prompt 回合失败（退出码 $rc），驱动终止###"
@@ -1132,7 +1278,7 @@ function Run-OpenCode {
         $instruction = [System.IO.File]::ReadAllText($script:DriveFile)
         Write-Host "---- drive: first instruction <- $($script:DriveFile) ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', 'build', '--auto', '--print-logs', '--log-level', 'DEBUG', $instruction) $true
+        $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', $instruction) $true
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         if ($rc -ne 0) {
             Write-ErrorLine "###$($script:LauncherName): warning: 首条指令回合退出码 $rc，仍进入继续循环###"
@@ -1142,7 +1288,7 @@ function Run-OpenCode {
         if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId) -and
             [string]::IsNullOrWhiteSpace($script:DriveFile)) {
             Turn-Begin
-            $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', 'build', '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
+            $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
             if ($rc -eq 0) {
                 Turn-Success
                 Mark-State 'finished' 'resume once' ''
@@ -1166,7 +1312,7 @@ function Run-OpenCode {
             return 0
         }
         Turn-Begin
-        $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', 'build', '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
+        $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
         if ($rc -eq 0) {
             Turn-Success
             $nudges++
@@ -1198,36 +1344,57 @@ function Run-Codex {
     if ([string]::IsNullOrWhiteSpace($homeRoot)) {
         $homeRoot = [Environment]::GetEnvironmentVariable('USERPROFILE')
     }
+    $codexConfig = $script:AgentConfig.agents.codex
     $providerId = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_ID')
-    if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = 'lqcd' }
+    if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$codexConfig.provider }
+    $provider = $script:AgentConfig.providers.$providerId
     $providerName = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_NAME')
     if ([string]::IsNullOrWhiteSpace($providerName)) { $providerName = $providerId }
     $providerBase = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_BASE_URL')
-    if ([string]::IsNullOrWhiteSpace($providerBase)) { $providerBase = 'http://nat200.natappvip.cc/v1' }
+    if ([string]::IsNullOrWhiteSpace($providerBase) -and $null -ne $provider) { $providerBase = [string]$provider.base_url }
     $providerKey = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_ENV_KEY')
-    if ([string]::IsNullOrWhiteSpace($providerKey)) { $providerKey = 'LQCD_API_KEY' }
+    if ([string]::IsNullOrWhiteSpace($providerKey) -and $null -ne $provider) { $providerKey = [string]$provider.env_key }
+    $providerWire = [Environment]::GetEnvironmentVariable('CODEX_PROVIDER_WIRE_API')
+    if ([string]::IsNullOrWhiteSpace($providerWire) -and $null -ne $provider) { $providerWire = [string]$provider.wire_api }
+    if ([string]::IsNullOrWhiteSpace($providerWire)) { $providerWire = 'responses' }
+    if ([string]::IsNullOrWhiteSpace($providerBase)) {
+        Write-ErrorLine "###$($script:LauncherName): warning: 途径 '$providerId' 未配置 base_url（见 agent-config.json / agent-custom.json）###"
+    }
     $contextWindow = [Environment]::GetEnvironmentVariable('CODEX_MODEL_CONTEXT_WINDOW')
+    if ([string]::IsNullOrWhiteSpace($contextWindow)) { $contextWindow = [string]$codexConfig.config.model_context_window }
     if ([string]::IsNullOrWhiteSpace($contextWindow)) { $contextWindow = '1000000' }
     $compactLimit = [Environment]::GetEnvironmentVariable('CODEX_MODEL_AUTO_COMPACT_TOKEN_LIMIT')
+    if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = [string]$codexConfig.config.model_auto_compact_token_limit }
     if ([string]::IsNullOrWhiteSpace($compactLimit)) { $compactLimit = '900000' }
     $serviceTier = [Environment]::GetEnvironmentVariable('CODEX_SERVICE_TIER')
+    if ([string]::IsNullOrWhiteSpace($serviceTier)) { $serviceTier = [string]$codexConfig.config.service_tier }
     $fastMode = [Environment]::GetEnvironmentVariable('CODEX_FAST_MODE')
+    if ([string]::IsNullOrWhiteSpace($fastMode)) { $fastMode = [string]$codexConfig.config.features.fast_mode }
     if ([string]::IsNullOrWhiteSpace($fastMode)) { $fastMode = 'false' }
     $personality = [Environment]::GetEnvironmentVariable('CODEX_PERSONALITY')
+    if ([string]::IsNullOrWhiteSpace($personality)) { $personality = [string]$codexConfig.config.personality }
     if ([string]::IsNullOrWhiteSpace($personality)) { $personality = 'pragmatic' }
     $reviewer = [Environment]::GetEnvironmentVariable('CODEX_APPROVALS_REVIEWER')
+    if ([string]::IsNullOrWhiteSpace($reviewer)) { $reviewer = [string]$codexConfig.config.approvals_reviewer }
     if ([string]::IsNullOrWhiteSpace($reviewer)) { $reviewer = 'auto_review' }
     $loginMethod = [Environment]::GetEnvironmentVariable('CODEX_FORCED_LOGIN_METHOD')
+    if ([string]::IsNullOrWhiteSpace($loginMethod)) { $loginMethod = [string]$codexConfig.config.forced_login_method }
     if ([string]::IsNullOrWhiteSpace($loginMethod)) { $loginMethod = 'api' }
     $statusLine = [Environment]::GetEnvironmentVariable('CODEX_TUI_STATUS_LINE')
+    if ([string]::IsNullOrWhiteSpace($statusLine) -and $null -ne $codexConfig.config.tui.status_line) {
+        $statusLine = (@($codexConfig.config.tui.status_line) | ConvertTo-Json -Compress)
+    }
     if ([string]::IsNullOrWhiteSpace($statusLine)) {
         $statusLine = '["model-with-reasoning","current-dir","hostname","branch-changes","run-state","permissions","approval-mode","context-used","weekly-limit","estimated-thread-cost","thread-id","fast-mode","task-progress"]'
     }
     $statusColors = [Environment]::GetEnvironmentVariable('CODEX_TUI_STATUS_LINE_USE_COLORS')
+    if ([string]::IsNullOrWhiteSpace($statusColors)) { $statusColors = [string]$codexConfig.config.tui.status_line_use_colors }
     if ([string]::IsNullOrWhiteSpace($statusColors)) { $statusColors = 'true' }
     $approval = [Environment]::GetEnvironmentVariable('CODEX_APPROVAL')
+    if ([string]::IsNullOrWhiteSpace($approval)) { $approval = [string]$codexConfig.approval }
     if ([string]::IsNullOrWhiteSpace($approval)) { $approval = 'never' }
     $sandbox = [Environment]::GetEnvironmentVariable('CODEX_SANDBOX')
+    if ([string]::IsNullOrWhiteSpace($sandbox)) { $sandbox = [string]$codexConfig.sandbox }
     if ([string]::IsNullOrWhiteSpace($sandbox)) { $sandbox = 'danger-full-access' }
 
     $common = @(
@@ -1241,8 +1408,8 @@ function Run-Codex {
         '--config', "model_providers.$providerId.name=`"$providerName`""
         '--config', "model_providers.$providerId.base_url=`"$providerBase`""
         '--config', "model_providers.$providerId.env_key=`"$providerKey`""
-        '--config', 'model_providers.' + $providerId + '.wire_api="responses"'
-        '--config', 'model_providers.' + $providerId + '.supports_websockets=true'
+        '--config', "model_providers.$providerId.wire_api=`"$providerWire`""
+        '--config', "model_providers.$providerId.supports_websockets=true"
         '--config', "tui.status_line=$statusLine"
         '--config', "tui.status_line_use_colors=$statusColors"
         '--config', "features.fast_mode=$fastMode"
@@ -1371,12 +1538,17 @@ function Parse-Arguments {
         }
     }
 
+    $agentKey = [string]$script:Agent
+    $agentConfig = $script:AgentConfig.agents.$agentKey
     $defaultVariable = switch ($script:Agent) {
         'claude' { 'CLAUDE_DEFAULT_MODEL_FLAG' }
         'opencode' { 'OPENCODE_DEFAULT_MODEL_FLAG' }
         default { 'CODEX_DEFAULT_MODEL_FLAG' }
     }
     $defaultFlag = [Environment]::GetEnvironmentVariable($defaultVariable)
+    if ([string]::IsNullOrWhiteSpace($defaultFlag)) {
+        $defaultFlag = [string]$agentConfig.default_flag
+    }
     if ([string]::IsNullOrWhiteSpace($defaultFlag)) {
         $defaultFlag = switch ($script:Agent) {
             'claude' { '-m' }
@@ -1552,82 +1724,40 @@ function Parse-Arguments {
         $script:Posture = if ($script:Agent -eq 'codex') { 'frontier-orchestrator' } else { 'deep-worker' }
     }
 
-    switch ($script:Agent) {
-        'claude' {
-            $modelTable = @{
-                '-m' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
-                '-o' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
-                '-p' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
-                '-q' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
-                '-k' = @('deepseek-flash', 'deepseek-flash')
-                '-g' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
-                '-f' = @('deepseek-flash', 'deepseek-flash')
-                '-h' = @('deepseek-flash[1m]', 'deepseek-flash[1m]')
-            }
-            $modelEnvPrefix = 'CLAUDE_MODEL_'
-            $defaultReasoning = ''
-        }
-        'opencode' {
-            $modelTable = @{
-                '-m' = @('opencode-go/muse-spark-1.2-contributor', 'Build auto·Muse Spark 1.2 Contributor OpenCode Go')
-                '-o' = @('opencode-go/ox-alpha-free', 'Build auto · Ox Alpha Free (Unlimited) OpenCode Go')
-                '-p' = @('opencode-go/deepseek-v4-pro', 'DeepSeek V4 Pro (New)')
-                '-q' = @('opencode-go/qwen3.8-max', 'Qwen3.8 Max')
-                '-k' = @('opencode-go/kimi-k3', 'Kimi K3')
-                '-g' = @('opencode-go/gpt-5.6-luna', 'GPT-5.6 Luna (2x usage)')
-                '-f' = @('deepseek/deepseek-flash', 'DeepSeek V4.1 Flash')
-                '-h' = @('opencode-go/hy3', 'Hy3')
-            }
-            $modelEnvPrefix = 'OPENCODE_MODEL_'
-            $defaultReasoning = ''
-        }
-        default {
-            $modelTable = @{
-                '-m' = @('gpt-5.6-luna', 'GPT-5.6-Luna')
-                '-o' = @('gpt-5.6-sol', 'GPT-5.6-Sol')
-                '-p' = @('gpt-5.6-terra', 'GPT-5.6-Terra')
-                '-q' = @('gpt-6-astra', 'GPT-6 Astra')
-                '-k' = @('gpt-5.4-mini', 'GPT-5.4-Mini')
-                '-g' = @('gpt-5.6-luna', 'GPT-5.6-Luna')
-                '-f' = @('gpt-5.6-sol', 'GPT-5.6-Sol')
-                '-h' = @('gpt-5.6-luna', 'GPT-5.6-Luna')
-            }
-            $modelEnvPrefix = 'CODEX_MODEL_'
-            $defaultReasoning = switch ($defaultFlag) {
-                '-m' { 'max' }
-                '-o' { 'max' }
-                '-p' { 'high' }
-                '-q' { 'max' }
-                '-k' { 'high' }
-                '-g' { 'high' }
-                '-f' { 'low' }
-                default { 'high' }
-            }
-        }
+    $modelEnvPrefix = switch ($script:Agent) {
+        'claude' { 'CLAUDE_MODEL_' }
+        'opencode' { 'OPENCODE_MODEL_' }
+        default { 'CODEX_MODEL_' }
     }
-    if (-not $modelTable.ContainsKey($defaultFlag)) {
+    $flagConfig = $null
+    if ($null -ne $agentConfig) {
+        $flagConfig = $agentConfig.flags.$defaultFlag
+    }
+    if ($null -eq $flagConfig) {
         Fail-Parse "###$($script:LauncherName): ERROR: 不支持的默认模型旗标 '$defaultFlag'###"
         return $false
     }
     $modelEnvName = $modelEnvPrefix + $defaultFlag.Substring(1).ToUpperInvariant()
     $flagModel = [Environment]::GetEnvironmentVariable($modelEnvName)
     if ([string]::IsNullOrWhiteSpace($flagModel)) {
-        $flagModel = $modelTable[$defaultFlag][0]
+        $flagModel = [string]$flagConfig.model
     } else {
         $script:ModelExplicit = $true
     }
     $script:Model = if ([string]::IsNullOrWhiteSpace($modelOverride)) { $flagModel } else { $modelOverride }
     $script:Reasoning = if ($script:Agent -eq 'codex') {
-        if ([string]::IsNullOrWhiteSpace($reasoningOverride)) { $defaultReasoning } else { $reasoningOverride }
+        if ([string]::IsNullOrWhiteSpace($reasoningOverride)) { [string]$flagConfig.reasoning } else { $reasoningOverride }
     } else { '' }
     $script:Variant = if ($script:Agent -eq 'opencode') {
-        if ([string]::IsNullOrWhiteSpace($variantOverride)) {
-            switch ($defaultFlag) {
-                '-m' { 'xhigh' }
-                '-h' { 'high' }
-                default { 'max' }
-            }
-        } else { $variantOverride }
+        if (-not [string]::IsNullOrWhiteSpace($variantOverride)) {
+            $variantOverride
+        } elseif (-not [string]::IsNullOrWhiteSpace([string]$flagConfig.variant)) {
+            [string]$flagConfig.variant
+        } elseif (-not [string]::IsNullOrWhiteSpace([string]$agentConfig.variant)) {
+            [string]$agentConfig.variant
+        } else {
+            'max'
+        }
     } else { '' }
     if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) {
         $script:ReasoningExplicit = $true
@@ -1662,7 +1792,9 @@ try {
             $script:WorkspaceRoot = $script:WorkDir
         }
         Discover-Context
-        if (-not (Parse-Arguments)) {
+        if (-not (Import-AgentConfig -ScriptDir $script:ScriptDir)) {
+            $script:ExitCode = 64
+        } elseif (-not (Parse-Arguments)) {
             $script:ExitCode = if ($script:FailureCode -ne 0) { $script:FailureCode } else { 0 }
         } elseif (-not (Start-Or-ResumeRun)) {
             $script:ExitCode = if ($script:FailureCode -ne 0) { $script:FailureCode } else { 1 }
