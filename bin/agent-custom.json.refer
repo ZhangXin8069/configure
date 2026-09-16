@@ -52,7 +52,7 @@
   "agents": {
     "claude": {
       "provider": "opencode-go",
-      "model": "glm-5.3-flash",
+      "model": "deepseek-v4.1-flash",
       "strength": "",
       "secure_binary": "${HOME}/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d712",
       "env": {
