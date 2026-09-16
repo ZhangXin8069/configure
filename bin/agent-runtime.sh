@@ -235,17 +235,217 @@ _agent_runtime_mark() {
     esac
 }
 
+# ---- 部署路径解析 ----
+# 这些 helper 把「配置在哪、数据写哪」绑定到部署自身位置而非 ${HOME}，因为仓库常被
+# 部署在 ${HOME}/configure 之外：共享只读部署（/opt、/srv）、多用户共用同一份、
+# 容器/CI 内 HOME 不可写或未设置。解析优先级统一为「显式环境变量 > 部署自洽 > HOME 回退」。
+
+# 判定目录是否为 configure 根（仓库根）：含 skills/tools/hooks/plugins 任一子目录
+_agent_runtime_is_configure_root() {
+    local dir="${1:-}"
+    [[ -n "$dir" && -d "$dir" ]] || return 1
+    [[ -d "${dir}/skills" || -d "${dir}/tools" || -d "${dir}/hooks" || -d "${dir}/plugins" ]]
+}
+
+# 脚本目录（bin/）的父目录，即部署自洽的 configure 根候选
+_agent_runtime_script_root() {
+    local dir="${AGENT_SCRIPT_DIR:-${_PATH:-}}"
+    [[ -n "$dir" ]] || return 1
+    (cd -- "${dir}/.." 2>/dev/null && pwd -P)
+}
+
+# configure 根解析：1) AGENT_CONFIGURE_ROOT（显式即权威，即使结构不完整）
+# 2) 脚本目录的父目录 3) ${HOME}/configure。2/3 取第一个「像 configure 根」者；
+# 都不像时返回脚本父目录，由调用方按「未找到」如实呈现。
+_agent_runtime_configure_root() {
+    if [[ -n "${AGENT_CONFIGURE_ROOT:-}" ]]; then
+        printf '%s\n' "${AGENT_CONFIGURE_ROOT}"
+        return 0
+    fi
+    local script_root="" candidate
+    local -a candidates=()
+    script_root="$(_agent_runtime_script_root 2>/dev/null || true)"
+    [[ -n "$script_root" ]] && candidates+=("$script_root")
+    [[ -n "${HOME:-}" ]] && candidates+=("${HOME}/configure")
+    if (( ${#candidates[@]} > 0 )); then
+        for candidate in "${candidates[@]}"; do
+            if _agent_runtime_is_configure_root "$candidate"; then
+                printf '%s\n' "$candidate"
+                return 0
+            fi
+        done
+    fi
+    [[ -n "$script_root" ]] && printf '%s\n' "$script_root"
+    return 0
+}
+
+# ---- 缺失可执行文件的自动安装 ----
+# 换机、非 root 服务器、全新容器等场景下，agent CLI 往往还没装。此时按 agent 系列约定
+# 运行部署内 lib/_<组件>/install.sh（三系脚本均默认装入 ${HOME}/.local/bin，不需要 root），
+# 成功后再把安装目录前置到当前进程 PATH，使调用方随后的 command -v 立即命中并继续执行。
+# 安装在本进程内完成，无需 re-exec：调用方随后照常解析二进制、生成 secure_binary、启动。
+# 开关：AGENT_AUTO_INSTALL=0 关闭；AGENT_INSTALL_DIR 覆盖安装目录（默认 ${HOME}/.local/bin）。
+
+# 在 PATH 中定位可执行文件：仅接受绝对路径，找不到返回 1
+_agent_runtime_locate_binary() {
+    local name="${1:-}" path=""
+    [[ -n "$name" ]] || return 1
+    path="$(command -v -- "$name" 2>/dev/null || true)"
+    case "$path" in
+        /*) printf '%s\n' "$path";;
+        *) return 1;;
+    esac
+}
+
+# agent 名 → 部署内安装脚本路径：claude→_claude-code、opencode→_opencode、codex→_codex
+_agent_runtime_agent_install_script() {
+    local agent="${1:-}" sub=""
+    case "$agent" in
+        claude) sub="_claude-code";;
+        opencode) sub="_opencode";;
+        codex) sub="_codex";;
+        *) return 1;;
+    esac
+    local root="${AGENT_CONFIGURE_ROOT:-}"
+    [[ -n "$root" ]] || root="$(_agent_runtime_configure_root 2>/dev/null || true)"
+    [[ -n "$root" ]] || return 1
+    local script="${root}/lib/${sub}/install.sh"
+    [[ -r "$script" ]] || return 1
+    printf '%s\n' "$script"
+}
+
+# 把目录前置到 PATH（幂等；目录不存在时不做任何事）
+_agent_runtime_prepend_path_dir() {
+    local dir="${1:-}"
+    [[ -n "$dir" && -d "$dir" ]] || return 1
+    case ":${PATH}:" in
+        *":${dir}:"*) ;;
+        *) PATH="${dir}:${PATH}"; export PATH;;
+    esac
+    return 0
+}
+
+# 确保 agent 可执行文件可用。查找顺序：PATH 命中 → 安装目录命中（已装但未入 PATH 的常见情形）
+# → 运行部署内安装脚本 → 重新探测。已可用时零开销直接返回；任一步失败返回 1，
+# 由调用方按原有语义报错，不做静默回退、不重试。
+_agent_runtime_ensure_agent() {
+    local agent="${1:-}"
+    [[ -n "$agent" ]] || return 1
+    _agent_runtime_locate_binary "$agent" >/dev/null 2>&1 && return 0
+
+    local install_dir="${AGENT_INSTALL_DIR:-}"
+    [[ -n "$install_dir" ]] || install_dir="${HOME:+${HOME}/.local/bin}"
+    if [[ -n "$install_dir" ]]; then
+        _agent_runtime_prepend_path_dir "$install_dir" || true
+        _agent_runtime_locate_binary "$agent" >/dev/null 2>&1 && return 0
+    fi
+
+    local label="${_NAME:-agent}"
+    case "${AGENT_AUTO_INSTALL:-1}" in
+        0 | off | no | false)
+            printf '###%s: 未找到 %s，已按 AGENT_AUTO_INSTALL=%s 跳过自动安装###\n' \
+                "$label" "$agent" "${AGENT_AUTO_INSTALL}" >&2
+            return 1
+            ;;
+    esac
+    # 防重入：安装脚本自身若再触发 agent 系列，不再递归安装
+    if [[ -n "${AGENT_AUTO_INSTALL_DONE:-}" ]]; then
+        printf '###%s: 未找到 %s，且自动安装已尝试过（AGENT_AUTO_INSTALL_DONE 已置位）###\n' \
+            "$label" "$agent" >&2
+        return 1
+    fi
+
+    local script=""
+    if ! script="$(_agent_runtime_agent_install_script "$agent")"; then
+        printf '###%s: 提示: 未找到 %s，部署内也没有安装脚本（%s/lib/_*/install.sh）###\n' \
+            "$label" "$agent" "${AGENT_CONFIGURE_ROOT:-<部署根未知>}" >&2
+        return 1
+    fi
+
+    printf '###%s: 未找到 %s，自动运行安装脚本：%s###\n' "$label" "$agent" "$script" >&2
+    local rc=0
+    # 安装脚本的 stdout 一律转 stderr：本函数会在命令替换中被调用
+    # （_prepare_secure_binary），安装进度若混入 stdout 会污染解析到的二进制路径。
+    # 真实安装脚本的下载进度因此仍然可见，只是不再混入返回值。
+    AGENT_AUTO_INSTALL_DONE=1 bash "$script" >&2 || rc=$?
+    if (( rc != 0 )); then
+        printf '###%s: ERROR: 自动安装失败（退出码 %d）：%s###\n' "$label" "$rc" "$script" >&2
+        printf '###%s: 可手动运行该脚本后重试；离线环境请先准备好安装包或设置 AGENT_AUTO_INSTALL=0###\n' \
+            "$label" >&2
+        return 1
+    fi
+
+    if [[ -n "$install_dir" ]]; then
+        _agent_runtime_prepend_path_dir "$install_dir" || true
+    fi
+    local found=""
+    if found="$(_agent_runtime_locate_binary "$agent")"; then
+        printf '###%s: %s 安装完成：%s###\n' "$label" "$agent" "$found" >&2
+        return 0
+    fi
+    printf '###%s: ERROR: 安装脚本已执行，但仍未找到 %s（安装目录可能不在 %s，请检查上方安装输出）###\n' \
+        "$label" "$agent" "${install_dir:-PATH}" >&2
+    return 1
+}
+
+# 数据根解析（runs/、cache/ 等可写状态）：1) AGENT_DATA_DIR / CONFIGURE_AGENT_DATA_DIR
+# （显式，无条件采用）2) 部署内 <configure 根>/data 3) ${HOME}/configure/data。
+# 同一轮内「已存在且可写」优先于「需新建」，避免升级后既有 run 历史与 --resume 失联。
+# 参数 existing=1 时只返回已存在者且不创建目录（供 agent-status.sh 等只读工具使用）。
+# 全部不可用时返回 1，由调用方给出可操作报错。
+_agent_runtime_resolve_data_root() {
+    local mode="${1:-create}"
+    local explicit="${AGENT_DATA_DIR:-${CONFIGURE_AGENT_DATA_DIR:-}}"
+    if [[ -n "$explicit" ]]; then
+        printf '%s\n' "$explicit"
+        return 0
+    fi
+    local root="" candidate
+    local -a candidates=()
+    local home_data=""
+    root="$(_agent_runtime_configure_root 2>/dev/null || true)"
+    [[ -n "$root" ]] && candidates+=("${root}/data")
+    if [[ -n "${HOME:-}" ]]; then
+        home_data="${HOME}/configure/data"
+        [[ "$home_data" == "${root:+${root}/data}" ]] || candidates+=("$home_data")
+    fi
+    (( ${#candidates[@]} > 0 )) || return 1
+    if [[ "$mode" == "existing" ]]; then
+        for candidate in "${candidates[@]}"; do
+            [[ -d "$candidate" ]] || continue
+            printf '%s\n' "$candidate"
+            return 0
+        done
+        return 1
+    fi
+    for candidate in "${candidates[@]}"; do
+        [[ -d "$candidate" && -w "$candidate" ]] || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+    for candidate in "${candidates[@]}"; do
+        mkdir -p -- "$candidate" 2>/dev/null || continue
+        [[ -w "$candidate" ]] || continue
+        printf '%s\n' "$candidate"
+        return 0
+    done
+    return 1
+}
+
 _agent_runtime_init() {
     AGENT_WORKDIR="${1:-${_PWD:-$PWD}}"
     AGENT_SCRIPT_DIR="${2:-${_PATH:-.}}"
-    AGENT_DATA_ROOT="${AGENT_DATA_DIR:-${CONFIGURE_AGENT_DATA_DIR:-}}"
-    if [[ -z "$AGENT_DATA_ROOT" ]]; then
-        if [[ -n "${HOME:-}" ]]; then
-            AGENT_DATA_ROOT="${HOME}/configure/data"
-        else
-            AGENT_DATA_ROOT="$(cd -- "${AGENT_SCRIPT_DIR}/.." && pwd -P)/data"
-        fi
+    AGENT_CONFIGURE_ROOT="$(_agent_runtime_configure_root 2>/dev/null || true)"
+
+    local _data_root=""
+    if ! _data_root="$(_agent_runtime_resolve_data_root create)"; then
+        printf '###%s: ERROR: 找不到可写的 agent 数据目录（已尝试：%s/data、%s）###\n' \
+            "${_NAME:-agent}" "${AGENT_CONFIGURE_ROOT:-<部署根未知>}" \
+            "${HOME:+${HOME}/configure/data}" >&2
+        printf '###%s: 请 export AGENT_DATA_DIR=<可写目录> 后重试###\n' "${_NAME:-agent}" >&2
+        return 73
     fi
+    AGENT_DATA_ROOT="$_data_root"
 
     if ! mkdir -p -- "$AGENT_DATA_ROOT/runs" "$AGENT_DATA_ROOT/hooks"; then
         printf '###%s: ERROR: 无法创建 agent 数据目录：%s（可设置 AGENT_DATA_DIR）###\n' \

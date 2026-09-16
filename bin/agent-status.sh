@@ -12,7 +12,9 @@ usage() {
 
 默认显示最新一次运行；RUN_ID 显示指定运行；--all 显示全部运行。
 数据目录优先级：AGENT_DATA_DIR、CONFIGURE_AGENT_DATA_DIR、
-${HOME}/configure/data（HOME 未设置时回退到仓库 data/）。
+<configure 部署根>/data、${HOME}/configure/data。
+部署根由脚本位置推导（可设 AGENT_CONFIGURE_ROOT 覆盖），因此仓库部署在
+${HOME}/configure 之外时同样能查到对应运行记录。
 本命令只读，不恢复、不删除、不修改任何运行状态。
 USAGE
 }
@@ -22,14 +24,17 @@ if [[ -r "${SCRIPT_DIR}/agent-runtime.sh" ]]; then
     source "${SCRIPT_DIR}/agent-runtime.sh"
 fi
 
-if [[ -n "${AGENT_DATA_DIR:-}" ]]; then
-    DATA_ROOT="$AGENT_DATA_DIR"
-elif [[ -n "${CONFIGURE_AGENT_DATA_DIR:-}" ]]; then
-    DATA_ROOT="$CONFIGURE_AGENT_DATA_DIR"
-elif [[ -n "${HOME:-}" ]]; then
-    DATA_ROOT="${HOME}/configure/data"
-else
-    DATA_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)/data"
+DATA_ROOT=""
+# 与 agent.sh 共用同一解析（部署自洽优先，其次 ${HOME}/configure/data）；只读工具用
+# existing 模式，不创建任何目录，数据根不存在时按「未找到」如实报告。
+if declare -F _agent_runtime_resolve_data_root >/dev/null 2>&1; then
+    AGENT_SCRIPT_DIR="${AGENT_SCRIPT_DIR:-$SCRIPT_DIR}"
+    DATA_ROOT="$(_agent_runtime_resolve_data_root existing 2>/dev/null || true)"
+fi
+if [[ -z "$DATA_ROOT" ]]; then
+    # 共享运行时缺失，或候选目录均不存在：退回单点解析
+    DATA_ROOT="${AGENT_DATA_DIR:-${CONFIGURE_AGENT_DATA_DIR:-${HOME:+${HOME}/configure/data}}}"
+    [[ -n "$DATA_ROOT" ]] || DATA_ROOT="$(cd -- "${SCRIPT_DIR}/.." && pwd -P)/data"
 fi
 
 all_runs=0
