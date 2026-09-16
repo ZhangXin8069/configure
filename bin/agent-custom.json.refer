@@ -1,12 +1,15 @@
 {
   "schema": "agent-custom/v1",
-  "description": "agent 系列个性化配置：各 agent 使用的供应商（provider）、模型（flags）与模型强度（variant/reasoning/effort），以及各供应商在本机使用的默认模型与机器相关路径。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
+  "description": "agent 系列个性化配置（两层默认：供应商层与 agent 层相互独立，agent 层优先）。供应商层：providers.<途径>.default_models/default_strengths.<agent>；agent 层：agents.<agent>.provider/model/strength。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
   "guidance": [
     "复制本文件为 agent-custom.json 后按需修改；agent-custom.json 已被 .gitignore 忽略，不会入库。",
-    "切换供应商：命令行快捷词（cl go / op gpt / co pay）或 agents.<agent>.provider；cl 用其 anthropic_base_url，co 用其 base_url/wire_api/env_key（途径端点等通用设置见 agent-config.json）。",
-    "供应商默认模型：providers.<途径>.default_models.<agent> 决定快捷切换供应商时的默认模型（未显式指定模型时生效）；未配置则沿用当前旗标模型并告警。",
-    "切换模型与强度：agents.<agent>.flags.<旗标>.model 为模型 ID；op 用 variant（max/xhigh/high/low），co 用 reasoning（low/medium/high/xhigh/max/ultra），cl 用 env.CLAUDE_CODE_EFFORT_LEVEL。",
-    "agents.opencode.snsc_binary 为 HPC/snsc 上 opencode 的部署路径（升级 vscode-server 后会变化）。"
+    "两层默认相互独立、agent 层优先：解析顺序为 命令行/环境变量 > agents.<agent>.model|strength > providers.<途径>.default_models|default_strengths.<agent>。",
+    "agents.<agent>.model/strength 留空（或省略）时取当前途径的默认值与默认强度；填写后作为该 agent 的固定默认，不随供应商快捷词（cl go / op gpt / co pay）切换而变化。",
+    "模型强度（strength）统一配置：cl 经 CLAUDE_CODE_EFFORT_LEVEL、op 经 variant、co 经 reasoning effort 落地，三条解析链相同。",
+    "agents.<agent>.provider 决定未指定快捷词时使用哪个途径；切换途径后若 agents.<agent>.model/strength 留空，即使用该途径的 default_models/default_strengths。",
+    "agents.opencode.provider 仅决定「未指定模型时用哪个途径的默认模型」；opencode 实际注册的途径仍是 agent-config.json agents.opencode.key_providers 中 key 已设置者。",
+    "agents.claude.env 只保留 claude 专属附加项（HAIKU/子代理模型/压缩窗口等）；ANTHROPIC_MODEL 与 OPUS/SONNET 别名、CLAUDE_CODE_EFFORT_LEVEL 由上述解析链自动派生。",
+    "agents.opencode.secure_binary 为 HPC/secure 变体（cls/ops/cos）下 opencode 的部署路径（升级 vscode-server 后会变化）。"
   ],
   "providers": {
     "deepseek-pay": {
@@ -14,6 +17,11 @@
         "claude": "deepseek-flash[1m]",
         "opencode": "deepseek/deepseek-flash",
         "codex": "deepseek-flash"
+      },
+      "default_strengths": {
+        "claude": "max",
+        "opencode": "max",
+        "codex": "max"
       }
     },
     "opencode-go": {
@@ -21,140 +29,44 @@
         "claude": "deepseek-v4.1-flash",
         "opencode": "opencode-go/deepseek-v4.1-flash",
         "codex": "deepseek-v4.1-flash"
+      },
+      "default_strengths": {
+        "claude": "max",
+        "opencode": "max",
+        "codex": "max"
       }
     },
     "custom-gpt": {
       "default_models": {
         "opencode": "custom-gpt/gpt-6-astra",
         "codex": "gpt-6-astra"
+      },
+      "default_strengths": {
+        "opencode": "max",
+        "codex": "max"
       }
     }
   },
   "agents": {
     "claude": {
-      "default_flag": "-m",
       "provider": "deepseek-pay",
-      "flags": {
-        "-m": {
-          "model": "deepseek-flash[1m]"
-        },
-        "-o": {
-          "model": "deepseek-flash[1m]"
-        },
-        "-p": {
-          "model": "deepseek-flash[1m]"
-        },
-        "-q": {
-          "model": "deepseek-flash[1m]"
-        },
-        "-k": {
-          "model": "deepseek-flash"
-        },
-        "-g": {
-          "model": "deepseek-flash[1m]"
-        },
-        "-f": {
-          "model": "deepseek-flash"
-        },
-        "-h": {
-          "model": "deepseek-flash[1m]"
-        }
-      },
+      "model": "",
+      "strength": "",
       "env": {
-        "ANTHROPIC_MODEL": "deepseek-flash[1m]",
-        "ANTHROPIC_DEFAULT_OPUS_MODEL": "deepseek-flash[1m]",
-        "ANTHROPIC_DEFAULT_SONNET_MODEL": "deepseek-flash[1m]",
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-flash",
-        "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-flash",
-        "CLAUDE_CODE_EFFORT_LEVEL": "max"
+        "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-flash"
       }
     },
     "opencode": {
-      "default_flag": "-f",
-      "variant": "max",
-      "snsc_binary": "/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713",
-      "flags": {
-        "-m": {
-          "model": "opencode-go/muse-spark-1.2-contributor",
-          "name": "Build auto·Muse Spark 1.2 Contributor OpenCode Go",
-          "variant": "xhigh"
-        },
-        "-o": {
-          "model": "opencode-go/ox-alpha-free",
-          "name": "Build auto · Ox Alpha Free (Unlimited) OpenCode Go"
-        },
-        "-p": {
-          "model": "opencode-go/deepseek-v4-pro",
-          "name": "DeepSeek V4 Pro (New)"
-        },
-        "-q": {
-          "model": "opencode-go/qwen3.8-max",
-          "name": "Qwen3.8 Max"
-        },
-        "-k": {
-          "model": "opencode-go/kimi-k3",
-          "name": "Kimi K3"
-        },
-        "-g": {
-          "model": "opencode-go/gpt-5.6-luna",
-          "name": "GPT-5.6 Luna (2x usage)"
-        },
-        "-f": {
-          "model": "deepseek/deepseek-flash",
-          "name": "DeepSeek V4.1 Flash"
-        },
-        "-h": {
-          "model": "opencode-go/hy3",
-          "name": "Hy3",
-          "variant": "high"
-        }
-      }
+      "provider": "deepseek-pay",
+      "model": "",
+      "strength": "",
+      "secure_binary": "/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
     },
     "codex": {
-      "default_flag": "-q",
       "provider": "custom-gpt",
-      "flags": {
-        "-m": {
-          "model": "gpt-5.6-luna",
-          "name": "GPT-5.6-Luna",
-          "reasoning": "max"
-        },
-        "-o": {
-          "model": "gpt-5.6-sol",
-          "name": "GPT-5.6-Sol",
-          "reasoning": "max"
-        },
-        "-p": {
-          "model": "gpt-5.6-terra",
-          "name": "GPT-5.6-Terra",
-          "reasoning": "high"
-        },
-        "-q": {
-          "model": "gpt-6-astra",
-          "name": "GPT-6 Astra",
-          "reasoning": "max"
-        },
-        "-k": {
-          "model": "gpt-5.4-mini",
-          "name": "GPT-5.4-Mini",
-          "reasoning": "high"
-        },
-        "-g": {
-          "model": "gpt-5.6-luna",
-          "name": "GPT-5.6-Luna",
-          "reasoning": "high"
-        },
-        "-f": {
-          "model": "gpt-5.6-sol",
-          "name": "GPT-5.6-Sol",
-          "reasoning": "low"
-        },
-        "-h": {
-          "model": "gpt-5.6-luna",
-          "name": "GPT-5.6-Luna",
-          "reasoning": "high"
-        }
-      }
+      "model": "",
+      "strength": ""
     }
   }
 }
