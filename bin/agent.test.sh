@@ -6,6 +6,8 @@ script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 launcher="$script_dir/agent.sh"
 status_script="$script_dir/agent-status.sh"
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-launcher-test.XXXXXX")
+# macOS 的 TMPDIR（/var → /private/var 符号链接）会让字面路径断言歧义，realpath 化
+test_root=$(cd "$test_root" && pwd -P)
 
 cleanup() {
     rm -rf -- "$test_root"
