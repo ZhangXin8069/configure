@@ -51,6 +51,22 @@ make_fake() {
     cat > "$script" <<'EOF'
 #!/usr/bin/env bash
 set -u
+# 模型目录探测调用（codex --version / codex debug models）不计入 FAKE_CALL_LOG
+if [[ "$(basename -- "$0")" == fake-codex.sh ]]; then
+    case "$*" in
+        '--version') printf 'codex-cli 9.9.9%s\n' "${FAKE_CODEX_VERSION_SUFFIX:-}"; exit 0;;
+        'debug models'*)
+            if [[ "${FAKE_MODELS_REJECT:-0}" == 1 && "$*" == *' -c '* ]]; then
+                exit 3
+            fi
+            if [[ "${FAKE_MODELS_BAD:-0}" == 1 ]]; then
+                printf 'not-json\n'
+            else
+                printf '%s\n' '{"models":[{"slug":"gpt-5.4-mini","display_name":"GPT-5.4-Mini","context_window":272000,"priority":23,"visibility":"hide","supported_reasoning_levels":[{"effort":"low","description":"Fast responses with lighter reasoning"},{"effort":"medium","description":"Balances speed and reasoning depth"},{"effort":"high","description":"Greater reasoning depth"},{"effort":"xhigh","description":"Extra high reasoning depth"}],"base_instructions":"fake template instructions"},{"slug":"gpt-6-astra","display_name":"GPT-6-Astra","context_window":272000,"supported_reasoning_levels":[{"effort":"low","description":"Fast responses with lighter reasoning"},{"effort":"medium","description":"Balances speed and reasoning depth"},{"effort":"high","description":"Greater reasoning depth"},{"effort":"xhigh","description":"Extra high reasoning depth"},{"effort":"max","description":"Maximum reasoning depth for the hardest problems"},{"effort":"ultra","description":"Maximum reasoning depth for the hardest problems"}],"base_instructions":"fake astra instructions"}]}'
+            fi
+            exit 0;;
+    esac
+fi
 printf '%s\t%s\n' "$0" "$*" >> "$FAKE_CALL_LOG"
 if [[ "${FAKE_FAIL_RESUMES:-0}" == 1 &&
       "$(basename -- "$0")" == fake-codex.sh &&
@@ -725,6 +741,91 @@ assert_contains "$switch_co_go_new" 'model_providers.opencode-go.wire_api="respo
 assert_contains "$switch_co_go_new" 'supports_websockets=false'
 printf 'PASS: 快捷词 co go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash，responses 端点）\n'
 
+# ---- Codex 模型元数据目录：内置目录之外的模型自动补齐（消除 metadata 告警） ----
+catalog_path=$(printf '%s\n' "$switch_co_go_new" | sed -n 's/.*model_catalog_json="\([^"]*\)".*/\1/p' | head -1)
+[[ -n "$catalog_path" ]] || fail "co go 应注入 model_catalog_json：$switch_co_go_new"
+case "$catalog_path" in
+    "$data/cache/"*) ;;
+    *) fail "模型目录应缓存于 data/cache：$catalog_path" ;;
+esac
+[[ -f "$catalog_path" ]] || fail "模型目录文件不存在：$catalog_path"
+python3 - "$catalog_path" <<'PY' || fail 'co go 注入的模型目录内容不正确'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    catalog = json.load(handle)
+slugs = {m['slug']: m for m in catalog['models']}
+assert 'gpt-6-astra' in slugs and 'gpt-5.4-mini' in slugs, '内置条目应保留'
+entry = slugs['deepseek-v4.1-flash']
+assert entry['display_name'] == 'DeepSeek V4.1 Flash', entry['display_name']
+assert entry['context_window'] == 1000000, entry['context_window']
+assert entry['auto_compact_token_limit'] == 900000, entry.get('auto_compact_token_limit')
+assert {l['effort'] for l in entry['supported_reasoning_levels']} >= {'low', 'max', 'ultra'}, entry['supported_reasoning_levels']
+PY
+printf 'PASS: co 为内置目录外模型注入模型元数据目录（保留内置条目）\n'
+
+builtin_before=$(wc -l < "$call_log")
+set +e
+builtin_output=$(CUSTOM_GPT_API_KEY=test-custom-key run_launcher co "$fake_codex" gpt --once 2>&1)
+builtin_status=$?
+set -e
+(( builtin_status == 0 )) || fail "co gpt 失败：$builtin_output"
+builtin_new=$(tail -n +$((builtin_before + 1)) "$call_log")
+case "$builtin_new" in
+    *model_catalog_json*) fail '内置目录中的模型不应注入 model_catalog_json' ;;
+esac
+printf 'PASS: co 内置模型（gpt-6-astra）不注入模型目录\n'
+
+cache_files_before=$(find "$data/cache" -type f | wc -l)
+go_reuse_before=$(wc -l < "$call_log")
+set +e
+go_reuse_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go --once 2>&1)
+go_reuse_status=$?
+set -e
+(( go_reuse_status == 0 )) || fail "co go 复用失败：$go_reuse_output"
+go_reuse_new=$(tail -n +$((go_reuse_before + 1)) "$call_log")
+assert_contains "$go_reuse_new" "model_catalog_json=\"$catalog_path\""
+cache_files_after=$(find "$data/cache" -type f | wc -l)
+(( cache_files_before == cache_files_after )) || fail "模型目录应复用缓存（${cache_files_before} -> ${cache_files_after}）"
+printf 'PASS: co 模型目录按 codex 版本缓存复用\n'
+
+badcat_before=$(wc -l < "$call_log")
+set +e
+badcat_output=$(FAKE_MODELS_BAD=1 FAKE_CODEX_VERSION_SUFFIX=-bad OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go --once 2>&1)
+badcat_status=$?
+set -e
+(( badcat_status == 0 )) || fail "模型目录生成失败时不应阻塞启动：$badcat_output"
+assert_contains "$badcat_output" 'Codex 模型目录生成失败'
+badcat_new=$(tail -n +$((badcat_before + 1)) "$call_log")
+case "$badcat_new" in
+    *model_catalog_json*) fail '目录生成失败时不应注入 model_catalog_json' ;;
+esac
+printf 'PASS: 模型目录生成失败时告警且不阻塞（保留 fallback 元数据）\n'
+
+override_before=$(wc -l < "$call_log")
+set +e
+override_output=$(CODEX_MODEL_CATALOG=/tmp/custom-catalog.json OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go --once 2>&1)
+override_status=$?
+set -e
+(( override_status == 0 )) || fail "CODEX_MODEL_CATALOG 覆盖失败：$override_output"
+override_new=$(tail -n +$((override_before + 1)) "$call_log")
+assert_contains "$override_new" 'model_catalog_json="/tmp/custom-catalog.json"'
+printf 'PASS: CODEX_MODEL_CATALOG 显式覆盖生效\n'
+
+reject_before=$(wc -l < "$call_log")
+set +e
+reject_output=$(FAKE_MODELS_REJECT=1 OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go --model deepseek-v4-pro --once 2>&1)
+reject_status=$?
+set -e
+(( reject_status == 0 )) || fail "模型目录自检拒绝时不应阻塞启动：$reject_output"
+assert_contains "$reject_output" 'Codex 无法加载模型目录'
+reject_new=$(tail -n +$((reject_before + 1)) "$call_log")
+case "$reject_new" in
+    *model_catalog_json*) fail '自检拒绝时不应注入 model_catalog_json' ;;
+esac
+printf 'PASS: 模型目录自检拒绝时告警且不注入（保留 fallback 元数据）\n'
+
 switch_explicit_before=$(wc -l < "$call_log")
 set +e
 switch_explicit_output=$(CUSTOM_GPT_API_KEY=test-custom-key run_launcher op "$fake_opencode" gpt --model custom-gpt/gpt-5.6-luna --once 2>&1)
@@ -818,3 +919,91 @@ set -e
 (( bad_status != 0 )) || fail '损坏的 agent-config.json 应报错退出'
 assert_contains "$bad_output" '解析配置失败'
 printf 'PASS: 损坏配置明确报错\n'
+
+# ---- secure 变体（cls/ops/cos）：secure_binary 缺失时从 PATH 完整复制 ----
+secure_home="$test_root/secure-home"
+secure_src_dir="$test_root/secure-src"
+mkdir -p "$secure_home" "$secure_src_dir"
+# 与 agent-custom.json.refer 的 agents.{claude,opencode,codex}.secure_binary 默认值保持一致
+# （升级 vscode-server 导致默认路径变化时需同步更新，同时防止模板被误改）
+secure_rel=".vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
+secure_cos="$secure_home/$secure_rel/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d711"
+secure_cls="$secure_home/$secure_rel/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d712"
+secure_ops="$secure_home/$secure_rel/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
+
+# PATH 中的可执行源（名字与 command -v 查找名一致，调用后转发给对应 fake）
+for pair in "codex:$fake_codex" "claude:$fake_claude" "opencode:$fake_opencode"; do
+    secure_name="${pair%%:*}"
+    secure_fake="${pair##*:}"
+    cat > "$secure_src_dir/$secure_name" <<EOF
+#!/usr/bin/env bash
+printf '%s\t%s\n' "\$0" "\$*" >> "\$FAKE_CALL_LOG"
+exec "$secure_fake" "\$@"
+EOF
+    chmod 0755 "$secure_src_dir/$secure_name"
+done
+
+ln -sf "$launcher" "$test_root/cos"
+cos_secure_before=$(wc -l < "$call_log")
+set +e
+cos_secure_output=$(cd "$repo/nested" && env -u CODEX_BIN \
+    HOME="$secure_home" PATH="$secure_src_dir:$PATH" \
+    AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
+    CUSTOM_GPT_API_KEY=test-custom-key \
+    "$test_root/cos" --once 2>&1)
+cos_secure_status=$?
+set -e
+(( cos_secure_status == 0 )) || fail "cos secure_binary 用例失败：$cos_secure_output"
+assert_contains "$cos_secure_output" '完整复制'
+[[ -f "$secure_cos" && -x "$secure_cos" && ! -L "$secure_cos" ]] || fail "cos secure_binary 未生成或不是普通文件：$secure_cos"
+cmp -s "$secure_src_dir/codex" "$secure_cos" || fail 'cos secure_binary 复制内容与源不一致'
+cos_secure_exec=$(tail -n +$((cos_secure_before + 1)) "$call_log" | head -1)
+assert_contains "$cos_secure_exec" "$secure_cos"
+
+set +e
+cos_secure_again=$(cd "$repo/nested" && env -u CODEX_BIN \
+    HOME="$secure_home" PATH="$secure_src_dir:$PATH" \
+    AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
+    CUSTOM_GPT_API_KEY=test-custom-key \
+    "$test_root/cos" --once 2>&1)
+cos_secure_again_status=$?
+set -e
+(( cos_secure_again_status == 0 )) || fail "cos 二次运行失败：$cos_secure_again"
+case "$cos_secure_again" in
+    *'完整复制'*) fail 'secure_binary 已存在时不应重复复制' ;;
+esac
+
+ln -sf "$launcher" "$test_root/cls"
+cls_secure_before=$(wc -l < "$call_log")
+set +e
+cls_secure_output=$(cd "$repo/nested" && env -u CLAUDE_BIN \
+    HOME="$secure_home" PATH="$secure_src_dir:$PATH" \
+    AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
+    DEEPSEEK_PAY_API_KEY=test-deepseek-key \
+    "$test_root/cls" --once 2>&1)
+cls_secure_status=$?
+set -e
+(( cls_secure_status == 0 )) || fail "cls secure_binary 用例失败：$cls_secure_output"
+assert_contains "$cls_secure_output" '完整复制'
+[[ -f "$secure_cls" && -x "$secure_cls" && ! -L "$secure_cls" ]] || fail "cls secure_binary 未生成或不是普通文件：$secure_cls"
+cmp -s "$secure_src_dir/claude" "$secure_cls" || fail 'cls secure_binary 复制内容与源不一致'
+cls_secure_exec=$(tail -n +$((cls_secure_before + 1)) "$call_log" | head -1)
+assert_contains "$cls_secure_exec" "$secure_cls"
+
+ln -sf "$launcher" "$test_root/ops"
+ops_secure_before=$(wc -l < "$call_log")
+set +e
+ops_secure_output=$(cd "$repo/nested" && env -u OPENCODE_BIN \
+    HOME="$secure_home" PATH="$secure_src_dir:$PATH" \
+    AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
+    DEEPSEEK_PAY_API_KEY=test-deepseek-key \
+    "$test_root/ops" --once 2>&1)
+ops_secure_status=$?
+set -e
+(( ops_secure_status == 0 )) || fail "ops secure_binary 用例失败：$ops_secure_output"
+assert_contains "$ops_secure_output" '完整复制'
+[[ -f "$secure_ops" && -x "$secure_ops" && ! -L "$secure_ops" ]] || fail "ops secure_binary 未生成或不是普通文件：$secure_ops"
+cmp -s "$secure_src_dir/opencode" "$secure_ops" || fail 'ops secure_binary 复制内容与源不一致'
+ops_secure_exec=$(tail -n +$((ops_secure_before + 1)) "$call_log" | head -1)
+assert_contains "$ops_secure_exec" "$secure_ops"
+printf 'PASS: secure 变体（cls/ops/cos）缺失时从 PATH 完整复制 secure_binary\n'

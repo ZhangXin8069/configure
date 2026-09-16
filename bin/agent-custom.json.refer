@@ -9,7 +9,8 @@
     "agents.<agent>.provider 决定未指定快捷词时使用哪个途径；切换途径后若 agents.<agent>.model/strength 留空，即使用该途径的 default_models/default_strengths。",
     "agents.opencode.provider 仅决定「未指定模型时用哪个途径的默认模型」；opencode 实际注册的途径仍是 agent-config.json agents.opencode.key_providers 中 key 已设置者。",
     "agents.claude.env 只保留 claude 专属附加项（HAIKU/子代理模型/压缩窗口等）；ANTHROPIC_MODEL 与 OPUS/SONNET 别名、CLAUDE_CODE_EFFORT_LEVEL 由上述解析链自动派生。",
-    "agents.opencode.secure_binary 为 HPC/secure 变体（cls/ops/cos）下 opencode 的部署路径（升级 vscode-server 后会变化）。"
+    "agents.<agent>.secure_binary 为 HPC/secure 变体（cls/ops/cos）下对应 agent（claude/opencode/codex）的部署路径，支持 ${HOME} 占位符（升级 vscode-server 后会变化）；路径缺失时启动器自动从 PATH 中对应可执行文件完整复制（非符号链接）过去。",
+    "co 的模型元数据目录（消除三方模型「Model metadata ... not found」告警）默认按通用配置 agents.codex.model_catalog 自动生成并缓存于 data/cache；可在本文件覆盖 enabled/clone_template/display_names，或用 CODEX_MODEL_CATALOG 显式指定目录文件。"
   ],
   "providers": {
     "deepseek-pay": {
@@ -52,6 +53,7 @@
       "provider": "deepseek-pay",
       "model": "",
       "strength": "",
+      "secure_binary": "${HOME}/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d712",
       "env": {
         "ANTHROPIC_DEFAULT_HAIKU_MODEL": "deepseek-flash",
         "CLAUDE_CODE_SUBAGENT_MODEL": "deepseek-flash"
@@ -61,12 +63,13 @@
       "provider": "deepseek-pay",
       "model": "",
       "strength": "",
-      "secure_binary": "/public/home/zhangxin/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
+      "secure_binary": "${HOME}/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
     },
     "codex": {
       "provider": "custom-gpt",
       "model": "",
-      "strength": ""
+      "strength": "",
+      "secure_binary": "${HOME}/.vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d711"
     }
   }
 }
