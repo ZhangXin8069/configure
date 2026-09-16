@@ -42,7 +42,7 @@ for mapping in \
 done
 assert_contains "$bat" 'agent-runtime.ps1'
 assert_contains "$bat" 'AGENT_BAT_WORKDIR'
-assert_contains "$bat" 'AGENT_BAT_SNSC'
+assert_contains "$bat" 'AGENT_BAT_SECURE'
 assert_not_contains "$bat" 'LOG_FILE=.agent.'
 
 for contract in \
@@ -64,8 +64,9 @@ for contract in \
 done
 assert_contains "$runtime" "'agent-config.json'"
 assert_contains "$runtime" "'agent-custom.json.refer'"
-assert_contains "$runtime" '$agentConfig.default_flag'
-assert_contains "$runtime" '$agentConfig.flags.$defaultFlag'
+assert_not_contains "$runtime" 'default_flag'
+assert_not_contains "$runtime" '$agentConfig.flags'
+assert_not_contains "$runtime" 'DEFAULT_MODEL_FLAG'
 assert_contains "$runtime" '$permissionMode'
 assert_contains "$runtime" 'agents.opencode.agent'
 assert_contains "$runtime" 'model_providers.$providerId.env_key'
@@ -78,6 +79,13 @@ assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$
 assert_contains "$runtime" 'Resolve-ProviderAlias'
 assert_contains "$runtime" "'pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt'"
 assert_contains "$runtime" 'Get-ProviderDefaultModel'
+assert_contains "$runtime" 'providers.$providerForModel.default_models.$agentKey'
+assert_contains "$runtime" 'Get-ProviderDefaultStrength'
+assert_contains "$runtime" 'default_strengths.$AgentName'
+assert_contains "$runtime" 'agents.$agentKey.model'
+assert_contains "$runtime" '$agentConfig.strength'
+assert_contains "$runtime" '$script:ClaudeStrength'
+assert_not_contains "$runtime" "'-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h'"
 assert_contains "$runtime" 'Invoke-LegacyKeyMigration'
 assert_contains "$runtime" "'DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'"
 assert_contains "$runtime" "'CUSTOM_GPT_API_KEY', 'LQCD_API_KEY'"
