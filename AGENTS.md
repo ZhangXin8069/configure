@@ -24,6 +24,8 @@
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm），`{~skill-name}` 触发 |
 | `docs/` | 参考文档、包清单、图片素材 |
+| `logs/` | 任务需求单：`v{YYYYMMDD}.txt` 保存历次 agent 任务的需求原文，作为工作输入依据 |
+| `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
 | `data/` | agent 运行时本地数据：runs manifest/state/events/context/log/inputs，`cache/` 为 Codex 模型元数据目录缓存；默认不入库 |
 | `hooks/` | Codex agent hook 适配层与独立 Git 质量门禁；不会自动修改 Codex 配置或 `core.hooksPath` |
 | `plugins/` | Codex 插件推荐索引与显式安装器；不自动安装第三方插件 |
