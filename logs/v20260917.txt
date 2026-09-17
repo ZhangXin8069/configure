@@ -1,0 +1,4 @@
+改进agent系列:1.自动更新各供应商支持的模型清单,例如通过{curl https://opencode.ai/zen/go/v1/models}获取模型清单,如若失败,自行寻找另外的完美解决方案;2.丰富切换功能,如{co go glm-
+  5.3-flash max}即使用{go供应商的{glm-5.3-flash}模型的{max}强度},如{cl pay deepseek-pro[1m]}即使用{pay供应商的{deepseek-pro[1m]}模型的默认强度},如{op gpt}即使用{gpt供应商的默认模
+  型的默认强度},如{co}则使用{默认供应商的默认模型的默认强度},以此类推;3.结合(1)的{自动更新模型清单}功能,提高(2)的兼容性(例如{不完整模型名}自动匹配{完整模型名})与鲁棒性(例如{过高
+  的模型强度}匹配{顺延的模型强度});4.上述默认设置读写在{agent-custom.json.refer},如若存在{agent-custom.json},则优先{agent-custom.json};

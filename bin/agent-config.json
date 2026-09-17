@@ -1,6 +1,12 @@
 {
   "schema": "agent-config/v1",
-  "description": "agent 系列（cl/op/co）通用配置：模型提供途径目录、状态栏与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
+  "description": "agent 系列（cl/op/co）通用配置：模型提供途径目录、模型发现/缓存、状态栏与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
+  "model_discovery": {
+    "enabled": true,
+    "cache_ttl_seconds": 21600,
+    "timeout_seconds": 5,
+    "metadata_url": "https://models.dev/api.json"
+  },
   "statusline": {
     "segments": [
       "model-with-reasoning",
@@ -29,7 +35,18 @@
       "anthropic_auth": "auth_token",
       "wire_api": "responses",
       "supports_websockets": false,
-      "opencode_provider_id": "deepseek"
+      "opencode_provider_id": "deepseek",
+      "models_url": "https://api.deepseek.com/models",
+      "models_auth": "bearer",
+      "models_metadata_provider": "deepseek",
+      "supported_strengths": [ "high", "max" ],
+      "models": {
+        "deepseek-v4-pro": {},
+        "deepseek-v4.1-flash": {},
+        "deepseek-v4-flash": {},
+        "deepseek-v4-flash-vision-exp": {},
+        "deepseek-flash": {}
+      }
     },
     "opencode-go": {
       "label": "OpenCode Go 订阅（$10/月）",
@@ -40,6 +57,10 @@
       "wire_api": "responses",
       "supports_websockets": false,
       "opencode_provider_id": "opencode-go",
+      "models_url": "https://opencode.ai/zen/go/v1/models",
+      "models_auth": "none",
+      "models_metadata_provider": "opencode-go",
+      "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
       "models": {
         "grok-4.6": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
         "gpt-5.6-luna": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
@@ -79,6 +100,9 @@
       "wire_api": "responses",
       "supports_websockets": true,
       "opencode_provider_id": "custom-gpt",
+      "models_url": "http://nat200.natappvip.cc/v1/models",
+      "models_auth": "bearer",
+      "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
       "opencode": {
         "npm": "@ai-sdk/openai",
         "models": [
