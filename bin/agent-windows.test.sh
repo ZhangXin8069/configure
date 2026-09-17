@@ -57,6 +57,9 @@ for contract in \
     'function Merge-JsonNode' \
     'function Import-AgentConfig' \
     'function Get-OpenCodeProviderConfig' \
+    'function Get-ModelCatalogCachePath' \
+    'function Update-ProviderModelCatalog' \
+    'function Resolve-AgentModelSelection' \
     '--max-turns' \
     '--max-runtime' \
     '--stop-file' \
@@ -94,6 +97,11 @@ assert_contains "$runtime" 'default_strengths.$AgentName'
 assert_contains "$runtime" 'agents.$agentKey.model'
 assert_contains "$runtime" '$agentConfig.strength'
 assert_contains "$runtime" '$script:ClaudeStrength'
+assert_contains "$runtime" 'models_url'
+assert_contains "$runtime" 'models_metadata_provider'
+assert_contains "$runtime" '$positional'
+assert_contains "$runtime" '已顺延为'
+assert_contains "$runtime" '模型匹配'
 # 两层默认择序：显式选途径（快捷词或 *_PROVIDER 环境变量）时 providers 层优先，标签随之切换
 assert_contains "$runtime" '$providerExplicit -and -not [string]::IsNullOrWhiteSpace($providerModel)'
 assert_contains "$runtime" '$providerExplicit -and -not [string]::IsNullOrWhiteSpace($providerStrength)'

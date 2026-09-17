@@ -9,6 +9,8 @@
 # prompt 单一来源：同目录 agent-prompt.txt（模板含 ${HOME}/${_PWD} 占位符；op 另支持 ${LIST_FILE}）
 # 配置来源：同目录 agent-config.json（通用）+ agent-custom.json 或 agent-custom.json.refer（个性化，
 #   存在 agent-custom.json 时替代后者）深度合并；模型途径、各途径/各 agent 默认模型与强度、共用参数均取自这两份配置
+# 模型目录：按 provider.models_url 自动刷新并缓存，models.dev 补齐推理强度；支持模糊模型匹配、
+#   上下文后缀保留与过高强度顺延（详见 agent-model-catalog.py）
 # 模型元数据：co 对内置目录之外的模型（deepseek 等）自动生成 model_catalog_json 注入（见 _codex_model_catalog），
 #   消除 Codex ≥0.154 的「Model metadata ... not found」告警；缓存于 data/cache，可用 CODEX_MODEL_CATALOG 覆盖
 
@@ -292,6 +294,8 @@ _agent_config_load() {
         fi
     fi
     _AGENT_PYTHON="${_py}" # 供后续 helper（如 Codex 模型目录）复用同一解释器
+    _AGENT_CONFIG_FILE="${_cfg}"
+    _AGENT_CUSTOM_CONFIG_FILE="${_custom}"
     local _dump
     if ! _dump="$("${_py}" - "${_cfg}" "${_custom}" <<'PYEOF'
 import json
@@ -385,6 +389,98 @@ PYEOF
         exit 1
     fi
     eval "${_dump}"
+}
+
+# 供应商模型目录：优先在线刷新，失败回退缓存/静态配置；解析结果同时用于模型模糊匹配
+# 与强度顺延。helper 缺失时保持旧行为，不让已有部署因升级不完整而无法启动。
+_agent_model_catalog_call() {
+    local _provider="$1"
+    shift
+    local _helper="${_PATH}/agent-model-catalog.py"
+    if [[ ! -r "${_helper}" ]]; then
+        return 127
+    fi
+    "${_AGENT_PYTHON}" "${_helper}" \
+        --config "${_AGENT_CONFIG_FILE}" \
+        --custom-config "${_AGENT_CUSTOM_CONFIG_FILE}" \
+        --cache "$(_agent_model_catalog_cache_path "${_provider}")" \
+        "$@"
+}
+
+_agent_model_catalog_cache_path() {
+    local _provider="$1" _safe
+    _safe="$(printf '%s' "${_provider}" | tr -c 'A-Za-z0-9._-' '-')"
+    [[ -n "${_safe}" ]] || _safe=provider
+    printf '%s\n' "${AGENT_DATA_ROOT:-${TMPDIR:-/tmp}}/cache/provider-models/${_safe}.json"
+}
+
+_agent_model_catalog_warn_unavailable() {
+    if [[ "${_AGENT_MODEL_CATALOG_WARNED:-0}" != 1 ]]; then
+        echo "###${_NAME}: warning: ${_PATH}/agent-model-catalog.py 缺失，跳过动态模型目录与模糊匹配###" >&2
+        _AGENT_MODEL_CATALOG_WARNED=1
+    fi
+}
+
+_agent_model_resolve_catalog() {
+    local _agent="$1" _provider="$2" _model="$3" _strength="$4" _assert_match="${5:-0}"
+    local _dump _rc _warn _idx _resolved_warning_count
+    AGENT_MODEL_RESOLVED_MODEL="${_model}"
+    AGENT_MODEL_RESOLVED_STRENGTH="${_strength}"
+    AGENT_MODEL_RESOLVED_MATCH="unknown"
+    AGENT_MODEL_RESOLVED_STRENGTH_MATCH="unverified"
+    local -a _args=(
+        resolve
+        --provider "${_provider}"
+        --agent "${_agent}"
+        --model "${_model}"
+        --strength "${_strength}"
+    )
+    (( _assert_match )) && _args+=(--assert-model-match)
+    _dump="$(_agent_model_catalog_call "${_provider}" "${_args[@]}" 2>&1)"
+    _rc=$?
+    if (( _rc != 0 )); then
+        if (( _rc == 127 )); then
+            _agent_model_catalog_warn_unavailable
+            return 0
+        fi
+        printf '%s\n' "${_dump}" >&2
+        return "${_rc}"
+    fi
+    eval "${_dump}"
+    AGENT_MODEL_RESOLVED_MODEL="${RESOLVED_MODEL:-${_model}}"
+    AGENT_MODEL_RESOLVED_STRENGTH="${RESOLVED_STRENGTH:-${_strength}}"
+    AGENT_MODEL_RESOLVED_MATCH="${RESOLVED_MODEL_MATCH:-unknown}"
+    AGENT_MODEL_RESOLVED_STRENGTH_MATCH="${RESOLVED_STRENGTH_MATCH:-unverified}"
+    _resolved_warning_count=0
+    if [[ "${RESOLVED_WARNING_COUNT:-0}" =~ ^[0-9]+$ ]]; then
+        _resolved_warning_count="${RESOLVED_WARNING_COUNT}"
+        for ((_idx = 0; _idx < RESOLVED_WARNING_COUNT; _idx++)); do
+            _warn="RESOLVED_WARNING_${_idx}"
+            [[ -n "${!_warn:-}" ]] && echo "###${_NAME}: warning: ${!_warn}###" >&2
+        done
+    fi
+    unset RESOLVED_MODEL RESOLVED_MODEL_BASE RESOLVED_MODEL_MATCH \
+        RESOLVED_STRENGTH RESOLVED_STRENGTH_MATCH RESOLVED_WARNING_COUNT
+    for ((_idx = 0; _idx < ${_resolved_warning_count:-0}; _idx++)); do
+        unset "RESOLVED_WARNING_${_idx}" 2>/dev/null || true
+    done
+}
+
+_agent_model_provider_json() {
+    local _provider="$1" _base_json="$2" _out _rc
+    _out="$(_agent_model_catalog_call "${_provider}" provider-json --provider "${_provider}" --base-json "${_base_json}" 2>&1)"
+    _rc=$?
+    if (( _rc != 0 )); then
+        if (( _rc == 127 )); then
+            _agent_model_catalog_warn_unavailable
+            printf '%s\n' "${_base_json}"
+            return 0
+        fi
+        echo "###${_NAME}: warning: 动态模型目录注入失败：${_out}###" >&2
+        printf '%s\n' "${_base_json}"
+        return 0
+    fi
+    printf '%s\n' "${_out}"
 }
 
 # 全局/工作区 SKILL.md 路径清单注入（co/cl 共用）：只列路径；去重
@@ -492,7 +588,7 @@ run_claude() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.claude 与 agents.claude.model 互为一层，高优先层缺值回退另一层。
@@ -501,9 +597,14 @@ run_claude() {
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
     # 不给驱动选项时保持原有 TUI 交互模式不变
     local MODEL_OVERRIDE="${CLAUDE_MODEL:-}"
+    local MODEL_ENV_OVERRIDE="${MODEL_OVERRIDE}"
+    local CLAUDE_STRENGTH_OVERRIDE=""
+    local CLAUDE_STRENGTH_ENV_OVERRIDE=""
     local PROVIDER_OVERRIDE="${CLAUDE_PROVIDER:-}"
     local MODEL_ID MODEL_NAME DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
-    local MODEL_EXPLICIT=0
+    local MODEL_EXPLICIT=0 MODEL_FLAG_EXPLICIT=0 STRENGTH_FLAG_EXPLICIT=0
+    local MODEL_FROM_POSITIONAL=0 STRENGTH_FROM_POSITIONAL=0
+    local -a POSITIONAL=()
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
     local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
@@ -516,10 +617,11 @@ run_claude() {
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
-                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} go）。"
+                echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
                 exit 0;;
@@ -543,9 +645,28 @@ run_claude() {
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
-            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
+            -*)
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
+                exit 64;;
+            *)
+                if (( ${#POSITIONAL[@]} >= 2 )); then
+                    echo "###${_NAME}: ERROR: 位置参数过多 '$1'（最多为 [供应商] [模型] [强度]）###" >&2
+                    exit 64
+                fi
+                POSITIONAL+=("$1")
+                shift
+                ;;
         esac
     done
+    if (( ${#POSITIONAL[@]} > 0 )) && [[ -z "${MODEL_ENV_OVERRIDE}" && ${MODEL_FLAG_EXPLICIT} == 0 ]]; then
+        MODEL_OVERRIDE="${POSITIONAL[0]}"
+        MODEL_EXPLICIT=1
+        MODEL_FROM_POSITIONAL=1
+    fi
+    if (( ${#POSITIONAL[@]} > 1 )) && [[ -z "${CLAUDE_STRENGTH_ENV_OVERRIDE}" && ${STRENGTH_FLAG_EXPLICIT} == 0 ]]; then
+        CLAUDE_STRENGTH_OVERRIDE="${POSITIONAL[1]}"
+        STRENGTH_FROM_POSITIONAL=1
+    fi
     if [[ -n "${_ti_raw:-}" ]]; then
         if ! DRIVE_INTERVAL="$(_parse_interval "${_ti_raw}")"; then
             echo "###${_NAME}: ERROR: --time '${_ti_raw}' 格式无效（示例: 30 / 30s / 5m / 2h）###" >&2
@@ -631,6 +752,21 @@ run_claude() {
         CLAUDE_STRENGTH="${_cl_provider_strength}"
     fi
     [[ -n "${CLAUDE_STRENGTH}" ]] || CLAUDE_STRENGTH="max"
+    [[ -n "${CLAUDE_STRENGTH_OVERRIDE}" ]] && CLAUDE_STRENGTH="${CLAUDE_STRENGTH_OVERRIDE}"
+    local _cl_assert_model_match=0
+    (( MODEL_FROM_POSITIONAL )) && _cl_assert_model_match=1
+    _agent_model_resolve_catalog claude "${_cl_provider}" "${MODEL_ID}" "${CLAUDE_STRENGTH}" "${_cl_assert_model_match}"
+    _cl_model_rc=$?
+    if (( _cl_model_rc != 0 )); then
+        exit "${_cl_model_rc}"
+    fi
+    MODEL_ID="${AGENT_MODEL_RESOLVED_MODEL}"
+    CLAUDE_STRENGTH="${AGENT_MODEL_RESOLVED_STRENGTH}"
+    if [[ "${AGENT_MODEL_RESOLVED_MATCH}" == "fuzzy" ]]; then
+        MODEL_NAME="${MODEL_ID}${_cl_model_label}（模型匹配）"
+    else
+        MODEL_NAME="${MODEL_ID}${_cl_model_label}"
+    fi
     # 状态栏（与 co 同款的通用 statusline 配置，经 agent-statusline.sh 渲染）
     export AGENT_STATUSLINE_SEGMENTS="${_CFG_STATUSLINE_SEGMENTS:-[]}"
     export AGENT_STATUSLINE_USE_COLORS="${_CFG_STATUSLINE_USE_COLORS:-true}"
@@ -932,7 +1068,7 @@ run_opencode() {
     fi
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.opencode 与 agents.opencode.model 互为一层，高优先层缺值回退另一层。
@@ -942,10 +1078,14 @@ run_opencode() {
     #   -time/--time DUR  : 「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（如 30s/5m/2h），默认 30s
     # 不给驱动选项时保持原有 TUI 交互模式不变
     local MODEL_OVERRIDE="${OPENCODE_MODEL:-}"
+    local MODEL_ENV_OVERRIDE="${MODEL_OVERRIDE}"
     local VARIANT_OVERRIDE="${OPENCODE_VARIANT:-}"
+    local VARIANT_ENV_OVERRIDE="${VARIANT_OVERRIDE}"
     local PROVIDER_OVERRIDE="${OPENCODE_PROVIDER:-}"
     local MODEL_ID MODEL_NAME VARIANT="" DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
-    local MODEL_EXPLICIT=0 VARIANT_EXPLICIT=0
+    local MODEL_EXPLICIT=0 VARIANT_EXPLICIT=0 MODEL_FLAG_EXPLICIT=0 STRENGTH_FLAG_EXPLICIT=0
+    local MODEL_FROM_POSITIONAL=0 STRENGTH_FROM_POSITIONAL=0
+    local -a POSITIONAL=()
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
     local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
@@ -959,13 +1099,14 @@ run_opencode() {
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
-                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --variant)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
-                VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; shift 2;;
+                VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} gpt）。"
+                echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
                 exit 0;;
@@ -989,9 +1130,29 @@ run_opencode() {
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
-            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2; exit 64;;
+            -*)
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
+                exit 64;;
+            *)
+                if (( ${#POSITIONAL[@]} >= 2 )); then
+                    echo "###${_NAME}: ERROR: 位置参数过多 '$1'（最多为 [供应商] [模型] [强度]）###" >&2
+                    exit 64
+                fi
+                POSITIONAL+=("$1")
+                shift
+                ;;
         esac
     done
+    if (( ${#POSITIONAL[@]} > 0 )) && [[ -z "${MODEL_ENV_OVERRIDE}" && ${MODEL_FLAG_EXPLICIT} == 0 ]]; then
+        MODEL_OVERRIDE="${POSITIONAL[0]}"
+        MODEL_EXPLICIT=1
+        MODEL_FROM_POSITIONAL=1
+    fi
+    if (( ${#POSITIONAL[@]} > 1 )) && [[ -z "${VARIANT_ENV_OVERRIDE}" && ${STRENGTH_FLAG_EXPLICIT} == 0 ]]; then
+        VARIANT_OVERRIDE="${POSITIONAL[1]}"
+        VARIANT_EXPLICIT=1
+        STRENGTH_FROM_POSITIONAL=1
+    fi
     if [[ -n "${_ti_raw:-}" ]]; then
         if ! DRIVE_INTERVAL="$(_parse_interval "${_ti_raw}")"; then
             echo "###${_NAME}: ERROR: --time '${_ti_raw}' 格式无效（示例: 30 / 30s / 5m / 2h）###" >&2
@@ -1060,6 +1221,20 @@ run_opencode() {
     fi
     [[ -n "${VARIANT}" ]] || VARIANT="max"
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT="${VARIANT_OVERRIDE}"
+    local _op_assert_model_match=0
+    (( MODEL_FROM_POSITIONAL )) && _op_assert_model_match=1
+    _agent_model_resolve_catalog opencode "${_op_provider}" "${MODEL_ID}" "${VARIANT}" "${_op_assert_model_match}"
+    _op_model_rc=$?
+    if (( _op_model_rc != 0 )); then
+        exit "${_op_model_rc}"
+    fi
+    MODEL_ID="${AGENT_MODEL_RESOLVED_MODEL}"
+    VARIANT="${AGENT_MODEL_RESOLVED_STRENGTH}"
+    if [[ "${AGENT_MODEL_RESOLVED_MATCH}" == "fuzzy" ]]; then
+        MODEL_NAME="${MODEL_ID}${_op_model_label}（模型匹配）"
+    else
+        MODEL_NAME="${MODEL_ID}${_op_model_label}"
+    fi
 
     # 显式指定途径时提示该途径 key 未设置（op 仅注册 key 已设置的途径；显式途径下模型取自 providers 层，
     # 该途径若因缺 key 未注册，模型就落空了）——命令行快捷词与环境变量一视同仁
@@ -1121,6 +1296,7 @@ run_opencode() {
     if [[ -z "${_op_provider_json}" ]]; then
         _op_provider_json='{}'
     fi
+    _op_provider_json="$(_agent_model_provider_json "${_op_provider}" "${_op_provider_json}")"
     export OPENCODE_CONFIG_CONTENT
     OPENCODE_CONFIG_CONTENT="$(printf '{"lsp":%s,"autoupdate":%s,"agent":{"%s":{"model":"%s","variant":"%s"}},"provider":%s}' \
         "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_OP_AUTOUPDATE}" "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" \
@@ -1516,7 +1692,7 @@ run_codex() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gpt] [--model MODEL]
+    # 用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL]
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
@@ -1525,12 +1701,16 @@ run_codex() {
     #   --reasoning-effort LEVEL : 直接指定 reasoning effort（low/medium/high/xhigh/max/ultra），
     #                              同两层优先级：途径默认强度与 agents.codex.strength 互为一层，缺值回退另一层。
     local MODEL_OVERRIDE="${CODEX_MODEL:-}"
+    local MODEL_ENV_OVERRIDE="${MODEL_OVERRIDE}"
     local REASONING_OVERRIDE="${CODEX_REASONING_EFFORT:-}"
+    local REASONING_ENV_OVERRIDE="${REASONING_OVERRIDE}"
     local PROVIDER_OVERRIDE="${CODEX_PROVIDER_ID:-}"
     local CODEX_SANDBOX_MODE="${CODEX_SANDBOX:-${_CFG_AGENTS_CODEX_SANDBOX:-danger-full-access}}"
     local CODEX_APPROVAL_POLICY="${CODEX_APPROVAL:-${_CFG_AGENTS_CODEX_APPROVAL:-never}}"
     local MODEL_ID MODEL_NAME REASONING_EFFORT DRIVE_INTERVAL="" DRIVE_MODE=0
-    local MODEL_EXPLICIT=0 REASONING_EXPLICIT=0
+    local MODEL_EXPLICIT=0 REASONING_EXPLICIT=0 MODEL_FLAG_EXPLICIT=0 STRENGTH_FLAG_EXPLICIT=0
+    local MODEL_FROM_POSITIONAL=0 STRENGTH_FROM_POSITIONAL=0
+    local -a POSITIONAL=()
     local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
     local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
@@ -1544,10 +1724,10 @@ run_codex() {
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
-                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; shift 2;;
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --reasoning-effort)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
-                REASONING_OVERRIDE="$2"; REASONING_EXPLICIT=1; shift 2;;
+                REASONING_OVERRIDE="$2"; REASONING_EXPLICIT=1; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
             --sandbox)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少策略参数###" >&2; exit 64; fi
                 CODEX_SANDBOX_MODE="$2"; shift 2;;
@@ -1572,15 +1752,36 @@ run_codex() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
                 echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} pay）。"
+                echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
-            *) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [--model MODEL] [-time 30s]）###" >&2; exit 64;;
+            -*)
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
+                exit 64;;
+            *)
+                if (( ${#POSITIONAL[@]} >= 2 )); then
+                    echo "###${_NAME}: ERROR: 位置参数过多 '$1'（最多为 [供应商] [模型] [强度]）###" >&2
+                    exit 64
+                fi
+                POSITIONAL+=("$1")
+                shift
+                ;;
         esac
     done
+    if (( ${#POSITIONAL[@]} > 0 )) && [[ -z "${MODEL_ENV_OVERRIDE}" && ${MODEL_FLAG_EXPLICIT} == 0 ]]; then
+        MODEL_OVERRIDE="${POSITIONAL[0]}"
+        MODEL_EXPLICIT=1
+        MODEL_FROM_POSITIONAL=1
+    fi
+    if (( ${#POSITIONAL[@]} > 1 )) && [[ -z "${REASONING_ENV_OVERRIDE}" && ${STRENGTH_FLAG_EXPLICIT} == 0 ]]; then
+        REASONING_OVERRIDE="${POSITIONAL[1]}"
+        REASONING_EXPLICIT=1
+        STRENGTH_FROM_POSITIONAL=1
+    fi
     if [[ -n "${_ti_raw:-}" ]]; then
         if ! DRIVE_INTERVAL="$(_parse_interval "${_ti_raw}")"; then
             echo "###${_NAME}: ERROR: --time '${_ti_raw}' 格式无效（示例: 30 / 30s / 5m / 2h）###" >&2
@@ -1649,6 +1850,20 @@ run_codex() {
     fi
     [[ -n "${REASONING_EFFORT}" ]] || REASONING_EFFORT="max"
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EFFORT="${REASONING_OVERRIDE}"
+    local _cx_assert_model_match=0
+    (( MODEL_FROM_POSITIONAL )) && _cx_assert_model_match=1
+    _agent_model_resolve_catalog codex "${_cx_provider}" "${MODEL_ID}" "${REASONING_EFFORT}" "${_cx_assert_model_match}"
+    _cx_model_rc=$?
+    if (( _cx_model_rc != 0 )); then
+        exit "${_cx_model_rc}"
+    fi
+    MODEL_ID="${AGENT_MODEL_RESOLVED_MODEL}"
+    REASONING_EFFORT="${AGENT_MODEL_RESOLVED_STRENGTH}"
+    if [[ "${AGENT_MODEL_RESOLVED_MATCH}" == "fuzzy" ]]; then
+        MODEL_NAME="${MODEL_ID}${_cx_model_label}（模型匹配）"
+    else
+        MODEL_NAME="${MODEL_ID}${_cx_model_label}"
+    fi
 
     local _runtime_mode=tui
     (( DRIVE_MODE )) && _runtime_mode=drive

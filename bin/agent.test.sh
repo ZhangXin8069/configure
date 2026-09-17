@@ -138,10 +138,12 @@ run_launcher() {
     local binary="$1"
     shift
     local script_root="${AGENT_TEST_SCRIPT_DIR:-$script_dir}"
+    local launcher_data="${AGENT_TEST_DATA_DIR:-$data}"
     ln -sf "$launcher" "$test_root/$name"
     case "$name" in
         co) (cd "$repo/nested" && \
-            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
@@ -152,7 +154,8 @@ run_launcher() {
             DEEPSEEK_API_KEY= LQCD_API_KEY= \
             "$test_root/$name" "$@") ;;
         op) (cd "$repo/nested" && \
-            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
@@ -163,7 +166,8 @@ run_launcher() {
             DEEPSEEK_API_KEY= LQCD_API_KEY= \
             "$test_root/$name" "$@") ;;
         cl) (cd "$repo/nested" && \
-            AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
@@ -187,19 +191,19 @@ default_codex_output=$(CODEX_MODEL= CODEX_REASONING_EFFORT= CODEX_SERVICE_TIER= 
 default_codex_status=$?
 set -e
 (( default_codex_status == 0 )) || fail "Codex 默认配置 fake launcher 失败：$default_codex_output"
-assert_contains "$default_codex_output" 'Codex: gpt-6-astra（途径默认） | reasoning=max'
-assert_contains "$default_codex_output" 'provider: custom-gpt | tier=standard'
-assert_file_contains "$call_log" '--model gpt-6-astra'
+assert_contains "$default_codex_output" 'Codex: deepseek-v4.1-flash（agent 默认） | reasoning=max'
+assert_contains "$default_codex_output" 'provider: opencode-go | tier=standard'
+assert_file_contains "$call_log" '--model deepseek-v4.1-flash'
 assert_file_contains "$call_log" 'features.fast_mode=false'
 assert_file_contains "$call_log" 'model_reasoning_effort="max"'
 assert_file_contains "$call_log" 'check_for_update_on_startup=false'
-assert_file_contains "$call_log" 'model_providers.custom-gpt.base_url="http://nat200.natappvip.cc/v1"'
-assert_file_contains "$call_log" 'model_providers.custom-gpt.env_key="CUSTOM_GPT_API_KEY"'
-assert_file_contains "$call_log" 'model_providers.custom-gpt.wire_api="responses"'
-assert_file_contains "$call_log" 'model_providers.custom-gpt.supports_websockets=true'
+assert_file_contains "$call_log" 'model_providers.opencode-go.base_url="https://opencode.ai/zen/go/v1"'
+assert_file_contains "$call_log" 'model_providers.opencode-go.env_key="OPENCODE_GO_API_KEY"'
+assert_file_contains "$call_log" 'model_providers.opencode-go.wire_api="responses"'
+assert_file_contains "$call_log" 'model_providers.opencode-go.supports_websockets=false'
 assert_file_contains "$call_log" "### 全局 Agent 配置目录（按需读取） ###"
 assert_file_not_contains "$call_log" 'service_tier='
-printf 'PASS: Codex 默认模型、reasoning、custom-gpt 途径与 Fast 关闭\n'
+printf 'PASS: Codex 默认模型、reasoning、默认 opencode-go 途径与 Fast 关闭\n'
 
 set +e
 codex_output=$(run_launcher co "$fake_codex" --once --model fake-model --reasoning-effort low 2>&1)
@@ -332,7 +336,7 @@ assert_file_contains "$call_log" '"apiKey":"{env:DEEPSEEK_PAY_API_KEY}"'
 assert_file_contains "$call_log" '"apiKey":"{env:OPENCODE_GO_API_KEY}"'
 assert_file_contains "$call_log" '"apiKey":"{env:CUSTOM_GPT_API_KEY}"'
 assert_file_contains "$call_log" '"baseURL":"http://nat200.natappvip.cc/v1"'
-assert_file_contains "$call_log" '"model":"deepseek/deepseek-flash","variant":"max"'
+assert_file_contains "$call_log" '"model":"opencode-go/deepseek-v4.1-flash","variant":"max"'
 assert_file_contains "$call_log" '"autoupdate":false'
 assert_file_contains "$call_log" "### 全局 Agent 配置目录（按需读取） ###"
 assert_file_contains "$call_log" '### configure Agent Runtime Contract v1 ###'
@@ -470,6 +474,7 @@ printf 'PASS: 工作目录无运行时垃圾\n'
 alt_dir="$test_root/altbin"
 mkdir -p "$alt_dir"
 ln -sf "$script_dir/agent-runtime.sh" "$alt_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-model-catalog.py" "$alt_dir/agent-model-catalog.py"
 ln -sf "$script_dir/agent-prompt.txt" "$alt_dir/agent-prompt.txt"
 cp -- "$script_dir/agent-config.json" "$alt_dir/agent-config.json"
 cat > "$alt_dir/agent-custom.json" <<'EOF'
@@ -564,6 +569,7 @@ printf 'PASS: 个性化 co 切途径为 deepseek-pay，未显式选途径时旧�
 alt2_dir="$test_root/altbin2"
 mkdir -p "$alt2_dir"
 ln -sf "$script_dir/agent-runtime.sh" "$alt2_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-model-catalog.py" "$alt2_dir/agent-model-catalog.py"
 ln -sf "$script_dir/agent-prompt.txt" "$alt2_dir/agent-prompt.txt"
 cp -- "$script_dir/agent-config.json" "$alt2_dir/agent-config.json"
 cat > "$alt2_dir/agent-custom.json" <<'EOF'
@@ -632,7 +638,7 @@ alt2_op_status=$?
 set -e
 (( alt2_op_status == 0 )) || fail "agent 层 op 默认失败：$alt2_op_output"
 alt2_op_new=$(tail -n +$((alt2_op_before + 1)) "$call_log")
-assert_contains "$alt2_op_new" '"model":"agent-op-model","variant":"xhigh"'
+assert_contains "$alt2_op_new" '"model":"deepseek/agent-op-model","variant":"xhigh"'
 printf 'PASS: 未显式选途径时 op 取 agent 层默认模型/强度（优先于途径默认值）\n'
 
 alt2_co_before=$(wc -l < "$call_log")
@@ -709,13 +715,14 @@ alt2_op_gpt_status=$?
 set -e
 (( alt2_op_gpt_status == 0 )) || fail "显式途径缺该 agent 默认值、回退 agent 层失败：$alt2_op_gpt_output"
 alt2_op_gpt_new=$(tail -n +$((alt2_op_gpt_before + 1)) "$call_log")
-assert_contains "$alt2_op_gpt_new" '"model":"agent-op-model","variant":"xhigh"'
+assert_contains "$alt2_op_gpt_new" '"model":"custom-gpt/agent-op-model","variant":"xhigh"'
 printf 'PASS: 显式途径未给该 agent 配 default_models/default_strengths 时回退 agent 层\n'
 
 # ---- 两层皆空：明确报错退出 64 ----
 empty_dir="$test_root/altbin3"
 mkdir -p "$empty_dir"
 ln -sf "$script_dir/agent-runtime.sh" "$empty_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-model-catalog.py" "$empty_dir/agent-model-catalog.py"
 ln -sf "$script_dir/agent-prompt.txt" "$empty_dir/agent-prompt.txt"
 cp -- "$script_dir/agent-config.json" "$empty_dir/agent-config.json"
 cat > "$empty_dir/agent-custom.json" <<'EOF'
@@ -764,7 +771,7 @@ switch_op_status=$?
 set -e
 (( switch_op_status == 0 )) || fail "op gpt 失败：$switch_op_output"
 switch_op_new=$(tail -n +$((switch_op_before + 1)) "$call_log")
-assert_contains "$switch_op_new" '"model":"custom-gpt/gpt-6-astra"'
+assert_contains "$switch_op_new" '"model":"custom-gpt/gpt-5.6-luna"'
 assert_contains "$switch_op_new" '"apiKey":"{env:CUSTOM_GPT_API_KEY}"'
 printf 'PASS: 快捷词 op gpt 切换 custom-gpt 途径并使用默认模型\n'
 
@@ -833,7 +840,7 @@ printf 'PASS: co 为内置目录外模型注入模型元数据目录（保留内
 
 builtin_before=$(wc -l < "$call_log")
 set +e
-builtin_output=$(CUSTOM_GPT_API_KEY=test-custom-key run_launcher co "$fake_codex" gpt --once 2>&1)
+builtin_output=$(CUSTOM_GPT_API_KEY=test-custom-key run_launcher co "$fake_codex" gpt --model gpt-6-astra --once 2>&1)
 builtin_status=$?
 set -e
 (( builtin_status == 0 )) || fail "co gpt 失败：$builtin_output"
@@ -902,6 +909,97 @@ switch_explicit_new=$(tail -n +$((switch_explicit_before + 1)) "$call_log")
 assert_contains "$switch_explicit_new" '"model":"custom-gpt/gpt-5.6-luna"'
 printf 'PASS: 快捷词与 --model 共存时显式模型优先\n'
 
+# ---- 在线/本地模型目录：不完整模型名、模型强度顺延、[1m] 后缀与失败回退 ----
+modelbin="$test_root/modelbin"
+mkdir -p "$modelbin"
+ln -sf "$script_dir/agent-runtime.sh" "$modelbin/agent-runtime.sh"
+ln -sf "$script_dir/agent-model-catalog.py" "$modelbin/agent-model-catalog.py"
+ln -sf "$script_dir/agent-prompt.txt" "$modelbin/agent-prompt.txt"
+cp -- "$script_dir/agent-config.json" "$modelbin/agent-config.json"
+model_list_file="$test_root/models.json"
+model_metadata_file="$test_root/metadata.json"
+custom_models_file="$test_root/custom-models.json"
+printf '%s\n' '{"data":[{"id":"deepseek-v4-pro"},{"id":"glm-5.3-flash"}]}' > "$model_list_file"
+printf '%s\n' '{"data":[{"id":"dynamic-gpt"}]}' > "$custom_models_file"
+printf '%s\n' '{"opencode-go":{"models":{"deepseek-v4-pro":{"reasoning_options":[{"type":"effort","values":["high","max"]}]},"glm-5.3-flash":{"reasoning_options":[{"type":"effort","values":["low","high","max"]}]}}},"deepseek":{"models":{"deepseek-v4-pro":{"reasoning_options":[{"type":"effort","values":["high","max"]}]}}}}' > "$model_metadata_file"
+cat > "$modelbin/agent-custom.json" <<EOF
+{
+  "model_discovery": {
+    "enabled": true,
+    "cache_ttl_seconds": 21600,
+    "metadata_url": "file://$model_metadata_file"
+  },
+  "providers": {
+    "opencode-go": {
+      "models_url": "file://$model_list_file",
+      "models_auth": "none",
+      "models_metadata_provider": "opencode-go",
+      "default_models": { "codex": "deepseek-v4-pro", "opencode": "opencode-go/deepseek-v4-pro" },
+      "default_strengths": { "codex": "max", "opencode": "max" }
+    },
+    "deepseek-pay": {
+      "models_url": "file://$test_root/missing-models.json",
+      "models_auth": "none",
+      "models_metadata_provider": "deepseek",
+      "default_models": { "claude": "deepseek-pro[1m]" },
+      "default_strengths": { "claude": "max" }
+    },
+    "custom-gpt": {
+      "models_url": "file://$custom_models_file",
+      "models_auth": "none",
+      "default_models": { "opencode": "custom-gpt/dynamic-gpt" },
+      "default_strengths": { "opencode": "max" }
+    }
+  },
+  "agents": {
+    "claude": { "provider": "opencode-go", "model": "deepseek-v4-pro", "strength": "max" },
+    "opencode": { "provider": "opencode-go", "model": "opencode-go/deepseek-v4-pro", "strength": "max" },
+    "codex": { "provider": "opencode-go", "model": "deepseek-v4-pro", "strength": "max" }
+  }
+}
+EOF
+
+discovery_data="$test_root/discovery-data"
+set +e
+discovery_co_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
+    AGENT_MODEL_DISCOVERY=1 run_launcher co "$fake_codex" go deepseek-pro ultra --once 2>&1)
+discovery_co_status=$?
+set -e
+(( discovery_co_status == 0 )) || fail "在线模型目录 co 切换失败：$discovery_co_output"
+assert_contains "$discovery_co_output" "模型 'deepseek-pro' 未精确匹配"
+assert_contains "$discovery_co_output" "不支持强度 'ultra'，已顺延为 'max'"
+assert_contains "$discovery_co_output" 'Codex: deepseek-v4-pro（override）（模型匹配） | reasoning=max'
+[[ -s "$discovery_data/cache/provider-models/opencode-go.json" ]] || fail 'opencode-go 模型目录缓存未生成'
+
+set +e
+discovery_glm_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
+    AGENT_MODEL_DISCOVERY=1 run_launcher co "$fake_codex" go glm-5.3-flash max --once 2>&1)
+discovery_glm_status=$?
+set -e
+(( discovery_glm_status == 0 )) || fail "co go MODEL STRENGTH 组合失败：$discovery_glm_output"
+assert_contains "$discovery_glm_output" 'Codex: glm-5.3-flash（override） | reasoning=max'
+
+discovery_cl_before=$(wc -l < "$call_log")
+set +e
+discovery_cl_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
+    AGENT_MODEL_DISCOVERY=1 run_launcher cl "$fake_claude" pay 'deepseek-pro[1m]' --once 2>&1)
+discovery_cl_status=$?
+set -e
+(( discovery_cl_status == 0 )) || fail "模型目录回退与 [1m] 后缀失败：$discovery_cl_output"
+assert_contains "$discovery_cl_output" 'Claude Code: deepseek-v4-pro[1m]（override）（模型匹配）'
+discovery_cl_new=$(tail -n +$((discovery_cl_before + 1)) "$call_log")
+assert_contains "$discovery_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=max'
+
+set +e
+discovery_op_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
+    AGENT_MODEL_DISCOVERY=1 CUSTOM_GPT_API_KEY=test-custom-key run_launcher op "$fake_opencode" gpt dynamic-gpt --once 2>&1)
+discovery_op_status=$?
+set -e
+(( discovery_op_status == 0 )) || fail "动态 custom-gpt 模型注入失败：$discovery_op_output"
+assert_file_contains "$call_log" '"model":"custom-gpt/dynamic-gpt"'
+assert_file_contains "$call_log" '"dynamic-gpt":{}'
+printf 'PASS: 模型目录在线刷新、元数据回退、不完整模型名、[1m] 后缀与强度顺延\n'
+
 # ---- 状态栏渲染：agent-statusline.sh 按通用 segments 渲染官方字段 ----
 statusline_output=$(printf '%s' '{"model":{"display_name":"Test Model"},"effort":{"level":"max"},"workspace":{"current_dir":"/tmp"},"session_id":"abcdef1234567890","cost":{"total_cost_usd":0.5},"context_window":{"total_input_tokens":150000,"context_window_size":1000000,"used_percentage":15},"fast_mode":true,"rate_limits":{"seven_day":{"used_percentage":42.5}}}' | \
     AGENT_STATUSLINE_SEGMENTS='["model-with-reasoning","current-dir","thread-id","estimated-thread-cost","context-used","context-window-size","weekly-limit","fast-mode","task-progress"]' \
@@ -967,11 +1065,11 @@ missing_co_before=$(wc -l < "$call_log")
 set +e
 missing_co_output=$(cd "$repo/nested" && env -u CUSTOM_GPT_API_KEY -u LQCD_API_KEY \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
-    CODEX_BIN="$fake_codex" "$test_root/co" --once 2>&1)
+    CODEX_BIN="$fake_codex" "$test_root/co" go --once 2>&1)
 missing_co_status=$?
 set -e
 (( missing_co_status == 0 )) || fail "缺 key co 失败：$missing_co_output"
-assert_contains "$missing_co_output" 'auth: CUSTOM_GPT_API_KEY 未设置'
+assert_contains "$missing_co_output" 'auth: OPENCODE_GO_API_KEY 未设置'
 printf 'PASS: co 缺 key 横幅提示\n'
 
 bad_dir="$test_root/badbin"
@@ -979,6 +1077,7 @@ mkdir -p "$bad_dir"
 printf '{ not json\n' > "$bad_dir/agent-config.json"
 printf '{}\n' > "$bad_dir/agent-custom.json"
 ln -sf "$script_dir/agent-runtime.sh" "$bad_dir/agent-runtime.sh"
+ln -sf "$script_dir/agent-model-catalog.py" "$bad_dir/agent-model-catalog.py"
 ln -sf "$script_dir/agent-prompt.txt" "$bad_dir/agent-prompt.txt"
 set +e
 bad_output=$(AGENT_TEST_SCRIPT_DIR="$bad_dir" run_launcher cl "$fake_claude" --once 2>&1)
