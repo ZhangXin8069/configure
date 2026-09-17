@@ -337,6 +337,618 @@ function Get-ProviderDefaultStrength {
     return [string]$provider.default_strengths.$AgentName
 }
 
+# 模型目录缓存：与 Unix agent-model-catalog.py 使用同一 data/cache/provider-models 布局。
+function Get-ModelCatalogCachePath {
+    param([string]$ProviderName)
+
+    $safe = ($ProviderName -replace '[^A-Za-z0-9._-]+', '-').Trim('-')
+    if ([string]::IsNullOrWhiteSpace($safe)) { $safe = 'provider' }
+    return Join-Path (Join-Path (Join-Path $script:DataRoot 'cache') 'provider-models') "$safe.json"
+}
+
+function ConvertTo-ModelNormalizationKey {
+    param([string]$Value)
+
+    return (($Value.ToLowerInvariant() -replace '[^a-z0-9]+', ''))
+}
+
+function Add-ModelCatalogEntry {
+    param(
+        [System.Collections.IDictionary]$Map,
+        [string]$ModelId,
+        $Metadata
+    )
+
+    if ([string]::IsNullOrWhiteSpace($ModelId)) { return }
+    $ModelId = ($ModelId -split '/', 2)[-1]
+    $strengths = New-Object System.Collections.Generic.List[string]
+    $entry = [ordered]@{
+        id                  = $ModelId
+        supported_strengths = @()
+    }
+    if ($null -ne $Metadata) {
+        foreach ($name in @('id', 'name', 'display_name', 'description', 'context_window', 'limit', 'reasoning', 'reasoning_options', 'supported_strengths')) {
+            if ($Metadata.PSObject.Properties.Name -contains $name) {
+                $entry[$name] = $Metadata.$name
+            }
+        }
+        foreach ($value in @($Metadata.supported_strengths)) {
+            if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
+                $normalized = ([string]$value).Trim().ToLowerInvariant()
+                if (-not $strengths.Contains($normalized)) { [void]$strengths.Add($normalized) }
+            }
+        }
+        foreach ($option in @($Metadata.reasoning_options)) {
+            if ($null -eq $option -or [string]$option.type -ne 'effort') { continue }
+            foreach ($value in @($option.values)) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$value)) {
+                    $normalized = ([string]$value).Trim().ToLowerInvariant()
+                    if (-not $strengths.Contains($normalized)) { [void]$strengths.Add($normalized) }
+                }
+            }
+        }
+    }
+    $entry.supported_strengths = @($strengths)
+    if ($entry.Contains('limit') -and $entry.limit -is [System.Management.Automation.PSCustomObject] -and
+        -not $entry.Contains('context_window') -and $null -ne $entry.limit.context) {
+        $entry.context_window = $entry.limit.context
+    }
+    $Map[$ModelId] = [pscustomobject]$entry
+}
+
+function Merge-ModelCatalogEntry {
+    param($Existing, $Incoming)
+
+    if ($null -eq $Existing) { return $Incoming }
+    if ($null -eq $Incoming) { return $Existing }
+    $merged = [ordered]@{}
+    foreach ($property in $Existing.PSObject.Properties) {
+        $merged[$property.Name] = $property.Value
+    }
+    foreach ($property in $Incoming.PSObject.Properties) {
+        $value = $property.Value
+        if ($value -is [System.Array] -and $value.Count -eq 0 -and $merged.Contains($property.Name)) {
+            continue
+        }
+        if ($null -eq $value -or ([string]$value).Length -eq 0) {
+            if ($merged.Contains($property.Name)) { continue }
+        }
+        $merged[$property.Name] = $value
+    }
+    return [pscustomobject]$merged
+}
+
+function Merge-ModelCatalogMap {
+    param($First, $Second)
+
+    $result = [ordered]@{}
+    foreach ($map in @($First, $Second)) {
+        if ($null -eq $map) { continue }
+        foreach ($property in $map.PSObject.Properties) {
+            $result[$property.Name] = Merge-ModelCatalogEntry $result[$property.Name] $property.Value
+        }
+    }
+    return [pscustomobject]$result
+}
+
+function ConvertFrom-ModelCatalogPayload {
+    param($Payload)
+
+    $result = [ordered]@{}
+    $items = $null
+    if ($Payload -is [System.Array]) {
+        $items = @($Payload)
+    } elseif ($Payload -is [System.Management.Automation.PSCustomObject]) {
+        if ($Payload.PSObject.Properties.Name -contains 'id') {
+            Add-ModelCatalogEntry $result ([string]$Payload.id) $Payload
+            return [pscustomobject]$result
+        } elseif ($Payload.PSObject.Properties.Name -contains 'data') {
+            $items = @($Payload.data)
+        } elseif ($Payload.PSObject.Properties.Name -contains 'models') {
+            if ($Payload.models -is [System.Management.Automation.PSCustomObject]) {
+                foreach ($property in $Payload.models.PSObject.Properties) {
+                    Add-ModelCatalogEntry $result $property.Name $property.Value
+                }
+                return [pscustomobject]$result
+            }
+            $items = @($Payload.models)
+        } else {
+            foreach ($property in $Payload.PSObject.Properties) {
+                Add-ModelCatalogEntry $result $property.Name $property.Value
+            }
+            return [pscustomobject]$result
+        }
+    } elseif (-not [string]::IsNullOrWhiteSpace([string]$Payload)) {
+        Add-ModelCatalogEntry $result ([string]$Payload) $null
+        return [pscustomobject]$result
+    }
+    foreach ($item in @($items)) {
+        if ($null -eq $item) { continue }
+        if ($item -is [System.Management.Automation.PSCustomObject]) {
+            $modelId = [string]$item.id
+            if ([string]::IsNullOrWhiteSpace($modelId)) { $modelId = [string]$item.model }
+            if ([string]::IsNullOrWhiteSpace($modelId)) { $modelId = [string]$item.name }
+            Add-ModelCatalogEntry $result $modelId $item
+        } else {
+            Add-ModelCatalogEntry $result ([string]$item) $null
+        }
+    }
+    return [pscustomobject]$result
+}
+
+function Get-StaticProviderModelMap {
+    param([string]$ProviderName)
+
+    $provider = $script:AgentConfig.providers.$ProviderName
+    $result = [ordered]@{}
+    if ($null -eq $provider) { return [pscustomobject]$result }
+    if ($null -ne $provider.models) {
+        if ($provider.models -is [System.Management.Automation.PSCustomObject]) {
+            foreach ($property in $provider.models.PSObject.Properties) {
+                Add-ModelCatalogEntry $result $property.Name $property.Value
+            }
+        } else {
+            foreach ($item in @($provider.models)) {
+                if ($item -is [System.Management.Automation.PSCustomObject]) {
+                    $modelId = [string]$item.id
+                    if ([string]::IsNullOrWhiteSpace($modelId)) { $modelId = [string]$item.model }
+                    Add-ModelCatalogEntry $result $modelId $item
+                } else {
+                    Add-ModelCatalogEntry $result ([string]$item) $null
+                }
+            }
+        }
+    }
+    if ($null -ne $provider.model_catalog) {
+        if ($provider.model_catalog -is [System.Management.Automation.PSCustomObject]) {
+            foreach ($property in $provider.model_catalog.PSObject.Properties) {
+                Add-ModelCatalogEntry $result $property.Name $property.Value
+            }
+        } else {
+            foreach ($item in @($provider.model_catalog)) {
+                $modelId = if ($item -is [System.Management.Automation.PSCustomObject]) { [string]$item.id } else { [string]$item }
+                Add-ModelCatalogEntry $result $modelId $item
+            }
+        }
+    }
+    if ($null -ne $provider.opencode -and $null -ne $provider.opencode.models) {
+        foreach ($item in @($provider.opencode.models)) {
+            if ($item -is [System.Management.Automation.PSCustomObject]) {
+                $modelId = [string]$item.id
+                if ([string]::IsNullOrWhiteSpace($modelId)) { $modelId = [string]$item.model }
+                Add-ModelCatalogEntry $result $modelId $item
+            } else {
+                Add-ModelCatalogEntry $result ([string]$item) $null
+            }
+        }
+    }
+    return [pscustomobject]$result
+}
+
+function Read-ModelCatalogCache {
+    param([string]$Path)
+
+    if ([string]::IsNullOrWhiteSpace($Path) -or -not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        return $null
+    }
+    try {
+        $cache = [System.IO.File]::ReadAllText($Path, [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+    } catch {
+        return $null
+    }
+    if ($null -eq $cache -or $null -eq $cache.models) { return $null }
+    return $cache
+}
+
+function Test-ModelCatalogCacheFresh {
+    param($Cache, [int64]$TtlSeconds)
+
+    if ($null -eq $Cache -or $TtlSeconds -le 0) { return $false }
+    try {
+        $updated = [int64]$Cache.updated_at
+        $now = [int64][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        return ($now -ge $updated -and ($now - $updated) -lt $TtlSeconds)
+    } catch {
+        return $false
+    }
+}
+
+function Get-ModelCatalogRequestHeaders {
+    param($Provider)
+
+    $headers = @{}
+    $authMode = ([string]$Provider.models_auth).Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($authMode) -or $authMode -in @('none', 'off')) {
+        return $headers
+    }
+    $envName = [string]$Provider.env_key
+    $token = Get-ConfigEnvironmentValue $envName
+    if ([string]::IsNullOrWhiteSpace($token)) {
+        throw "缺少模型目录认证变量 $envName"
+    }
+    if ($authMode -in @('api_key', 'x-api-key')) {
+        $headers['x-api-key'] = $token
+    } else {
+        $headers['Authorization'] = "Bearer $token"
+    }
+    return $headers
+}
+
+function Invoke-ModelCatalogHttp {
+    param(
+        [string]$Url,
+        [hashtable]$Headers,
+        [int]$TimeoutSeconds
+    )
+
+    $uri = [Uri]$Url
+    if ($uri.Scheme -eq 'file') {
+        return [System.IO.File]::ReadAllText($uri.LocalPath, [System.Text.Encoding]::UTF8)
+    }
+    try {
+        $protocols = [Net.ServicePointManager]::SecurityProtocol
+        [Net.ServicePointManager]::SecurityProtocol = $protocols -bor [Net.SecurityProtocolType]::Tls12
+    } catch {
+    }
+    Add-Type -AssemblyName System.Net.Http -ErrorAction SilentlyContinue
+    $handler = New-Object System.Net.Http.HttpClientHandler
+    $client = New-Object System.Net.Http.HttpClient($handler)
+    $client.Timeout = [TimeSpan]::FromSeconds([Math]::Max(1, $TimeoutSeconds))
+    try {
+        foreach ($entry in $Headers.GetEnumerator()) {
+            [void]$client.DefaultRequestHeaders.TryAddWithoutValidation([string]$entry.Key, [string]$entry.Value)
+        }
+        $response = $client.GetAsync($uri).GetAwaiter().GetResult()
+        try {
+            $response.EnsureSuccessStatusCode() | Out-Null
+            return $response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+        } finally {
+            $response.Dispose()
+        }
+    } finally {
+        $client.Dispose()
+        $handler.Dispose()
+    }
+}
+
+function Update-ProviderModelCatalog {
+    param([string]$ProviderName)
+
+    $provider = $script:AgentConfig.providers.$ProviderName
+    if ($null -eq $provider) {
+        throw "未配置途径 $ProviderName"
+    }
+    $static = Get-StaticProviderModelMap $ProviderName
+    $cachePath = Get-ModelCatalogCachePath $ProviderName
+    $cache = Read-ModelCatalogCache $cachePath
+    $discovery = $script:AgentConfig.model_discovery
+    $enabled = $true
+    if ($null -ne $discovery -and $null -ne $discovery.enabled) { $enabled = [bool]$discovery.enabled }
+    $enabledEnv = [Environment]::GetEnvironmentVariable('AGENT_MODEL_DISCOVERY')
+    if ($enabledEnv -eq '0' -or $enabledEnv -eq 'false') { $enabled = $false }
+    $ttl = 21600
+    if ($null -ne $discovery -and $null -ne $discovery.cache_ttl_seconds) { $ttl = [int64]$discovery.cache_ttl_seconds }
+    $ttlEnv = [Environment]::GetEnvironmentVariable('AGENT_MODEL_CACHE_TTL')
+    if (-not [string]::IsNullOrWhiteSpace($ttlEnv)) { $ttl = [int64]$ttlEnv }
+    $timeout = 5
+    if ($null -ne $discovery -and $null -ne $discovery.timeout_seconds) { $timeout = [int]$discovery.timeout_seconds }
+    $timeoutEnv = [Environment]::GetEnvironmentVariable('AGENT_MODEL_HTTP_TIMEOUT')
+    if (-not [string]::IsNullOrWhiteSpace($timeoutEnv)) { $timeout = [int]$timeoutEnv }
+    $warnings = New-Object System.Collections.Generic.List[string]
+
+    if (-not $enabled -or (Test-ModelCatalogCacheFresh $cache $ttl)) {
+        $result = if ($null -ne $cache) { $cache } else {
+            [pscustomobject]@{
+                schema      = 'agent-model-catalog/v1'
+                provider    = $ProviderName
+                updated_at  = 0
+                sources     = @('static')
+                models      = $static
+            }
+        }
+        return [pscustomobject]@{ Catalog = $result; Warnings = @($warnings) }
+    }
+
+    $dynamic = $null
+    $metadata = $null
+    $sources = New-Object System.Collections.Generic.List[string]
+    $modelsUrl = [string]$provider.models_url
+    if (-not [string]::IsNullOrWhiteSpace($modelsUrl)) {
+        try {
+            $payload = (Invoke-ModelCatalogHttp $modelsUrl (Get-ModelCatalogRequestHeaders $provider) $timeout) | ConvertFrom-Json
+            $dynamic = ConvertFrom-ModelCatalogPayload $payload
+            if ($dynamic.PSObject.Properties.Count -gt 0) {
+                [void]$sources.Add($modelsUrl)
+            } else {
+                $dynamic = $null
+                [void]$warnings.Add("模型接口 $modelsUrl 未返回可用模型，已尝试其他来源")
+            }
+        } catch {
+            [void]$warnings.Add("模型清单刷新失败（$modelsUrl）：$($_.Exception.Message)，尝试其他来源")
+        }
+    } elseif (-not [string]::IsNullOrWhiteSpace([string]$provider.models_metadata_provider)) {
+        [void]$warnings.Add("途径 $ProviderName 未配置 models_url，使用 models.dev 元数据")
+    }
+
+    $metadataUrl = ''
+    if ($null -ne $discovery) { $metadataUrl = [string]$discovery.metadata_url }
+    $metadataEnv = [Environment]::GetEnvironmentVariable('AGENT_MODEL_METADATA_URL')
+    if (-not [string]::IsNullOrWhiteSpace($metadataEnv)) { $metadataUrl = $metadataEnv }
+    $metadataProvider = [string]$provider.models_metadata_provider
+    if (-not [string]::IsNullOrWhiteSpace($metadataUrl) -and -not [string]::IsNullOrWhiteSpace($metadataProvider)) {
+        try {
+            $metadataPayload = (Invoke-ModelCatalogHttp $metadataUrl @{} $timeout) | ConvertFrom-Json
+            $providerMetadata = $metadataPayload.$metadataProvider
+            if ($null -ne $providerMetadata -and $null -ne $providerMetadata.models) {
+                $metadata = ConvertFrom-ModelCatalogPayload $providerMetadata.models
+                if ($metadata.PSObject.Properties.Count -gt 0) {
+                    [void]$sources.Add($metadataUrl)
+                } else {
+                    $metadata = $null
+                }
+            } else {
+                [void]$warnings.Add("models.dev 中没有途径 $metadataProvider 的模型元数据")
+            }
+        } catch {
+            [void]$warnings.Add("模型元数据刷新失败（$metadataUrl）：$($_.Exception.Message)")
+        }
+    }
+
+    if ($null -eq $dynamic -and $null -eq $metadata) {
+        if ($null -ne $cache) {
+            [void]$warnings.Add('所有在线模型来源均失败，继续使用缓存目录')
+            return [pscustomobject]@{ Catalog = $cache; Warnings = @($warnings) }
+        }
+        [void]$warnings.Add('所有在线模型来源均失败，继续使用静态模型目录')
+        $fallback = [pscustomobject]@{
+            schema     = 'agent-model-catalog/v1'
+            provider   = $ProviderName
+            updated_at = 0
+            sources    = @('static')
+            models     = $static
+        }
+        return [pscustomobject]@{ Catalog = $fallback; Warnings = @($warnings) }
+    }
+
+    if ($null -ne $dynamic) {
+        $allowedIds = @($dynamic.PSObject.Properties.Name)
+        $staticFiltered = [ordered]@{}
+        foreach ($property in $static.PSObject.Properties) {
+            if ($allowedIds -contains $property.Name) {
+                $staticFiltered[$property.Name] = $property.Value
+            }
+        }
+        $metadataFiltered = [ordered]@{}
+        if ($null -ne $metadata) {
+            foreach ($property in $metadata.PSObject.Properties) {
+                if ($allowedIds -contains $property.Name) {
+                    $metadataFiltered[$property.Name] = $property.Value
+                }
+            }
+        }
+        $merged = Merge-ModelCatalogMap ([pscustomobject]$staticFiltered) $dynamic
+        $merged = Merge-ModelCatalogMap $merged ([pscustomobject]$metadataFiltered)
+    } else {
+        $merged = Merge-ModelCatalogMap $static $metadata
+    }
+    $result = [pscustomobject]@{
+        schema     = 'agent-model-catalog/v1'
+        provider   = $ProviderName
+        updated_at = [int64][DateTimeOffset]::UtcNow.ToUnixTimeSeconds()
+        sources    = @($sources)
+        models     = $merged
+    }
+    Write-Utf8 $cachePath (($result | ConvertTo-Json -Depth 20 -Compress) + [Environment]::NewLine)
+    return [pscustomobject]@{ Catalog = $result; Warnings = @($warnings) }
+}
+
+function Get-ProviderKnownModelMap {
+    param([string]$ProviderName)
+
+    $cache = Read-ModelCatalogCache (Get-ModelCatalogCachePath $ProviderName)
+    $static = Get-StaticProviderModelMap $ProviderName
+    if ($null -ne $cache) {
+        return $cache.models
+    }
+    return $static
+}
+
+function Strip-ModelContextSuffix {
+    param([string]$Value)
+
+    if ($Value -match '^(.*)(\[[^\]]+\])$') {
+        return [pscustomobject]@{ Base = $Matches[1]; Suffix = $Matches[2] }
+    }
+    return [pscustomobject]@{ Base = $Value; Suffix = '' }
+}
+
+function Remove-ModelProviderPrefix {
+    param([string]$Value, [string]$ProviderName, $Provider)
+
+    if ($Value -notmatch '^([^/]+)/(.+)$') {
+        return [pscustomobject]@{ Base = $Value; Prefix = '' }
+    }
+    $prefix = [string]$Matches[1]
+    $rest = [string]$Matches[2]
+    $allowed = @($ProviderName)
+    if (-not [string]::IsNullOrWhiteSpace([string]$Provider.opencode_provider_id)) {
+        $allowed += [string]$Provider.opencode_provider_id
+    }
+    if ($allowed -contains $prefix) {
+        return [pscustomobject]@{ Base = $rest; Prefix = $prefix }
+    }
+    return [pscustomobject]@{ Base = $Value; Prefix = '' }
+}
+
+function Test-ModelTokenSequence {
+    param([string]$Query, [string]$Candidate)
+
+    $queryTokens = @($Query.ToLowerInvariant() -split '[^a-z0-9]+' | Where-Object { $_ })
+    if ($queryTokens.Count -eq 0) { return $false }
+    $candidateTokens = @($Candidate.ToLowerInvariant() -split '[^a-z0-9]+' | Where-Object { $_ })
+    $index = 0
+    foreach ($token in $candidateTokens) {
+        if ($index -lt $queryTokens.Count -and $token -eq $queryTokens[$index]) {
+            $index++
+        }
+    }
+    return ($index -eq $queryTokens.Count)
+}
+
+function Get-ModelMatchScore {
+    param([string]$Query, [string]$Candidate)
+
+    if ($Query.ToLowerInvariant() -eq $Candidate.ToLowerInvariant()) { return 200.0 }
+    $queryKey = ConvertTo-ModelNormalizationKey $Query
+    $candidateKey = ConvertTo-ModelNormalizationKey $Candidate
+    if ($queryKey -eq $candidateKey -and $queryKey) { return 190.0 }
+    if ($queryKey -and $candidateKey.Contains($queryKey)) {
+        return 170.0 - (($candidateKey.Length - $queryKey.Length) * 0.2)
+    }
+    if ($candidateKey -and $queryKey.Contains($candidateKey)) {
+        return 160.0 - (($queryKey.Length - $candidateKey.Length) * 0.2)
+    }
+    if (Test-ModelTokenSequence $Query $Candidate) {
+        return 145.0 - ([Math]::Abs($queryKey.Length - $candidateKey.Length) * 0.1)
+    }
+    return 0.0
+}
+
+function Resolve-ModelCatalogName {
+    param($ModelMap, [string]$Query, [bool]$AssertMatch)
+
+    $parsed = Strip-ModelContextSuffix $Query
+    $base = [string]$parsed.Base
+    $suffix = [string]$parsed.Suffix
+    $candidates = New-Object System.Collections.Generic.List[object]
+    foreach ($property in $ModelMap.PSObject.Properties) {
+        $modelId = [string]$property.Name
+        $aliases = @($modelId)
+        if (-not [string]::IsNullOrWhiteSpace([string]$property.Value.name)) { $aliases += [string]$property.Value.name }
+        if (-not [string]::IsNullOrWhiteSpace([string]$property.Value.display_name)) { $aliases += [string]$property.Value.display_name }
+        $score = 0.0
+        foreach ($alias in $aliases) {
+            if ($base -match '[\*\?]' -and $modelId -like $base) {
+                $score = [Math]::Max($score, 180.0)
+            } else {
+                $score = [Math]::Max($score, (Get-ModelMatchScore $base $alias))
+            }
+        }
+        if ($score -gt 0) {
+            [void]$candidates.Add([pscustomobject]@{ Score = $score; ModelId = $modelId })
+        }
+    }
+    if ($candidates.Count -eq 0) {
+        if ($AssertMatch) { throw "模型 '$Query' 未在途径模型清单中匹配到可用模型" }
+        return [pscustomobject]@{ Model = $base + $suffix; Match = 'unknown' }
+    }
+    $sorted = @($candidates | Sort-Object @{Expression = { $_.Score }; Descending = $true}, @{Expression = { $_.ModelId.Length }; Descending = $false}, ModelId)
+    $bestScore = $sorted[0].Score
+    $best = @($sorted | Where-Object { [Math]::Abs($_.Score - $bestScore) -lt 0.01 })
+    if ($best.Count -gt 1) {
+        $queryKey = ConvertTo-ModelNormalizationKey $base
+        $starts = @($best | Where-Object { (ConvertTo-ModelNormalizationKey $_.ModelId).StartsWith($queryKey) })
+        if ($starts.Count -eq 1) {
+            $best = $starts
+        } else {
+            throw "模型 '$Query' 匹配到多个候选：$((@($best | ForEach-Object { $_.ModelId }) | Sort-Object) -join ', ')（请补充名称）"
+        }
+    }
+    $modelId = [string]$best[0].ModelId
+    $mode = if ((ConvertTo-ModelNormalizationKey $modelId) -eq (ConvertTo-ModelNormalizationKey $base)) { 'exact' } else { 'fuzzy' }
+    return [pscustomobject]@{ Model = $modelId + $suffix; Match = $mode; ModelBase = $modelId }
+}
+
+function Resolve-ModelCatalogStrength {
+    param($Entry, [string]$Requested, $Provider)
+
+    $requested = ([string]$Requested).Trim().ToLowerInvariant()
+    if ([string]::IsNullOrWhiteSpace($requested)) { $requested = 'max' }
+    $supported = @()
+    if ($null -ne $Entry -and $null -ne $Entry.supported_strengths) {
+        $supported = @($Entry.supported_strengths | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ })
+    }
+    if ($supported.Count -eq 0 -and $null -ne $Provider.supported_strengths) {
+        $supported = @($Provider.supported_strengths | ForEach-Object { ([string]$_).Trim().ToLowerInvariant() } | Where-Object { $_ })
+    }
+    $rank = @{ none = 0; minimal = 1; low = 2; medium = 3; high = 4; xhigh = 5; max = 6; ultra = 7 }
+    if (-not $rank.ContainsKey($requested) -or $supported.Count -eq 0) {
+        return [pscustomobject]@{ Strength = $requested; Match = 'unverified' }
+    }
+    $known = @($supported | Where-Object { $rank.ContainsKey($_) } | Sort-Object { $rank[$_] } -Unique)
+    if ($known.Count -eq 0) {
+        return [pscustomobject]@{ Strength = $requested; Match = 'unverified' }
+    }
+    if ($known -contains $requested) {
+        return [pscustomobject]@{ Strength = $requested; Match = 'exact' }
+    }
+    $lower = @($known | Where-Object { $rank[$_] -lt $rank[$requested] })
+    if ($lower.Count -gt 0) {
+        $selected = $lower[$lower.Count - 1]
+    } else {
+        $selected = $known[0]
+    }
+    return [pscustomobject]@{ Strength = $selected; Match = 'clamped' }
+}
+
+function Resolve-AgentModelSelection {
+    param(
+        [string]$ProviderName,
+        [string]$AgentName,
+        [string]$ModelQuery,
+        [string]$StrengthQuery,
+        [bool]$AssertModelMatch
+    )
+
+    $refresh = Update-ProviderModelCatalog $ProviderName
+    $warnings = New-Object System.Collections.Generic.List[string]
+    foreach ($warning in @($refresh.Warnings)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$warning)) { [void]$warnings.Add([string]$warning) }
+    }
+    $provider = $script:AgentConfig.providers.$ProviderName
+    $models = $refresh.Catalog.models
+    if ($null -eq $models -or $models.PSObject.Properties.Count -eq 0) {
+        $models = Get-StaticProviderModelMap $ProviderName
+    }
+
+    $query = Strip-ModelContextSuffix $ModelQuery
+    $queryValue = Remove-ModelProviderPrefix ([string]$query.Base) $ProviderName $provider
+    $matched = Resolve-ModelCatalogName $models (([string]$queryValue.Base) + [string]$query.Suffix) $AssertModelMatch
+    $resolved = Strip-ModelContextSuffix ([string]$matched.Model)
+    $modelBase = [string]$resolved.Base
+    $suffix = if ([string]::IsNullOrWhiteSpace([string]$resolved.Suffix)) { [string]$query.Suffix } else { [string]$resolved.Suffix }
+    $model = $modelBase + $suffix
+    if ($AgentName -eq 'opencode' -and $model -notmatch '/') {
+        $providerId = [string]$provider.opencode_provider_id
+        if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = $ProviderName }
+        $model = "$providerId/$model"
+    }
+    $entry = $models.PSObject.Properties[$modelBase]
+    if ($null -ne $entry) { $entry = $entry.Value }
+    if ([string]$matched.Match -eq 'unknown') {
+        $strength = [pscustomobject]@{
+            Strength = ([string]$StrengthQuery).Trim().ToLowerInvariant()
+            Match    = 'unverified'
+        }
+    } else {
+        $strength = Resolve-ModelCatalogStrength $entry $StrengthQuery $provider
+    }
+    if ([string]$matched.Match -eq 'fuzzy') {
+        [void]$warnings.Add("模型 '$ModelQuery' 未精确匹配，已使用 '$model'")
+    }
+    if ([string]$strength.Match -eq 'clamped') {
+        [void]$warnings.Add("模型 '$modelBase' 不支持强度 '$(([string]$StrengthQuery).ToLowerInvariant())'，已顺延为 '$($strength.Strength)'")
+    }
+    return [pscustomobject]@{
+        Model         = $model
+        ModelBase     = $modelBase
+        ModelMatch    = [string]$matched.Match
+        Strength      = [string]$strength.Strength
+        StrengthMatch = [string]$strength.Match
+        Warnings      = @($warnings)
+    }
+}
+
 # OpenCode provider 注入块：仅注入 key 环境变量存在的途径；custom-gpt 额外注册端点与模型
 function Get-OpenCodeProviderConfig {
     $result = [ordered]@{}
@@ -354,9 +966,10 @@ function Get-OpenCodeProviderConfig {
             $baseUrl = [string]$provider.base_url
             if ([string]::IsNullOrWhiteSpace($baseUrl)) { continue }
             $models = [ordered]@{}
-            foreach ($model in @($provider.opencode.models)) {
-                if (-not [string]::IsNullOrWhiteSpace([string]$model)) {
-                    $models[[string]$model] = [ordered]@{}
+            $modelMap = Get-ProviderKnownModelMap $name
+            foreach ($property in $modelMap.PSObject.Properties) {
+                if (-not [string]::IsNullOrWhiteSpace([string]$property.Name)) {
+                    $models[[string]$property.Name] = [ordered]@{}
                 }
             }
             $result[$providerId] = [ordered]@{
@@ -1055,8 +1668,9 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
     Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 cl.bat go）。'
+    Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
     Write-Host '模型：显式指定途径时（快捷词 pay|go|gpt 或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
@@ -2101,6 +2715,7 @@ function Parse-Arguments {
         default { 'CODEX_MODEL' }
     }
     $modelOverride = [Environment]::GetEnvironmentVariable($modelVariable)
+    $modelEnvOverride = $modelOverride
     $script:ModelExplicit = -not [string]::IsNullOrWhiteSpace($modelOverride)
     $providerVariable = switch ($script:Agent) {
         'claude' { 'CLAUDE_PROVIDER' }
@@ -2115,7 +2730,14 @@ function Parse-Arguments {
         $providerOverride = ''
     }
     $variantOverride = [Environment]::GetEnvironmentVariable('OPENCODE_VARIANT')
+    $variantEnvOverride = $variantOverride
     $reasoningOverride = [Environment]::GetEnvironmentVariable('CODEX_REASONING_EFFORT')
+    $reasoningEnvOverride = $reasoningOverride
+    $claudeStrengthOverride = ''
+    $modelFlagExplicit = $false
+    $strengthFlagExplicit = $false
+    $modelFromPositional = $false
+    $positional = New-Object System.Collections.Generic.List[string]
     $sandbox = [Environment]::GetEnvironmentVariable('CODEX_SANDBOX')
     $approval = [Environment]::GetEnvironmentVariable('CODEX_APPROVAL')
     $driveFile = ''
@@ -2147,12 +2769,14 @@ function Parse-Arguments {
                 if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少模型参数"; break }
                 $modelOverride = [string]$cliArgs[++$i]
                 $script:ModelExplicit = $true
+                $modelFlagExplicit = $true
                 continue
             }
             '-model' {
                 if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少模型参数"; break }
                 $modelOverride = [string]$cliArgs[++$i]
                 $script:ModelExplicit = $true
+                $modelFlagExplicit = $true
                 continue
             }
             '--variant' {
@@ -2160,6 +2784,7 @@ function Parse-Arguments {
                 if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少等级参数"; break }
                 $variantOverride = [string]$cliArgs[++$i]
                 $script:VariantExplicit = $true
+                $strengthFlagExplicit = $true
                 continue
             }
             '--reasoning-effort' {
@@ -2167,6 +2792,7 @@ function Parse-Arguments {
                 if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少等级参数"; break }
                 $reasoningOverride = [string]$cliArgs[++$i]
                 $script:ReasoningExplicit = $true
+                $strengthFlagExplicit = $true
                 continue
             }
             '--sandbox' {
@@ -2224,7 +2850,13 @@ function Parse-Arguments {
                 continue
             }
             default {
-                $errorMessage = "未知参数 '$option'"
+                if ($option.StartsWith('-')) {
+                    $errorMessage = "未知参数 '$option'"
+                } elseif ($positional.Count -ge 2) {
+                    $errorMessage = "位置参数过多 '$option'（最多为 [供应商] [模型] [强度]）"
+                } else {
+                    [void]$positional.Add($option)
+                }
                 break
             }
         }
@@ -2235,6 +2867,34 @@ function Parse-Arguments {
     if (-not [string]::IsNullOrWhiteSpace($errorMessage)) {
         Fail-Parse "###$($script:LauncherName): ERROR: $errorMessage###"
         return $false
+    }
+    if ($positional.Count -gt 0 -and
+        [string]::IsNullOrWhiteSpace($modelEnvOverride) -and -not $modelFlagExplicit) {
+        $modelOverride = $positional[0]
+        $script:ModelExplicit = $true
+        $modelFromPositional = $true
+    }
+    if ($positional.Count -gt 1 -and -not $strengthFlagExplicit) {
+        $positionalStrength = $positional[1]
+        switch ($script:Agent) {
+            'claude' {
+                if ([string]::IsNullOrWhiteSpace($claudeStrengthOverride)) {
+                    $claudeStrengthOverride = $positionalStrength
+                }
+            }
+            'opencode' {
+                if ([string]::IsNullOrWhiteSpace($variantEnvOverride)) {
+                    $variantOverride = $positionalStrength
+                    $script:VariantExplicit = $true
+                }
+            }
+            default {
+                if ([string]::IsNullOrWhiteSpace($reasoningEnvOverride)) {
+                    $reasoningOverride = $positionalStrength
+                    $script:ReasoningExplicit = $true
+                }
+            }
+        }
     }
     if (-not [string]::IsNullOrWhiteSpace($driveTime)) {
         $parsedInterval = Parse-Interval $driveTime $false
@@ -2336,13 +2996,42 @@ function Parse-Arguments {
         $providerStrength
     }
     if ([string]::IsNullOrWhiteSpace($pickedStrength)) { $pickedStrength = 'max' }
-    $script:Reasoning = if ($script:Agent -eq 'codex') {
+    if ($script:Agent -eq 'claude' -and -not [string]::IsNullOrWhiteSpace($claudeStrengthOverride)) {
+        $pickedStrength = $claudeStrengthOverride
+    }
+    $resolvedReasoning = if ($script:Agent -eq 'codex') {
         if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) { $reasoningOverride } else { $pickedStrength }
     } else { '' }
-    $script:Variant = if ($script:Agent -eq 'opencode') {
+    $resolvedVariant = if ($script:Agent -eq 'opencode') {
         if (-not [string]::IsNullOrWhiteSpace($variantOverride)) { $variantOverride } else { $pickedStrength }
     } else { '' }
-    $script:ClaudeStrength = if ($script:Agent -eq 'claude') { $pickedStrength } else { '' }
+    $resolvedClaudeStrength = if ($script:Agent -eq 'claude') { $pickedStrength } else { '' }
+    $strengthQuery = switch ($script:Agent) {
+        'codex' { $resolvedReasoning }
+        'opencode' { $resolvedVariant }
+        default { $resolvedClaudeStrength }
+    }
+    try {
+        $selection = Resolve-AgentModelSelection $providerForModel $agentKey $script:Model $strengthQuery $modelFromPositional
+    } catch {
+        Fail-Parse "###$($script:LauncherName): ERROR: $($_.Exception.Message)###"
+        return $false
+    }
+    foreach ($warning in @($selection.Warnings)) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
+            Write-ErrorLine "###$($script:LauncherName): warning: $warning###"
+        }
+    }
+    $script:Model = [string]$selection.Model
+    $script:ModelName = "$($script:Model)$modelLabel"
+    if ([string]$selection.ModelMatch -eq 'fuzzy') {
+        $script:ModelName += '（模型匹配）'
+    }
+    switch ($script:Agent) {
+        'codex' { $script:Reasoning = [string]$selection.Strength }
+        'opencode' { $script:Variant = [string]$selection.Strength }
+        default { $script:ClaudeStrength = [string]$selection.Strength }
+    }
     if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) {
         $script:ReasoningExplicit = $true
     }

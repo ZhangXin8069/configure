@@ -1,8 +1,18 @@
 {
   "schema": "agent-custom/v1",
-  "description": "agent 系列个性化配置（两层默认：显式选途径时供应商层优先，否则 agent 层优先；高优先层缺值回退另一层）。供应商层：providers.<途径>.default_models/default_strengths.<agent>；agent 层：agents.<agent>.provider/model/strength。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
+  "description": "agent 系列个性化默认与模型目录配置（两层默认：显式选途径时供应商层优先，否则 agent 层优先；高优先层缺值回退另一层）。供应商层：providers.<途径>.default_models/default_strengths.<agent>；agent 层：agents.<agent>.provider/model/strength。生效规则：存在用户编写的 agent-custom.json 时完全替代本文件，否则以本文件为个性化默认值；两文件均与 agent-config.json 深度合并（同名键个性化优先）。",
+  "model_discovery": {
+    "enabled": true,
+    "cache_ttl_seconds": 21600,
+    "timeout_seconds": 5,
+    "metadata_url": "https://models.dev/api.json"
+  },
   "guidance": [
     "复制本文件为 agent-custom.json 后按需修改；agent-custom.json 已被 .gitignore 忽略，不会入库。",
+    "切换语法统一为 [供应商] [模型] [强度]：co go glm-5.3-flash max、cl pay deepseek-pro[1m]、op gpt、直接 co 分别使用显式组合或默认供应商/模型/强度；传统 --model/--variant/--reasoning-effort 仍为最高优先级。",
+    "模型目录按 TTL 自动从 providers.<途径>.models_url 更新；也可用 models.dev 元数据补齐推理强度。刷新失败依次回退旧缓存、models.dev、静态 models；全部不可用时仍可启动。",
+    "不完整模型名会自动匹配完整 ID（如 deepseek-pro → deepseek-v4-pro），[1m] 等上下文后缀保留；模型不支持的过高强度会顺延到最近支持等级（如 ultra → max）。",
+    "zsh 会把未引用的 [1m] 当通配符；命令行使用含方括号的模型名时请写成 'deepseek-pro[1m]'（或双引号）。",
     "两层默认的择序取决于是否「显式选途径」：命令行快捷词（cl go / op gpt / co pay）与 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量一视同仁，均视为显式——此时 providers 层优先；未显式时（途径来自 agents.<agent>.provider）agent 层优先。命令行/环境变量的 --model/--variant/--reasoning-effort 恒为最高。",
     "显式选途径时取 providers.<途径>.default_models|default_strengths.<agent>，仅当该途径未给此 agent 配置时才回退 agents.<agent>.model/strength；未显式选途径时反之。故填写 agents.<agent>.model 只固定「未指定途径时」的默认，执行 cl go 等仍会切到该途径的默认模型。",
     "模型强度（strength）统一配置：cl 经 CLAUDE_CODE_EFFORT_LEVEL、op 经 variant、co 经 reasoning effort 落地，三条解析链相同。",
