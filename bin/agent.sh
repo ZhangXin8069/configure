@@ -157,6 +157,10 @@ _prepare_secure_binary() {
 # prompt 基础读取：agent-prompt.txt 单一来源，替换 ${HOME}/${_PWD} 占位符；
 # 文件缺失时给出明确报错并退出（防静默用空 prompt）。成功后 PROMPT 就绪。
 _load_prompt() {
+    if [[ "${AGENT_DISPATCH_MINIMAL:-0}" == 1 && -n "${AGENT_DISPATCH_TASK:-}" ]]; then
+        PROMPT=$'你是 configure agent 系列的子 agent。只处理下面给出的任务，不扩大范围；先理解再行动，采用最小可靠改动，执行可用的验证，最终简洁返回结果、证据与阻塞。除非任务明确要求，不要继续派发子 agent；确需派发但失败时，复用启动本 agent 的同一 provider/model/auth/settings 链重试，仍失败则自行串行完成。\n\n【派发任务】\n'"${AGENT_DISPATCH_TASK}"
+        return 0
+    fi
     local _pf="${_PATH}/agent-prompt.txt"
     if [[ ! -r "${_pf}" ]]; then
         echo "###${_NAME}: ERROR: ${_pf} 不存在或不可读（prompt 单一来源缺失）###" >&2
@@ -171,10 +175,15 @@ _load_prompt() {
     if [[ -n "${AGENT_CONTEXT_PROMPT:-}" ]]; then
         PROMPT+="${AGENT_CONTEXT_PROMPT}"
     fi
+    if [[ -n "${AGENT_DISPATCH_TASK:-}" ]]; then
+        PROMPT+=$'\n\n### 本次派发任务 ###\n'
+        PROMPT+="${AGENT_DISPATCH_TASK}"
+    fi
 }
 
 # 全局 agent 配置目录清单注入（co/cl 共用）：只列路径，不读取内容
 _append_agent_config_dirs() {
+    [[ "${AGENT_DISPATCH_MINIMAL:-0}" == 1 ]] && return 0
     local _title="$1" _agent_dir
     shift
     PROMPT+=$'\n\n### '"${_title}"$' ###\n'
@@ -198,6 +207,24 @@ _contains() {
     return 1
 }
 
+# 父 agent 上下文：供 agent-dispatch.sh 默认原样继承本轮启动设置。
+_export_parent_context() {
+    local _provider="$1" _model="$2" _strength="$3" _sandbox="${4:-}" _approval="${5:-}"
+    export AGENT_PARENT_LAUNCHER="${_NAME:-}"
+    export AGENT_PARENT_AGENT="${_AGENT:-}"
+    export AGENT_PARENT_PROVIDER="${_provider}"
+    export AGENT_PARENT_MODEL="${_model}"
+    export AGENT_PARENT_STRENGTH="${_strength}"
+    export AGENT_PARENT_CWD="${_PWD:-$PWD}"
+    export AGENT_PARENT_WORKSPACE="${AGENT_WORKSPACE_ROOT:-${_PWD:-$PWD}}"
+    export AGENT_PARENT_DATA_ROOT="${AGENT_DATA_ROOT:-}"
+    export AGENT_PARENT_RUN_ID="${AGENT_RUN_ID:-}"
+    export AGENT_PARENT_MANIFEST="${AGENT_MANIFEST_FILE:-}"
+    export AGENT_PARENT_SECURE="${_SECURE:-0}"
+    export AGENT_PARENT_SANDBOX="${_sandbox}"
+    export AGENT_PARENT_APPROVAL="${_approval}"
+}
+
 # JSON 字符串值转义（反斜杠/双引号/换行；用于 cl 的 --settings 私有设置文件）
 _json_escape() {
     local _s="$1"
@@ -206,6 +233,16 @@ _json_escape() {
     _s="${_s//$'\n'/}"
     _s="${_s//$'\r'/}"
     printf '%s' "${_s}"
+}
+
+# 派发结果捕获：stdout 写入独立结果文件，stderr 仍进入 run 日志。
+_run_agent_command() {
+    local _capture="${AGENT_DISPATCH_OUTPUT_FILE:-}"
+    if [[ -n "${_capture}" ]]; then
+        "$@" >"${_capture}" 2>>"${LOG_FILE}"
+    else
+        "$@" 2>>"${LOG_FILE}"
+    fi
 }
 
 # 旧 key 环境变量名过渡：新名缺失而旧名存在时导出新名（并告警提示迁移）
@@ -222,16 +259,66 @@ _migrate_legacy_keys() {
     done
 }
 
+# OpenCode 三类 key 变量等价，按使用方案选择首选变量后归一化到三者：
+#   go=GO>ZEN>API；zen=ZEN>API>GO；未指定方案=API>GO>ZEN（默认仍用 go 基础设置）。
+_migrate_opencode_keys() {
+    local _mode="${1:-default}" _value=""
+    case "${_mode}" in
+        go)
+            _value="${OPENCODE_GO_API_KEY:-${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-}}}"
+            ;;
+        zen)
+            _value="${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-${OPENCODE_GO_API_KEY:-}}}"
+            ;;
+        *)
+            _value="${OPENCODE_API_KEY:-${OPENCODE_GO_API_KEY:-${OPENCODE_ZEN_API_KEY:-}}}"
+            ;;
+    esac
+    [[ -n "${_value}" ]] || return 0
+    local _name _existing _conflict=0
+    for _name in OPENCODE_API_KEY OPENCODE_ZEN_API_KEY OPENCODE_GO_API_KEY; do
+        _existing="${!_name:-}"
+        if [[ -n "${_existing}" && "${_existing}" != "${_value}" ]]; then
+            _conflict=1
+        fi
+    done
+    export OPENCODE_API_KEY="${_value}"
+    export OPENCODE_ZEN_API_KEY="${_value}"
+    export OPENCODE_GO_API_KEY="${_value}"
+    if (( _conflict )); then
+        echo "###${_NAME:-agent}: warning: OPENCODE_API_KEY/OPENCODE_ZEN_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按 ${_mode} 方案统一###" >&2
+    fi
+}
+
+_detect_opencode_key_mode() {
+    local _arg _provider
+    for _arg in "$@"; do
+        case "${_arg}" in
+            go|opencode-go) printf 'go\n'; return 0;;
+            zen|opencode-zen) printf 'zen\n'; return 0;;
+        esac
+    done
+    for _arg in CODEX_PROVIDER_ID OPENCODE_PROVIDER CLAUDE_PROVIDER; do
+        _provider="${!_arg:-}"
+        case "${_provider}" in
+            go|opencode-go) printf 'go\n'; return 0;;
+            zen|opencode-zen) printf 'zen\n'; return 0;;
+        esac
+    done
+    printf 'default\n'
+}
+
 # 途径名规整化：custom-gpt → CUSTOM_GPT，与 _agent_config_load 展开出的 _CFG_* 变量名保持一致
 _cfg_provider_key() {
     printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go、gpt→custom-gpt；完整途径名原样返回
+# 供应商快捷词：pay→deepseek-pay、go→opencode-go、zen→opencode-zen、gpt→custom-gpt；完整途径名原样返回
 _provider_alias() {
     case "$1" in
         pay) printf 'deepseek-pay\n';;
         go)  printf 'opencode-go\n';;
+        zen) printf 'opencode-zen\n';;
         gpt) printf 'custom-gpt\n';;
         *)   printf '%s\n' "$1";;
     esac
@@ -428,6 +515,12 @@ _agent_model_resolve_catalog() {
     AGENT_MODEL_RESOLVED_STRENGTH="${_strength}"
     AGENT_MODEL_RESOLVED_MATCH="unknown"
     AGENT_MODEL_RESOLVED_STRENGTH_MATCH="unverified"
+    AGENT_MODEL_RESOLVED_CODEX_WIRE_API=""
+    AGENT_MODEL_RESOLVED_CODEX_UNSUPPORTED_REASON=""
+    AGENT_MODEL_RESOLVED_CODEX_BRIDGE_PROTOCOL=""
+    AGENT_MODEL_RESOLVED_CLAUDE_WIRE_API=""
+    AGENT_MODEL_RESOLVED_CLAUDE_UNSUPPORTED_REASON=""
+    AGENT_MODEL_RESOLVED_CLAUDE_BRIDGE_PROTOCOL=""
     local -a _args=(
         resolve
         --provider "${_provider}"
@@ -451,6 +544,12 @@ _agent_model_resolve_catalog() {
     AGENT_MODEL_RESOLVED_STRENGTH="${RESOLVED_STRENGTH:-${_strength}}"
     AGENT_MODEL_RESOLVED_MATCH="${RESOLVED_MODEL_MATCH:-unknown}"
     AGENT_MODEL_RESOLVED_STRENGTH_MATCH="${RESOLVED_STRENGTH_MATCH:-unverified}"
+    AGENT_MODEL_RESOLVED_CODEX_WIRE_API="${RESOLVED_CODEX_WIRE_API:-}"
+    AGENT_MODEL_RESOLVED_CODEX_UNSUPPORTED_REASON="${RESOLVED_CODEX_UNSUPPORTED_REASON:-}"
+    AGENT_MODEL_RESOLVED_CODEX_BRIDGE_PROTOCOL="${RESOLVED_CODEX_BRIDGE_PROTOCOL:-}"
+    AGENT_MODEL_RESOLVED_CLAUDE_WIRE_API="${RESOLVED_CLAUDE_WIRE_API:-}"
+    AGENT_MODEL_RESOLVED_CLAUDE_UNSUPPORTED_REASON="${RESOLVED_CLAUDE_UNSUPPORTED_REASON:-}"
+    AGENT_MODEL_RESOLVED_CLAUDE_BRIDGE_PROTOCOL="${RESOLVED_CLAUDE_BRIDGE_PROTOCOL:-}"
     _resolved_warning_count=0
     if [[ "${RESOLVED_WARNING_COUNT:-0}" =~ ^[0-9]+$ ]]; then
         _resolved_warning_count="${RESOLVED_WARNING_COUNT}"
@@ -460,7 +559,11 @@ _agent_model_resolve_catalog() {
         done
     fi
     unset RESOLVED_MODEL RESOLVED_MODEL_BASE RESOLVED_MODEL_MATCH \
-        RESOLVED_STRENGTH RESOLVED_STRENGTH_MATCH RESOLVED_WARNING_COUNT
+        RESOLVED_STRENGTH RESOLVED_STRENGTH_MATCH RESOLVED_WARNING_COUNT \
+        RESOLVED_CODEX_WIRE_API RESOLVED_CODEX_UNSUPPORTED_REASON \
+        RESOLVED_CODEX_BRIDGE_PROTOCOL \
+        RESOLVED_CLAUDE_WIRE_API RESOLVED_CLAUDE_UNSUPPORTED_REASON \
+        RESOLVED_CLAUDE_BRIDGE_PROTOCOL
     for ((_idx = 0; _idx < ${_resolved_warning_count:-0}; _idx++)); do
         unset "RESOLVED_WARNING_${_idx}" 2>/dev/null || true
     done
@@ -485,6 +588,7 @@ _agent_model_provider_json() {
 
 # 全局/工作区 SKILL.md 路径清单注入（co/cl 共用）：只列路径；去重
 _append_skill_list() {
+    [[ "${AGENT_DISPATCH_MINIMAL:-0}" == 1 ]] && return 0
     local _title="$1" _root _skill_path _found=0 _discovered=0
     shift
     PROMPT+=$'\n\n### '"${_title}"$' ###\n'
@@ -513,12 +617,34 @@ _append_skill_list() {
 # op 分支另有用户输入兜底补录（_recover_inputs，仅 op 分支定义）
 _LIVE_PID=""
 _CLAUDE_SETTINGS_TMP=""
+_BRIDGE_PID=""
+_BRIDGE_READY_FILE=""
+_BRIDGE_PORT=""
+_BRIDGE_TMP_DIR=""
+_bridge_stop() {
+    if [[ -n "${_BRIDGE_PID:-}" ]]; then
+        kill "${_BRIDGE_PID}" 2>/dev/null || true
+        wait "${_BRIDGE_PID}" 2>/dev/null || true
+        _BRIDGE_PID=""
+    fi
+    if [[ -n "${_BRIDGE_READY_FILE:-}" && -f "${_BRIDGE_READY_FILE}" ]]; then
+        rm -f -- "${_BRIDGE_READY_FILE}"
+    fi
+    if [[ -n "${_BRIDGE_TMP_DIR:-}" && -d "${_BRIDGE_TMP_DIR}" ]]; then
+        rm -f -- "${_BRIDGE_TMP_DIR}/bridge.log"
+        rmdir "${_BRIDGE_TMP_DIR}" 2>/dev/null || true
+    fi
+    _BRIDGE_READY_FILE=""
+    _BRIDGE_PORT=""
+    _BRIDGE_TMP_DIR=""
+}
 _cleanup() {
     local _exit_rc=$?
     if [[ "${_AGENT:-}" == opencode ]] && declare -F _recover_inputs >/dev/null 2>&1; then
         _recover_inputs
     fi
     [[ -n "${_LIVE_PID:-}" ]] && kill "${_LIVE_PID}" 2>/dev/null
+    _bridge_stop
     if [[ -n "${_CLAUDE_SETTINGS_TMP:-}" && -f "${_CLAUDE_SETTINGS_TMP}" ]]; then
         rm -f -- "${_CLAUDE_SETTINGS_TMP}"
     fi
@@ -588,7 +714,7 @@ run_claude() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.claude 与 agents.claude.model 互为一层，高优先层缺值回退另一层。
@@ -613,14 +739,14 @@ run_claude() {
     [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
+            pay|go|zen|gpt|deepseek-pay|opencode-go|opencode-zen|custom-gpt)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} go）。"
+                echo "用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=custom-gpt（如 ${_NAME} zen）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
@@ -646,7 +772,7 @@ run_claude() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -686,11 +812,11 @@ run_claude() {
 
     # ---- 途径设置：Anthropic 兼容端点与 key 均取自 agent-config.json/agent-custom.json ----
     # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
-    # 途径来自命令行快捷词（pay/go/gpt）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
+    # 途径来自命令行快捷词（pay/go/zen/gpt）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
     # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go。
     local _cl_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}")"
     if [[ -z "${_cl_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CLAUDE_PROVIDER 环境变量，两者一视同仁）：
@@ -708,6 +834,10 @@ run_claude() {
     fi
     _cl_var="_CFG_PROVIDERS_${_cl_pkey}_ENV_KEY"
     _cl_key_name="${!_cl_var:-}"
+    _cl_var="_CFG_PROVIDERS_${_cl_pkey}_BASE_URL"
+    local _cl_bridge_upstream="${!_cl_var:-}"
+    _cl_var="_CFG_PROVIDERS_${_cl_pkey}_CLAUDE_BRIDGE_AUTH"
+    local CLAUDE_BRIDGE_AUTH="${CLAUDE_BRIDGE_AUTH:-${!_cl_var:-bearer}}"
     export ANTHROPIC_BASE_URL
 
     # 模型选择（两层默认：显式选途径时 providers 层优先，否则 agent 层优先；高优先层缺值回退另一层）：
@@ -766,6 +896,30 @@ run_claude() {
         MODEL_NAME="${MODEL_ID}${_cl_model_label}（模型匹配）"
     else
         MODEL_NAME="${MODEL_ID}${_cl_model_label}"
+    fi
+    if [[ -z "${AGENT_MODEL_RESOLVED_CLAUDE_BRIDGE_PROTOCOL}" &&
+          -n "${AGENT_MODEL_RESOLVED_CLAUDE_WIRE_API}" &&
+          "${AGENT_MODEL_RESOLVED_CLAUDE_WIRE_API}" != "messages" ]]; then
+        local _cl_provider_hint="${_cl_provider}"
+        case "${_cl_provider}" in
+            deepseek-pay) _cl_provider_hint=pay;;
+            opencode-go) _cl_provider_hint=go;;
+            opencode-zen) _cl_provider_hint=zen;;
+            custom-gpt) _cl_provider_hint=gpt;;
+        esac
+        echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Claude 的 Anthropic Messages 协议：${AGENT_MODEL_RESOLVED_CLAUDE_UNSUPPORTED_REASON:-该模型不支持 /v1/messages}###" >&2
+        echo "###${_NAME}: hint: 请改用 'op ${_cl_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
+        exit 64
+    fi
+    if [[ -n "${AGENT_MODEL_RESOLVED_CLAUDE_BRIDGE_PROTOCOL}" ]]; then
+        local _cl_bridge_target="${CLAUDE_BRIDGE_UPSTREAM_BASE:-${_cl_bridge_upstream}}"
+        _start_protocol_bridge \
+            "${AGENT_MODEL_RESOLVED_CLAUDE_BRIDGE_PROTOCOL}" \
+            "${_cl_bridge_target}" \
+            "${_cl_key_name}" \
+            "${CLAUDE_BRIDGE_AUTH}" || exit $?
+        ANTHROPIC_BASE_URL="http://127.0.0.1:${_BRIDGE_PORT}"
+        export ANTHROPIC_BASE_URL
     fi
     # 状态栏（与 co 同款的通用 statusline 配置，经 agent-statusline.sh 渲染）
     export AGENT_STATUSLINE_SEGMENTS="${_CFG_STATUSLINE_SEGMENTS:-[]}"
@@ -868,6 +1022,7 @@ run_claude() {
         "${AGENT_POSTURE:-deep-worker}" "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" \
         "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 0 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
+    _export_parent_context "${_cl_provider}" "${MODEL_ID}" "${CLAUDE_STRENGTH}"
     _load_prompt
     _append_agent_config_dirs "全局 Agent 配置目录（按需读取）" "${_agent_config_dirs[@]}"
     _append_skill_list "全局技能（${_agent_config_dirs[0]}）" "${_agent_config_dirs[0]}"
@@ -877,6 +1032,9 @@ run_claude() {
 
     echo "============================================================"
     echo "  Claude Code: ${MODEL_NAME} | provider=${_cl_provider} | permission-mode ${_CL_PERMISSION_MODE}"
+    if [[ -n "${_BRIDGE_PORT}" ]]; then
+        echo "  bridge: Anthropic Messages -> ${AGENT_MODEL_RESOLVED_CLAUDE_BRIDGE_PROTOCOL} (127.0.0.1:${_BRIDGE_PORT})"
+    fi
     if [[ -n "${_cl_key}" ]]; then
         echo "  auth: ${_cl_key_name} 已设置"
     else
@@ -914,6 +1072,7 @@ run_claude() {
     # 实时活动监视器：claude stderr 无结构化事件行，仅筛出关键行（错误/警告/会话）实时输出
     _live_log()
     {
+        [[ -n "${AGENT_DISPATCH_TASK:-}" ]] && return 0
         local _iu
         if tail --version 2>/dev/null | head -1 | grep -q GNU; then
             _iu="-s 0.2 --pid=$$"
@@ -949,7 +1108,7 @@ run_claude() {
     else
         echo "---- drive: prompt round start $(date "+%F-%T") ----"
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}" 2>> "${LOG_FILE}"
+        _run_agent_command "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}"
         _drv_rc=$?
         if (( _drv_rc != 0 )); then
             _agent_runtime_turn_failure
@@ -959,6 +1118,11 @@ run_claude() {
         _agent_runtime_turn_success
         _drv_sid="$(grep -oE 'session_(id|\.id)=[A-Za-z0-9_-]+' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
         if [[ -z "${_drv_sid}" ]]; then
+            if (( ONCE_MODE )) && [[ -z "${DRIVE_FILE}" ]]; then
+                _agent_runtime_mark finished "once 模式（模型无会话 ID，无需续链）"
+                echo "logs -> ${LOG_FILE}"
+                return 0
+            fi
             echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session id，驱动终止###" >&2
             exit 1
         fi
@@ -1068,7 +1232,7 @@ run_opencode() {
     fi
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.opencode 与 agents.opencode.model 互为一层，高优先层缺值回退另一层。
@@ -1095,7 +1259,7 @@ run_opencode() {
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
+            pay|go|zen|gpt|deepseek-pay|opencode-go|opencode-zen|custom-gpt)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -1104,8 +1268,8 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
                 VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} gpt）。"
+                echo "用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=custom-gpt（如 ${_NAME} zen）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
@@ -1131,7 +1295,7 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -1180,7 +1344,7 @@ run_opencode() {
     # 两层皆空时启动报错。
     local _op_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}")"
     if [[ -z "${_op_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 OPENCODE_PROVIDER 环境变量，两者一视同仁）
@@ -1261,6 +1425,7 @@ run_opencode() {
         "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 0 "$VARIANT_EXPLICIT" || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
     VARIANT="${AGENT_RUNTIME_VARIANT:-$VARIANT}"
+    _export_parent_context "${_op_provider}" "${MODEL_ID}" "${VARIANT}"
     _load_prompt
     local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
     local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
@@ -1329,6 +1494,7 @@ run_opencode() {
     # 以 [HH:MM:SS] [LEVEL] 紧凑行实时输出到终端（GNU tail 用 -s 0.2 近实时；BSD 回退默认 -F）
     _live_log()
     {
+        [[ -n "${AGENT_DISPATCH_TASK:-}" ]] && return 0
         local _iu
         if tail --version 2>/dev/null | head -1 | grep -q GNU; then
             _iu="-s 0.2 --pid=$$"
@@ -1423,8 +1589,7 @@ PYEOF
         else
             echo "---- drive: prompt round start $(date "+%F-%T") ----"
             _agent_runtime_turn_begin
-            "${_OPENCODE_BIN}" run --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${PROMPT}" \
-                    2> "${LOG_FILE}"
+            _run_agent_command "${_OPENCODE_BIN}" run --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${PROMPT}"
             _drv_rc=$?
             if (( _drv_rc != 0 )); then
                 _agent_runtime_turn_failure
@@ -1645,6 +1810,65 @@ PYEOF
     printf '%s\n' "${_out}"
 }
 
+_start_protocol_bridge() {
+    local _protocol="$1" _upstream="$2" _key_env="$3" _auth_mode="$4"
+    if [[ "${_protocol}" != "chat_completions" ]]; then
+        echo "###${_NAME}: ERROR: 不支持的 Codex 协议桥：${_protocol}###" >&2
+        return 64
+    fi
+    if [[ -z "${_upstream}" ]]; then
+        echo "###${_NAME}: ERROR: Codex 协议桥缺少上游地址###" >&2
+        return 64
+    fi
+    local _bridge_script="${_PATH}/agent-protocol-bridge.py"
+    if [[ ! -r "${_bridge_script}" ]]; then
+        echo "###${_NAME}: ERROR: 缺少协议桥脚本 ${_bridge_script}###" >&2
+        return 66
+    fi
+    local _bridge_dir="${AGENT_RUN_DIR:-}"
+    if [[ -z "${_bridge_dir}" ]]; then
+        _bridge_dir="$(mktemp -d "${AGENT_DATA_ROOT:-${TMPDIR:-/tmp}}/bridge.XXXXXX")" || return 70
+        _BRIDGE_TMP_DIR="${_bridge_dir}"
+    fi
+    local _bridge_log="${_bridge_dir}/bridge.log"
+    local _bridge_session="${AGENT_RUN_ID:-}"
+    if [[ -z "${_bridge_session}" ]]; then
+        _bridge_session="$("${_AGENT_PYTHON}" -c 'import uuid; print(uuid.uuid4())')" || return 70
+    fi
+    _BRIDGE_READY_FILE="${_bridge_dir}/.bridge-ready.$$"
+    : > "${_bridge_log}" 2>/dev/null || true
+    "${_AGENT_PYTHON}" "${_bridge_script}" \
+        --upstream-base "${_upstream}" \
+        --api-key-env "${_key_env}" \
+        --auth-mode "${_auth_mode}" \
+        --session-id "${_bridge_session}" \
+        --ready-file "${_BRIDGE_READY_FILE}" \
+        >>"${_bridge_log}" 2>&1 &
+    _BRIDGE_PID=$!
+    local _attempt _port=""
+    for ((_attempt = 0; _attempt < 50; _attempt++)); do
+        if [[ -s "${_BRIDGE_READY_FILE}" ]]; then
+            _port="$(head -n 1 "${_BRIDGE_READY_FILE}" 2>/dev/null || true)"
+            break
+        fi
+        if ! kill -0 "${_BRIDGE_PID}" 2>/dev/null; then
+            echo "###${_NAME}: ERROR: Codex 协议桥启动失败，日志：${_bridge_log}###" >&2
+            tail -n 20 "${_bridge_log}" >&2 2>/dev/null || true
+            _bridge_stop
+            return 70
+        fi
+        sleep 0.1
+    done
+    if [[ ! "${_port}" =~ ^[0-9]+$ ]] || (( _port <= 0 )); then
+        echo "###${_NAME}: ERROR: Codex 协议桥未在 5s 内就绪，日志：${_bridge_log}###" >&2
+        tail -n 20 "${_bridge_log}" >&2 2>/dev/null || true
+        _bridge_stop
+        return 70
+    fi
+    _BRIDGE_PORT="${_port}"
+    return 0
+}
+
 run_codex() {
     local _CODEX_BIN="${CODEX_BIN:-}"
     if (( _SECURE )) && [[ -z "${_CODEX_BIN}" && -n "${_CFG_AGENTS_CODEX_SECURE_BINARY:-}" ]]; then
@@ -1692,7 +1916,7 @@ run_codex() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL]
+    # 用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL]
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
@@ -1720,7 +1944,7 @@ run_codex() {
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|gpt|deepseek-pay|opencode-go|custom-gpt)
+            pay|go|zen|gpt|deepseek-pay|opencode-go|opencode-zen|custom-gpt)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -1752,15 +1976,15 @@ run_codex() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 ${_NAME} pay）。"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=custom-gpt（如 ${_NAME} zen）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -1809,7 +2033,7 @@ run_codex() {
     # 两层皆空时启动报错。
     local _cx_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}")"
     if [[ -z "${_cx_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gpt、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CODEX_PROVIDER_ID 环境变量，两者一视同仁）
@@ -1864,6 +2088,20 @@ run_codex() {
     else
         MODEL_NAME="${MODEL_ID}${_cx_model_label}"
     fi
+    if [[ -z "${AGENT_MODEL_RESOLVED_CODEX_BRIDGE_PROTOCOL}" &&
+          -n "${AGENT_MODEL_RESOLVED_CODEX_WIRE_API}" &&
+          "${AGENT_MODEL_RESOLVED_CODEX_WIRE_API}" != "responses" ]]; then
+        local _cx_provider_hint="${_cx_provider}"
+        case "${_cx_provider}" in
+            deepseek-pay) _cx_provider_hint=pay;;
+            opencode-go) _cx_provider_hint=go;;
+            opencode-zen) _cx_provider_hint=zen;;
+            custom-gpt) _cx_provider_hint=gpt;;
+        esac
+        echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Codex Responses 协议：${AGENT_MODEL_RESOLVED_CODEX_UNSUPPORTED_REASON:-该模型不支持 /responses}###" >&2
+        echo "###${_NAME}: hint: 请改用 'op ${_cx_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
+        exit 64
+    fi
 
     local _runtime_mode=tui
     (( DRIVE_MODE )) && _runtime_mode=drive
@@ -1878,6 +2116,8 @@ run_codex() {
         "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" "$REASONING_EXPLICIT" 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
     REASONING_EFFORT="${AGENT_RUNTIME_REASONING:-$REASONING_EFFORT}"
+    _export_parent_context "${_cx_provider}" "${MODEL_ID}" "${REASONING_EFFORT}" \
+        "${CODEX_SANDBOX_MODE}" "${CODEX_APPROVAL_POLICY}"
     _load_prompt
     _append_agent_config_dirs "全局 Agent 配置目录（按需读取）" "${_agent_config_dirs[@]}"
     _append_skill_list "全局技能（${_agent_config_dirs[0]}）" "${_agent_config_dirs[0]}"
@@ -1895,9 +2135,20 @@ run_codex() {
     local CODEX_PROVIDER_WIRE_API="${CODEX_PROVIDER_WIRE_API:-${!_cx_pvar:-responses}}"
     _cx_pvar="_CFG_PROVIDERS_${_cx_pkey}_SUPPORTS_WEBSOCKETS"
     local CODEX_PROVIDER_SUPPORTS_WEBSOCKETS="${CODEX_PROVIDER_SUPPORTS_WEBSOCKETS:-${!_cx_pvar:-false}}"
+    _cx_pvar="_CFG_PROVIDERS_${_cx_pkey}_CODEX_BRIDGE_AUTH"
+    local CODEX_BRIDGE_AUTH="${CODEX_BRIDGE_AUTH:-${!_cx_pvar:-bearer}}"
     local CODEX_PROVIDER_NAME="${CODEX_PROVIDER_NAME:-${CODEX_PROVIDER_ID}}"
     if [[ -z "${CODEX_PROVIDER_BASE_URL}" ]]; then
         echo "###${_NAME}: warning: 途径 '${CODEX_PROVIDER_ID}' 未配置 base_url（见 agent-config.json / agent-custom.json）###" >&2
+    fi
+    if [[ -n "${AGENT_MODEL_RESOLVED_CODEX_BRIDGE_PROTOCOL}" ]]; then
+        local _cx_bridge_upstream="${CODEX_BRIDGE_UPSTREAM_BASE:-${CODEX_PROVIDER_BASE_URL}}"
+        _start_protocol_bridge \
+            "${AGENT_MODEL_RESOLVED_CODEX_BRIDGE_PROTOCOL}" \
+            "${_cx_bridge_upstream}" \
+            "${CODEX_PROVIDER_ENV_KEY}" \
+            "${CODEX_BRIDGE_AUTH}" || exit $?
+        CODEX_PROVIDER_BASE_URL="http://127.0.0.1:${_BRIDGE_PORT}/v1"
     fi
     local CODEX_MODEL_CONTEXT_WINDOW="${CODEX_MODEL_CONTEXT_WINDOW:-${_CFG_AGENTS_CODEX_CONFIG_MODEL_CONTEXT_WINDOW:-1000000}}"
     local CODEX_CHECK_FOR_UPDATE_ON_STARTUP="${CODEX_CHECK_FOR_UPDATE_ON_STARTUP:-${_CFG_AGENTS_CODEX_CONFIG_CHECK_FOR_UPDATE_ON_STARTUP:-false}}"
@@ -1920,7 +2171,7 @@ run_codex() {
     local CODEX_TUI_STATUS_LINE_USE_COLORS="${CODEX_TUI_STATUS_LINE_USE_COLORS:-${_CFG_AGENTS_CODEX_CONFIG_TUI_STATUS_LINE_USE_COLORS:-${_CFG_STATUSLINE_USE_COLORS:-true}}}"
 
     # 构造数组，避免工作目录、模型名和 prompt 中的空格/特殊字符被重新分词。
-    local -a CODEX_COMMON_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
+    local -a CODEX_COMMON_ARGS CODEX_EXEC_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
     CODEX_COMMON_ARGS=(
         --model "${MODEL_ID}"
         --config "forced_login_method=\"${CODEX_FORCED_LOGIN_METHOD}\""
@@ -1956,11 +2207,18 @@ run_codex() {
         "${CODEX_COMMON_ARGS[@]}"
         "${CODEX_AGENT_DIR_ARGS[@]}"
     )
+    CODEX_EXEC_ARGS=("${CODEX_COMMON_ARGS[@]}")
+    if [[ -n "${AGENT_DISPATCH_TASK:-}" ]]; then
+        CODEX_EXEC_ARGS+=(--skip-git-repo-check)
+    fi
     unset _agent_dir
 
     echo "============================================================"
     echo "  Codex: ${MODEL_NAME} | reasoning=${REASONING_EFFORT}"
     echo "  provider: ${CODEX_PROVIDER_ID} | tier=${CODEX_SERVICE_TIER:-standard} | personality=${CODEX_PERSONALITY}"
+    if [[ -n "${_BRIDGE_PORT}" ]]; then
+        echo "  bridge: Responses -> ${AGENT_MODEL_RESOLVED_CODEX_BRIDGE_PROTOCOL} (127.0.0.1:${_BRIDGE_PORT})"
+    fi
     if [[ -n "${CODEX_MODEL_CATALOG}" ]]; then
         echo "  catalog: 注入自定义模型元数据（${MODEL_ID}）"
     fi
@@ -1990,6 +2248,7 @@ run_codex() {
         python3 -c 'import json,sys; x=json.loads(sys.stdin.read()); i=x.get("item",{}); t=i.get("text",""); print(t if isinstance(t,str) else "")' <<<"${1}" 2>/dev/null
     }
     _live_log() {
+        [[ -n "${AGENT_DISPATCH_TASK:-}" ]] && return 0
         local -a _tail_args
         if tail --version 2>/dev/null | head -1 | grep -q GNU; then
             _tail_args=(-s 0.2 "--pid=$$")
@@ -2083,7 +2342,7 @@ PY
         else
             echo "---- drive: prompt round start $(date "+%F-%T") ----"
             _agent_runtime_turn_begin
-            if "${_CODEX_BIN}" exec "${CODEX_INITIAL_ARGS[@]}" --json -- "${PROMPT}" >>"${LOG_FILE}" 2>&1; then
+            if "${_CODEX_BIN}" exec "${CODEX_EXEC_ARGS[@]}" --json -- "${PROMPT}" >>"${LOG_FILE}" 2>&1; then
                 _drv_rc=0
             else
                 _drv_rc=$?
@@ -2106,7 +2365,7 @@ PY
         if (( ONCE_MODE )); then
             if [[ -n "${RESUME_RUN_ID}" ]]; then
                 _agent_runtime_turn_begin
-                if "${_CODEX_BIN}" exec resume "${CODEX_COMMON_ARGS[@]}" --json "${_drv_sid}" -- "继续" >>"${LOG_FILE}" 2>&1; then
+                if "${_CODEX_BIN}" exec resume "${CODEX_EXEC_ARGS[@]}" --json "${_drv_sid}" -- "继续" >>"${LOG_FILE}" 2>&1; then
                     _agent_runtime_turn_success
                     _agent_runtime_mark finished "resume once"
                     _run_rc=0
@@ -2134,7 +2393,7 @@ PY
                 break
             fi
             _agent_runtime_turn_begin
-            if "${_CODEX_BIN}" exec resume "${CODEX_COMMON_ARGS[@]}" --json "${_drv_sid}" -- "继续" >>"${LOG_FILE}" 2>&1; then
+            if "${_CODEX_BIN}" exec resume "${CODEX_EXEC_ARGS[@]}" --json "${_drv_sid}" -- "继续" >>"${LOG_FILE}" 2>&1; then
                 _agent_runtime_turn_success
                 _nudges=$((_nudges + 1))
                 _fails=0
@@ -2163,6 +2422,9 @@ PY
 }
 
 _migrate_legacy_keys
+_OPENCODE_KEY_MODE="$(_detect_opencode_key_mode "$@")"
+_migrate_opencode_keys "${_OPENCODE_KEY_MODE}"
+unset _OPENCODE_KEY_MODE
 _agent_config_load
 
 case "${_AGENT}" in

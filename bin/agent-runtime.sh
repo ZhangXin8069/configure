@@ -699,6 +699,7 @@ _agent_runtime_start_or_resume() {
 }
 
 _agent_runtime_append_prompt_contract() {
+    [[ "${AGENT_DISPATCH_MINIMAL:-0}" == 1 ]] && return 0
     local mode="${1:-tui}"
     local model="${2:-}"
     local reasoning="${3:-}"
