@@ -89,7 +89,14 @@ assert_contains "$runtime" 'function New-ClaudeSettingsFile'
 assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
 assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$script:Model, \$prompt"
 assert_contains "$runtime" 'Resolve-ProviderAlias'
-assert_contains "$runtime" "'pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt'"
+assert_contains "$runtime" "'pay', 'go', 'zen', 'gpt', 'deepseek-pay', 'opencode-go', 'opencode-zen', 'custom-gpt'"
+assert_contains "$runtime" "'zen' { return 'opencode-zen' }"
+assert_contains "$runtime" 'Get-AgentProtocolCompatibility'
+assert_contains "$runtime" 'CodexWireApi'
+assert_contains "$runtime" 'ClaudeWireApi'
+assert_contains "$runtime" 'CodexBridgeProtocol'
+assert_contains "$runtime" 'ClaudeBridgeProtocol'
+assert_contains "$runtime" 'Windows runtime 暂未实现'
 assert_contains "$runtime" 'Get-ProviderDefaultModel'
 assert_contains "$runtime" 'providers.$providerForModel.default_models.$agentKey'
 assert_contains "$runtime" 'Get-ProviderDefaultStrength'
@@ -114,6 +121,10 @@ assert_not_contains "$runtime" "'-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h'"
 assert_contains "$runtime" 'Invoke-LegacyKeyMigration'
 assert_contains "$runtime" "'DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'"
 assert_contains "$runtime" "'CUSTOM_GPT_API_KEY', 'LQCD_API_KEY'"
+assert_contains "$runtime" "'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_GO_API_KEY'"
+assert_contains "$runtime" 'OPENCODE_API_KEY/OPENCODE_ZEN_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按'
+assert_contains "$runtime" "'OPENCODE_GO_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY'"
+assert_contains "$runtime" "'OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_GO_API_KEY'"
 assert_contains "$runtime" 'agent-statusline.ps1'
 assert_contains "$runtime" 'AGENT_STATUSLINE_SEGMENTS'
 assert_contains "$runtime" 'statusLine'

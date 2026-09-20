@@ -593,6 +593,58 @@ def final_model_id(agent, provider_name, provider, model_id):
     return "%s/%s" % (provider_id, model_id)
 
 
+def codex_compatibility(provider, entry, model_id):
+    codex_config = provider.get("codex") or {}
+    if not isinstance(codex_config, dict):
+        codex_config = {}
+    wire_api = str(entry.get("codex_wire_api") or provider.get("wire_api") or "responses")
+    bridge_patterns = codex_config.get("bridge_models") or []
+    if isinstance(bridge_patterns, str):
+        bridge_patterns = [bridge_patterns]
+    model_key = str(model_id or "").lower()
+    for pattern in bridge_patterns:
+        pattern = str(pattern or "").strip().lower()
+        if pattern and fnmatch.fnmatchcase(model_key, pattern):
+            return wire_api, "", str(codex_config.get("bridge_protocol") or "chat_completions")
+    patterns = codex_config.get("unsupported_models") or []
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    for pattern in patterns:
+        pattern = str(pattern or "").strip().lower()
+        if pattern and fnmatch.fnmatchcase(model_key, pattern):
+            return "unsupported", str(
+                codex_config.get("unsupported_reason")
+                or "该模型不支持 Codex 所需的 Responses 协议"
+            ), ""
+    return wire_api, "", ""
+
+
+def claude_compatibility(provider, entry, model_id):
+    claude_config = provider.get("claude") or {}
+    if not isinstance(claude_config, dict):
+        claude_config = {}
+    wire_api = str(entry.get("claude_wire_api") or "messages")
+    bridge_patterns = claude_config.get("bridge_models") or []
+    if isinstance(bridge_patterns, str):
+        bridge_patterns = [bridge_patterns]
+    model_key = str(model_id or "").lower()
+    for pattern in bridge_patterns:
+        pattern = str(pattern or "").strip().lower()
+        if pattern and fnmatch.fnmatchcase(model_key, pattern):
+            return wire_api, "", str(claude_config.get("bridge_protocol") or "chat_completions")
+    patterns = claude_config.get("unsupported_models") or []
+    if isinstance(patterns, str):
+        patterns = [patterns]
+    for pattern in patterns:
+        pattern = str(pattern or "").strip().lower()
+        if pattern and fnmatch.fnmatchcase(model_key, pattern):
+            return "unsupported", str(
+                claude_config.get("unsupported_reason")
+                or "该模型不支持 Anthropic Messages 协议"
+            ), ""
+    return wire_api, "", ""
+
+
 def resolve_selection(config, provider_name, agent, model_query, strength_query, assert_model_match, cache_path):
     provider = provider_config(config, provider_name)
     catalog, warnings = refresh_catalog(config, provider_name, cache_path)
@@ -613,6 +665,12 @@ def resolve_selection(config, provider_name, agent, model_query, strength_query,
         strength_mode = "unverified"
     else:
         strength, strength_mode = resolve_strength(entry, strength_query, provider)
+    codex_wire_api, codex_unsupported_reason, codex_bridge_protocol = codex_compatibility(
+        provider, entry, resolved_base
+    )
+    claude_wire_api, claude_unsupported_reason, claude_bridge_protocol = claude_compatibility(
+        provider, entry, resolved_base
+    )
     if model_mode == "fuzzy":
         warnings.append("模型 '%s' 未精确匹配，已使用 '%s'" % (model_query, model_id))
     if strength_mode == "clamped":
@@ -628,6 +686,12 @@ def resolve_selection(config, provider_name, agent, model_query, strength_query,
         "model_match": model_mode,
         "strength": strength,
         "strength_match": strength_mode,
+        "codex_wire_api": codex_wire_api,
+        "codex_unsupported_reason": codex_unsupported_reason,
+        "codex_bridge_protocol": codex_bridge_protocol,
+        "claude_wire_api": claude_wire_api,
+        "claude_unsupported_reason": claude_unsupported_reason,
+        "claude_bridge_protocol": claude_bridge_protocol,
         "warnings": warnings,
         "sources": catalog.get("sources") or [],
     }, warnings
@@ -644,6 +708,12 @@ def emit_shell(result, warnings):
     print("RESOLVED_MODEL_MATCH=%s" % shell_quote(result["model_match"]))
     print("RESOLVED_STRENGTH=%s" % shell_quote(result["strength"]))
     print("RESOLVED_STRENGTH_MATCH=%s" % shell_quote(result["strength_match"]))
+    print("RESOLVED_CODEX_WIRE_API=%s" % shell_quote(result["codex_wire_api"]))
+    print("RESOLVED_CODEX_UNSUPPORTED_REASON=%s" % shell_quote(result["codex_unsupported_reason"]))
+    print("RESOLVED_CODEX_BRIDGE_PROTOCOL=%s" % shell_quote(result["codex_bridge_protocol"]))
+    print("RESOLVED_CLAUDE_WIRE_API=%s" % shell_quote(result["claude_wire_api"]))
+    print("RESOLVED_CLAUDE_UNSUPPORTED_REASON=%s" % shell_quote(result["claude_unsupported_reason"]))
+    print("RESOLVED_CLAUDE_BRIDGE_PROTOCOL=%s" % shell_quote(result["claude_bridge_protocol"]))
     print("RESOLVED_WARNING_COUNT=%d" % len(warnings))
     for index, warning in enumerate(warnings):
         print("RESOLVED_WARNING_%d=%s" % (index, shell_quote(warning)))

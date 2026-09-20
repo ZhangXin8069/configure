@@ -278,6 +278,20 @@ function Import-AgentConfig {
     return $true
 }
 
+# OpenCode key 使用方案：命令行优先于环境变量；未显式给出 go/zen 时使用 default。
+function Get-OpenCodeKeyMode {
+    foreach ($arg in @($script:CliArgs)) {
+        if ($arg -in @('go', 'opencode-go')) { return 'go' }
+        if ($arg -in @('zen', 'opencode-zen')) { return 'zen' }
+    }
+    foreach ($name in @('CODEX_PROVIDER_ID', 'OPENCODE_PROVIDER', 'CLAUDE_PROVIDER')) {
+        $provider = [Environment]::GetEnvironmentVariable($name)
+        if ($provider -in @('go', 'opencode-go')) { return 'go' }
+        if ($provider -in @('zen', 'opencode-zen')) { return 'zen' }
+    }
+    return 'default'
+}
+
 # 旧 key 环境变量名过渡：新名缺失而旧名存在时写入新名（并告警提示迁移）
 #   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY；LQCD_API_KEY → CUSTOM_GPT_API_KEY
 function Invoke-LegacyKeyMigration {
@@ -293,6 +307,34 @@ function Invoke-LegacyKeyMigration {
             Write-ErrorLine "###$($script:LauncherName): warning: 未设置 $newName，回退使用旧变量 $oldName（建议迁移到新名）###"
         }
     }
+    $opencodeNames = @('OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_GO_API_KEY')
+    $opencodeMode = Get-OpenCodeKeyMode
+    $orderedNames = switch ($opencodeMode) {
+        'go' { @('OPENCODE_GO_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY') }
+        'zen' { @('OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_GO_API_KEY') }
+        default { @('OPENCODE_API_KEY', 'OPENCODE_GO_API_KEY', 'OPENCODE_ZEN_API_KEY') }
+    }
+    $opencodeValue = ''
+    foreach ($name in $orderedNames) {
+        $candidate = [Environment]::GetEnvironmentVariable($name)
+        if (-not [string]::IsNullOrWhiteSpace($candidate)) {
+            $opencodeValue = $candidate
+            break
+        }
+    }
+    if (-not [string]::IsNullOrWhiteSpace($opencodeValue)) {
+        $conflict = $false
+        foreach ($name in $opencodeNames) {
+            $candidate = [Environment]::GetEnvironmentVariable($name)
+            if (-not [string]::IsNullOrWhiteSpace($candidate) -and $candidate -ne $opencodeValue) {
+                $conflict = $true
+            }
+            [Environment]::SetEnvironmentVariable($name, $opencodeValue, 'Process')
+        }
+        if ($conflict) {
+            Write-ErrorLine "###$($script:LauncherName): warning: OPENCODE_API_KEY/OPENCODE_ZEN_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按 $opencodeMode 方案统一###"
+        }
+    }
 }
 
 # 读取配置引用的环境变量（env_key/value_from_env 等），缺失返回空串
@@ -305,13 +347,14 @@ function Get-ConfigEnvironmentValue {
     return $value
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go、gpt→custom-gpt；完整途径名原样返回
+# 供应商快捷词：pay→deepseek-pay、go→opencode-go、zen→opencode-zen、gpt→custom-gpt；完整途径名原样返回
 function Resolve-ProviderAlias {
     param([string]$Value)
 
     switch ($Value) {
         'pay' { return 'deepseek-pay' }
         'go' { return 'opencode-go' }
+        'zen' { return 'opencode-zen' }
         'gpt' { return 'custom-gpt' }
         default { return $Value }
     }
@@ -891,6 +934,54 @@ function Resolve-ModelCatalogStrength {
     return [pscustomobject]@{ Strength = $selected; Match = 'clamped' }
 }
 
+function Get-AgentProtocolCompatibility {
+    param(
+        $Provider,
+        [string]$AgentName,
+        [string]$ModelId
+    )
+
+    $expected = if ($AgentName -eq 'codex') { 'responses' } else { 'messages' }
+    if ($null -eq $Provider) {
+        return [pscustomobject]@{ WireApi = $expected; UnsupportedReason = ''; BridgeProtocol = '' }
+    }
+    $protocol = $Provider.$AgentName
+    $patterns = @()
+    $reason = ''
+    $bridgePatterns = @()
+    $bridgeProtocol = ''
+    if ($null -ne $protocol) {
+        $patterns = @($protocol.unsupported_models)
+        $bridgePatterns = @($protocol.bridge_models)
+        $reason = [string]$protocol.unsupported_reason
+        $bridgeProtocol = [string]$protocol.bridge_protocol
+    }
+    foreach ($pattern in $bridgePatterns) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$pattern) -and
+            $ModelId -like ([string]$pattern)) {
+            return [pscustomobject]@{
+                WireApi = $expected
+                UnsupportedReason = ''
+                BridgeProtocol = $bridgeProtocol
+            }
+        }
+    }
+    foreach ($pattern in $patterns) {
+        if (-not [string]::IsNullOrWhiteSpace([string]$pattern) -and
+            $ModelId -like ([string]$pattern)) {
+            if ([string]::IsNullOrWhiteSpace($reason)) {
+                $reason = '该模型不支持当前 agent 所需的协议'
+            }
+            return [pscustomobject]@{
+                WireApi = 'unsupported'
+                UnsupportedReason = $reason
+                BridgeProtocol = ''
+            }
+        }
+    }
+    return [pscustomobject]@{ WireApi = $expected; UnsupportedReason = ''; BridgeProtocol = '' }
+}
+
 function Resolve-AgentModelSelection {
     param(
         [string]$ProviderName,
@@ -933,6 +1024,8 @@ function Resolve-AgentModelSelection {
     } else {
         $strength = Resolve-ModelCatalogStrength $entry $StrengthQuery $provider
     }
+    $codexCompatibility = Get-AgentProtocolCompatibility $provider 'codex' $modelBase
+    $claudeCompatibility = Get-AgentProtocolCompatibility $provider 'claude' $modelBase
     if ([string]$matched.Match -eq 'fuzzy') {
         [void]$warnings.Add("模型 '$ModelQuery' 未精确匹配，已使用 '$model'")
     }
@@ -945,6 +1038,12 @@ function Resolve-AgentModelSelection {
         ModelMatch    = [string]$matched.Match
         Strength      = [string]$strength.Strength
         StrengthMatch = [string]$strength.Match
+        CodexWireApi  = [string]$codexCompatibility.WireApi
+        CodexUnsupportedReason = [string]$codexCompatibility.UnsupportedReason
+        CodexBridgeProtocol = [string]$codexCompatibility.BridgeProtocol
+        ClaudeWireApi = [string]$claudeCompatibility.WireApi
+        ClaudeUnsupportedReason = [string]$claudeCompatibility.UnsupportedReason
+        ClaudeBridgeProtocol = [string]$claudeCompatibility.BridgeProtocol
         Warnings      = @($warnings)
     }
 }
@@ -1668,10 +1767,10 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
-    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gpt=custom-gpt（如 cl.bat go）。'
+    Write-Host "用法：$($script:LauncherName) [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=custom-gpt（如 cl.bat zen）。'
     Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
-    Write-Host '模型：显式指定途径时（快捷词 pay|go|gpt 或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX}_MODEL 恒为最高。'
+    Write-Host '模型：显式指定途径时（快捷词 pay|go|zen|gpt 或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
@@ -2553,7 +2652,6 @@ function Run-Codex {
     $sandbox = [Environment]::GetEnvironmentVariable('CODEX_SANDBOX')
     if ([string]::IsNullOrWhiteSpace($sandbox)) { $sandbox = [string]$codexConfig.sandbox }
     if ([string]::IsNullOrWhiteSpace($sandbox)) { $sandbox = 'danger-full-access' }
-
     $common = @(
         '--model', $script:Model
         '--config', "forced_login_method=`"$loginMethod`""
@@ -2756,7 +2854,7 @@ function Parse-Arguments {
     $errorMessage = ''
     for ($i = 0; $i -lt $cliArgs.Count; $i++) {
         $option = [string]$cliArgs[$i]
-        if ($option -in @('pay', 'go', 'gpt', 'deepseek-pay', 'opencode-go', 'custom-gpt')) {
+        if ($option -in @('pay', 'go', 'zen', 'gpt', 'deepseek-pay', 'opencode-go', 'opencode-zen', 'custom-gpt')) {
             $providerOverride = Resolve-ProviderAlias $option
             continue
         }
@@ -2935,7 +3033,7 @@ function Parse-Arguments {
         $script:Posture = if ($script:Agent -eq 'codex') { 'frontier-orchestrator' } else { 'deep-worker' }
     }
 
-    # 途径来自命令行快捷词（pay/go/gpt）、{CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量
+    # 途径来自命令行快捷词（pay/go/zen/gpt）、{CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量
     #（env 值已在 2109-2115 过别名规整），或个性化配置 agents.<agent>.provider。
     # 三者中前两者属「显式选途径」，决定两层默认谁优先。
     $providerForModel = if (-not [string]::IsNullOrWhiteSpace($providerOverride)) {
@@ -2944,7 +3042,7 @@ function Parse-Arguments {
         [string]$agentConfig.provider
     }
     if ([string]::IsNullOrWhiteSpace($providerForModel)) {
-        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|gpt 或 agent-custom.json agents.$agentKey.provider）###"
+        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt 或 agent-custom.json agents.$agentKey.provider）###"
         return $false
     }
     if ($script:Agent -eq 'claude') {
@@ -3021,6 +3119,40 @@ function Parse-Arguments {
         if (-not [string]::IsNullOrWhiteSpace([string]$warning)) {
             Write-ErrorLine "###$($script:LauncherName): warning: $warning###"
         }
+    }
+    if ($script:Agent -eq 'codex' -and -not [string]::IsNullOrWhiteSpace([string]$selection.CodexBridgeProtocol)) {
+        Fail-Parse "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 需要 Responses -> chat_completions 协议桥；Windows runtime 暂未实现，请改用 'op go $($selection.Model)'###"
+        return $false
+    }
+    if ($script:Agent -eq 'claude' -and -not [string]::IsNullOrWhiteSpace([string]$selection.ClaudeBridgeProtocol)) {
+        Fail-Parse "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 需要 Anthropic Messages -> chat_completions 协议桥；Windows runtime 暂未实现，请改用 'op go $($selection.Model)'###"
+        return $false
+    }
+    if ($script:Agent -eq 'codex' -and [string]$selection.CodexWireApi -ne 'responses') {
+        $providerHint = switch ($providerForModel) {
+            'deepseek-pay' { 'pay' }
+            'opencode-go' { 'go' }
+            'opencode-zen' { 'zen' }
+            'custom-gpt' { 'gpt' }
+            default { $providerForModel }
+        }
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Codex Responses 协议：$($selection.CodexUnsupportedReason)###"
+        Write-ErrorLine "###$($script:LauncherName): hint: 请改用 'op $providerHint $($selection.Model)'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###"
+        $script:FailureCode = 64
+        return $false
+    }
+    if ($script:Agent -eq 'claude' -and [string]$selection.ClaudeWireApi -ne 'messages') {
+        $providerHint = switch ($providerForModel) {
+            'deepseek-pay' { 'pay' }
+            'opencode-go' { 'go' }
+            'opencode-zen' { 'zen' }
+            'custom-gpt' { 'gpt' }
+            default { $providerForModel }
+        }
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Claude 的 Anthropic Messages 协议：$($selection.ClaudeUnsupportedReason)###"
+        Write-ErrorLine "###$($script:LauncherName): hint: 请改用 'op $providerHint $($selection.Model)'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###"
+        $script:FailureCode = 64
+        return $false
     }
     $script:Model = [string]$selection.Model
     $script:ModelName = "$($script:Model)$modelLabel"
