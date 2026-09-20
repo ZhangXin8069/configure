@@ -61,6 +61,16 @@
       "models_auth": "none",
       "models_metadata_provider": "opencode-go",
       "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
+      "codex": {
+        "bridge_models": [ "glm-*" ],
+        "bridge_protocol": "chat_completions",
+        "bridge_auth": "bearer"
+      },
+      "claude": {
+        "bridge_models": [ "glm-*" ],
+        "bridge_protocol": "chat_completions",
+        "bridge_auth": "bearer"
+      },
       "models": {
         "grok-4.6": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
         "gpt-5.6-luna": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
@@ -90,6 +100,83 @@
         "qwen3.7-max": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
         "qwen3.7-plus": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
         "qwen3.6-plus": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" }
+      }
+    },
+    "opencode-zen": {
+      "label": "OpenCode Zen（按量付费）",
+      "env_key": "OPENCODE_ZEN_API_KEY",
+      "base_url": "https://opencode.ai/zen/v1",
+      "anthropic_base_url": "https://opencode.ai/zen",
+      "anthropic_auth": "api_key",
+      "wire_api": "responses",
+      "supports_websockets": false,
+      "opencode_provider_id": "opencode",
+      "models_url": "https://opencode.ai/zen/v1/models",
+      "models_auth": "none",
+      "models_metadata_provider": "opencode",
+      "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
+      "codex": {
+        "bridge_models": [
+          "deepseek-*",
+          "glm-*",
+          "minimax-*",
+          "kimi-*",
+          "big-pickle",
+          "*-free"
+        ],
+        "bridge_protocol": "chat_completions",
+        "bridge_auth": "bearer",
+        "unsupported_models": [
+          "claude-*",
+          "gemini-*",
+          "qwen*"
+        ],
+        "unsupported_reason": "OpenCode Zen 的这些模型不提供 Responses 或可桥接的 Chat Completions 路由"
+      },
+      "claude": {
+        "bridge_models": [
+          "deepseek-*",
+          "glm-*",
+          "minimax-*",
+          "kimi-*",
+          "big-pickle",
+          "*-free"
+        ],
+        "bridge_protocol": "chat_completions",
+        "bridge_auth": "bearer",
+        "unsupported_models": [
+          "gemini-*",
+          "gpt-*",
+          "grok-*",
+          "muse-*"
+        ],
+        "unsupported_reason": "OpenCode Zen 的这些模型不提供 Anthropic 兼容 /messages 端点"
+      },
+      "models": {
+        "gpt-6-astra": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "gpt-5.6-sol": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "gpt-5.6-terra": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "gpt-5.6-luna": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "gpt-5.4-mini": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "gpt-5.3-codex": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "grok-4.6": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "grok-4.5": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "muse-spark-1.3": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "muse-spark-1.2": { "endpoint": "responses", "npm": "@ai-sdk/openai" },
+        "claude-fable-5.1": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
+        "claude-opus-5": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
+        "claude-sonnet-5": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
+        "claude-haiku-4.5": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
+        "gemini-3.8-flash": { "endpoint": "models/gemini-3.8-flash", "npm": "@ai-sdk/google" },
+        "deepseek-v4.1-flash": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" },
+        "deepseek-v4-pro": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" },
+        "glm-5.3-flash": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" },
+        "glm-5.3": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" },
+        "minimax-m3": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" },
+        "kimi-k3": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" },
+        "qwen3.8-flash": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
+        "qwen3.7-max": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
+        "big-pickle": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" }
       }
     },
     "custom-gpt": {
@@ -130,6 +217,7 @@
       "key_providers": [
         "deepseek-pay",
         "opencode-go",
+        "opencode-zen",
         "custom-gpt"
       ]
     },

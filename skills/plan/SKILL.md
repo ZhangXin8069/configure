@@ -120,6 +120,9 @@ metadata:
 2. 向用户提供执行方式选择：
    - **本会话内联执行**：按计划逐步执行（建议转 make 技能编排）；
    - **子任务代理执行**：每任务派发独立子代理执行+审查；
+     优先用 `${CONFIGURE_ROOT}/bin/agent-dispatch.sh --task-file <任务文件> --json`，
+     默认继承父 agent 的完整启动设置；没有该接口或派发失败时，按当前 agent 的
+     run manifest、启动器和 provider/model/auth/settings 路由重试；仍失败时改为本会话内联执行。
    - **用户手动执行**：计划交付给用户自行实施。
 
 ### Step 6. 总结（结构化输出）

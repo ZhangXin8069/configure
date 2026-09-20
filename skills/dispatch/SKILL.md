@@ -34,6 +34,10 @@ metadata:
 6. **不适用判定先行**：相关失败（修一个可能带好另一个）→ 先合并调查；
    探索性调试（还不知道坏在哪）→ 先定位再拆；共享状态/同文件 → 顺序执行；
    判定不适用时转对应技能，不强行并行。
+7. **派发失败复用启动链，不裸调厂商 CLI**：子 agent 启动失败常见于丢失
+   provider/model/base_url、认证变量、`--settings`、sandbox/approval 或工作区路由。
+   重试前读取当前 run manifest、实际启动命令和环境，复用“启动本 agent 的方式”；
+   禁止直接裸调 `codex exec`、`claude -p`、`opencode run` 后假定失败不可恢复。
 
 ## Git 检查
 
@@ -93,8 +97,23 @@ metadata:
 
 ### Step 4. 同一条消息发出全部派发（并行）
 
-用 task 工具一次调用全部子代理（同响应 = 并行），首批可含一个探索性代理
-（如"先定位失败根因"），发现新独立域再派发（第二批并行）。
+若当前环境提供 `${CONFIGURE_ROOT}/bin/agent-dispatch.sh`，优先用它一次调用全部子代理
+（多个独立进程可在同一响应内并行启动），首批可含一个探索性代理：
+
+```bash
+"${CONFIGURE_ROOT}/bin/agent-dispatch.sh" --task "$DOMAIN1_PROMPT" --json
+"${CONFIGURE_ROOT}/bin/agent-dispatch.sh" --task "$DOMAIN2_PROMPT" --json
+"${CONFIGURE_ROOT}/bin/agent-dispatch.sh" --task "$DOMAIN3_PROMPT" --json
+```
+
+默认子 agent 完整继承父 agent 的 launcher/provider/模型/强度/工作目录/secure/
+sandbox/approval；仅当任务确实需要异构能力时才显式传 `--agent`/`--provider`/
+`--model`/`--strength`。接口返回 `agent-dispatch/v1` JSON，主 agent 应解析
+`ok`、`run_id`、`result`、`log_file`，而不是依赖终端装饰文本。
+
+若没有该接口，再用运行器原生 task 工具；两者都不可用时按下述降级链执行。
+
+原生 task 用法：
 
 ```text
 task(agent=general, prompt=域1指令)
@@ -102,6 +121,18 @@ task(agent=general, prompt=域2指令)
 task(agent=general, prompt=域3指令)
 # 同一响应内多个 task 调用 = 并行执行
 ```
+
+用 task 工具一次调用全部子代理（同响应 = 并行），首批可含一个探索性代理
+（如"先定位失败根因"），发现新独立域再派发（第二批并行）。
+
+若当前运行器没有 `task`/原生子代理工具，或上述派发失败，按以下顺序重试：
+
+1. 从当前 run manifest、进程环境和启动器恢复本 agent 的 provider、model、强度、
+   base_url、key 环境变量、binary、工作区与 sandbox/approval；用同一启动方式构造子 agent。
+2. 使用统一启动器或当前 agent 的等价非交互入口重试；Claude 必须保留私有
+   `--settings`/认证变量，Codex/OpenCode 必须保留显式 provider/model 路由。
+3. 记录每次完整错误与尝试方式；连续失败后停止派发，由主 agent 串行完成各域。
+   串行降级不改变独立性判定和验收标准，不得伪装成并行成功。
 
 ### Step 5. 整合与验证
 
@@ -136,6 +167,7 @@ task(agent=general, prompt=域3指令)
 | 代理输出与承诺不符 | 以实测为准（git diff/测试输出核对），不采纳口头承诺 |
 | 多代理改同一文件冲突 | 冲突域合并重做，先完成依赖方；全量验证防遗漏 |
 | 代理失败/超时 | 重派该域（补充上下文），其余域结果保留，不整体重跑 |
+| 子代理工具不存在、启动失败或认证/模型路由失败 | 读取当前 run manifest 与真实启动命令，按“启动本 agent 的方式”和完整路由参数重试；仍失败则主 agent 串行处理全部域，并报告失败证据 |
 | 全量验证失败 | 按 debug 流程定位修复，循环至通过 |
 | 代理返回无结构（无根因/无改动清单） | 下轮派发在预期输出中写明格式，本轮结果按摘要人工归纳 |
 | 并行与顺序判定摇摆 | 默认先并行第一批探索性代理，再据结果决定是否继续并行 |
@@ -145,4 +177,6 @@ task(agent=general, prompt=域3指令)
 - 并行不豁免验证与诚实原则：每个代理结论以实测输出为证，整合后全量验证才可宣称完成；
 - 精确上下文 > 省 token：代理指令写清问题域/目标/约束/产出，宁详勿略；
 - 不传会话历史给代理（上下文裁剪纪律，同 review 技能）；
+- 子 agent 必须继承当前 agent 的启动链；裸厂商 CLI 失败不等于派发能力不可用；
+- 派发重试必须有界，最终失败时转串行，不以等待或口头摘要替代执行；
 - 代理或整合阶段产生的本次改动按上级公共 Git 契约收尾。
