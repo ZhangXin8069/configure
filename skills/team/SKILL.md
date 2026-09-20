@@ -27,7 +27,7 @@ team 负责跨轮协作与 worker 生命周期，不替代具体领域技能。�
 2. **一 worker 一隔离线**：每个 worker 只写自己的 git worktree / 临时目录 / 产物前缀，避免共享可变状态把责任混在一起。
 3. **拆解按依赖图，不按直觉**：独立子图才并行，依赖链必须串行，判断不清时先合并，不冒险拆散。
 4. **指令必须自包含**：worker 不能依赖会话历史，必须拿到问题域、目标、约束、允许改动的文件/目录、预期输出和停止条件。
-5. **先发现能力再分派**：在可用时读取运行器的模型、推理级别和工具兼容性，按问题能力与资源约束选择最小足够 worker；不默认使用最高档能力。
+5. **先发现能力再分派**：在可用时读取运行器的模型、推理级别和工具兼容性，按问题能力与资源约束选择最小足够 worker；不默认使用最高档能力。派发失败时复用启动当前 agent 的 provider/model/认证/设置链，禁止裸调厂商 CLI。
 6. **单文件单写者**：每个文件只允许一个 worker 负责写入，审查者默认只读；子 worker 不得继续派生 worker，除非父目标明确授权。
 7. **健康检查看证据，不看口头承诺**：心跳、退出码、diff、日志新鲜度、重复失败模式比“我大概做完了”更可靠。
 8. **失败先分类，再重派或合并**：先判断是依赖未解、范围太大、上下文不足、实现偏航还是隔离污染，再决定缩小重派、顺序化还是回收隔离。
@@ -79,7 +79,10 @@ git worktree add ../team-<worker-id> <base-branch>
 
 ### Step 4. 派发首批 worker
 
-用当前运行器可用的 worker / task / 子代理机制发起首批任务。每个 worker 指令至少包含：
+优先用 `${CONFIGURE_ROOT}/bin/agent-dispatch.sh --task-file <worker-task> --json`
+发起首批任务；默认完整继承父 agent 的 launcher/provider/模型/强度/工作目录/secure/
+sandbox/approval，只有任务需要异构能力时才显式覆盖。没有该接口时再用当前运行器的
+worker / task / 子代理机制。每个 worker 指令至少包含：
 
 - 问题域
 - 目标
@@ -89,6 +92,11 @@ git worktree add ../team-<worker-id> <base-branch>
 - 终止条件
 
 必要时先派一个探索 worker 定位依赖或风险，再决定是否继续拆分。首批派发可直接复用 `dispatch` 的拆域思路，但 worker 生命周期由 `team` 继续管理；审查 worker 默认只读，子 worker 不得自行扩展派发范围。
+
+若 task/worker 入口不存在或派发失败，先读取当前 run manifest、启动命令、环境变量与
+binary/settings，按启动本 agent 的同一路由重试；再尝试当前 agent 的等价非交互入口。
+连续失败时停止重派，将该批次降级为主 agent 串行执行，记录失败原因与尝试链；
+依赖图和单文件单写者约束仍保持不变。
 
 ### Step 5. 健康检查与重派
 
@@ -109,6 +117,7 @@ git worktree add ../team-<worker-id> <base-branch>
 | 只有一次并行就够 | 转 `dispatch`，不要用 `team` 维持 worker 池 |
 | 依赖关系不清或多个 worker 可能改同一文件 | 合并域，重画状态机，改为顺序执行 |
 | worker 长时间无心跳或同错重放 | 判失败，缩域重派或回收该 worker |
+| task/worker 工具不存在或 provider/model/auth/settings 路由失败 | 读取 run manifest 和真实启动命令，复用当前 agent 启动链重试；仍失败则合并 worker 域并由主 agent 串行完成，记录降级证据 |
 | 工作树污染 / 串写 | 停止扩散，重建隔离后再继续 |
 | worker 输出无证据 | 以实测为准，要求补证据或重派 |
 | 集成验证失败 | 回到最近稳定点，按 `debug` / `test` 修复后再合并 |
@@ -121,3 +130,4 @@ git worktree add ../team-<worker-id> <base-branch>
 - 能顺序就别并行；能合并就别硬拆。
 - worker 的“完成”必须能在文件、日志或命令输出里复核。
 - 如果工作树隔离做不到，先降级为顺序流程，不要假装并行。
+- 如果隔离可行但派发链不可用，同样降级为顺序流程；隔离设施本身不证明 worker 已成功启动。

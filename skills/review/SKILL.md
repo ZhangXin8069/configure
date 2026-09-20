@@ -68,8 +68,13 @@ HEAD_SHA=$(git rev-parse HEAD)
 
 ### Step 3. 执行审查（派发审查子代理）
 
-- 派发 `general-purpose` 子代理执行审查，输入精确上下文：
+- 优先用 `${CONFIGURE_ROOT}/bin/agent-dispatch.sh --task <审查指令> --json` 派发审查者；
+  默认继承父 agent 的 launcher/provider/模型/强度/工作目录/secure/sandbox/approval，
+  只有审查确实需要异构模型时才显式覆盖。再输入精确上下文：
   改动描述、需求/计划、BASE_SHA、HEAD_SHA；
+- 没有 `agent-dispatch.sh` 时派发 `general-purpose` 子代理；
+- 若原生审查子代理不可用或派发失败，先按当前 agent 的 run manifest、启动器和认证/
+  provider/model 设置重试；仍失败则由主 agent 按同一审查维度串行完成；
 - 审查维度：与需求的一致性、正确性、边界情形、错误处理、测试覆盖、
   代码质量（可读/可维护）、调试残留/硬编码/安全隐患；
 - 结论按严重度分级：Critical（必须立即修）/ Important（继续前修）/
@@ -134,7 +139,7 @@ HEAD_SHA=$(git rev-parse HEAD)
 | 场景 | 处理 |
 |---|---|
 | 审查对象不明确 | 列出候选区间（工作区/最近提交/tag 区间），**一次性全部列出提问**，不逐次追问 |
-| 审查子代理不可用 | 直接审查（同维度），注明未派发子代理 |
+| 审查子代理不可用或派发失败 | 先复用当前 agent 的启动链和完整路由重试；仍失败则由主 agent 直接审查（同维度），注明串行降级 |
 | 反馈与代码事实不符 | 用代码/测试反驳，附证据 |
 | 发现大量 Critical | 暂停其他工作，逐个按 debug 循环修复并回归 |
 | 需求/计划缺失 | 以"改动是否符合其自身描述 + 一般正确性标准"审查并注明 |

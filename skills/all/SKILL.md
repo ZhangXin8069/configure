@@ -211,6 +211,7 @@ fast 激活时，先把 `fast_context.optimization_gain_stop` 和 `fast_context.
 | 优化收益微小 | 普通模式收益 <5% 或 fast 激活时低于 `fast_context.optimization_gain_stop`，视为收敛；报告实际阈值与权衡，由用户决定取舍 |
 | 收敛后用户要求继续 | 视为新任务：重置轮数计数，按新目标继续迭代 |
 | 子技能结果缺失 | 检查该技能是否返回结果；未返回则在终端摘要说明缺失 |
+| dispatch/子代理派发失败 | 按 `dispatch` 规则复用当前 agent 的真实启动链、provider/model/auth/settings 重试；仍失败则主 agent 串行完成独立域，不伪造并行结果 |
 
 ## 注意事项
 
