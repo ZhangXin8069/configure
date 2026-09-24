@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# Install opencode (Linux / macOS) from GitHub releases into ~/.local/bin
+# Install OpenCode V2 (Linux / macOS) into ~/.local/bin
 # Usage: bash install.sh [VERSION]   (default: latest)
 # Env:   OPENCODE_INSTALL_DIR  安装目录（默认 $HOME/.local/bin）
+#        OPENCODE_BASE_URL     二进制源（默认 https://opencode.ai/files/bin）
 
 set -euo pipefail
 
 APP="opencode"
 INSTALL_DIR="${OPENCODE_INSTALL_DIR:-$HOME/.local/bin}"
-REPO="https://github.com/anomalyco/opencode/releases"
+BASE_URL="${OPENCODE_BASE_URL:-https://opencode.ai/files/bin}"
 
 # --- 依赖检查 ---
 if ! command -v curl >/dev/null 2>&1; then
@@ -74,18 +75,15 @@ filename="$APP-$target$ext"
 # --- 版本解析 ---
 version="${1:-}"
 if [ -z "$version" ]; then
-    url="$REPO/latest/download/$filename"
-    tag="$(curl -fsSL "https://api.github.com/repos/anomalyco/opencode/releases/latest" \
-        | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"v\([^"]*\)".*/\1/p')"
-    if [ -z "$tag" ]; then
-        echo "Error: failed to resolve latest version from GitHub API" >&2
+    version="$(curl -fsSL "https://opencode.ai/update/api/latest/cli/npm" \
+        | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+    if [ -z "$version" ]; then
+        echo "Error: failed to resolve latest OpenCode V2 version" >&2
         exit 1
     fi
-    version="${tag#v}"
-else
-    version="${version#v}"
-    url="$REPO/download/v${version}/$filename"
 fi
+version="${version#v}"
+url="$BASE_URL/$version/$filename"
 
 echo "============================================================"
 echo "  OpenCode installer: $os/$arch"

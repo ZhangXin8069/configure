@@ -15,7 +15,7 @@
     "zsh 会把未引用的 [1m] 当通配符；命令行使用含方括号的模型名时请写成 'deepseek-pro[1m]'（或双引号）。",
     "两层默认的择序取决于是否「显式选途径」：命令行快捷词（cl go / op zen / co pay）与 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量一视同仁，均视为显式——此时 providers 层优先；未显式时（途径来自 agents.<agent>.provider）agent 层优先。命令行/环境变量的 --model/--variant/--reasoning-effort 恒为最高。",
     "显式选途径时取 providers.<途径>.default_models|default_strengths.<agent>，仅当该途径未给此 agent 配置时才回退 agents.<agent>.model/strength；未显式选途径时反之。故填写 agents.<agent>.model 只固定「未指定途径时」的默认，执行 cl go 等仍会切到该途径的默认模型。",
-    "模型强度（strength）统一配置：cl 经 CLAUDE_CODE_EFFORT_LEVEL、op 经 variant、co 经 reasoning effort 落地，三条解析链相同。",
+    "模型强度（strength）统一配置：cl 经 CLAUDE_CODE_EFFORT_LEVEL、op 经 variant、co 经 reasoning effort 落地，三条解析链相同；OpenCode V2 启动器把 op 的 variant 合并为 provider/model#variant，V1 仍兼容独立 variant 字段。",
     "agents.<agent>.provider 决定未指定快捷词与环境变量时使用哪个途径（此时 agent 层默认优先）。若想让某途径下也始终用 agents.<agent>.model，把该途径的 providers.<途径>.default_models.<agent> 留空或删除即可（强度同理）。",
     "agents.opencode.provider 仅决定「未指定模型时用哪个途径的默认模型」；opencode 实际注册的途径仍是 agent-config.json agents.opencode.key_providers 中 key 已设置者。",
     "agents.claude.env 只保留 claude 专属附加项（HAIKU/子代理模型/压缩窗口等）；ANTHROPIC_MODEL 与 OPUS/SONNET 别名、CLAUDE_CODE_EFFORT_LEVEL 由上述解析链自动派生。",

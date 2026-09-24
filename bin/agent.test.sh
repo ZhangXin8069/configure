@@ -69,6 +69,18 @@ if [[ "$(basename -- "$0")" == fake-codex.sh ]]; then
             exit 0;;
     esac
 fi
+case "$(basename -- "$0")" in
+    fake-opencode.sh|fake-opencode-v2.sh)
+        if [[ "${1:-}" == '--version' ]]; then
+            if [[ "$(basename -- "$0")" == 'fake-opencode-v2.sh' ]]; then
+                printf 'opencode v2.0.16\n'
+            else
+                printf '1.18.32\n'
+            fi
+            exit 0
+        fi
+        ;;
+esac
 printf '%s\t%s\n' "$0" "$*" >> "$FAKE_CALL_LOG"
 if [[ "${FAKE_FAIL_RESUMES:-0}" == 1 &&
       "$(basename -- "$0")" == fake-codex.sh &&
@@ -93,8 +105,16 @@ case "$(basename -- "$0")" in
             "${AGENT_PARENT_MODEL:-}" "${AGENT_PARENT_STRENGTH:-}" "${AGENT_PARENT_SECURE:-}" >> "$FAKE_CALL_LOG"
         printf '{"type":"thread.started","thread_id":"thread-fake"}\n'
         ;;
-    fake-opencode.sh)
-        printf 'timestamp=x level=INFO session.id=session-fake message=started\n' >&2
+    fake-opencode.sh|fake-opencode-v2.sh)
+        if [[ "$(basename -- "$0")" == 'fake-opencode-v2.sh' ]]; then
+            if [[ "${1:-}" == 'session' && "${2:-}" == 'export' ]]; then
+                printf '%s\n' '{"messages":[]}'
+            else
+                printf '%s\n' '{"type":"text","timestamp":1,"sessionID":"session-v2","part":{"type":"text","text":"MOCK_V2_OK"}}'
+            fi
+        else
+            printf 'timestamp=x level=INFO session.id=session-fake message=started\n' >&2
+        fi
         printf 'opencode-config: %s\n' "${OPENCODE_CONFIG_CONTENT:-}" >> "$FAKE_CALL_LOG"
         ;;
     fake-claude.sh)
@@ -136,6 +156,7 @@ call_count() {
 
 fake_codex=$(make_fake fake-codex)
 fake_opencode=$(make_fake fake-opencode)
+fake_opencode_v2=$(make_fake fake-opencode-v2)
 fake_claude=$(make_fake fake-claude)
 
 if ! python3 "$script_dir/agent-protocol-bridge.test.py" >/dev/null 2>&1; then
@@ -403,6 +424,49 @@ printf '%s' "$op_config_json" | python3 -c 'import json,sys; json.load(sys.stdin
     || fail "OPENCODE_CONFIG_CONTENT 不是合法 JSON：$op_config_json"
 printf 'PASS: OpenCode --once、三途径 key 注入、custom-gpt 注册、数据目录隔离\n'
 
+# ---- OpenCode V2：原生配置、隔离 server、JSON 会话解析与无 --agent TUI ----
+v2_op_before=$(wc -l < "$call_log")
+set +e
+v2_op_output=$(OPENCODE_GO_API_KEY=test-go-key DEEPSEEK_PAY_API_KEY=test-deepseek-key CUSTOM_GPT_API_KEY=test-custom-key \
+    run_launcher op "$fake_opencode_v2" --once --file "$repo/first.txt" 2>&1)
+v2_op_status=$?
+set -e
+(( v2_op_status == 0 )) || fail "OpenCode V2 fake launcher 失败：$v2_op_output"
+assert_contains "$v2_op_output" 'MOCK_V2_OK'
+v2_op_run_id=$(printf '%s\n' "$v2_op_output" | sed -n 's/^  run: //p' | head -1)
+v2_op_run="$data/runs/$v2_op_run_id"
+assert_file_contains "$v2_op_run/manifest.env" 'session_id=session-v2'
+assert_file_contains "$v2_op_run/manifest.env" 'state=finished'
+v2_op_new=$(tail -n +$((v2_op_before + 1)) "$call_log")
+assert_contains "$v2_op_new" '--standalone --model opencode-go/deepseek-v4.1-flash#max --agent build --format json'
+assert_contains "$v2_op_new" '--log-level debug'
+v2_config_json=$(printf '%s\n' "$v2_op_new" | sed -n 's/^opencode-config: //p' | tail -1)
+printf '%s' "$v2_config_json" | python3 -c '
+import json,sys
+c=json.load(sys.stdin)
+assert c["default_agent"]=="build"
+assert c["update"]=="disable"
+assert c["model"]=="opencode-go/deepseek-v4.1-flash"
+assert c["agents"]["build"]["model"]=="opencode-go/deepseek-v4.1-flash#max"
+assert "opencode-go" not in c["providers"]
+assert c["providers"]["custom-gpt"]["settings"]["baseURL"]=="http://nat200.natappvip.cc/v1"
+assert c["providers"]["custom-gpt"]["models"]["gpt-5.6-luna"]["variants"]
+' || fail "OpenCode V2 原生配置不正确：$v2_config_json"
+
+v2_tui_before=$(wc -l < "$call_log")
+set +e
+v2_tui_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher op "$fake_opencode_v2" 2>&1)
+v2_tui_status=$?
+set -e
+(( v2_tui_status == 0 )) || fail "OpenCode V2 TUI fake launcher 失败：$v2_tui_output"
+v2_tui_new=$(tail -n +$((v2_tui_before + 1)) "$call_log")
+assert_contains "$v2_tui_new" '--standalone --auto --prompt'
+assert_contains "$v2_tui_new" '--log-level debug'
+case "$v2_tui_new" in
+    *' --agent '*) fail 'OpenCode V2 顶层 TUI 不应传 --agent' ;;
+esac
+printf 'PASS: OpenCode V2 原生配置、standalone、JSON 会话解析与 TUI 参数兼容\n'
+
 set +e
 # 未显式选途径：途径取 agents.claude.provider=opencode-go，模型取 agent 层 agents.claude.model
 cl_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --once --file "$repo/first.txt" 2>&1)
@@ -520,7 +584,7 @@ status_json=$(AGENT_DATA_DIR="$data" "$status_script" --all --json)
 if ! printf '%s\n' "$status_json" | python3 -c '
 import json, sys
 runs = json.load(sys.stdin)
-sys.exit(0 if len(runs) == 10 and all(r.get("run_id") for r in runs) else 1)
+sys.exit(0 if len(runs) == 12 and all(r.get("run_id") for r in runs) else 1)
 '; then
     fail "agent-status JSON 结果不完整：$status_json"
 fi

@@ -245,6 +245,55 @@ _run_agent_command() {
     fi
 }
 
+# OpenCode V2 JSONL 运行输出：stdout 同时保留给终端/派发接口，并缓存供会话 ID 解析。
+_run_opencode_v2() {
+    local _capture="${AGENT_RUN_DIR}/opencode-events.jsonl" _rc=0
+    _OPENCODE_EVENTS_FILE="${_capture}"
+    : >"${_capture}"
+    if [[ -n "${AGENT_DISPATCH_OUTPUT_FILE:-}" ]]; then
+        "$@" >"${AGENT_DISPATCH_OUTPUT_FILE}" 2>>"${LOG_FILE}"
+        _rc=$?
+        cp -- "${AGENT_DISPATCH_OUTPUT_FILE}" "${_capture}" 2>/dev/null || true
+    else
+        "$@" 2>>"${LOG_FILE}" | tee "${_capture}"
+        _rc=${PIPESTATUS[0]}
+    fi
+    return "${_rc}"
+}
+
+_opencode_major_version() {
+    local _bin="${1:-}" _raw=""
+    [[ -n "${_bin}" ]] || {
+        printf '0\n'
+        return 0
+    }
+    _raw="$("${_bin}" --version 2>/dev/null | head -1 || true)"
+    _raw="${_raw##* }"
+    _raw="${_raw#v}"
+    if [[ "${_raw}" =~ ^([0-9]+)(\.|$) ]]; then
+        printf '%s\n' "${BASH_REMATCH[1]}"
+    else
+        printf '0\n'
+    fi
+}
+
+_opencode_session_from_output() {
+    local _file="${1:-}"
+    [[ -r "${_file}" ]] || return 1
+    sed -n 's/.*"sessionID":"\([A-Za-z0-9_-]*\)".*/\1/p' "${_file}" | head -1
+}
+
+_opencode_session_from_log() {
+    local _file="${1:-}" _sid=""
+    [[ -r "${_file}" ]] || return 1
+    _sid="$(grep -o 'session\.id=[A-Za-z0-9_-]*' "${_file}" 2>/dev/null | head -1 | cut -d= -f2)"
+    if [[ -z "${_sid}" ]]; then
+        _sid="$(grep -o '/session/ses_[A-Za-z0-9_-]*' "${_file}" 2>/dev/null | head -1 | sed 's#.*/##')"
+    fi
+    [[ -n "${_sid}" ]] || return 1
+    printf '%s\n' "${_sid}"
+}
+
 # 旧 key 环境变量名过渡：新名缺失而旧名存在时导出新名（并告警提示迁移）
 #   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY；LQCD_API_KEY → CUSTOM_GPT_API_KEY
 _migrate_legacy_keys() {
@@ -452,6 +501,60 @@ def opencode_providers(cfg):
     return blocks
 
 
+def opencode_v2_package(npm):
+    packages = {
+        "@ai-sdk/openai": "@opencode/ai/providers/openai",
+        "@ai-sdk/openai-compatible": "@opencode/ai/providers/openai-compatible",
+        "@ai-sdk/anthropic": "@opencode/ai/providers/anthropic-compatible",
+        "@ai-sdk/google": "@opencode/ai/providers/google",
+    }
+    return packages.get(npm, npm)
+
+
+def opencode_providers_v2(cfg):
+    agents = cfg.get("agents") or {}
+    providers = cfg.get("providers") or {}
+    key_providers = (agents.get("opencode") or {}).get("key_providers") or []
+    blocks = {}
+    for name in key_providers:
+        provider = providers.get(name)
+        if not isinstance(provider, dict):
+            continue
+        env_key = str(provider.get("env_key") or "")
+        if not env_key or not os.environ.get(env_key):
+            continue
+        provider_id = str(provider.get("opencode_provider_id") or name)
+        # Built-in providers use the runtime environment. Only the custom endpoint
+        # needs an explicit native provider block.
+        if name != "custom-gpt" or provider_id != "custom-gpt":
+            continue
+        base_url = str(provider.get("base_url") or "")
+        if not base_url:
+            continue
+        meta = provider.get("opencode") or {}
+        known_models = provider.get("models") or {}
+        strengths = [str(value) for value in (provider.get("supported_strengths") or [])]
+        models = {}
+        for model_id in (meta.get("models") or []):
+            model_id = str(model_id)
+            model_meta = known_models.get(model_id) or {}
+            item = {"modelID": model_id}
+            package = opencode_v2_package(str(model_meta.get("npm") or meta.get("npm") or ""))
+            if package:
+                item["package"] = package
+            if strengths:
+                item["variants"] = [{"id": strength} for strength in strengths]
+            models[model_id] = item
+        blocks[provider_id] = {
+            "name": str(provider.get("label") or name),
+            "env": [env_key],
+            "package": opencode_v2_package(str(meta.get("npm") or "")),
+            "settings": {"baseURL": base_url, "apiKey": "{env:%s}" % env_key},
+            "models": models,
+        }
+    return blocks
+
+
 def main():
     with open(sys.argv[1], encoding="utf-8") as fh:
         base = json.load(fh)
@@ -464,7 +567,9 @@ def main():
     flatten(cfg, [], leaves)
     lines = ["%s=%s" % (variable_name(parts), shlex.quote(value)) for parts, value in leaves]
     provider_json = json.dumps(opencode_providers(cfg), ensure_ascii=False, separators=(",", ":"))
+    provider_v2_json = json.dumps(opencode_providers_v2(cfg), ensure_ascii=False, separators=(",", ":"))
     lines.append("_CFG_OPENCODE_PROVIDER_JSON=%s" % shlex.quote(provider_json))
+    lines.append("_CFG_OPENCODE_PROVIDER_V2_JSON=%s" % shlex.quote(provider_v2_json))
     # 以 UTF-8 字节写出：不受调用方 locale（如 LANG=C）影响，避免中文值编码错误
     sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))
 
@@ -1457,18 +1562,59 @@ run_opencode() {
 
     local _OP_AGENT="${_CFG_AGENTS_OPENCODE_AGENT:-build}"
     local _OP_AUTOUPDATE="${OPENCODE_AUTOUPDATE:-${_CFG_AGENTS_OPENCODE_AUTOUPDATE:-false}}"
+    local _op_v2=0 _op_update="disable" _op_autoupdate_lc=""
+    if (( $(_opencode_major_version "${_OPENCODE_BIN}") >= 2 )); then
+        _op_v2=1
+        _OPENCODE_V2=1
+    else
+        _OPENCODE_V2=0
+    fi
+    _op_autoupdate_lc="$(printf '%s' "${_OP_AUTOUPDATE}" | tr '[:upper:]' '[:lower:]')"
+    case "${_op_autoupdate_lc}" in
+        1|true|yes|on|auto) _op_update="auto";;
+        notify) _op_update="notify";;
+        *) _op_update="disable";;
+    esac
     local _op_provider_json="${_CFG_OPENCODE_PROVIDER_JSON:-}"
     if [[ -z "${_op_provider_json}" ]]; then
         _op_provider_json='{}'
     fi
     _op_provider_json="$(_agent_model_provider_json "${_op_provider}" "${_op_provider_json}")"
     export OPENCODE_CONFIG_CONTENT
-    OPENCODE_CONFIG_CONTENT="$(printf '{"lsp":%s,"autoupdate":%s,"agent":{"%s":{"model":"%s","variant":"%s"}},"provider":%s}' \
-        "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_OP_AUTOUPDATE}" "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" \
-        "${_op_provider_json}")"
+    if (( _op_v2 )); then
+        local _op_provider_v2_json="${_CFG_OPENCODE_PROVIDER_V2_JSON:-}"
+        if [[ -z "${_op_provider_v2_json}" ]]; then
+            _op_provider_v2_json='{}'
+        fi
+        _op_provider_v2_json="$(_agent_model_provider_json "${_op_provider}" "${_op_provider_v2_json}")"
+        OPENCODE_CONFIG_CONTENT="$("${_AGENT_PYTHON:-python3}" - \
+            "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" "${_op_update}" \
+            "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_op_provider_v2_json}" <<'PYEOF'
+import json
+import sys
+
+agent, model, variant, update, lsp, provider_json = sys.argv[1:7]
+model_ref = model if not variant else model + "#" + variant
+config = {
+    "$schema": "https://opencode.ai/config.json",
+    "lsp": lsp.lower() not in ("0", "false", "off", "no"),
+    "update": update,
+    "default_agent": agent,
+    "model": model,
+    "agents": {agent: {"model": model_ref}},
+    "providers": json.loads(provider_json or "{}"),
+}
+print(json.dumps(config, ensure_ascii=False, separators=(",", ":")))
+PYEOF
+        )"
+    else
+        OPENCODE_CONFIG_CONTENT="$(printf '{"lsp":%s,"autoupdate":%s,"agent":{"%s":{"model":"%s","variant":"%s"}},"provider":%s}' \
+            "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_OP_AUTOUPDATE}" "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" \
+            "${_op_provider_json}")"
+    fi
 
     echo "============================================================"
-    echo "  OpenCode: ${_OP_AGENT} | auto | ${MODEL_NAME} (${VARIANT})"
+    echo "  OpenCode: ${_OP_AGENT} | auto | ${MODEL_NAME} (${VARIANT}) | v$(( _op_v2 + 1 ))"
     echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"
     echo "  state: ${AGENT_MANIFEST_FILE}"
@@ -1503,23 +1649,32 @@ run_opencode() {
         fi
         ( tail ${_iu} -n 0 -F "${LOG_FILE}" 2>/dev/null | \
           while IFS= read -r _lt; do
-              case "${_lt}" in *level=ERROR*|*level=WARN*|*' tool '*|*permission=*) ;; *) continue ;; esac
+              case "${_lt}" in
+                  *level=ERROR*|*level=WARN*|*level=error*|*level=warn*|*' tool '*|*permission=*) ;;
+                  *) continue ;;
+              esac
               printf '[%s] %s\n' "$(date +%H:%M:%S)" \
-                     "$(sed -E 's/timestamp=[^ ]+ level=([A-Z]+) run=[^ ]+ message=/[\1] /; s/"//g' <<<"${_lt}" | cut -c1-140)"
+                     "$(sed -E 's/timestamp=[^ ]+ level=([A-Za-z]+) run=[^ ]+ message=/[\1] /; s/"//g' <<<"${_lt}" | tr '[:lower:]' '[:upper:]' | cut -c1-140)"
           done ) &
         _LIVE_PID=$!
     }
 
-    # 兜底防丢失：trap EXIT（任何退出路径均触发）——从 LOG_FILE 提取 session.id，export 会话 JSON，
+    # 兜底防丢失：trap EXIT（任何退出路径均触发）——从 JSONL/日志提取 session id，export 会话 JSON，
     # python3 提取 user 消息文本（跳过系统注入提示词），与 LIST_FILE 比对后追加补录缺失的用户输入
     _recover_inputs() {
-        local _rec_sid _rec_jf
-        _rec_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+        local _rec_sid="" _rec_jf
+        _rec_sid="$(_opencode_session_from_output "${_OPENCODE_EVENTS_FILE:-}" 2>/dev/null || true)"
+        [[ -n "${_rec_sid}" ]] || _rec_sid="$(_opencode_session_from_log "${LOG_FILE}" 2>/dev/null || true)"
         [[ -n "${_rec_sid}" ]] || return 0
         [[ -x "${_OPENCODE_BIN}" ]] || return 0
         command -v python3  >/dev/null 2>&1 || return 0
         _rec_jf="${AGENT_RUN_DIR}/export.json"
-        if "${_OPENCODE_BIN}" export "${_rec_sid}" 2>/dev/null > "${_rec_jf}"; then
+        if { if (( _OPENCODE_V2 )); then
+                "${_OPENCODE_BIN}" session export --standalone "${_rec_sid}"
+            else
+                "${_OPENCODE_BIN}" export "${_rec_sid}"
+            fi
+        } 2>/dev/null > "${_rec_jf}"; then
             python3 - "${_rec_jf}" "${LIST_FILE}" <<'PYEOF'
 import json, sys, datetime
 exp, lst = sys.argv[1], sys.argv[2]
@@ -1530,9 +1685,14 @@ except Exception:
     sys.exit(0)
 users = []
 for m in d.get('messages', []):
-    if m.get('info', {}).get('role') != 'user':
+    if m.get('info', {}).get('role') == 'user':
+        parts = m.get('parts', [])
+    elif m.get('type') == 'user':
+        text = m.get('text', '')
+        parts = [{'type': 'text', 'text': text}] if text else []
+    else:
         continue
-    for p in m.get('parts', []):
+    for p in parts:
         if p.get('type') == 'text':
             t = p.get('text', '')
             if t and '【用户输入记录】' not in t:
@@ -1557,9 +1717,15 @@ PYEOF
     if (( ! DRIVE_MODE )); then
         # 原有 TUI 交互模式（无驱动选项时保持原生交互）
         _agent_runtime_turn_begin
-        "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}" \
-                --print-logs --log-level DEBUG \
-                2> "${LOG_FILE}"
+        if (( _op_v2 )); then
+            "${_OPENCODE_BIN}" --standalone --auto --prompt "${PROMPT}" \
+                    --print-logs --log-level debug \
+                    2> "${LOG_FILE}"
+        else
+            "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}" \
+                    --print-logs --log-level DEBUG \
+                    2> "${LOG_FILE}"
+        fi
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
@@ -1589,7 +1755,13 @@ PYEOF
         else
             echo "---- drive: prompt round start $(date "+%F-%T") ----"
             _agent_runtime_turn_begin
-            _run_agent_command "${_OPENCODE_BIN}" run --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${PROMPT}"
+            if (( _op_v2 )); then
+                _run_opencode_v2 "${_OPENCODE_BIN}" run --standalone \
+                    --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}" \
+                    --format json --auto --print-logs --log-level debug "${PROMPT}"
+            else
+                _run_agent_command "${_OPENCODE_BIN}" run --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${PROMPT}"
+            fi
             _drv_rc=$?
             if (( _drv_rc != 0 )); then
                 _agent_runtime_turn_failure
@@ -1597,7 +1769,8 @@ PYEOF
                 exit "${_drv_rc}"
             fi
             _agent_runtime_turn_success
-            _drv_sid="$(grep -o 'session.id=[A-Za-z0-9_-]*' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+            _drv_sid="$(_opencode_session_from_output "${_OPENCODE_EVENTS_FILE:-}" 2>/dev/null || true)"
+            [[ -n "${_drv_sid}" ]] || _drv_sid="$(_opencode_session_from_log "${LOG_FILE}" 2>/dev/null || true)"
             if [[ -z "${_drv_sid}" ]]; then
                 echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 session.id，驱动终止###" >&2
                 exit 1
@@ -1609,8 +1782,14 @@ PYEOF
             _drv_instr="$(<"${DRIVE_FILE}")"
             echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
             _agent_runtime_turn_begin
-            "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${_drv_instr}" \
-                    2>> "${LOG_FILE}"
+            if (( _op_v2 )); then
+                _run_opencode_v2 "${_OPENCODE_BIN}" run --standalone -s "${_drv_sid}" \
+                    --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}" \
+                    --format json --auto --print-logs --log-level debug "${_drv_instr}"
+            else
+                "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "${_drv_instr}" \
+                        2>> "${LOG_FILE}"
+            fi
             _drv_rc=$?
             if (( _drv_rc == 0 )); then
                 _agent_runtime_turn_success
@@ -1627,8 +1806,14 @@ PYEOF
         if (( ONCE_MODE )); then
             if [[ -n "${RESUME_RUN_ID}" && -z "${DRIVE_FILE}" ]]; then
                 _agent_runtime_turn_begin
-                "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "继续" \
-                        2>> "${LOG_FILE}"
+                if (( _op_v2 )); then
+                    _run_opencode_v2 "${_OPENCODE_BIN}" run --standalone -s "${_drv_sid}" \
+                        --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}" \
+                        --format json --auto --print-logs --log-level debug "继续"
+                else
+                    "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "继续" \
+                            2>> "${LOG_FILE}"
+                fi
                 _drv_rc=$?
                 if (( _drv_rc == 0 )); then
                     _agent_runtime_turn_success
@@ -1656,8 +1841,15 @@ PYEOF
                 break
             fi
             _agent_runtime_turn_begin
-            if "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "继续" \
-                    2>> "${LOG_FILE}"; then
+            if { if (( _op_v2 )); then
+                    _run_opencode_v2 "${_OPENCODE_BIN}" run --standalone -s "${_drv_sid}" \
+                        --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}" \
+                        --format json --auto --print-logs --log-level debug "继续"
+                else
+                    "${_OPENCODE_BIN}" run -s "${_drv_sid}" --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG "继续" \
+                            2>> "${LOG_FILE}"
+                fi
+            }; then
                 _agent_runtime_turn_success
                 _nudges=$((_nudges + 1))
                 _fails=0
