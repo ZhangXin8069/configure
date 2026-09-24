@@ -74,6 +74,13 @@ assert_not_contains "$runtime" '$agentConfig.flags'
 assert_not_contains "$runtime" 'DEFAULT_MODEL_FLAG'
 assert_contains "$runtime" '$permissionMode'
 assert_contains "$runtime" 'agents.opencode.agent'
+assert_contains "$runtime" 'function Get-OpenCodeMajorVersion'
+assert_contains "$runtime" 'function Get-OpenCodeProviderConfigV2'
+assert_contains "$runtime" 'ConvertTo-OpenCodeV2Package'
+assert_contains "$runtime" 'default_agent'
+assert_contains "$runtime" "'--standalone', '-s', \$sid, '--model', \$modelRef"
+assert_contains "$runtime" "'--format', 'json'"
+assert_contains "$runtime" "'--log-level', 'debug'"
 assert_contains "$runtime" 'function Initialize-SecureBinary'
 assert_contains "$runtime" 'function Expand-HomePath'
 assert_contains "$runtime" 'agents.$SecureAgentName.secure_binary'
@@ -133,6 +140,8 @@ assert_contains "$runtime" 'check_for_update_on_startup'
 assert_contains "$runtime" 'DISABLE_AUTOUPDATER'
 assert_contains "$runtime" 'OPENCODE_AUTOUPDATE'
 assert_contains "$runtime" 'autoupdate'
+assert_contains "$runtime" "'\$schema'"
+assert_contains "$runtime" 'https://opencode.ai/config.json'
 assert_contains "$runtime" 'function Get-CodexModelCatalogPath'
 assert_contains "$runtime" '& $Bin debug models'
 assert_contains "$runtime" 'model_catalog_json'

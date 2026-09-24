@@ -1,13 +1,16 @@
 @echo off
-rem Install opencode (Windows x64) from GitHub releases into %USERPROFILE%\.local\bin
+rem Install OpenCode V2 (Windows x64/ARM64) into %USERPROFILE%\.local\bin
 rem Usage: install.bat [VERSION]   (default: latest)
 rem Env:   OPENCODE_INSTALL_DIR  install directory (default %USERPROFILE%\.local\bin)
+rem        OPENCODE_BASE_URL     binary source (default https://opencode.ai/files/bin)
 
 setlocal EnableExtensions EnableDelayedExpansion
 
 rem ---- 安装目录 ----
 set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 if defined OPENCODE_INSTALL_DIR set "INSTALL_DIR=%OPENCODE_INSTALL_DIR%"
+set "OPENCODE_BASE=https://opencode.ai/files/bin"
+if defined OPENCODE_BASE_URL set "OPENCODE_BASE=%OPENCODE_BASE_URL%"
 
 title OpenCode Installer
 
@@ -20,32 +23,38 @@ rem ---- 架构检测 ----
 set "PROC_ARCH=%PROCESSOR_ARCHITECTURE%"
 if defined PROCESSOR_ARCHITEW6432 set "PROC_ARCH=%PROCESSOR_ARCHITEW6432%"
 if /i "%PROC_ARCH%"=="ARM64" (
-    echo   ERROR: opencode does not support Windows ARM64 yet.
-    exit /b 1
+    set "TARGET=windows-arm64"
 )
 if /i "%PROC_ARCH%"=="x86" (
     echo   ERROR: opencode does not support 32-bit Windows.
     exit /b 1
 )
 
-rem ---- AVX2 检测（老 CPU 用 baseline 构建）----
-set "TARGET=windows-x64"
-set "HAS_AVX2="
-for /f "delims=" %%i in ('powershell -NoProfile -NonInteractive -Command "(Add-Type -MemberDefinition '[DllImport(""kernel32.dll"")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);' -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)" 2^>nul') do set "HAS_AVX2=%%i"
-if /i not "%HAS_AVX2%"=="True" if not "%HAS_AVX2%"=="1" (
-    echo   CPU without AVX2 detected - using baseline build.
-    set "TARGET=windows-x64-baseline"
+rem ---- AVX2 检测（老 x64 CPU 用 baseline 构建；ARM64 不需要）----
+if not defined TARGET (
+    set "TARGET=windows-x64"
+    set "HAS_AVX2="
+    for /f "delims=" %%i in ('powershell -NoProfile -NonInteractive -Command "(Add-Type -MemberDefinition '[DllImport(""kernel32.dll"")] public static extern bool IsProcessorFeaturePresent(int ProcessorFeature);' -Name Kernel32 -Namespace Win32 -PassThru)::IsProcessorFeaturePresent(40)" 2^>nul') do set "HAS_AVX2=%%i"
+    if /i not "%HAS_AVX2%"=="True" if not "%HAS_AVX2%"=="1" (
+        echo   CPU without AVX2 detected - using baseline build.
+        set "TARGET=windows-x64-baseline"
+    )
 )
 
 rem ---- 版本解析 / 下载地址 ----
 set "VER=%~1"
-set "FILENAME=opencode-%TARGET%.zip"
-set "URL=https://github.com/anomalyco/opencode/releases/latest/download/%FILENAME%"
-if not "%VER%"=="" (
-    set "URL=https://github.com/anomalyco/opencode/releases/download/v%VER%/%FILENAME%"
+if defined VER if /i "%VER:~0,1%"=="v" set "VER=%VER:~1%"
+if not defined VER (
+    for /f "usebackq delims=" %%i in (`powershell -NoProfile -NonInteractive -Command "(Invoke-RestMethod -Uri 'https://opencode.ai/update/api/latest/cli/npm').version"`) do set "VER=%%i"
 )
+if not defined VER (
+    echo   ERROR: failed to resolve latest OpenCode V2 version.
+    exit /b 1
+)
+set "FILENAME=opencode-%TARGET%.zip"
+set "URL=%OPENCODE_BASE%/%VER%/%FILENAME%"
 
-echo   Version: %VER%   (empty = latest)
+echo   Version: %VER%
 echo   Asset:   %FILENAME%
 echo   Downloading...
 curl.exe -fL --progress-bar -o "%TEMP%\opencode-install.zip" "%URL%"
