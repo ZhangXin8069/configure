@@ -1084,6 +1084,86 @@ function Get-OpenCodeProviderConfig {
     return $result
 }
 
+function ConvertTo-OpenCodeV2Package {
+    param([string]$Npm)
+
+    switch ($Npm) {
+        '@ai-sdk/openai' { return '@opencode/ai/providers/openai' }
+        '@ai-sdk/openai-compatible' { return '@opencode/ai/providers/openai-compatible' }
+        '@ai-sdk/anthropic' { return '@opencode/ai/providers/anthropic-compatible' }
+        '@ai-sdk/google' { return '@opencode/ai/providers/google' }
+        default { return $Npm }
+    }
+}
+
+# OpenCode V2 provider 配置：内置途径使用运行时环境，仅自定义 custom-gpt 注册包、端点和模型。
+function Get-OpenCodeProviderConfigV2 {
+    $result = [ordered]@{}
+    $agentConfig = $script:AgentConfig.agents.opencode
+    foreach ($name in @($agentConfig.key_providers)) {
+        if ([string]::IsNullOrWhiteSpace([string]$name)) { continue }
+        $provider = $script:AgentConfig.providers.$name
+        if ($null -eq $provider) { continue }
+        $envKey = [string]$provider.env_key
+        if ([string]::IsNullOrWhiteSpace($envKey)) { continue }
+        if ([string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $envKey))) { continue }
+        $providerId = [string]$provider.opencode_provider_id
+        if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$name }
+        if ($name -eq 'custom-gpt' -and $providerId -eq 'custom-gpt') {
+            $baseUrl = [string]$provider.base_url
+            if ([string]::IsNullOrWhiteSpace($baseUrl)) { continue }
+            $meta = $provider.opencode
+            $models = [ordered]@{}
+            $modelMap = Get-ProviderKnownModelMap $name
+            foreach ($property in $modelMap.PSObject.Properties) {
+                $modelId = [string]$property.Name
+                if ([string]::IsNullOrWhiteSpace($modelId)) { continue }
+                $modelMeta = $provider.models.$modelId
+                $npm = if ($null -ne $modelMeta) { [string]$modelMeta.npm } else { '' }
+                if ([string]::IsNullOrWhiteSpace($npm)) { $npm = [string]$meta.npm }
+                $item = [ordered]@{
+                    modelID = $modelId
+                    package = ConvertTo-OpenCodeV2Package $npm
+                }
+                $strengths = @($provider.supported_strengths | Where-Object { -not [string]::IsNullOrWhiteSpace([string]$_) })
+                if ($strengths.Count -gt 0) {
+                    $item.variants = @($strengths | ForEach-Object { [ordered]@{ id = [string]$_ } })
+                }
+                $models[$modelId] = $item
+            }
+            $result[$providerId] = [ordered]@{
+                name = [string]$provider.label
+                env = @($envKey)
+                package = ConvertTo-OpenCodeV2Package ([string]$meta.npm)
+                settings = [ordered]@{
+                    baseURL = $baseUrl
+                    apiKey = "{env:$envKey}"
+                }
+                models = $models
+            }
+        }
+    }
+    return $result
+}
+
+function Get-OpenCodeMajorVersion {
+    param([string]$Bin)
+
+    if ([string]::IsNullOrWhiteSpace($Bin) -or -not (Test-Path -LiteralPath $Bin -PathType Leaf)) {
+        return 0
+    }
+    try {
+        $raw = & $Bin --version 2>$null | Select-Object -First 1
+        $match = [regex]::Match([string]$raw, 'v?([0-9]+)(?:\.|$)')
+        if ($match.Success) {
+            return [int]$match.Groups[1].Value
+        }
+    } catch {
+        return 0
+    }
+    return 0
+}
+
 function Write-Utf8 {
     param(
         [Parameter(Mandatory = $true)][string]$Path,
@@ -2020,7 +2100,13 @@ function Find-OpenCodeSession {
         return ''
     }
     foreach ($line in [System.IO.File]::ReadAllLines($script:LogFile)) {
-        $match = [regex]::Match($line, 'session\.id=([A-Za-z0-9_-]+)')
+        $match = [regex]::Match($line, '"sessionID"\s*:\s*"([A-Za-z0-9_-]+)"')
+        if (-not $match.Success) {
+            $match = [regex]::Match($line, '/session/(ses_[A-Za-z0-9_-]+)')
+        }
+        if (-not $match.Success) {
+            $match = [regex]::Match($line, 'session\.id=([A-Za-z0-9_-]+)')
+        }
         if ($match.Success) {
             return $match.Groups[1].Value
         }
@@ -2325,11 +2411,8 @@ function Run-OpenCode {
     if ([string]::IsNullOrWhiteSpace($agentName)) { $agentName = 'build' }
     $lspEnabled = $script:AgentConfig.agents.opencode.lsp
     if ($null -eq $lspEnabled) { $lspEnabled = $true }
-    $agentBlock = [ordered]@{}
-    $agentBlock[$agentName] = [ordered]@{
-        model = $script:Model
-        variant = $script:Variant
-    }
+    $openCodeMajor = Get-OpenCodeMajorVersion $executable
+    $openCodeV2 = $openCodeMajor -ge 2
     $autoupdate = $false
     if ($null -ne $script:AgentConfig.agents.opencode.autoupdate) {
         $autoupdate = [bool]$script:AgentConfig.agents.opencode.autoupdate
@@ -2338,15 +2421,41 @@ function Run-OpenCode {
     if (-not [string]::IsNullOrWhiteSpace($autoupdateEnv)) {
         $autoupdate = ($autoupdateEnv -eq 'true')
     }
-    $config = [ordered]@{
-        lsp        = [bool]$lspEnabled
-        autoupdate = $autoupdate
-        agent      = $agentBlock
-        provider   = Get-OpenCodeProviderConfig
+    if ($openCodeV2) {
+        $updateMode = if ($autoupdate) { 'auto' } else { 'disable' }
+        $modelRef = if ([string]::IsNullOrWhiteSpace($script:Variant)) {
+            $script:Model
+        } else {
+            "$($script:Model)#$($script:Variant)"
+        }
+        $agentBlock = [ordered]@{}
+        $agentBlock[$agentName] = [ordered]@{ model = $modelRef }
+        $config = [ordered]@{
+            '$schema'       = 'https://opencode.ai/config.json'
+            lsp             = [bool]$lspEnabled
+            update          = $updateMode
+            default_agent   = $agentName
+            model           = $script:Model
+            agents          = $agentBlock
+            providers       = Get-OpenCodeProviderConfigV2
+        }
+    } else {
+        $agentBlock = [ordered]@{}
+        $agentBlock[$agentName] = [ordered]@{
+            model = $script:Model
+            variant = $script:Variant
+        }
+        $config = [ordered]@{
+            lsp        = [bool]$lspEnabled
+            autoupdate = $autoupdate
+            agent      = $agentBlock
+            provider   = Get-OpenCodeProviderConfig
+        }
     }
     $env:OPENCODE_CONFIG_CONTENT = ($config | ConvertTo-Json -Compress -Depth 8)
     Write-Host '============================================================'
-    Write-Host "  OpenCode: $agentName | auto | $($script:ModelName) ($($script:Variant))"
+    $versionLabel = if ($openCodeV2) { 'v2' } else { 'v1' }
+    Write-Host "  OpenCode: $agentName | auto | $($script:ModelName) ($($script:Variant)) | $versionLabel"
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -2358,7 +2467,11 @@ function Run-OpenCode {
     if (-not $script:Drive) {
         Write-Host '  mode: TUI interactive'
         Turn-Begin
-        $rc = Invoke-Logged $executable @('--agent', $agentName, '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'DEBUG')
+        if ($openCodeV2) {
+            $rc = Invoke-Logged $executable @('--standalone', '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'debug')
+        } else {
+            $rc = Invoke-Logged $executable @('--agent', $agentName, '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'DEBUG')
+        }
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -2383,7 +2496,11 @@ function Run-OpenCode {
     } else {
         Write-Host "---- drive: prompt round start $(Get-Date -Format 'yyyy-MM-dd-HH:mm:ss') ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('run', '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', $prompt) $true
+        if ($openCodeV2) {
+            $rc = Invoke-Logged $executable @('run', '--standalone', '--model', $modelRef, '--agent', $agentName, '--format', 'json', '--auto', '--print-logs', '--log-level', 'debug', $prompt) $true
+        } else {
+            $rc = Invoke-Logged $executable @('run', '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', $prompt) $true
+        }
         if ($rc -ne 0) {
             Turn-Failure
             Write-ErrorLine "###$($script:LauncherName): ERROR: prompt 回合失败（退出码 $rc），驱动终止###"
@@ -2403,7 +2520,11 @@ function Run-OpenCode {
         $instruction = [System.IO.File]::ReadAllText($script:DriveFile)
         Write-Host "---- drive: first instruction <- $($script:DriveFile) ----"
         Turn-Begin
-        $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', $instruction) $true
+        if ($openCodeV2) {
+            $rc = Invoke-Logged $executable @('run', '--standalone', '-s', $sid, '--model', $modelRef, '--agent', $agentName, '--format', 'json', '--auto', '--print-logs', '--log-level', 'debug', $instruction) $true
+        } else {
+            $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', $instruction) $true
+        }
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         if ($rc -ne 0) {
             Write-ErrorLine "###$($script:LauncherName): warning: 首条指令回合退出码 $rc，仍进入继续循环###"
@@ -2413,7 +2534,11 @@ function Run-OpenCode {
         if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId) -and
             [string]::IsNullOrWhiteSpace($script:DriveFile)) {
             Turn-Begin
-            $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
+            if ($openCodeV2) {
+                $rc = Invoke-Logged $executable @('run', '--standalone', '-s', $sid, '--model', $modelRef, '--agent', $agentName, '--format', 'json', '--auto', '--print-logs', '--log-level', 'debug', '继续') $true
+            } else {
+                $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
+            }
             if ($rc -eq 0) {
                 Turn-Success
                 Mark-State 'finished' 'resume once' ''
@@ -2437,7 +2562,11 @@ function Run-OpenCode {
             return 0
         }
         Turn-Begin
-        $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
+        if ($openCodeV2) {
+            $rc = Invoke-Logged $executable @('run', '--standalone', '-s', $sid, '--model', $modelRef, '--agent', $agentName, '--format', 'json', '--auto', '--print-logs', '--log-level', 'debug', '继续') $true
+        } else {
+            $rc = Invoke-Logged $executable @('run', '-s', $sid, '--agent', $agentName, '--auto', '--print-logs', '--log-level', 'DEBUG', '继续') $true
+        }
         if ($rc -eq 0) {
             Turn-Success
             $nudges++
