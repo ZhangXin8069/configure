@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # OpenCode 一键配置脚本（Linux / macOS）
-# 幂等合并生成 ~/.config/opencode/opencode.json 与 tui.json，不覆盖已有键；
-# 默认仅打印与检查，--apply 才写盘。参考 awesome-opencode/awesome-opencode 生态清单。
+# V2 生成 opencode.json + cli.json；V1 兼容生成 opencode.json + tui.json。
+# 幂等合并且不覆盖无关键；默认仅打印与检查，--apply 才写盘。
 # Usage: bash config.sh [选项]
 
 set -euo pipefail
@@ -9,8 +9,22 @@ set -euo pipefail
 CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/opencode"
 CONFIG_FILE="$CONFIG_DIR/opencode.json"
 TUI_FILE="$CONFIG_DIR/tui.json"
+CLI_FILE="$CONFIG_DIR/cli.json"
 SCHEMA="https://opencode.ai/config.json"
 TUI_SCHEMA="https://opencode.ai/tui.json"
+CLI_SCHEMA="https://opencode.ai/v2/cli.json"
+
+OPENCODE_MAJOR=2
+if command -v opencode >/dev/null 2>&1; then
+    _version="$(opencode --version 2>/dev/null | head -1 || true)"
+    _version="${_version##* }"
+    _version="${_version#v}"
+    case "$_version" in
+        0.*|1.*) OPENCODE_MAJOR=1;;
+        2.*) OPENCODE_MAJOR=2;;
+    esac
+fi
+unset _version
 
 APPLY=0
 MODEL=""
@@ -20,24 +34,21 @@ LSP=""
 PERMISSIONS=()
 PLUGINS=()
 
-# --- 推荐清单（来源：https://github.com/awesome-opencode/awesome-opencode） ---
+# --- V2 插件说明（V1 插件 API 与 V2 不兼容，不再推荐未经确认迁移的旧包） ---
 list_plugins() {
     cat <<'EOF'
-推荐插件（npm 模块名须以各仓库 README 安装说明为准）:
-  opencode-arise            并行后台任务编排 (@bluelovers/opencode-arise)
-  opencode-autotitle        AI 自动会话命名 (pawelma/opencode-autotitle)
-  opencode-background       后台进程管理 (zenobi-us/opencode-background)
-  opencode-dynamic-pruning  token 优化: 裁剪过期工具输出 (Tarquinen/opencode-dynamic-context-pruning)
-  opencode-context-analysis token 用量分析 (IgorWarzocha/Opencode-Context-Analysis-Plugin)
-  opencode-ccs-sync         从 Claude Code Switch 同步 providers (JasonLandbridge/opencode-ccs-sync)
-  opencode-models-discovery 模型发现与过滤 (yuhp/opencode-models-discovery)
-  其他候选: 见 https://github.com/awesome-opencode/awesome-opencode#plugins
+OpenCode V2 插件 API 与 V1 不兼容。
+仅安装明确声明支持 V2 的插件；安装使用:
+  opencode plugin add <package>
+插件目录见: https://opencode.ai/v2/docs/plugins/
+
+本脚本的 --plugin 只把包名写入 opencode.json 的 plugins 数组，不联网安装。
 EOF
 }
 
 list_themes() {
     cat <<'EOF'
-推荐主题（来源: awesome-opencode THEMES 与官方内置; 安装方式见各仓库）:
+主题应优先使用 V2 内置主题或已验证兼容 cli.json 的外部主题:
   内置:    tokyonight / dracula / catppuccin / gruvbox / nord / solarized / light / dark
   ayu:     postrednik/opencode-ayu-theme
   charcoal: VyomJain6904/charcoal-theme
@@ -57,16 +68,17 @@ usage() {
   --apply               合并并写盘（默认 dry-run；写盘前自动备份旧配置）
   --model MODEL         设置默认模型（provider/model 格式）
   --small-model MODEL   设置轻量模型（标题生成等）
-  --theme NAME          设置 TUI 主题（写入 tui.json）
+  --theme NAME          设置 TUI 主题（V2 写入 cli.json，V1 写入 tui.json）
   --lsp on|off          启用/关闭 LSP
-  --permission TOOL=VAL 设置工具权限 (allow/ask/deny)，如 bash=ask、edit=ask；可多次
-  --plugin NAME         将 npm 插件加入 plugin 数组（不联网安装，需先 opencode plugin NAME）
-  --list-plugins        列出推荐插件
+  --permission TOOL=VAL 设置权限 (allow/ask/deny)，如 bash=ask、edit=ask；V2 自动映射 action
+  --plugin NAME         将包名加入 plugins/plugin 数组（不联网安装）
+  --list-plugins        显示 V2 插件安装说明
   --list-themes         列出推荐主题
   -h, --help            显示帮助
 
 默认行为: 打印将要合并的 JSON 差异，不写盘；加 --apply 才写入。
-配置位置: $CONFIG_FILE（合并保留已有键）与 $TUI_FILE
+模式: OpenCode V$OPENCODE_MAJOR
+配置位置: $CONFIG_FILE（合并保留已有键）与 $([ "$OPENCODE_MAJOR" = 2 ] && printf '%s' "$CLI_FILE" || printf '%s' "$TUI_FILE")
 EOF
 }
 
@@ -82,10 +94,15 @@ check_status() {
     else
         printf 'opencode: 未安装（见同目录 install.sh）\n'
     fi
+    printf '配置模式: OpenCode V%s\n' "$OPENCODE_MAJOR"
     printf '配置目录: %s\n' "$CONFIG_DIR"
     [ -f "$CONFIG_FILE" ] && printf 'opencode.json: 存在 (%s 字节)\n' "$(wc -c < "$CONFIG_FILE" | tr -d ' ')" \
                           || printf 'opencode.json: 不存在\n'
-    [ -f "$TUI_FILE" ] && printf 'tui.json: 存在\n' || printf 'tui.json: 不存在\n'
+    if [ "$OPENCODE_MAJOR" = 2 ]; then
+        [ -f "$CLI_FILE" ] && printf 'cli.json: 存在\n' || printf 'cli.json: 不存在\n'
+    else
+        [ -f "$TUI_FILE" ] && printf 'tui.json: 存在\n' || printf 'tui.json: 不存在\n'
+    fi
     if [ -f "$CONFIG_FILE" ]; then
         printf '已配置模型: '
         python3 - "$CONFIG_FILE" <<'PY' 2>/dev/null || printf '（解析失败）\n'
@@ -165,32 +182,59 @@ d=json.load(sys.stdin); d["lsp"]=False; print(json.dumps(d))')";;
         *) die "--lsp 仅接受 on|off";;
     esac
     if [ ${#PERMISSIONS[@]} -gt 0 ]; then
-        local perm_args=""
         for p in "${PERMISSIONS[@]}"; do
             case "$p" in
-                *=*) ;;
+                *=*)
+                    _perm_value="${p#*=}"
+                    case "$_perm_value" in
+                        allow|ask|deny) ;;
+                        *) die "--permission 的值必须是 allow/ask/deny: $p";;
+                    esac
+                    ;;
                 *) die "--permission 需要 TOOL=VAL 格式（如 bash=ask）: $p";;
             esac
-            perm_args+=" $p"
         done
-        merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
+        unset _perm_value
+        if [ "$OPENCODE_MAJOR" = 2 ]; then
+            merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+rules=d.setdefault("permissions",[])
+for kv in sys.argv[1:]:
+    action,effect=kv.split("=",1)
+    action={"bash":"shell","task":"subagent","write":"edit","patch":"edit"}.get(action,action)
+    resource="*"
+    rules=[r for r in rules if not (isinstance(r,dict) and r.get("action")==action and r.get("resource")==resource)]
+    rules.append({"action":action,"resource":resource,"effect":effect})
+d["permissions"]=rules
+print(json.dumps(d))' "${PERMISSIONS[@]}")"
+        else
+            merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
 d=json.load(sys.stdin)
 perm=d.setdefault("permission",{})
 for kv in sys.argv[1:]:
     k,v=kv.split("=",1)
-    perm[k]=v
-print(json.dumps(d))' $perm_args)"
+perm[k]=v
+print(json.dumps(d))' "${PERMISSIONS[@]}")"
+        fi
     fi
     if [ ${#PLUGINS[@]} -gt 0 ]; then
-        local pl_args=""
-        for p in "${PLUGINS[@]}"; do pl_args+=" $p"; done
-        merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
+        if [ "$OPENCODE_MAJOR" = 2 ]; then
+            merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
 d=json.load(sys.stdin)
-pl=d.setdefault("plugin",[])
+plugins=d.setdefault("plugins",[])
 for name in sys.argv[1:]:
-    if name not in pl:
-        pl.append(name)
-print(json.dumps(d))' $pl_args)"
+    if name not in plugins:
+        plugins.append(name)
+print(json.dumps(d))' "${PLUGINS[@]}")"
+        else
+            merged="$(printf '%s' "$merged" | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+plugins=d.setdefault("plugin",[])
+for name in sys.argv[1:]:
+    if name not in plugins:
+        plugins.append(name)
+print(json.dumps(d))' "${PLUGINS[@]}")"
+        fi
     fi
 
     if [ "$merged" != "$cur" ]; then
@@ -205,28 +249,43 @@ print(json.dumps(d, indent=2))' "$SCHEMA")"
         printf 'opencode.json: 无变更\n'
     fi
 
-    # --- tui.json 主题 ---
+    # --- CLI 主题：V2=cli.json，V1=tui.json ---
     if [ -n "$THEME" ]; then
         local tcur="{}" tmerged tcur_cmp tmerged_cmp
-        [ -f "$TUI_FILE" ] && tcur="$(load_json "$TUI_FILE")"
-        tmerged="$(printf '%s' "$tcur" | python3 -c 'import json,sys
+        local theme_file
+        if [ "$OPENCODE_MAJOR" = 2 ]; then
+            theme_file="$CLI_FILE"
+        else
+            theme_file="$TUI_FILE"
+        fi
+        [ -f "$theme_file" ] && tcur="$(load_json "$theme_file")"
+        if [ "$OPENCODE_MAJOR" = 2 ]; then
+            tmerged="$(printf '%s' "$tcur" | python3 -c 'import json,sys
+d=json.load(sys.stdin)
+theme=d.setdefault("theme",{})
+theme["name"]=sys.argv[1]
+d["$schema"]=sys.argv[2]
+print(json.dumps(d, indent=2))' "$THEME" "$CLI_SCHEMA")"
+        else
+            tmerged="$(printf '%s' "$tcur" | python3 -c 'import json,sys
 d=json.load(sys.stdin); d["theme"]=sys.argv[1]
 d["$schema"]=sys.argv[2]
 print(json.dumps(d, indent=2))' "$THEME" "$TUI_SCHEMA")"
+        fi
         tcur_cmp="$(printf '%s' "$tcur" | python3 -c 'import json,sys
 print(json.dumps(json.load(sys.stdin), sort_keys=True))')"
         tmerged_cmp="$(printf '%s' "$tmerged" | python3 -c 'import json,sys
 print(json.dumps(json.load(sys.stdin), sort_keys=True))')"
         if [ "$tmerged_cmp" != "$tcur_cmp" ]; then
-            write_config "$TUI_FILE" "$tmerged"
+            write_config "$theme_file" "$tmerged"
             changed=1
         else
-            printf 'tui.json: 无变更\n'
+            printf '%s: 无变更\n' "$(basename "$theme_file")"
         fi
     fi
 
     [ "$changed" = 0 ] && printf '全部无变更（配置已是最新或仅提供参数不一致）\n'
-    [ "$APPLY" = 1 ] && printf '\n提示: 合并采用「保留已有键」策略；外部主题插件需按仓库说明安装后生效。\n'
+    [ "$APPLY" = 1 ] && printf '\n提示: 合并采用「保留已有键」策略；插件包需确认支持 OpenCode V%s 后安装。\n' "$OPENCODE_MAJOR"
 }
 
 main "$@"

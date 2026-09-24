@@ -734,7 +734,11 @@ def provider_json(config, base_json, provider_name, cache_path):
         models.update(static_model_entries(provider))
     block = base.get(provider_id)
     if isinstance(block, dict) and isinstance(block.get("models"), dict):
-        block["models"] = {model_id: {} for model_id in sorted(models)}
+        for model_id in sorted(models):
+            current = block["models"].get(model_id)
+            if not isinstance(current, dict):
+                current = {}
+            block["models"][model_id] = current
     print(json.dumps(base, ensure_ascii=False, separators=(",", ":")))
 
 
