@@ -1,0 +1,486 @@
+% --- v20260730_output_20260728_080657.tex ---
+% Gluon PDF Pipeline — docker-v20260730 GPU 运行报告
+\documentclass[12pt,a4paper]{ctexart}
+
+% ── Packages ──
+\usepackage[top=2.5cm, bottom=2.5cm, left=2.5cm, right=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{xcolor}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{physics}
+\usepackage{braket}
+\usepackage{array}
+\usepackage{caption}
+\usepackage{subcaption}
+\usepackage{multirow}
+\usepackage{enumitem}
+\usepackage{fancyhdr}
+\usepackage{lastpage}
+
+% ── Metadata ──
+\hypersetup{
+  pdfauthor={Zhang Xin, IMP CAS},
+  pdftitle={Gluon PDF Pipeline — docker-v20260730 GPU Report},
+  pdfsubject={Lattice QCD Disconnected Gluon PDF},
+  colorlinks=true, linkcolor=blue, citecolor=blue, urlcolor=blue
+}
+
+% ── Header / Footer ──
+\pagestyle{fancy}
+\fancyhf{}
+\fancyhead[L]{\small Gluon PDF Pipeline — docker-v20260730}
+\fancyhead[R]{\small Zhang Xin, IMP CAS}
+\fancyfoot[C]{\thepage}
+
+% ── Title ──
+\title{
+  \textbf{非极化胶子 PDF 的格点 QCD 计算} \\[4pt]
+  \large Disconnected Gluon PDF Pipeline — GPU 运行报告
+}
+\author{
+  Zhang Xin \\
+  Institute of Modern Physics, Chinese Academy of Sciences (IMP, CAS)
+}
+\date{\today \\[4pt] Run ID: \texttt{docker\_v20260730\_gpu} \\ Output: \texttt{output\_20260728\_080657}}
+
+\begin{document}
+
+\maketitle
+\thispagestyle{empty}
+
+% ══════════════════════════════════════════════════════════════════
+\section{运行概览}
+
+本次运行是 \texttt{docker-v20260730} GPU 加速版流水线的最终校正版本，
+在真实格点数据上复现 disconnected 胶子 PDF 的比率分析。
+流水线在 NVIDIA GeForce RTX 4060 (8\,GB VRAM) 上以单精度 (complex64) 运行。
+
+\begin{table}[htbp]
+\centering
+\caption{运行基本信息}
+\label{tab:overview}
+\begin{tabular}{ll}
+\toprule
+\textbf{项目}                      & \textbf{值} \\
+\midrule
+运行 ID                            & \texttt{docker\_v20260730\_gpu} \\
+计算精度                           & complex64 (单精度 GPU) \\
+GPU                                & NVIDIA GeForce RTX 4060 (8\,GB, CC 8.9) \\
+CuPy / CUDA                        & CuPy 14.0.1 / CUDA 12.4 \\
+Python                             & 3.10.12 \\
+总耗时                             & 998.2\,s (16.6\,min) \\
+总输出大小                         & $\sim$3.0\,GB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════
+\section{系综与参数}
+
+\begin{table}[htbp]
+\centering
+\caption{格点系综参数}
+\label{tab:ensemble}
+\begin{tabular}{ll}
+\toprule
+\textbf{参数} & \textbf{值} \\
+\midrule
+系综名称 & \texttt{beta6.20\_mu-0.2770\_ms-0.2400\_L24x72} \\
+格点尺寸 & $L^3 \times T = 24^3 \times 72$ \\
+$\beta$  & 6.20 \\
+格距 $a$ & 0.1053\,fm \\
+$N_c$    & 3 \\
+轻夸克质量 $\mu_l$ & $-0.2770$ \\
+奇异夸克质量 $\mu_s$ & $-0.2400$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\centering
+\caption{计算参数}
+\label{tab:params}
+\begin{tabular}{ll}
+\toprule
+\textbf{参数}          & \textbf{值} \\
+\midrule
+本征矢量数 $N_{\rm ev}$  & 100 \\
+VVV 截断 $N_{\rm ev1}$   & 100 \\
+动量 $\mathbf{P}$        & $(0,0,-2)$  (2 单位 $2\pi/L$) \\
+插值算符                  & $C\gamma_5\gamma_4$ (\texttt{\_Cg5g4}) \\
+组态 ID                   & 6250, 6450, 6650 ($N_{\rm conf}=3$) \\
+动量涂抹                  & OFF (perambulator 已编码) \\
+有效质量方法              & fit\_cosh (默认) \\
+$z$ 方向                  & $z$ ($z_{\rm dir}=2$) \\
+$\Delta z$                & 24 \\
+Jackknife                 & 是 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{数据路径}
+
+\begin{table}[htbp]
+\centering
+\caption{数据源路径}
+\label{tab:paths}
+\begin{tabular}{ll}
+\toprule
+\textbf{数据类型} & \textbf{路径} \\
+\midrule
+Eigenvectors & \texttt{/public/group/lqcd/eigensystem/.../L24x72/\{conf\_id\}/} \\
+Perambulators & \texttt{/public/group/lqcd/perambulators/.../L24x72/light/\{conf\_id\}/} \\
+Gauge configs & \texttt{/public/group/lqcd/configurations/CLOVER/.../L24x72/} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════
+\section{流水线架构}
+
+流水线由四个核心步骤组成:
+
+\begin{enumerate}[leftmargin=*]
+  \item \textbf{Step 00: 环境检查} — GPU 检测, Python 依赖, 数据路径验证
+  \item \textbf{Step 01: 质子 2pt 关联函数} — 蒸馏法 + GPU VVV + Wick 收缩
+  \item \textbf{Step 02: OPE 算子计算} — donghx 对偶场强算法 (GPU)
+  \item \textbf{Step 03: huangcl 比率分析} — Jackknife 重采样 + 作图
+\end{enumerate}
+
+\subsection{2pt 蒸馏计算 (Step 01)}
+
+质子 2pt 关联函数通过蒸馏法 (distillation) 计算:
+
+\begin{equation}
+  C_2(t_{\rm snk}, t_{\rm src}) = \sum_{\mathbf{x}}
+  \Phi_{abc}(P) \; \tau^{giad}_{\rm snk} \;
+  (\Gamma\tau\Gamma)^{gjbe}_{\rm snk} \;
+  \tau^{ilcf}_{\rm src} \; \Phi^*_{def}(P)
+  \;-\; \text{Exchange}
+\end{equation}
+
+其中 VVV 重子块为:
+
+\begin{equation}
+  \Phi_{abc}(P) = \sum_{\mathbf{x}} e^{-i\mathbf{P}\cdot\mathbf{x}/L}
+  \, \varepsilon_{ijk} \, v_i^a(\mathbf{x}) \, v_j^b(\mathbf{x}) \, v_k^c(\mathbf{x})
+\end{equation}
+
+宇称投影 $C_2^{\pm} = \Tr[P_{\pm} \cdot C_2]$, 其中 $P_{\pm} = \tfrac12 (\gamma_0 \pm \gamma_4)$.
+
+\subsection{OPE 算子计算 (Step 02)}
+
+采用 donghx 的 \texttt{operators\_new\_z0\_mu2} 算法:
+
+\begin{equation}
+  O_{\mu\nu}(z, t) = \sum_{\mathbf{x}}
+  \Tr_c\left[
+    F_{\mu\nu}(\mathbf{x}+z\hat{e}_z) \;
+    W^\dagger(z\to 0) \;
+    \widetilde{F}_{\mu\nu}(\mathbf{x}) \;
+    W(0\to z)
+  \right]
+\end{equation}
+
+其中 $\widetilde{F}_{\mu\nu} = \frac12 \varepsilon_{\mu\nu\rho\sigma} F_{\rho\sigma}$ 为对偶场强。
+
+三个分量通过 MPI 分发:
+\begin{itemize}
+  \item rank 0: $(\mu,\nu) = (3,1)$ — $F_{tx}$ 分量
+  \item rank 1: $(\mu,\nu) = (3,2)$ — $F_{ty}$ 分量
+  \item rank 2: $(\mu,\nu) = (1,2)$ — $F_{xy}$ 分量
+\end{itemize}
+
+在本实现中，所有三个分量在单个 GPU 上串行计算。
+
+OPE 组合公式 (huangcl 分析):
+\begin{equation}
+  O_{\rm combined}(z,t) = -O_{30}(z,t) - O_{31}(z,t) + 2\,O_{01}(z,t)
+\end{equation}
+
+\subsection{比率分析 (Step 03)}
+
+3pt disconnected 关联函数:
+\begin{equation}
+  C_3^{\rm disc}(t_{\rm sep}, \tau, z) =
+  C_3(t_{\rm sep}, \tau, z) \;-\;
+  C_2(t_{\rm sep}) \cdot O(\tau, z)
+\end{equation}
+
+比率:
+\begin{equation}
+  R(z, t_{\rm sep}, \tau) = \frac{C_3^{\rm disc}}{C_2}
+\end{equation}
+
+Jackknife 误差分析: $\sigma_{\rm JK} = \sigma_{\rm sample} \cdot \sqrt{N_{\rm conf}-1}$.
+
+% ══════════════════════════════════════════════════════════════════
+\section{结果}
+
+\subsection{有效质量}
+
+\begin{table}[htbp]
+\centering
+\caption{质子有效质量 (Pz=$-$2), 多种方法对比}
+\label{tab:meff}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Config} & \textbf{fit\_cosh} & \textbf{fit\_exp} & \textbf{exp\_forward} & \textbf{cosh} \\
+\midrule
+6250 & 1.7775\,GeV & 1.7716\,GeV & 1.4384\,GeV & 6.0846\,GeV \\
+6450 & 1.7942\,GeV & 1.7951\,GeV & 3.4929\,GeV & 6.9253\,GeV \\
+6650 & 1.7729\,GeV & 1.7744\,GeV & 2.1924\,GeV & 7.8781\,GeV \\
+\midrule
+\textbf{平均} & \textbf{1.7815\,GeV} & \textbf{1.7804\,GeV} & --- & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Pz=0 静止质量: $m_0 \approx 1.37$\,GeV (fit\_cosh, 独立验证)。
+
+预期 boosted 能量:
+$E(P_z{=}{-}2) = \sqrt{m_0^2 + p_z^2}
+ = \sqrt{1.37^2 + (2\cdot 2\pi/(24\cdot 0.1053) \cdot 0.1973)^2}
+ \approx 1.69$\,GeV。
+
+实际测量 $\sim$1.78\,GeV ($\pm 5\%$, $N_{\rm conf}=3$ 统计有限)。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{effective_mass.png}
+\caption{质子 2pt 有效质量: (左上) 源平均 C2pt, (右上) 逐组态 meff + 平台拟合,
+(左下) 前向关联函数, (右下) 逐组态 |C2pt|}
+\label{fig:meff}
+\end{figure}
+
+\subsection{场强张量 F (OPE)}
+
+\begin{table}[htbp]
+\centering
+\caption{OPE 算子各分量范围 (conf 6250)}
+\label{tab:ope}
+\begin{tabular}{lccc}
+\toprule
+\textbf{分量} & $\mathbf{|O|_{\min}}$ & $\mathbf{|O|_{\max}}$ & \textbf{形状} \\
+\midrule
+$\mu{=}0,\nu{=}1$ ($F_{xy}$) & $1.0\times 10^{-2}$ & $7.3\times 10^{1}$ & (24, 72) \\
+$\mu{=}3,\nu{=}0$ ($F_{tx}$) & $1.3\times 10^{-2}$ & $5.7\times 10^{1}$ & (24, 72) \\
+$\mu{=}3,\nu{=}1$ ($F_{ty}$) & $4.6\times 10^{-3}$ & $5.5\times 10^{1}$ & (24, 72) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+三组态 OPE 分量量级一致 (均 $\sim 50$), 对偶场强校正后所有分量幅度匹配。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{field_strength_diagnostics.png}
+\caption{场强诊断: (左上) $z$ 平均 |O| vs $t$, (右上) $\Re[O(z)]$ at $t=36$,
+(左下) $\Im[O(z)]$ at $t=36$, (右下) $\Re[O(z{=}0,t)]$ vs $t$}
+\label{fig:field}
+\end{figure}
+
+\subsection{Disconnected 比率}
+
+\begin{table}[htbp]
+\centering
+\caption{比率 $R(z{=}2, t_{\rm sep}, \tau)$ 范围}
+\label{tab:ratio}
+\begin{tabular}{lcc}
+\toprule
+$\mathbf{t_{\rm sep}}$ & $\mathbf{\Re[R]}$ 范围 & $\mathbf{\Im[R]}$ 范围 \\
+\midrule
+4  & $[-0.0824, +0.2297]$ & $[-0.0849, +0.0606]$ \\
+5  & $[-0.0791, +0.1735]$ & $[-0.1289, +0.1981]$ \\
+6  & $[-0.2732, +0.2243]$ & $[-0.1983, +0.1194]$ \\
+7  & $[-0.5036, +0.2406]$ & $[-0.2688, +0.1223]$ \\
+8  & $[-0.8927, +0.4719]$ & $[-0.2706, +0.8195]$ \\
+9  & $[-2.6271, +0.4593]$ & $[-0.5524, +1.5517]$ \\
+10 & $[-3.0037, +2.2145]$ & $[-1.6741, +2.3112]$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+比率图形状与 huangcl 参考 ($N_{\rm conf}=200$) 一致, $N_{\rm conf}=3$ 的统计误差
+在较大 $t_{\rm sep}$ 时增大, 这是预期的 Jackknife 行为。
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{ratio.png}
+\caption{Disconnected 比率 $R(z{=}2)$ — 非极化胶子 PDF, P=(0,0,$-$2)}
+\label{fig:ratio}
+\end{figure}
+
+\begin{figure}[htbp]
+\centering
+\includegraphics[width=0.95\textwidth]{ratio_diagnostics.png}
+\caption{比率诊断面板: 上部 $\Re[R(z)]$ 对多个 $z$ 值, 下部 $\Im[R(z)]$}
+\label{fig:diag}
+\end{figure}
+
+% ══════════════════════════════════════════════════════════════════
+\section{性能分析}
+
+\begin{table}[htbp]
+\centering
+\caption{各步骤耗时与 GPU 内存}
+\label{tab:perf}
+\begin{tabular}{lrr}
+\toprule
+\textbf{步骤}                & \textbf{耗时 (s)} & \textbf{GPU 空闲 (MB)} \\
+\midrule
+加载 eigvecs (3 组态)       & 27.9  & 7099 \\
+VVV 计算 (3 组态)           & 191.7 & 6915 \\
+Wick 收缩 (3 组态)          & 481.7 & 6435 \\
+有效质量 (3 组态)           & 0.4   & 6435 \\
+\addlinespace
+读取 gauge (3 组态)         & 85.3  & 6813 \\
+OPE mu0\_nu1 (3 组态)       & 67.2  & 4685--4959 \\
+OPE mu3\_nu0 (3 组态)       & 66.2  & 4685--4959 \\
+OPE mu3\_nu1 (3 组态)       & 68.5  & 4685--4959 \\
+\addlinespace
+huangcl 分析                & 2.8   & 7087 \\
+\addlinespace
+\textbf{总计}               & \textbf{998.2} & --- \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\noindent
+耗时分布:
+\begin{itemize}
+  \item 2pt 蒸馏: 70.3\% (Wick 48.3\%, VVV 19.2\%, eigvec 加载 2.8\%)
+  \item OPE 计算: 28.8\% (gauge 读取 8.5\%, OPE 分量 20.3\%)
+  \item 分析 + 报告: 0.9\%
+\end{itemize}
+
+主要瓶颈为 Wick 收缩 (对 72 个 $t_{\rm src} \times 31$ 个 $(t_{\rm snk}, t_{\rm src})$ pair
+执行 6 次 einsum 收缩)。
+
+% ══════════════════════════════════════════════════════════════════
+\section{Bug 修复记录}
+
+本次运行的代码经过三轮调试，修复了以下关键 Bug:
+
+\subsection{Bug 1: Perambulator 二进制布局错误}
+\textbf{错误}: Perambulator 文件被读为 \texttt{(Nt, 4, Nev, Nev)} 格式，
+混淆了 sink/source 两组 Nev 轴。
+
+\textbf{正确格式}: \texttt{(Nt, Nev\_snk, 4, Nev\_src)} LE float64。
+验证: $t_{\rm snk}{=}0$ 时矩阵对角占优 ($\sim$0.6--0.75)。
+
+\textbf{影响}: Wick 收缩索引收缩顺序错误 → $m_{\rm eff} \approx 0.2$\,GeV。
+
+\subsection{Bug 2: 缺失对偶场强 $\widetilde{F}$}
+\textbf{错误}: OPE 直接使用 $F$ 而非 donghx 的对偶场强
+$\widetilde{F}_{\mu\nu} = \tfrac12\varepsilon_{\mu\nu\rho\sigma}F_{\rho\sigma}$。
+
+\textbf{影响}: $\mu{=}3,\nu{=}1$ 分量幅度 $\sim 10^{-6}$, 另两个分量 $\sim 10^2$ → ratio 图形完全错误。
+
+\subsection{Bug 3: Levi-Civita 张量实现错误}
+\textbf{错误}: Tensor4 的 \texttt{c} 计数器从 \texttt{b} 开始累加
+(\texttt{c = b + ...}) 而非 \texttt{c = 0 + ...}。
+
+\textbf{影响}: $\varepsilon[3,1,0,2]$ 符号错误,
+$\widetilde{F}_{31} = +F_{02}$ (应为 $-F_{02}$)。
+
+\subsection{Bug 4: OPE 空间求和轴错误}
+\textbf{错误}: 仅对 $z$ 方向垂直平面求和, 遗漏 $z$ 方向。
+\textbf{正确}: donghx 代码为 \texttt{np.sum(ans, axis=(1,2,3))} 对全部三个空间轴求和。
+
+% ══════════════════════════════════════════════════════════════════
+\section{理论框架概要}
+
+本工作基于 Large Momentum Effective Theory (LaMET):
+
+\begin{enumerate}[leftmargin=*]
+  \item 在格点上计算空间关联的 quasi-PDF 矩阵元 $\tilde{h}(z, P_z, \mu)$
+  \item 通过 Fourier 变换得到 quasi-PDF $\tilde{q}(x, P_z)$
+  \item 通过微扰匹配 (perturbative matching) 得到光锥 PDF $q(x, \mu)$
+\end{enumerate}
+
+非极化胶子 PDF 的矩阵元:
+
+\begin{equation}
+  \tilde{h}_g(z, P_z) = \frac{
+    \langle P | O_{\mu\nu}(z) | P \rangle
+  }{
+    \langle P | P \rangle
+  }
+\end{equation}
+
+其中 $O_{\mu\nu}(z)$ 为具有 Wilson 线的非局域胶子算符。
+
+disconnected 贡献来自于胶子算符不与夸克线相连的部分, 可因子化为:
+\begin{equation}
+  C_3^{\rm disc} = C_2 \cdot \langle O \rangle_{\rm gauge}
+\end{equation}
+
+最终 light-cone PDF 通过:
+\begin{equation}
+  g(x, \mu) = \int_{-\infty}^{\infty} \frac{dz}{2\pi} \, e^{-ixP_z z} \;
+  Z_g(z, \mu) \, \tilde{h}_g(z, P_z)
+\end{equation}
+
+% ══════════════════════════════════════════════════════════════════
+\section{输出文件清单}
+
+\begin{table}[htbp]
+\centering
+\caption{主要输出文件}
+\label{tab:output}
+\begin{tabular}{ll}
+\toprule
+\textbf{文件} & \textbf{说明} \\
+\midrule
+\texttt{ratio.png}                      & Ratio $R(z{=}2)$ 主图 \\
+\texttt{effective\_mass.png}            & 有效质量四面板图 \\
+\texttt{ratio\_diagnostics.png}         & Ratio 诊断面板 \\
+\texttt{field\_strength\_diagnostics.png}& 场强诊断图 \\
+\texttt{ratio\_results.npz}             & 数值比率结果 \\
+\texttt{final\_report.md}               & Markdown 报告 \\
+\texttt{timing.jsonl}                   & 逐步骤计时 \\
+\texttt{run.log}                        & 完整运行日志 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ══════════════════════════════════════════════════════════════════
+\section{结论与展望}
+
+本次运行成功在 GPU 单精度模式下计算了非极化胶子 PDF 的 disconnected 贡献，
+包含完整的蒸馏法 2pt 关联函数、对偶场强 OPE 算子、以及 Jackknife 比率分析。
+主要结论:
+
+\begin{itemize}
+  \item 质子有效质量 $m_{\rm eff}(P_z{=}{-}2) \approx 1.78$\,GeV,
+  与预期 boosted 能量 1.69\,GeV 在 $\pm 5\%$ 范围内一致
+  \item OPE 三个分量量级一致 ($\sim 50$)，对偶场强校正后物理结果合理
+  \item Ratio $R(z{=}2)$ 形状与 huangcl $N_{\rm conf}=200$ 参考一致
+  \item GPU 单精度 (complex64) 在 8\,GB RTX 4060 上可行, 但 OPE 可用 GPU 内存接近极限
+\end{itemize}
+
+\noindent
+\textbf{后续改进方向}:
+\begin{itemize}
+  \item 增加到 $N_{\rm conf} \gtrsim 50$ 以获得统计上有意义的 Jackknife 误差
+  \item 实现 OPE 的 MPI 并行以加速
+  \item 添加 Fourier 变换、微扰匹配、连续外推步骤
+  \item 双精度 (complex128) 需要 $\gtrsim 12$\,GB VRAM 或分时片策略
+\end{itemize}
+
+\vspace{12pt}
+\begin{center}
+\rule{0.5\textwidth}{0.4pt} \\[4pt]
+{\small
+Generated by Claude Code (Opus 4.8) \\
+Institute of Modern Physics, Chinese Academy of Sciences \\
+\texttt{zhangxin25@impcas.ac.cn}
+}
+\end{center}
+
+\end{document}

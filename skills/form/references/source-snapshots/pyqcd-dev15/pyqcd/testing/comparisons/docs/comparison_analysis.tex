@@ -1,0 +1,66 @@
+\documentclass[10.5pt]{ctexart}
+\usepackage[a4paper,margin=2.4cm]{geometry}
+\usepackage{booktabs,longtable,array,amsmath}
+\sloppy
+\title{cmp1 对照单测阶段分析报告\\{\large PyQCD $\leftrightarrow$ refer/sush/lqcddb \& refer/donghx}}
+\author{~auto-all}
+\date{2026年8月30日}
+\begin{document}
+\maketitle
+
+\section{任务定义与收敛判定}
+对 \verb|PyQCD| 与参照库 \verb|refer/sush/lqcddb|、\verb|refer/donghx| 执行对照单测：双方代码完全查找 $\rightarrow$ 同功能逐一真实运行 $\rightarrow$ 输出与性能对照 $\rightarrow$ 循环 debug 与优化；缺失功能按参照补充并同样纳入对照。通过标准：逐功能对照记录齐全且硬失败为 0。实测完整主套件共 52 项，其中 51 项数值/行为通过，L20 的 1 项参考 GEVP 复数语义差异已登记并由白名单门接纳；断言门 \verb|verify_cmp1| fresh 结果为 \verb|pass=51/52 whitelist_ok=1 hard_fails=0|，退出码 0。主仓库集成测试为 \textbf{42/42 PASS}；MPI 搬运层对照 \textbf{24/24 一致}。判定收敛。
+
+主套件同时覆盖合成数据、参考代码和用户指定真实输入；本轮真实 conf4150 的本征模、light perambulator、CLOVER 规范场、HYP-OPE 与 momentum-smear 输出级证据集中列于第 4150 节。独立 momentum-smeared perambulator、3pt/barematrix 原始输入缺失的部分不宣称已重算。
+
+\section{全量查找与映射结论}
+lqcddb 顶层导出 58 项、public 功能约 120 项：已整合约 61、部分 17、缺失 44（MPI 域分解 25、contractadviser 11、零散小函数与绘图常量）。donghx 64 个脚本归并 9 个功能族，全部有对应；当前实质缺口为独立 momentum-smeared perambulator 驱动的 raw VVV/2pt 输入链与 twopt\_slice 写出器等子项。逐项映射与 file:line 证据见 \verb|cmp1/MAPPING.md|。
+
+\section{对照结果矩阵（摘要）}
+逐位一致（rel\_diff $=0$ 或机器精度）：DR $\gamma$ / Pauli $\sigma$ / Levi-Civita 表、Wick 引擎与等价图识别、seq\_peram（真实 peram）、Jackknife / ratio\_3pt / solve\_GEVP / loop\_tsrc / dis\_connect(PDF)、cached\_contract、ASCII 读写、check\_files\_existence、safe\_save、readin\_eigvecs、CG 系数、baroperator 全套、inner/check/normal/orthnormal、compress V1(I/B)、Mom\_VdV、Clover 场强全叠、$\Delta$G 双场强算符（D05）、固定规范 FF 算符（D07）、unpol $F\cdot F$ 开关（S09）、Lorentz 指派表四模式、补充项 gamma\_index / PFF 投影 / p$\times\sigma$ / perm\_comb / 缓存键 / 切片增强 / Peram\_truncated / 绘图常量。
+
+统计性与结构性对照：Bootstrap（双方无种子，比较分布尺度）、V2--V4 随机压缩（形状契约）、Wick 图出图（B9 视觉等价）、PFF 分段窗（见 \S5）。
+
+\section{本轮修复的 pyqcd 缺陷（对照发现）}
+\begin{enumerate}
+\item \verb|lattice/_sigma.py|、\verb|contraction/_autowick.py|：错误相对导入（\verb|.base_functions| / \verb|.baroperator|）导致 ModuleNotFound。
+\item \verb|tools/_base.creat_mom_list|：语义缺失（立方壳枚举、符号展开、only\_g0），按参照重写后逐位一致。
+\item \verb|analysis/_analyse.loop_tsrc|：ArraySlicer squeeze/broadcast 失配使 $\geq 5$ 维输入崩溃；纯 numpy 重写，与参照逐位一致且提速约 8 倍。
+\item \verb|analysis/_analyse.dis_connect|：按参照 reshape 平坦重解释语义逐行镜像，PDF 模式逐位一致；等秩输入回退意图切片路径（兼容既有 B7 契约）。
+\item \verb|vertex/_vertex.Mom_VVV_sink_t|：原为简化实现，忠实重写为参照 dir 循环六置换算法（含相位折叠约定）。
+\item \verb|operator/_gluon_ope.gluon_ope_operator_z0|：新增 \verb|second_insert='F'| 开关对齐 donghx unpol 通道。
+\item \verb|vertex/_eigcompress.inner_product|：由同索引批量内积修正为参考实现的交叉 Gram 矩阵，新增复数共轭、形状和模平方回归。
+\end{enumerate}
+
+\section{登记差异与遗留（诚实声明)}
+\begin{itemize}
+\item \textbf{fm2GeV 常数}：pyqcd 采用精确 $\hbar c=0.1973269804$，ref 截断 0.197；meff/Mom2GeV 呈恒定比例 0.998343，属有意精度提升，容差通过。
+\item \textbf{meff cosh 支路}：pyqcd 增加 arccosh 定义域保护（仅消除边界 NaN），log 支路不受影响。
+\item \textbf{dis\_connect PFF 装配窗口}：参照依赖其 ArraySlicer.reshape 平坦重解释副作用与覆盖顺序；pyqcd 按文档意图实现，实测存在差异，登记于映射表。
+\item \textbf{$\tilde F$ 轴序约定差（D04）}：ref \verb|plaquette_clover_all_tilde| 与 pyqcd \verb|compute_dual_field_strength| 存在固定线性关系（候选：恒等/$\pm$共轭/转置共轭），用例已锁定判定；D05/D07 用同侧输入逐位回归，S09 unpol $F\cdot F$ 的修复后误差为 $6.05\times10^{-16}$。
+\item \textbf{性能摘要}：Mom\_VVV\_sink\_t 已向量化（历史 35s$\rightarrow$1.4s，Nev=32）；其余显著更快项：Wick 引擎约 50$\times$、loop\_tsrc 约 8$\times$、readin\_eigvecs 约 1.8$\times$。
+\end{itemize}
+
+\section{第二、三轮攻坚与当前边界}
+第二轮：桥接 \verb|is_pure| 误滤 Operator.py 嵌套表构建循环致参照 Tensor4 全零（假"约定差"），改安全内建白名单后 D04/D05/D07 全部逐位一致（$\leq 1.9\times10^{-16}$）；S09 unpol F$\cdot$F 系分离度指标配对错误，修正后逐位 0 差；Mom\_VVV\_sink\_t 向量化 35s$\to$1.4s。第三轮：补充动量涂抹三件套（momsmear\_phase / twopt\_slice\_boundary / proton\_interpolator 六变体）与 stout \verb|traceless=False| 对照模式。S10 的逐位差异仍作为结构性登记，并由作用量判据给出参照布局下的符号缺陷证据；L20 与 PFF 等差异也继续按映射表保留，未把“白名单通过”写成逐位一致。
+
+\section{后续攻坚记录}
+已补充动量涂抹三件套与质子插值六变体、MPI 域分解搬运层八模式（mpirun $-np\,3$ 对照 lqcddb 24/24 一致）、contractadviser 核心成本模型（S14 逐位一致）。stout 差异经作用量判据定性：pyqcd 物理正确（$E$ 降 9.1\%），参照在该布局下呈反平滑（$+18\%$）——这是当前对照边界中的参考侧差异，不替代逐位等价结论。
+
+\section{4150 真实数据证据}
+本轮继续读取用户指定的公共数据，但不修改公共目录。标准二进制本征模目录含 72 个文件，每个文件 66,355,200 bytes，对应 \verb|(Nev,Nx$^3$,Nc,complex)|=(100,24$^3$,3,complex128)；conf4150 的第一个时间片实测正交归一最大对角误差 $1.61\times10^{-14}$、非对角最大值 $3.26\times10^{-15}$。light perambulator 含 $4\times72$ 个文件，每个 46,080,000 bytes，对应 $(72,100,4,100,complex128)$ 单一源 Dirac 分量，有限性与尺寸均通过。
+
+\verb|hpy_4D_10times_new| 的 ILDG 载荷读取为 $(72,24,24,24,4,3,3)$ 的 complex128 规范场，最大幺正性偏差 $1.11\times10^{-15}$。PyQCD 实时计算 x/y/z 三方向共 9 个 HYP-OPE 通道，与参考 4150 成品的零横向位移切片全部通过：最大相对 L2 误差 $3.30\times10^{-15}$，最大绝对误差 $5.69\times10^{-13}$（z 向通道相对误差约 $7.5\times10^{-17}$）。证据摘要见 \verb|cmp1/v202608301200_hyp_ope/summary.md|。
+
+4150 的 donghx 2pt 成品还可直接读取七个选定根目录，共 58 个动量组、232 个已解析数组；其中五个为非零 momentum-smear，另两个为 \verb|momsmear0| 输出配置。全部 contract/nopol 投影检查通过，最大相对 L2 为 $8.29\times10^{-7}$、最大绝对差为 $1.98\times10^{-9}$，仍低于 complex64 的 $5\times10^{-6}$ 容差；\verb|momsmear0_Cg5| 的无后缀文件被检查器记录为隐式变体，不从目录名猜测。证据摘要见 \verb|cmp1/v202608300150_4150_2pt_inventory/summary.md|。此外，PyQCD 使用标准 light peram 对 \verb|momsmear0_Cg5g4| 与 \verb|momsmear0_Cg5| 的 $P=0$ 各计算 35 个时间对，contract 相对差分别为 $3.50\times10^{-15}$、$2.29\times10^{-15}$，nopol 相对差分别为 $1.27\times10^{-15}$、$1.53\times10^{-15}$；逐时间 VVV 参考仍缺失，runner 整体状态保持未验证。用户指定的三个独立 momentum-smeared perambulator 候选目录当前均不存在，因此非零 momentum-smear 结果只作为输出级参考，不能宣称已由普通 peram 重算。
+
+\section{产物与复现}
+\begin{itemize}
+\item 套件：\texttt{pyqcd/testing/}、\texttt{comparisons/}
+     （common / donghx / lqcddb / supplementary）。
+\item 权威结果：\texttt{artifacts/v202608300112/}；运行
+      \texttt{python -m pyqcd.testing.comparisons.main --group all}。
+\item 断言门：\texttt{python -m pyqcd.testing.comparisons.verify}。
+\item 版本：以本轮最终 Git commit 与 annotated \verb|stab| 标签为准；标签验证记录见交付摘要。
+\end{itemize}
+\end{document}

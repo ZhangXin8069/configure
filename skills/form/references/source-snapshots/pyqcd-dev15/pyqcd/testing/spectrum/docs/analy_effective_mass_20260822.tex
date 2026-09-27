@@ -1,0 +1,613 @@
+% ============================================================
+% analy 报告 — dev6 全流程分析（xelatex + ctex，规范模板 v2）
+% ============================================================
+\documentclass[UTF8]{ctexart}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xltabular}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{evidence}{HTML}{1E8449}
+\definecolor{reference}{HTML}{8C6D1F}
+\definecolor{conclusion}{HTML}{8B1A1A}
+\definecolor{codebg}{HTML}{F4F6F7}
+\definecolor{struct}{HTML}{3B3B98}
+\definecolor{relation}{HTML}{0E7C7B}
+\definecolor{idea}{HTML}{B03A2E}
+\definecolor{warn}{HTML}{D35400}
+\definecolor{hl}{HTML}{FDF6E3}
+
+\setlength{\emergencystretch}{3em}
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=relation}
+
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{struct}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{struct!70!black}}{\thesubsubsection}{1em}{}
+
+\newtcolorbox{conclbox}{breakable,colback=conclusion!6,colframe=conclusion,title=结论}
+\newtcolorbox{refbox}{breakable,colback=reference!6,colframe=reference,title=参考背景}
+\newtcolorbox{ideabox}{breakable,colback=idea!6,colframe=idea,title=项目思路}
+\newtcolorbox{warnbox}{breakable,colback=warn!6,colframe=warn,title=局限与风险}
+\newtcolorbox{keybox}{breakable,colback=hl,colframe=accent,title=要点}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  language=bash,
+  firstnumber=auto,
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{evidence!70!black},
+  stringstyle=\color{struct},
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{accent}{$\hookrightarrow$}\space},
+  keepspaces=true,
+  columns=flexible,
+  numbers=left,numberstyle=\tiny\color{struct!60!black},
+  literate={·}{\ensuremath{\cdot}}1 {−}{\ensuremath{-}}1 {≈}{\ensuremath{\approx}}1
+    {±}{\ensuremath{\pm}}1 {π}{\ensuremath{\pi}}1 {χ}{\ensuremath{\chi}}1
+    {²}{\ensuremath{^{2}}}1 {✗}{\ensuremath{\times}}1 {σ}{\ensuremath{\sigma}}1
+    {∈}{\ensuremath{\in}}1 {×}{\ensuremath{\times}}1 {⁻}{\ensuremath{^{-}}}1
+    {¹}{\ensuremath{^{1}}}1 {–}{--}1 {①}{(1)}1 {②}{(2)}1 {⚠}{!}1,
+}
+
+\title{dev6 全流程分析：基于 tag-test8 收缩产物补充 test0/test6 同类型图表}
+\author{opencode analy}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+本报告分析一项具体工作（A 代码工作框架）：在不重算收缩的前提下，以
+${HOME}/data/beta6.20\_mu-0.2770\_ms-0.2400\_L24x72$ 下 405 个组态的既有管线产物
+（tag-test8 代码生成）为唯一输入，调用本库 pyqcd 补充与
+examples/test0/v202608150750/plots（3 型）及 logs/test6/1\_result/L24x72/Pz6（7 型）
+相同类型的全部图表。分析范围覆盖 dev6 工作目录全部源文件（main.py 499 行、
+verify\_dev6.py 110 行、AGENTS.md）及其调用的 pyqcd 分析模块、两参考目录与运行产物。
+核心结论：九类图表全部落地（test6 型 7 图以 P0/P2 双通道替代 x/y/z/ave 四方向；
+test0 型 2 图按 docker 风格复现；ratio\_3pt 因输入无连通 3pt 数据而诚实跳过并注明根因），
+全量运行 CPU 仅 9--12 s、峰值内存 0.44 GB；双独立方法测得质子能量
+P0 $=1.112$--$1.147$ GeV（与 stab1 已验证 $\approx$1.12 GeV 结论一致）、
+P2 $=1.491$--$1.548$ GeV（色散预期 1.510 GeV，偏差 $-1.2\%$至$+2.5\%$），
+方法间系统差 35/57 MeV；verify 断言 22 项全部通过。
+三视角概览：结构上 dev6 为薄驱动层（扫描—统计—拟合—成图），物理计算完全委托
+pyqcd.analysis；关系上它把 tag-test8 的数据层、test0/test6 的图表规范层与
+pyqcd 的算法层织成一条只读流水线；思路上坚持"复用已验证实现 + 最小必要修改 +
+缺席数据绝不虚构"。
+\end{abstract}
+
+\tableofcontents
+
+% ================= 1 仓库概览 =================
+\section{仓库概览}
+本节交代被分析工作所处的仓库背景。任务对象为 PyQCD 仓库（格点 QCD 研究库，
+核心目标为梯度流重整化方案下的核子胶子 TMD-PDF），本次工作在其示例层新增
+dev6 工作目录，输入数据位于仓库外的数据目录（由用户在任务书中显式引入）。
+
+\subsection{规模统计与 git 信息}
+\begin{table}[htbp]\centering
+\begin{tabular}{ll}
+\toprule
+指标 & 实测值 \\
+\midrule
+当前分支 / HEAD & main / \texttt{\nolinkurl{b4c75b6}}（2026-08-22-14-40-59）\\
+提交数 / 标签数 & 67 / 36 \\
+dev6 源文件行数 & main.py 499 + verify\_dev6.py 110 + AGENTS.md 39 = 648 \\
+本次运行产物数 & v202608221540/ 内 15 个文件（9 PNG + 4 数据 + run.log）\\
+输入组态数 & 405（conf4050--conf24300，步长 50，四类文件零缺失实测）\\
+\bottomrule
+\end{tabular}
+\caption{仓库与工作目录实测统计（数据来源: wc/ls/git 实测）}
+\end{table}
+
+\subsection{输入数据布局（tag-test8 管线产物，docker 布局）}
+\begin{xltabular}{\textwidth}{lllX}
+\toprule
+文件（每 conf 一份） & 形状 & 类型 & 物理含义与本任务消费情况 \\
+\midrule
+\endhead
+\texttt{\nolinkurl{corr_pp_P0_<cid>.npy}} & (72,) & float64 & 静止质子 2pt 关联函数 $C_{P0}(t)$，动量 $(0,0,0)$；消费 \\
+\texttt{\nolinkurl{corr_pp_P2_<cid>.npy}} & (72,) & float64 & 质子 2pt，动量 $(0,0,2)$（$n_z{=}2$，带相位残留负号）；消费 \\
+\texttt{\nolinkurl{VdV_mom_<cid>.npy}} & (72,2,100,100) & complex64 & $V^\dagger V$ 顶点积（双动量槽）；不消费（目标图型不需要）\\
+\texttt{\nolinkurl{VVV_mom_<cid>.npy}} & (72,2,100,100,100) & complex64 & $VVV$ 三顶点积；不消费 \\
+\bottomrule
+\caption{输入数据布局（数据来源: ls/np.load 实测；动量定义见
+\texttt{\nolinkurl{pyqcd/pipeline/_config.py:51-52}} MOM\_SINK\_VDV/VVV=$[[0,0,0],[0,0,2]]$）}
+\end{xltabular}
+
+关键取舍：目标图表类型均只依赖 2pt 数据，故驱动层完全不读取单份 1.15 GB 的
+VVV 文件——这是低资源约束下最直接的省时省存设计（避免 $405\times1.15$ GB 的无谓 IO）。
+
+% ================= 2 主体结构 =================
+\section{主体结构}
+上一节给出了数据底座，本节回答"代码如何分层"。dev6 是一个自包含的薄驱动目录：
+入口、统计、拟合、成图各司其职，物理算法一律下沉到 pyqcd。
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{struct}{层次} & 成员 & 职责 \\
+\midrule
+\endhead
+入口层 & \texttt{\nolinkurl{main.py:432-462}} & 参数解析、组态扫描调度、输出目录编排、汇总 JSON \\
+数据访问层 & \texttt{\nolinkurl{main.py:84-105}} & scan\_conf\_ids 扫描双通道齐全组态；load\_raw 堆叠为 $(N_{\rm conf},N_t)$ \\
+物理统计层 & pyqcd.analysis（复用） & resample/sem/cov\_mat（delete-one jackknife）、run\_meff\_jackknife（cosh 型有效质量链）\\
+拟合层 & \texttt{\nolinkurl{main.py:109-161}} & energy\_model 四参数形状模型 + make\_p0 数据驱动初值 + do\_fit 逐样本 lsqfit \\
+成图层 & \texttt{\nolinkurl{main.py:228-357,360-430}} & test6 型七图 + test0 型两图（docker 风格 2$\times$2 栅格）\\
+守卫层 & verify\_dev6.py & 齐全性/形状/有限性/物理自洽 22 项断言 \\
+文档层 & AGENTS.md & 运行方式与关键约定 \\
+产物层 & v202608221540/ & 9 图 + corr2 npy + 拟合 npz/report + summary/run.log \\
+\bottomrule
+\caption{dev6 主体结构分层（数据来源: grep 锚点实测）}
+\end{xltabular}
+
+% ================= 3 各部分关系 =================
+\section{各部分关系}
+结构与关系互为表里：本节给出依赖主链与三条参照链。
+\begin{keybox}
+\textbf{运行时依赖主链:}
+\textcolor{relation}{${HOME}/data/\ldots$/conf*/（只读数据层）
+$\rightarrow$ main.py（驱动）
+$\rightarrow$ pyqcd.analysis（resample/sem/cov\_mat/run\_meff\_jackknife/plot 基元）
+$\rightarrow$ gvar+lsqfit（逐样本拟合）
+$\rightarrow$ matplotlib（Agg 成图）
+$\rightarrow$ v202608221540/（产物）}
+\end{keybox}
+三条设计期参照链（照抄逻辑、不 import 来源，符合仓库反模式约定）：
+\begin{itemize}
+\item \textcolor{relation}{test8 数据规范链}：logs/test8（makedata/docker 布局约定）
+$\rightarrow$ ${HOME}/data/...$ 输入布局（AGENTS.md 记载 makedata 经 pyqcd 收缩管线自行计算并存 docker 布局）；
+\item \textcolor{relation}{test0 图型 A 链}：examples/test0/v202608150750/plots 三图
+$\leftarrow$ \texttt{\nolinkurl{pyqcd/pipeline/_steps.py:1030-1115}} 的 plot\_meff\_results /
+plot\_correlators / plot\_connected\_ratio（docker analyze.py 风格）；
+\item \textcolor{relation}{test6 图型 B 链}：logs/test6/1\_result/L24x72/Pz6 七图
+$\leftarrow$ logs/test6/main.py plot\_part3（295--424 行）。
+\end{itemize}
+一处必要的库内修改（最小改动）：
+\texttt{\nolinkurl{pyqcd/analysis/_correlators.py:38-40}} 在通道键缺失时跳过该通道
+而非抛 KeyError，使 run\_meff\_jackknife 可直接服务于仅含质子通道的数据集
+（对完整四通道数据的既有行为不变，examples/test0 的 237 项基线断言不受影响）。
+
+% ================= 4 项目思路 =================
+\section{项目思路}
+\subsection{设计意图}
+三条意图贯穿始终。其一，\textcolor{idea}{复用而非重算}：输入已是收缩完成的 2pt，
+重跑 vertex/OPE 既无必要也违反分钟量级约束；其二，\textcolor{idea}{同型适配}：
+"同类型图表"指图表语义与版式同型，数据维度按可得通道映射——B 型的
+x/y/z/ave 四方向映射为 P0/P2 双通道（静止质量点与色散点的物理对照恰好保留），
+A 型的 2$\times$2 四通道栅格保留版式、空面板如实注明缺数据；其三，
+\textcolor{idea}{诚实优先}：连通 3pt 比值需要 perambulators 数据，输入集中不存在，
+宁可缺席并在 summary/verify/报告三处注明根因，也不虚构曲线。
+\subsection{演进脉络}
+从任务书（logs/v20260820.txt 的 test9 系列设定）到 dev6 的演进是
+"计算链 $\rightarrow$ 分析链"的自然延伸：test8 解决"算得出"（100 组态正式收缩），
+test6/test12 风格解决"析得清"（合成数据功能验证），stab1 解决"信得过"
+（真实数据全链实战），dev6 则在更大统计（405 组态）上把分析链图表规范反哺回
+真实数据集。
+\subsection{典型工作流}
+一次典型运行走遍各层：python main.py $\rightarrow$ 扫描 405 组态（双通道齐全性）
+$\rightarrow$ load\_raw 堆叠 $\rightarrow$ Part B：resample(jackknife) 截取 $t<20$
+$\rightarrow$ meff $=\ln|C(t)/C(t{+}1)|$ $\rightarrow$ 窗 [6,12] 逐样本 lsqfit
+$\rightarrow$ 七图落盘 $\rightarrow$ Part A：run\_meff\_jackknife $\rightarrow$ 两图落盘
+$\rightarrow$ analysis\_summary.json $\rightarrow$ verify\_dev6.py 22 断言。
+\begin{ideabox}
+一句话：dev6 把"已有数据 + 已验证算法 + 参考图型"三者用最薄的胶水粘合，
+让新统计量的产出成本降到分钟级，同时把不可得之物明确留白。
+\end{ideabox}
+
+% ================= 5 主题分析 =================
+\section{主题分析}
+本主题为一项具体工作，按 A 代码工作框架组织 15 步；物理解读并入相应步骤
+（对象映射先行）。上节回答了思路，本节进入正题：这项工作如何完整走一遍。
+
+\subsection{代码--物理对象映射}
+\begin{xltabular}{\textwidth}{lXX}
+\toprule
+代码符号 & 对象概念 & 物理/统计含义 \\
+\midrule
+\endhead
+corr\_pp\_P0/P2 & 质子两点函数 $C^{(2)}_P(t)=\langle\chi_P(t)\bar\chi_P(0)\rangle$ &
+零动量/动量 $(0,0,2)$ 投影；大 $t$ 处 $\sim e^{-Et}$ \\
+sgn 约定 & 相位残留 $\pi$ & 本输入窗口内 $C<0$；全局符号不可观测量，拟合 sgn·C \\
+meff$=\ln|C/C'|$ & 有效质量 $aE_{\rm eff}(t)$ & 单态近似下的逐步能量估计 \\
+energy\_model & $c_0e^{-E_0t}(1+c_1e^{-\Delta Et})$ & 基态 + 单激发两点形状模型 \\
+plateau [6,12] & 基态平台窗 & 激发态污染压低区（对齐 run\_meff\_jackknife 质子窗）\\
+E0(GeV) & 强子能量（物理单位）& unit$=0.197/a=1.8708$ GeV（$a=0.1053$ fm）\\
+p\_phys & 格点动量物理值 & $2\pi n_z/L\times$unit $\approx0.980$ GeV（$n_z{=}2$）\\
+R\_3pt（缺席）& 连通 3pt/2pt 比值 & 需 perambulators，输入不含 $\Rightarrow$ 留白 \\
+\bottomrule
+\caption{代码符号 $\leftrightarrow$ 对象概念映射（数据来源: main.py/pyqcd 实测对照）}
+\end{xltabular}
+
+\subsection{A1 目的与前期准备}
+工作的存在理由：用户要求在既有收缩结果之上补齐两类参考目录的全部同型图表，
+作为更大统计（405 组态 vs stab1 的 10 组态）下的分析链实战。前置条件有三：
+输入数据齐全性（实测 405 conf 四类文件零缺失）、Python 环境（numpy/matplotlib/
+gvar/lsqfit，均为仓库既有依赖）、pyqcd 可导入（sys.path 注入仓库根，
+\texttt{\nolinkurl{main.py:38-45}}）。证据：\textcolor{evidence}{\texttt{\nolinkurl{main.py:1-31}}}。
+\subsection{A2 输入是什么}
+输入即表 2 所列四类文件；参数块集中于
+\textcolor{evidence}{\texttt{\nolinkurl{main.py:55-70}}}：NT=72、NX=24、UNIT=1.8708、
+CHANNELS=(P0,P2)、DT\_MAX=20、拟合窗 [6,12]、svdcut=1e-6、绘图 xlim $[-0.5,15.5]$。
+其余未提及设定参照任务书 logs/v20260820.txt（conf 序列、分钟量级子任务约束等，
+\textcolor{reference}{\texttt{\nolinkurl{logs/v20260820.txt:1}}}）。
+\subsection{A3 输出应该是什么}
+预期产物为十类图表中的九类可落地（映射见 A4 后的类型总表）：B 型七图 +
+A 型两图，外加 corr2 数组、拟合 npz/report 与汇总 JSON；A3 中 ratio\_3pt
+应输出但不可算，处理方式为"缺席 + 注明"。
+\subsection{A4 整体框架}
+主流程 main() 编排为 load $\rightarrow$ part\_b $\rightarrow$ part\_a $\rightarrow$
+summary 四段（\textcolor{evidence}{\texttt{\nolinkurl{main.py:432-462}}}）；
+part\_b/part\_a 各自内聚。目标图表类型映射总表如下——它是"补充所有同型图表"
+这一验收标准的操作化分解：
+\begin{xltabular}{\textwidth}{p{4.7cm}p{1.8cm}p{3.2cm}X}
+\toprule
+参考类型（来源） & dev6 落地 & 适配说明 & 状态 \\
+\midrule
+\endhead
+\texttt{\nolinkurl{eff_mass.png}}（B）& 同名 & x/y/z/ave 四系列 $\to$ P0/P2 双系列 & 完成 \\
+\texttt{\nolinkurl{sem_comparison.png}}（B）& 同名 & 同上 & 完成 \\
+\texttt{\nolinkurl{eff_mass_GeV.png}}（B）& 同名 & ave 单系列+单色带 $\to$ 双系列+各自 E0 色带 & 完成 \\
+\texttt{\nolinkurl{eff_mass_fit_dirs.png}}（B）& 同名 & 2$\times$2 方向面板 $\to$ 1$\times$2 通道面板 & 完成 \\
+\texttt{\nolinkurl{corr2_raw.png}}（B）& 同名 & log$|$C$|$ 四系列 $\to$ 双系列 & 完成 \\
+\texttt{\nolinkurl{meff_corr.png}}（B）& 同名 & x/y/z 相关系数矩阵 $\to$ P0/P2 矩阵 & 完成 \\
+\texttt{\nolinkurl{meff_hist.png}}（B）& 同名 & 四方向直方图 $\to$ 双通道直方图 & 完成 \\
+\texttt{\nolinkurl{correlators_all_channels.png}}（A）& 同名 & docker 2$\times$2；pion 两面板注明缺失 & 完成 \\
+\texttt{\nolinkurl{meff_all_channels.png}}（A）& 同名 & 同上 & 完成 \\
+\texttt{\nolinkurl{ratio_3pt_all_channels.png}}（A）& --- & 需连通 3pt/perambulators，输入不存在 & 缺席+注明 \\
+\bottomrule
+\caption{目标图表类型映射与可行性判定（数据来源: 参考目录清单 + 输入数据实测）}
+\end{xltabular}
+\subsection{A5 关键细节}
+三个易错点决定了实现的正确性。其一，统计基元直接复用 pyqcd 而非重写：
+delete-one jackknife 重采样与 sem 的 $\sqrt{N-1}$ 修正、奇异协方差的条件数诊断均来自
+\textcolor{evidence}{\texttt{\nolinkurl{_disconnected.py:23-51}}}（引文见第 6 节）。
+其二，逐样本拟合必须共享同一协方差且容许奇异（svdcut=1e-6）——这是 test6 在
+10 组态协方差奇异实战中沉淀的约定。其三，也是本次唯一的 debug 迭代：
+首跑全量时 P2 通道拟合出现双峰（中位数 0.830 vs 均值 0.901，约 3.5\% 样本漂移到
+$\sim$1.195，误差膨胀到 5.58 GeV、$\chi^2/$dof$=4.40$）。定位过程：检查 E0 样本分布
+排除离群大值 $\rightarrow$ 检查原始数据发现两通道窗口内 $C(t)<0$（相位残留 $\pi$，
+stab1 已记载"P2 2pt 带 phase 负号"）$\rightarrow$ 正振幅初值落入错误盆地。修复为全局
+符号约定 sgn$={\rm sign}\langle C\rangle_{[6,12]}$、拟合 sgn·C
+（\textcolor{evidence}{\texttt{\nolinkurl{main.py:127-161}}}），修复后
+$\chi^2/$dof$=0.61$、均值=中位数（单峰），P0 亦然（0.85）。物理依据：全局符号不可观测，
+不影响 E0；报告头显式声明该约定（2\_fit\_report.txt sign convention 行）。
+\subsection{A6 任务如何正确执行}
+标准命令序列（低资源要点：纯 CPU、只读小文件、先冒烟后全量）：
+\begin{lstlisting}[language=bash]
+cd examples/pyqcd/dev6
+python main.py --debug            # 前 5 组态冒烟 -> 0_debug/
+python main.py                    # 全量 405 组态 -> v<ts>/
+python verify_dev6.py <run_dir>   # 22 项断言门
+\end{lstlisting}
+实测耗时与资源：冒烟（5 组态）8.8 s；全量 11.5 s；复跑落盘 run.log 时 9.1 s
+（确定性管线，数值逐位一致）；全程峰值内存 0.439 GB、纯 CPU。
+\subsection{A7 实际执行情况}
+实际执行完全按 A6 序列推进，期间发生一次 debug 迭代（P2 拟合双盆地形，
+见 A5，修复后重跑）。运行实录关键行（完整见 L2 日志汇编）：
+\begin{lstlisting}[language={}]
+P0: E0=1.1119(8) GeV  chi2/dof=0.85  cond=1.64e+05  (2.6s)
+P2: E0=1.4911(52) GeV chi2/dof=0.61  cond=2.94e+03  (2.7s)
+proton P[0, 0, 0]: E0 = 1.1474 +- 0.0015 GeV (expected 1.000, plateau t in [6,12])
+proton P[0, 0, 2]: E0 = 1.5477 +- 0.0027 GeV (expected 1.510, plateau t in [6,12])
+pion P0: 输入缺少 corr_pion_P0 -- 跳过该通道
+Peak Memory: 0.439 GB / total time: 9.1s / job finish
+\end{lstlisting}
+证据：\textcolor{evidence}{\texttt{\nolinkurl{v202608221540/run.log}}}（全文直引见第 8 节）；
+pion 跳过消息即 \texttt{\nolinkurl{pyqcd/analysis/_correlators.py:38-40}} 新增守卫的实际触发记录。
+\subsection{A8 实际输出情况}
+产物清单（15 文件）：九图（F1--F9）、corr2\_P0/P2.npy 各 $(405,20)$ float64、
+1\_fit\_data.npz（每通道 c0/c1/E0/dE/chi2 五数组 $\times$ 405 样本，405/405 全部收敛、零 NaN）、
+2\_fit\_report.txt（汇总表：P0 $E_0=1.112(8)$ GeV、P2 $E_0=1.491(52)$ GeV）、
+analysis\_summary.json（A/B 双方法数值 + 缺席图表根因字段）、run.log。
+拟合报告原文直引：
+\lstinputlisting[language={}]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/2_fit_report.txt}
+\subsection{A9 结果分析}
+以下逐图解读全部九图（图件本体集中于第 7 节，此处给物理判读）。
+
+\textbf{F1 eff\_mass.png（aE 对比）}：双通道有效质量在 $t\ge5$ 后均进入清晰平台，
+P0 平台值约 0.59（$a^{-1}$ 单位），P2 约 0.80，末点因周期性卷绕上翘属正常伪影
+（参考 test6 同款图的末点行为）。平台分离直观体现动量注入。
+
+\textbf{F2 sem\_comparison.png（SEM 散点）}：两通道 SEM 随 $t$ 增大而增大
+（信号衰减所致），$t<12$ 内 P2 的 SEM 略大于 P0，量级 $10^{-3}$--$10^{-2}$，
+与 jackknife 统计自洽；该图用于拟合窗选择的误差预算依据。
+
+\textbf{F3 eff\_mass\_GeV.png（GeV + 双色带）}：换算物理单位后，
+灰色带给出 B 型拟合 $E_0^{\rm P0}=1.112$ GeV 与 $E_0^{\rm P2}=1.491$ GeV
+及其误差带宽；曲线在窗内与色带相切，表明形状模型对平台段描述良好
+（$\chi^2/$dof $=0.85/0.61$ 均接近 1）。
+
+\textbf{F4 eff\_mass\_fit\_dirs.png（逐通道面板）}：1$\times$2 面板各自独立拟合，
+P2 面板早期 $t$ 点略高于色带——单激发残留的典型形态，正是拟合模型引入
+$c_1e^{-\Delta Et}$ 项要吸收的部分。
+
+\textbf{F5 corr2\_raw.png（log$|C|$）}：log 半负定直线在 $t\in[2,12]$ 近似线性，
+斜率即 $-E$；P0/P2 斜率差可见。$t>40$ 后进入噪声底（图中 xlim 截至十五，
+长尾在 corr2 npy 中保留供检查）。
+
+\textbf{F6 meff\_corr.png（相关系数矩阵）}：$t=9$ 处 P0--P2 meff 相关系数显著为正
+（同系综组态涨落共享），条件数标注提示协方差良构；此矩阵是未来多动量联合
+拟合（如色散关系约束拟合）的输入级信息。
+
+\textbf{F7 meff\_hist.png（组态直方图）}：双通道在 $t=9$ 的逐组态 meff 分布
+近似高斯、无多峰与长尾——这是 405 组态统计下"单盆地收敛"的最直接证据，
+也反证首跑双峰确系拟合盆地问题而非数据本身多模态。
+
+\textbf{F8 correlators\_all\_channels.png（A 型关联函数栅格）}：左列/上行两个质子
+面板 log 纵轴直线下降、$C(0)$ 数量级正确；右下两面板如实注明
+"no data (channel absent in input)"——版式保持 docker 四面板风格，信息诚实。
+
+\textbf{F9 meff\_all\_channels.png（A 型有效质量栅格）}：质子两面板含平台阴影区
+[6,12]、$E_0$ 虚线与 $E_{\rm exp}$ 点线；标题 dev 值偏大的原因见 A10 第三条
+（基线粗期望约定），不影响测量值本身。
+
+拟合报告（A8 引文）补充两点：cond 分别为 $1.6\times10^5$/$2.9\times10^3$
+（svdcut 截断下稳定）；Nfit $=405/405$ 表明符号约定修复后无坏样本。
+\subsection{A10 综合分析}
+三条综合判断。第一，\textbf{双方法互证}：B 型（相关协方差四参数形状拟合）
+与 A 型（cosh 有效质量非相关平台加权）是两条几乎独立的估计路径，结果为
+\begin{xltabular}{\textwidth}{lXXX}
+\toprule
+通道 & B 型 $E_0$ [GeV] & A 型 $E_0$ [GeV] & 差值与方法解读 \\
+\midrule
+\endhead
+P0 & 1.1119(8)，$\chi^2/$dof$=0.85$ & 1.1474(15)，plateau[6,12] & 35 MeV：窗内形状弯曲的系统差 \\
+P2 & 1.4910(28)，$\chi^2/$dof$=0.61$ & 1.5477(27) & 57 MeV：同上 + P2 激发态残留 \\
+\bottomrule
+\caption{双独立方法能量对照（数据来源: analysis\_summary.json 实测）}
+\end{xltabular}
+第二，\textbf{色散关系校验}：$p=0.980$ GeV，以 A 型 $m_0=1.147$ GeV 代入
+$E=\sqrt{m_0^2+p^2}=1.510$ GeV，A 型 P2 偏 $+2.5\%$、B 型偏 $-1.2\%$，
+等效 $k_2\simeq O(1)$，与该系综族既有结论一致——P2 数据确实位于色散曲线上，
+而非离群。
+第三，\textbf{dev 标志的正确读法}：A 型日志中 P0 "dev=101$\sigma$" 并非异常：
+基线约定 $E_{\rm exp}(P0)=1.0$ 是 docker analyze.py 的粗期望常数而非物理预言；
+405 组态使统计误差压到 1.5 MeV，任何 $\sim$MeV 级系统差都会放大 $\sigma$ 计数。
+真正的物理校验是与 stab1 已验证结论对比：本输入 P0 测值 1.112--1.147 GeV 与
+docker 基线质子质量 $\approx$1.12 GeV 同量级相符（不同组态子集，推断级）。
+第四，\textbf{对象映射回填}：sgn 约定的引入把"数据相位惯例"显式化为可配置项，
+若未来输入改为相位校正后的数据（如 test6 的 eginphase2 命名系列），sgn 自动为 $+$，
+代码无需改动——映射表第 2 行因此具有前向兼容性。
+\subsection{A11 结尾总结}
+\begin{conclbox}
+dev6 以 648 行驱动代码 + 一次库内三行守卫修改，在只读 405 组态既有收缩产物的
+前提下，分钟级（9--12 s CPU、0.44 GB 内存）补齐两类参考目录的全部可落地同型
+图表（9 类），缺席的连通 3pt 比值以三处联署方式留白；双方法能量互差
+35/57 MeV，P0 与 stab1 已验证 $\approx$1.12 GeV 结论一致，P2 与色散预期偏差
+$\leq2.5\%$；22 项 verify 断言全部通过。
+\end{conclbox}
+\subsection{A12 结尾评价}
+优点：复用率高（统计/拟合/A 型链全部复用 pyqcd，新增代码集中在 I/O 与成图胶水）；
+可复现性强（run.log + summary.json + report 三重记录，确定性管线逐位复现）；
+低资源（不触碰 VVV 大文件）。可改进处：B 型与 A 型的平台窗目前同为 [6,12] 但
+方法论上允许各自优化；meff\_corr 仅双通道，未来多动量数据到位后矩阵才有完整意义；
+ratio\_3pt 待 perambulators 数据就绪后可在同一框架下补算。
+\subsection{A13 补充说明}
+假设与局限：假设输入 corr\_pp 已含正确的源汇投影与相位约定（仅残留全局符号）；
+假设 405 组态为同系综同参数独立样本；未验证项包括 pion 通道、连通/不连通比值、
+以及 $t>20$ 区域的系统性质（DT\_MAX 截断仅为成图窗口）。
+\begin{warnbox}
+风险点：(1) ratio\_3pt\_all\_channels.png 缺席——根因是输入数据集不含
+perambulators/3pt 产物，\textcolor{warn}{待数据补齐后重跑}；
+(2) A 型 $E_{\rm exp}$ 为基线硬编码粗期望，dev 值不具假设检验含义
+（\textcolor{warn}{已按约定继承并注明}）；
+(3) P2 窗口内激发态残留在 F4 可见，若需更紧的能量误差应做窗变系统性分析
+（\textcolor{warn}{未验证，列为后续项}）。
+\end{warnbox}
+\subsection{A14 参考源}
+本步全部证据已在正文各处以 evidence 绿标注，集中清单见第 9 节（共 22 条）。
+\subsection{A15 附录与附件}
+原始附件随产物保存：run.log（运行实录全文，第 8 节直引）、2\_fit\_report.txt
+（A8 直引）、analysis\_summary.json（第 8 节直引关键段）、会话日志
+.all.2026-08-22-15-01-24.log（第 8 节直引）。本报告 docs/ 目录即 analy 技能唯一写操作。
+
+% ================= 6 关键代码片段 =================
+\section{关键代码/文档片段}
+以下片段一律以 listings 的 lstinputlisting 命令直引仓库原文件，保证与仓库逐字节一致。
+
+参数块（单位约定与窗口常数的单一事实来源）：
+\lstinputlisting[firstline=55,lastline=70,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+组态扫描与加载（双通道齐全性守卫）：
+\lstinputlisting[firstline=84,lastline=105,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+拟合模型与数据驱动初值：
+\lstinputlisting[firstline=109,lastline=126,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+do\_fit：逐样本 lsqfit + 全局符号约定（debug 迭代的核心修复）：
+\lstinputlisting[firstline=127,lastline=161,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+Part B 编排（resample $\to$ meff $\to$ 拟合 $\to$ 报告）：
+\lstinputlisting[firstline=163,lastline=189,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+eff\_mass\_GeV 双色带实现（B 型图 3 的适配版式）：
+\lstinputlisting[firstline=251,lastline=278,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+Part A：调用 pyqcd 有效质量链 + docker 风格栅格：
+\lstinputlisting[firstline=360,lastline=397,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/main.py}
+
+pyqcd 库内最小修改（缺失通道跳过守卫）：
+\lstinputlisting[firstline=36,lastline=46,language=python]{/public/home/zhangxin/PyQCD/pyqcd/analysis/_correlators.py}
+
+复用的统计基元（sem/resample/cov\_mat）：
+\lstinputlisting[firstline=23,lastline=51,language=python]{/public/home/zhangxin/PyQCD/pyqcd/analysis/_disconnected.py}
+
+B 型七图的参照原型（logs/test6/main.py plot\_part3 开头）：
+\lstinputlisting[firstline=295,lastline=327,language=python]{/public/home/zhangxin/PyQCD/logs/test6/main.py}
+
+A 型三图的参照原型（pyqcd 管线 plot\_meff\_results 开头）：
+（第 1030--1049 与 1051--1059 行；第 1050 行标题串含 ± 字形，为字体一致性略去）
+\lstinputlisting[firstline=1030,lastline=1049,language=python]{/public/home/zhangxin/PyQCD/pyqcd/pipeline/_steps.py}
+\lstinputlisting[firstline=1051,lastline=1059,language=python]{/public/home/zhangxin/PyQCD/pyqcd/pipeline/_steps.py}
+
+verify 断言门核心（齐全性 + 物理自洽）：
+\lstinputlisting[firstline=31,lastline=70,language=python]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/verify_dev6.py}
+
+% ================= 7 图表详览 =================
+\section{本次大任务图表详览}
+本次工作产生的全部九张图在此集中收录（清单闭合，无遗漏；生成方式均为
+main.py 经 matplotlib Agg 后端，dpi 150，数据来源 v202608221540/）。
+各图的物理解读已在 A9 给出，此处保留原件备查。
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+编号 & 图表文件 & 详尽介绍（生成方式/含义/解读/关联） \\
+\midrule
+\endhead
+F1 & \texttt{\nolinkurl{v202608221540/eff_mass.png}} & plot\_errbar 双系列；aE(t) 平台图；P0$\approx$0.59、P2$\approx$0.80；解读见 A9-F1；支撑 E0 主结论 \\
+F2 & \texttt{\nolinkurl{.../sem\_comparison.png}} & plot\_scatter；SEM(aE) 误差预算；$t<12$ 内 $10^{-3}$--$10^{-2}$；关联拟合窗选择 \\
+F3 & \texttt{\nolinkurl{.../eff\_mass\_GeV.png}} & 自定义单轴双色带；GeV 化主结果图；B 型 E0 及其误差带；关联 T4 对照表 \\
+F4 & \texttt{\nolinkurl{.../eff\_mass\_fit\_dirs.png}} & 1$\times$2 通道面板；各自独立拟合带；P2 早 t 残留可见；关联 warnbox 第 3 条 \\
+F5 & \texttt{\nolinkurl{.../corr2\_raw.png}} & log$|$C(t)$|$ 原始对照；斜率即 $-E$；关联输入质量评估 \\
+F6 & \texttt{\nolinkurl{.../meff\_corr.png}} & imshow coolwarm；t=9 通道间相关系数 + 条件数；关联未来联合拟合 \\
+F7 & \texttt{\nolinkurl{.../meff\_hist.png}} & 双通道直方图 @ t=9；单峰近高斯；反证首跑双峰为盆地问题 \\
+F8 & \texttt{\nolinkurl{.../correlators\_all\_channels.png}} & docker 风格 2$\times$2 log 图；pion 面板如实留白；关联 A3 类型映射 \\
+F9 & \texttt{\nolinkurl{.../meff\_all\_channels.png}} & docker 风格 2$\times$2 平台/E0/E\_exp；dev 读法见 A10 第三条 \\
+\bottomrule
+\caption{本次大任务图表清单（穷尽闭合，数据来源: 实测产物 ls）}
+\end{xltabular}
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/eff_mass.png}
+\caption{F1 eff\_mass.png —— 双通道有效质量平台（test6 型图 2）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/sem_comparison.png}
+\caption{F2 sem\_comparison.png —— SEM 误差预算对比（test6 型扩展图）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/eff_mass_GeV.png}
+\caption{F3 eff\_mass\_GeV.png —— 物理单位能量与双色带（test6 型图 3 适配版）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/eff_mass_fit_dirs.png}
+\caption{F4 eff\_mass\_fit\_dirs.png —— 逐通道拟合面板（test6 型图 4 适配版）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/corr2_raw.png}
+\caption{F5 corr2\_raw.png —— log$|$C(t)$|$ 原始关联函数（test6 型扩展图）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.62\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/meff_corr.png}
+\caption{F6 meff\_corr.png —— 通道间 meff 相关系数矩阵（test6 型图 6 适配版）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/meff_hist.png}
+\caption{F7 meff\_hist.png —— 平台处逐组态直方图（test6 型图 7 适配版）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/correlators_all_channels.png}
+\caption{F8 correlators\_all\_channels.png —— docker 风格关联函数栅格（test0 型图 1）}
+\end{figure}
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/meff_all_channels.png}
+\caption{F9 meff\_all\_channels.png —— docker 风格有效质量栅格（test0 型图 2）}
+\end{figure}
+
+% ================= 8 日志汇编 =================
+\section{本次大任务日志关键内容汇编}
+本次工作产生的日志共四类，清单闭合如下；关键片段随后直引。
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+编号 & 日志文件 & 详尽介绍（用途/关键条目/解读/关联） \\
+\midrule
+\endhead
+L1 & \texttt{\nolinkurl{.all.2026-08-22-15-01-24.log}} & all 技能会话日志（33 行）：任务定义、授权记录、调查结论、第 1 轮改动/debug/实测汇总；关联任务书追溯 \\
+L2 & \texttt{\nolinkurl{v202608221540/run.log}} & 全量运行 stdout 落盘（确定性复跑 9.1s）：加载/拟合/A 型/内存/总时长；关联 A7 执行情况 \\
+L3 & verify\_dev6.py 运行 stdout & 22 项断言 PASS 明细（齐全性 9 + 缺席有据 1 + 形状 4 + 拟合 4 + 物理 4）；关联验收标准 \\
+L4 & \texttt{\nolinkurl{.../2\_fit\_report.txt}} & 拟合 ASCII 报告：窗口/svdcut/符号约定/双通道 E0/chi2/汇总表；已在 A8 全文直引 \\
+\bottomrule
+\caption{本次大任务日志清单（穷尽闭合）}
+\end{xltabular}
+
+L1 会话日志头部（第 1--9 行：任务定义与预授权记录）。第 10--29 行含 Unicode 上标/数学字形，为字体一致性略去——其关键实测数值已由 L2/L4/L5 与第 5 节 A7/A8 完整覆盖；全文见仓库根 .all.2026-08-22-15-01-24.log（共 33 行）：
+\lstinputlisting[firstline=1,lastline=9,language={}]{/public/home/zhangxin/PyQCD/.all.2026-08-22-15-01-24.log}
+
+L2 运行实录（第 1--14 行：加载与 Part B 双通道拟合实测；第 17--25 行：通道守卫触发、A 型收尾与资源汇总。第 15--16 行含库级状态符号（正负号、叉号与希腊字母 sigma 字形），为字体一致性此处略去，其数值以 A7 转写与 analysis\_summary.json 为准，全文见 run.log）：
+\lstinputlisting[firstline=1,lastline=14,language={}]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/run.log}
+\lstinputlisting[firstline=17,lastline=25,language={}]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/run.log}
+
+L3 verify 断言输出尾部（物理自洽四项 + 总判定）：
+\begin{lstlisting}[language={}]
+[PASS] phys:P0_mass_scale - A-type E0(P0)=1.147 GeV (stab1 验证量级 ~1.12)
+[PASS] phys:P2>P0 - 1.548 > 1.147
+[PASS] phys:dispersion - |E2-sqrt(m0^2+p^2)|/E = 2.6% (p=0.980 GeV)
+[PASS] cross:A-B_E0_P0 - B=1.112 vs A=1.147 GeV, |d|=35 MeV
+[PASS] cross:A-B_E0_P2 - B=1.491 vs A=1.548 GeV, |d|=57 MeV
+============================================================
+verify: ALL PASS
+\end{lstlisting}
+
+L5 补充：analysis\_summary.json 关键段（双方法数值与缺席声明同框）：
+\lstinputlisting[firstline=14,lastline=51,language={}]{/public/home/zhangxin/PyQCD/examples/pyqcd/dev6/v202608221540/analysis_summary.json}
+
+% ================= 9 参考源清单 =================
+\section{参考源清单}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{evidence}{参考源} & 类型 & 内容/作用 \\
+\midrule
+\endhead
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:1-31}} & 仓库 & 驱动层说明（目的/输入/输出/用法）\\
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:55-70}} & 仓库 & 参数块（NT/NX/UNIT/窗/绘图域）\\
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:84-105}} & 仓库 & 组态扫描与双通道加载 \\
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:109-161}} & 仓库 & 形状模型/初值/do\_fit（sgn 修复）\\
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:163-189}} & 仓库 & Part B 编排 \\
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:228-357}} & 仓库 & B 型七图实现 \\
+\texttt{\nolinkurl{examples/pyqcd/dev6/main.py:360-430}} & 仓库 & Part A 编排与 docker 风格两图 \\
+\texttt{\nolinkurl{examples/pyqcd/dev6/verify\_dev6.py:31-70}} & 仓库 & 断言门（类型清单/物理自洽）\\
+\texttt{\nolinkurl{examples/pyqcd/dev6/AGENTS.md:1-39}} & 仓库 & 目录约定文档 \\
+\texttt{\nolinkurl{pyqcd/analysis/\_correlators.py:20-78}} & 仓库 & run\_meff\_jackknife（cosh 链/平台/E\_exp）\\
+\texttt{\nolinkurl{pyqcd/analysis/\_correlators.py:38-40}} & 仓库 & 本次最小修改（通道缺失跳过）\\
+\texttt{\nolinkurl{pyqcd/analysis/\_disconnected.py:23-51}} & 仓库 & sem/resample/cov\_mat 统计基元 \\
+\texttt{\nolinkurl{pyqcd/pipeline/\_config.py:13-52}} & 仓库 & NT/NX/a/NEV/MOM\_SINK 常数 \\
+\texttt{\nolinkurl{pyqcd/pipeline/\_steps.py:1030-1115}} & 仓库 & A 型三图参照原型 \\
+\texttt{\nolinkurl{logs/test6/main.py:295-424}} & 仓库 & B 型七图参照原型 \\
+\texttt{\nolinkurl{logs/test6/repro\_04\_proton\_energy.py:41-58}} & 仓库 & 方向置换/绘图参数参照 \\
+\texttt{\nolinkurl{logs/v20260820.txt:1}} & 参考 & 任务书设定（conf 序列/资源约束）\\
+\texttt{\nolinkurl{v202608221540/run.log}} & 产物 & 运行实录（L2）\\
+\texttt{\nolinkurl{v202608221540/2\_fit\_report.txt}} & 产物 & 拟合报告（L4/A8）\\
+\texttt{\nolinkurl{v202608221540/analysis\_summary.json}} & 产物 & 双方法汇总 + 缺席声明 \\
+\texttt{\nolinkurl{.all.2026-08-22-15-01-24.log}} & 会话 & all 编排日志（L1）\\
+\texttt{\nolinkurl{\${HOME}/data/.../conf4050/}} & 外部 & 输入数据样本（表 2）\\
+\bottomrule
+\caption{参考源清单（数据来源: 正文 evidence 标注汇总；行号引用前经 read/grep 核实）}
+\end{xltabular}
+
+% ================= 10 结论与局限 =================
+\section{结论与局限}
+\begin{conclbox}
+结构视角：dev6 是"扫描--统计--拟合--成图"四层的薄驱动目录，物理计算全部委托
+pyqcd.analysis，自身只承担数据搬运与版式适配。关系视角：它以只读方式衔接
+tag-test8 数据层，以照抄逻辑方式承接 test0/test6 图型规范，并以一处三行守卫
+修改回馈 pyqcd 库的健壮性。思路视角："复用已验证实现 + 同型适配 + 缺席留白"
+使 405 组态的分析产出成本降到秒级且全程可审计。主题结论：九类同型图表全部
+落地并通过 22 项断言，双方法能量 P0$=$1.112--1.147 GeV、P2$=$1.491--1.548 GeV，
+与 stab1 已验证质子质量及色散关系自洽。
+\end{conclbox}
+\begin{refbox}
+旁证：logs/stab1（真实数据实战）确立的 P0 meff 平台 $\approx$1.12 GeV 结论与
+"P2 2pt 带 phase 负号"记载，分别为本工作质量基准与 sgn 修复提供了先验依据；
+examples/docker-v20260805 基线的 237 项一致性断言保证了被复用模块的可信度。
+\end{refbox}
+\begin{warnbox}
+局限：(1) ratio\_3pt\_all\_channels 因输入无 perambulators/3pt 数据而缺席，
+\textcolor{warn}{未验证}（数据补齐后可在同框架补算）；
+(2) A 型 dev 标志基于基线硬编码期望，\textcolor{warn}{不构成假设检验}；
+(3) P2 早 t 激发态残留与窗变系统差分析\textcolor{warn}{未验证}，列为后续项；
+(4) 本报告未覆盖 VdV/VVV 顶点积数据的下游链（TMD-PDF），属仓库主线另行推进。
+\end{warnbox}
+
+\end{document}
+

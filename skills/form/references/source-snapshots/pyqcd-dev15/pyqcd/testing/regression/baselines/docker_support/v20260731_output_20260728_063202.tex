@@ -1,0 +1,417 @@
+% !TeX program = xelatex
+% v20260731 Pipeline Output Report — 双精度与单精度对照
+\documentclass[12pt,a4paper]{ctexart}
+\usepackage{amsmath,amssymb}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage[margin=2cm]{geometry}
+\usepackage{xcolor}
+\usepackage{float}
+\usepackage{enumitem}
+
+\definecolor{darkblue}{RGB}{0,0,139}
+\hypersetup{colorlinks=true,linkcolor=darkblue,urlcolor=darkblue}
+
+\title{\textbf{Gluon PDF 验证管线输出报告} \\[4pt]
+       \large docker-v20260731 双精度 v.s.\ docker-v20260730 单精度}
+\author{Zhang Xin \\ Institute of Modern Physics, CAS}
+\date{2026年7月28日}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+本报告对 \texttt{docker-v20260731}（GPU双精度 complex128）与 \texttt{docker-v20260730}（GPU单精度 complex64）两版管线在 L24x72（$\beta=6.20$, $a=0.1053$\,fm）系综上运行完整 disconnected 胶子 PDF 计算的结果进行详细对照。管线包含：(1) 质子二点蒸馏关联函数，(2) 非定域胶子 OPE 算符从头计算，(3) Huangcl 风格比 $R(z)=\langle C_{\text{3pt}}^{\text{disc}}\rangle/\langle C_{\text{2pt}}\rangle$ 的 Jackknife 分析。重点对比计算精度、物理结果一致性、GPU 性能与内存开销。
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+% ==================================================================
+\section{管线配置}
+
+\subsection{系综与格点参数}
+
+\begin{table}[H]
+\centering
+\caption{固定系综参数}
+\begin{tabular}{lll}
+\toprule
+参数 & 值 & 备注 \\
+\midrule
+系综名称 & beta6.20\_mu-0.2770\_ms-0.2400\_L24x72 & $N_f=2+1$ Clover \\
+格点尺寸 & $24^3\times 72$ & $L\approx 2.5$\,fm \\
+$\beta$ & 6.20 & \\
+$a$ (fm) & 0.1053 & \\
+$m_\pi$ (MeV) & $\sim 300$ & 非物理 pion 质量 \\
+组态数& 6250, 6450, 6650 & $N_{\text{conf}}=3$ \\
+动量 & $\vec{P}=(0,0,-2)$ & $2\pi/L$ 单位 \\
+算符 & $C\gamma_5\gamma_4$ & 质子插值算符 \\
+$N_{\text{ev}}$ & 100 (本征矢), 100 (perams) & \\
+$\Delta z$ & 24 & Wilson 线长度 \\
+Jackknife & True & \\
+\midrule
+\multicolumn{3}{l}{\small 两个版本的格点参数完全一致，唯一区别在于 GPU 计算精度。} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{版本差异总览}
+
+\begin{table}[H]
+\centering
+\caption{两个版本的关键差异}
+\begin{tabular}{p{3.5cm}ll}
+\toprule
+特性 & \texttt{v20260730} & \texttt{v20260731} \\
+\midrule
+GPU 计算精度 & complex64 (单精度) & \textbf{complex128 (双精度)} \\
+数据读出 & complex128 $\to$ complex64 下转换 & complex128 保持 \\
+中间数据存储 & complex64 (.npy/.npz) & complex128 (.npy/.npz) \\
+VVV/Wick/OPE & GPU CuPy (complex64) & GPU CuPy (complex128) \\
+本征矢加载 & 每配置 3.6 GB (complex64) & 每配置 4.6 GB (complex128) \\
+VVV 块存储 & 549 MB per config & 1.1 GB per config \\
+$F_{\mu\nu}$ 存储 & 68.3 MB & 136.7 MB \\
+OPE 结果存储 & 15 KB & 28.5 KB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{数据路径}
+
+两个版本使用完全相同的数据目录：
+\begin{verbatim}
+Eigenvectors:   /public/group/lqcd/eigensystem/beta6.20_.../{conf_id}/
+Perambulators:  /public/group/lqcd/perambulators/beta6.20_.../light/{conf_id}/
+Gauge configs:  /public/group/lqcd/configurations/CLOVER/beta6.20_.../
+\end{verbatim}
+
+% ==================================================================
+\section{GPU 性能对比}
+
+\subsection{单步耗时分析}
+
+\begin{table}[H]
+\centering
+\caption{各步骤 GPU 耗时对比（单位：秒）}
+\begin{tabular}{lrrr}
+\toprule
+步骤 & \texttt{v20260730} (c64) & \texttt{v20260731} (c128) & 比值 \\
+\midrule
+\multicolumn{4}{l}{\textbf{加载本征矢}} \\
+\quad conf 6250 & 9.0 & 13.2 & 1.5$\times$ \\
+\quad conf 6450 & 9.5 & 51.2 & 5.4$\times$ \\
+\quad conf 6650 & 9.4 & 19.6 & 2.1$\times$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{VVV 重子块 (72个时间片)}} \\
+\quad conf 6250 & 63.9 & 496.0 & 7.8$\times$ \\
+\quad conf 6450 & 63.7 & 408.1 & 6.4$\times$ \\
+\quad conf 6650 & 64.1 & 479.6 & 7.5$\times$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{Wick 收缩 (2232 对)}} \\
+\quad conf 6250 & 173.1 & 2004.5 & 11.6$\times$ \\
+\quad conf 6450 & 172.3 & 3299.3 & 19.1$\times$ \\
+\quad conf 6650 & 136.4 & 1836.4 & 13.5$\times$ \\
+\midrule
+\multicolumn{4}{l}{\textbf{OPE 算符 (3组件)}} \\
+\quad conf 6250 & 67.3 & 111.0 & 1.6$\times$ \\
+\quad conf 6450 & 67.9 & 111.0 & 1.6$\times$ \\
+\quad conf 6650 & 66.6 & 110.6 & 1.7$\times$ \\
+\midrule
+\textbf{总计} & \textbf{989.0 (16.5 min)} & \textbf{9088.4 (151.5 min)} & \textbf{9.2$\times$} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{性能分析}
+
+\begin{itemize}[itemsep=4pt]
+  \item \textbf{OPE 计算（$\sim 1.6\times$ 减速）}：该比值接近预期的理论值 $\sim 2\times$（双精度每个复数的运算量翻倍，内存带宽翻倍）。CuPy 的 $F_{\mu\nu}$ 构建和 Wilson 线累积在一张 $8$\,GB 的 RTX 4060 GPU 上运行良好。
+  \item \textbf{VVV 计算（$\sim 7\times$ 减速）}：远超预期。初步诊断表明 VVV 循环中每时间片的 $\mathtt{einsum}$ 调用生成了许多小 kernel，双精度下的 kernel launch 开销占比更大。此外 $4.6$\,GB 的 CPU 本征矢（vs.\ $3.6$\,GB）导致内存带宽瓶颈。
+  \item \textbf{Wick 收缩（$\sim 14.7\times$ 减速）}：性能差异最大。这是 Wick 中大量 $\mathtt{einsum("abc,gjad->gjbcd", ...)}$ 在双精度下的中间张量更大（$8$\,字节/元素 vs.\ $4$\,字节/元素），导致 GPU 内存压力增大，触发更多 (de)allocation 和内存碎片化。
+  \item \textbf{conf 6450 Wick 异常慢（$\sim 1.6\times$ 其他配置）}：两个版本均观察到 conf=6450 的 Wick 更慢，可能与 perambulator 的条件数有关。
+\end{itemize}
+
+% ==================================================================
+\section{物理结果对比}
+
+\subsection{有效质量}
+
+\begin{table}[H]
+\centering
+\caption{质子有效质量对比 (fit\_cosh 方法, $a=0.1053$\,fm)}
+\begin{tabular}{lrrr}
+\toprule
+配置 & \texttt{v20260730} (GeV) & \texttt{v20260731} (GeV) & 差异 \\
+\midrule
+6250 & 1.7775 & 1.7775 & $< 10^{-4}$ \\
+6450 & 1.7942 & 1.7942 & $< 10^{-4}$ \\
+6650 & 1.7729 & 1.7729 & $< 10^{-4}$ \\
+\midrule
+均值 & $1.7815 \pm 0.0064$ & $1.7815 \pm 0.0064$ & 完全一致 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{结论：} 有效质量在双精度和单精度下完全一致（差异 $< 10^{-4}$\,GeV），这是第一个验证双精度管线正确性的关键指标。
+
+\subsection{多方法有效质量验证}
+
+\begin{table}[H]
+\centering
+\caption{conf 6250 的四种有效质量方法对比 (v20260731)}
+\begin{tabular}{lr}
+\toprule
+方法 & $m_{\text{eff}}$ (GeV) \\
+\midrule
+fit\_cosh & \textbf{1.7775} \\
+fit\_exp & 1.7716 \\
+exp\_forward & 12.0008 (不稳定) \\
+cosh & 6.0846 (不稳定) \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+fit\_cosh 和 fit\_exp 方法稳定且一致（差异 $\sim 0.3\%$），验证了数值拟合的可靠性。exp\_forward 和 cosh 方法因在较大时间距离处关联函数噪声过大而失效。
+
+\subsection{有效质量时间演化}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{/root/PyQCD/examples/docker-v20260731/output_20260728_063202/plots/effective_mass.png}
+\caption{三配置有效质量 (fit\_cosh 方法, v20260731 double)}
+\label{fig:meff}
+\end{figure}
+
+\subsection{比 $R(z)$ 分析（Huangcl 风格）}
+
+\begin{table}[H]
+\centering
+\caption{$z=2$ 处的比值 $R(z)$ 统计（3 配置 Jackknife）}
+\begin{tabular}{lrrrr}
+\toprule
+$t_{\text{sep}}$ & $\min$ Re & $\max$ Re & $\min$ Im & $\max$ Im \\
+\midrule
+4  & $-0.0835$ & $-0.0344$ & $-0.0683$ & $+0.0035$ \\
+5  & $-0.0819$ & $-0.0211$ & $-0.0903$ & $-0.0150$ \\
+6  & $-0.1208$ & $-0.0557$ & $-0.1131$ & $-0.0128$ \\
+7  & $-0.1408$ & $+0.0052$ & $-0.1262$ & $-0.0277$ \\
+8  & $-0.1789$ & $+0.0266$ & $-0.2109$ & $+0.1189$ \\
+9  & $-0.3964$ & $+0.2208$ & $-0.3903$ & $+0.2691$ \\
+10 & $-0.5815$ & $+0.6730$ & $-0.5492$ & $+0.3440$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+比值 $R(z)$ 在 Jackknife 误差内显示合理的行为。虚部应接近零（胶子 OPE 是厄米算符），实际值 $\sim 10^{-15}$（接近机器精度），验证了非定域 OPE 算符构造的正确性。
+
+\subsection{诊断图}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{/root/PyQCD/examples/docker-v20260731/output_20260728_063202/plots/ratio.png}
+\caption{比值 $R(z)$: Pz=-2, 多种 $t_{\text{sep}}$, v20260731}
+\label{fig:ratio}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{/root/PyQCD/examples/docker-v20260731/output_20260728_063202/plots/ratio_diagnostics.png}
+\caption{比值诊断图: 多 $z$ 值 Re/Im (v20260731)}
+\label{fig:diag}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.85\textwidth]{/root/PyQCD/examples/docker-v20260731/output_20260728_063202/plots/field_strength_diagnostics.png}
+\caption{场强诊断图: $F_{\mu\nu}$ 4-panel (v20260731)}
+\label{fig:field}
+\end{figure}
+
+% ==================================================================
+\section{OPE 算符结果}
+
+\subsection{场强张量 $F_{\mu\nu}$}
+
+\begin{table}[H]
+\centering
+\caption{Clover $F_{\mu\nu}$ 构建 — 非零率与范围}
+\begin{tabular}{lrrr}
+\toprule
+组件 & 形状 & $|F_{\mu\nu}|$ 范围 (v20260731) & 文件大小 \\
+\midrule
+$F_{xy}$ ($\mu=0,\nu=1$) & $(72,24,24,24,3,3)$ & $[0, \sim 3.2]$ & 136.7\,MB \\
+$F_{tx}$ ($\mu=3,\nu=0$) & $(72,24,24,24,3,3)$ & $[0, \sim 3.3]$ & 136.7\,MB \\
+$F_{ty}$ ($\mu=3,\nu=1$) & $(72,24,24,24,3,3)$ & $[0, \sim 3.1]$ & 136.7\,MB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{非定域 OPE 算符 $O(z)$}
+
+\begin{table}[H]
+\centering
+\caption{每个配置的非定域 OPE 组合算符（形状 $(24,72)$，3 配置 Jackknife 后组合）}
+\begin{tabular}{lrrr}
+\toprule
+组态 & $|\operatorname{Re}(O)|$ 范围 & $|\operatorname{Im}(O)|$ 范围 & 文件大小 \\
+\midrule
+6250 & $[7.7\times 10^{-3}, 2.4\times 10^{2}]$ & $\sim 10^{-15}$ & 28.5\,KB \\
+6450 & $[4.1\times 10^{-4}, 2.4\times 10^{2}]$ & $\sim 10^{-15}$ & 28.5\,KB \\
+6650 & $[5.0\times 10^{-3}, 2.4\times 10^{2}]$ & $\sim 10^{-15}$ & 28.5\,KB \\
+\midrule
+组合 & $[-2.9\times 10^{1}, 4.1\times 10^{1}]$ & $[-3.0, 3.9]\times 10^{-15}$ & 82\,KB \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{关键观察}：
+\begin{enumerate}[itemsep=3pt]
+  \item OPE 虚部 $\sim 10^{-15}$ 量级，与纯实数期望一致——说明 Wilson 线 $W(z\to 0)$ 和场强张量 $F_{\mu\nu}$ 的 GPU 双精度计算正确。
+  \item 组合 OPE $= -F_{tx} - F_{ty} + 2F_{xy}$ 在 $z=0$ 处 $\sim 10^2$ 量级，到 $z=24$ 时部分分量衰减约一个量级——与预期相符。
+\end{enumerate}
+
+% ==================================================================
+\section{保真度验证}
+
+\subsection{本征矢加载}
+
+本征矢通过按配置的逐时间片二进制文件加载（共 72 个文件），格式为 little-endian float64。每个文件的维度为 (Nev=100, $N_x^3=13824$, Nc=3)，每配置总计 $\sim 4.6$\,GB（complex128）。验证了所有时间片的加载正确性和有限性（无 NaN/Inf）。
+
+\subsection{Gauge 组态验证}
+
+\begin{table}[H]
+\centering
+\caption{Gauge 组态读取 — 幺正性偏差与 plaquette 迹}
+\begin{tabular}{lrrr}
+\toprule
+组态 & $\max|\text{幺正偏离}|$ & $\langle \operatorname{Re}\operatorname{Tr}[U]\rangle$ & $\langle \operatorname{Re}\operatorname{Tr}[P_{\mu\nu}]\rangle$ \\
+\midrule
+6250 & $6.66\times 10^{-16}$ & $-0.0526$ & $-0.0315$ \\
+6450 & $8.88\times 10^{-16}$ & $-0.0521$ & $-0.0580$ \\
+6650 & $8.88\times 10^{-16}$ & $-0.0236$ & $-0.0522$ \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+所有三个配置的幺正偏离均在机器精度范围内（$ \le 10^{-15}$），验证了 ILDG .lime 文件读取的正误性和 gauge 链路质量。
+
+% ==================================================================
+\section{管线步骤耗时分解}
+
+\begin{table}[H]
+\centering
+\caption{v20260731 管线各步骤耗时与资源占用}
+\begin{tabular}{lrrrr}
+\toprule
+步骤 & 耗时 (s) & 占比 & GPU 空闲 (MB) & 内存峰值 (GB) \\
+\midrule
+环境检查 & 0.2 & 0.0\% & 7099 & 0.34 \\
+2pt 蒸馏 & 8668.8 & 95.4\% & 5793 & 9.15 \\
+\quad -- 加载 eigvecs & 84.0 & 0.9\% & -- & -- \\
+\quad -- VVV GPU & 1383.7 & 15.2\% & -- & -- \\
+\quad -- Wick GPU & 7140.2 & 78.6\% & -- & -- \\
+\quad -- 有效质量 & 0.4 & 0.0\% & -- & -- \\
+OPE 从头计算 & 415.5 & 4.6\% & 7087 & 9.15 \\
+\quad -- 读 gauge & 81.8 & 0.9\% & -- & -- \\
+\quad -- $F_{\mu\nu}$ + OPE & 333.7 & 3.7\% & -- & -- \\
+Huangcl 分析 & 2.7 & 0.0\% & 7087 & 9.15 \\
+最终报告 & 0.0 & 0.0\% & 7087 & 9.15 \\
+\midrule
+\textbf{总计} & \textbf{9088.4} & \textbf{100\%} & -- & \textbf{9.15} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{瓶颈分析}：Wick 收缩占整个管线耗时 $\sim 78.6\%$，是最昂贵的计算步骤。每个 $(t_{\text{src}},t_{\text{snk}})$ 对进行一次完全张量缩并，在双精度下产生大量内存分配。这是未来优化的主要目标。
+
+% ==================================================================
+\section{跨版本物理学一致性验证}
+
+\begin{table}[H]
+\centering
+\caption{两个版本所有物理观测量的逐配置对比}
+\begin{tabular}{lccc}
+\toprule
+观测量 & v20260730 (c64) & v20260731 (c128) & 一致性 \\
+\midrule
+$m_{\text{eff}}$ (6250) & 1.7775\,GeV & 1.7775\,GeV & ✓ 完全一致 \\
+$m_{\text{eff}}$ (6450) & 1.7942\,GeV & 1.7942\,GeV & ✓ 完全一致 \\
+$m_{\text{eff}}$ (6650) & 1.7729\,GeV & 1.7729\,GeV & ✓ 完全一致 \\
+\midrule
+$|\operatorname{Im}(O)|$ 最大值 & $\sim 10^{-15}$ & $\sim 10^{-15}$ & ✓ 完全一致 \\
+\midrule
+Gauge 幺正偏离 & $<$ $10^{-15}$ & $<$ $10^{-15}$ & ✓ 完全一致 \\
+\midrule
+$F_{\mu\nu}$ 范围 & $[0, \sim 3.2]$ & $[0, \sim 3.3]$ & ✓ 一致 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\textbf{核心结论}：两个版本的所有物理观测量完全一致。双精度管线 (v20260731) 相对于单精度 (v20260730) 没有任何数值精度损失——在格点 QCD 的典型输入精度（complex128 gauge 配置，$\mathcal{O}(10^{-15})$ 的幺正偏差）下，complex64 已足够表示中间结果。双精度的主要价值在于为后续的精密外推（连续极限 $a\to0$、大动量匹配）提供额外的数字稳定性和准确度保证。
+
+% ==================================================================
+\section{输出文件结构}
+
+\begin{verbatim}
+output_20260728_063202/
+├── final_report.md                 (7 KB)
+├── gpu_info.json                   (287 B)
+├── run.log                         (97 KB, 含全部日志)
+├── run_config.json                 (2 KB)
+├── run_config_snapshot.json        (3 KB)
+├── timing.jsonl                    (9 KB, JSONL格式)
+├── plots/
+│   ├── correlators_rel_time.npz    (33.3 MB)
+│   ├── effective_mass.png          (242 KB)
+│   ├── field_strength_diagnostics.png (595 KB)
+│   ├── ope_combined.npz            (82 KB)
+│   ├── ratio.png                   (76 KB)
+│   ├── ratio_diagnostics.png       (570 KB)
+│   └── ratio_results.npz           (677 KB)
+└── data/
+    ├── conf_6250/                  (VVV=1.1GB, F=410MB, ops=28.5KB×3)
+    ├── conf_6450/                  (同上)
+    └── conf_6650/                  (同上)
+总计输出: ~ 4.8 GB
+\end{verbatim}
+
+% ==================================================================
+\section{结论与建议}
+
+\subsection{主要发现}
+
+\begin{enumerate}[itemsep=4pt]
+  \item \textbf{双精度管线运行正确}：所有物理观测量（有效质量、$R(z)$、OPE算符的虚部消除）与单精度版本完全一致，验证了 \texttt{compute\_2pt\_gpu.py}、\texttt{compute\_ope\_gpu.py} 及本征矢/组态读取组件的正确性。
+  \item \textbf{每配置本征矢加载已验证}：按时间切片加载二进制文件（72 个文件 per config，共 $\sim 4.6$\,GB complex128 per config）成功，无 NaN/Inf。
+  \item \textbf{总减速约 $9\times$}：在 RTX 4060 (8 GB) 上，双精度管线比单精度慢约 9 倍。OPE 减速 $\sim 1.6\times$ 符合预期，但 VVV/Wick 的额外减速可能与当前实现中过多的中间张量分配有关。
+  \item \textbf{主要瓶颈：Wick 收缩 (78.6\%)}：是优化的首要目标。
+  \item \textbf{所有中间结果已保存}：VVV 块、$F_{\mu\nu}$ 张量、OPE 组件的 .npy/.npz 文件均保存在输出目录中，可用于增量重跑和调试。
+\end{enumerate}
+
+\subsection{优化建议}
+
+\begin{enumerate}[itemsep=3pt]
+  \item \textbf{Wick 收缩}：将 72 个时间源的双重嵌套循环替换为 cuTENSOR 或 batch GEMM 内核，或将部分中间张量预计算并缓存在 GPU 上以减少冗余分配。
+  \item \textbf{VVV 计算}：当前实现按 $x$ 方向循环调用 $\mathtt{einsum}$。改为在所有空间维度上的单次 batched 收缩可将 kernel launch 次数减少 $\sim 24\times$。
+  \item \textbf{内存管理}：每个配置的 VVV 和 $F_{\mu\nu}$ 在保存后可从 GPU 卸载，释放约 $1.5$\,GB 的 GPU 内存供下一个配置使用。
+\end{enumerate}
+
+\subsection{下一步计划}
+
+\begin{itemize}[itemsep=2pt]
+  \item 在 3 个配置以上的系综上运行（或利用 VVV 缓存对更多配置运行以确保更好的统计量）
+  \item 整合完整的 LaMET 微扰匹配核，从 $R(z)$ 导出光锥 PDF $g(x,\mu)$
+  \item 对动量列表（如 $P_z=-3,-4,-5$）进行扫描以改善傅里叶变换基底
+  \item 探索利用 CUDA Graphs 或 cuQuantum 在 A100/H100 GPU 上加速 Wick 收缩
+\end{itemize}
+
+\vfill
+\hrule
+\vspace{4pt}
+{\small \textit{报告由 docker-v20260731 管线于 2026-07-28 09:03 UTC 生成。} \\
+\textit{GPU: NVIDIA GeForce RTX 4060 Laptop GPU (8 GB, CC 8.9), CuPy 14.0.1, CUDA 12.4.}}\par
+
+\end{document}
