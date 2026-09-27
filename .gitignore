@@ -431,6 +431,7 @@ _minted*/
 .agent-runtime/
 data/runs/
 data/hooks/
+data/form-source-cache/
 data/context-*.txt
 .pdfcheck.*
 # ZhangXin

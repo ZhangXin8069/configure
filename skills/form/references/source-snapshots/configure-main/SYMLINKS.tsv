@@ -1,0 +1,15 @@
+bin/ccodex-prompt.txt	./agent-prompt.txt
+bin/cl	agent.sh
+bin/cl.bat	agent.bat
+bin/cls	agent.sh
+bin/co	agent.sh
+bin/co.bat	agent.bat
+bin/conservative.sh	cpupower.sh
+bin/cos	agent.sh
+bin/ondemand.sh	cpupower.sh
+bin/oopencode-prompt.txt	./agent-prompt.txt
+bin/op	agent.sh
+bin/op.bat	agent.bat
+bin/ops	agent.sh
+bin/performance.sh	cpupower.sh
+bin/powersave.sh	cpupower.sh

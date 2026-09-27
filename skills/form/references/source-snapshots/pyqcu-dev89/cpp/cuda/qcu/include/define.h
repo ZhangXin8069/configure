@@ -1,0 +1,623 @@
+#ifndef _DEFINE_H
+#define _DEFINE_H
+#include "./lattice_complex.h"
+namespace qcu {
+// CUDA kernel block size.
+// 8/16  — for debugging and testing small lattices (development default)
+// 128  — recommended for NVIDIA GPU production builds
+// 256  — recommended for AMD DCU / ROCm production builds
+// TODO: make this configurable via CMake or runtime parameter
+// #define _BLOCK_SIZE_ 8 // for test small lattice
+// #define _BLOCK_SIZE_ 16 // for test small lattice
+#define _BLOCK_SIZE_ 128 // NVIDIA production default
+// #define _BLOCK_SIZE_ 256 // better for dcu
+#define _MAIN_RANK_ 0
+#define _a_ 0
+#define _b_ 1
+#define _c_ 2
+#define _d_ 3
+#define _tmp0_ 0
+#define _tmp1_ 1
+#define _rho_prev_ 2
+#define _rho_ 3
+#define _alpha_ 4
+#define _beta_ 5
+#define _omega_ 6
+#define _send_tmp_ 7
+#define _norm2_tmp_ 8
+#define _diff2_tmp_ 9
+// NOTE: _lat_4dim_ is stored as float/double in device_vals and read back
+// via int(float_val). For float (23-bit mantissa), exact integers are only
+// representable up to ~1.67e7 sites (≈ 64^4 = 1.68e7, borderline).
+// For double (52-bit mantissa), this is never an issue. The extraction pattern
+// used throughout solver kernels is:
+//   int lat = int(((LatticeComplex<T> *)device_vals)[_lat_4dim_]._data.x);
+#define _lat_4dim_ 10
+#define _vals_size_ 11
+#define _NO_USE_ 0
+#define _USE_ 1
+#define _X_ 0
+#define _Y_ 1
+#define _Z_ 2
+#define _T_ 3
+#define _LAT_X_ 0
+#define _LAT_Y_ 1
+#define _LAT_Z_ 2
+#define _LAT_T_ 3
+#define _LAT_XYZT_ 4
+#define _GRID_X_ 5
+#define _GRID_Y_ 6
+#define _GRID_Z_ 7
+#define _GRID_T_ 8
+#define _PARITY_ 9
+#define _NODE_RANK_ 10
+#define _NODE_SIZE_ 11
+#define _DAGGER_ 12
+#define _MAX_ITER_ 13
+#define _DATA_TYPE_ 14
+#define _LAT_C16_ 0
+#define _LAT_C32_ 1
+#define _LAT_C64_ 2
+#define _LAT_C128_ 3
+#define _LAT_C256_ 4
+#define _LAT_R8_ 5
+#define _LAT_R16_ 6
+#define _LAT_R32_ 7
+#define _LAT_R64_ 8
+#define _LAT_R128_ 9
+#define _DATA_TYPE_SIZE_ 10
+#define _SET_INDEX_ 15
+#define _SET_PLAN_ 16
+#define _SET_PLAN_N_2_ -2 // just for laplacian
+#define _SET_PLAN_N_1_ -1 // just for gauss gauge
+#define _SET_PLAN0_ 0     // for wilson dslash
+#define _SET_PLAN1_ 1 // just for bistabcg and cg and the whole dslash for them
+#define _SET_PLAN2_ 2 // for clover dslash
+#define _MG_NUM_LEVEL_ 17
+#define _MG_LEVEL_INDEX_ 18
+#define _MG_LEVEL1_E_ 19
+#define _MG_LEVEL1_X_ 20
+#define _MG_LEVEL1_Y_ 21
+#define _MG_LEVEL1_Z_ 22
+#define _MG_LEVEL1_T_ 23
+#define _MG_LEVEL1_MAX_ITER_ 24
+#define _MG_LEVEL1_DATA_TYPE_ 25
+#define _MG_LEVEL1_NUM_RESTART_ 26
+#define _MG_LEVEL2_E_ 27
+#define _MG_LEVEL2_X_ 28
+#define _MG_LEVEL2_Y_ 29
+#define _MG_LEVEL2_Z_ 30
+#define _MG_LEVEL2_T_ 31
+#define _MG_LEVEL2_MAX_ITER_ 32
+#define _MG_LEVEL2_DATA_TYPE_ 33
+#define _MG_LEVEL2_NUM_RESTART_ 34
+#define _MG_LEVEL3_E_ 35
+#define _MG_LEVEL3_X_ 36
+#define _MG_LEVEL3_Y_ 37
+#define _MG_LEVEL3_Z_ 38
+#define _MG_LEVEL3_T_ 39
+#define _MG_LEVEL3_MAX_ITER_ 40
+#define _MG_LEVEL3_DATA_TYPE_ 41
+#define _MG_LEVEL3_NUM_RESTART_ 42
+#define _MG_LEVEL4_E_ 43
+#define _MG_LEVEL4_X_ 44
+#define _MG_LEVEL4_Y_ 45
+#define _MG_LEVEL4_Z_ 46
+#define _MG_LEVEL4_T_ 47
+#define _MG_LEVEL4_MAX_ITER_ 48
+#define _MG_LEVEL4_DATA_TYPE_ 49
+#define _MG_LEVEL4_NUM_RESTART_ 50
+#define _MG_PARAMS_SIZE_ 8
+#define _VERBOSE_ 51
+#define _SEED_ 52
+#define _TEST_IN_CPU_ 53
+#define _MG_USE_GCR_ 54
+#define _MG_USE_DEFLATE_ 55
+#define _MG_MU_PRE_ 56
+#define _MG_USE_INIT_GUESS_ 57
+// Strict QUDA-style full-coarse hierarchy assets.  This region is disjoint
+// from LatticeSet handles (low slots) and the legacy 33-point MG region
+// [30,46).  Per transition: V, raw Y, Yhat, (X,X^-1).
+#define _SET_PTRS_STRICT_COARSE_BASE_ 60
+#define _SET_PTRS_STRICT_STRIDE_ 4
+#define _SET_PTRS_STRICT_NULL_ 0
+#define _SET_PTRS_STRICT_RAW_LINKS_ 1
+#define _SET_PTRS_STRICT_PRECONDITIONED_LINKS_ 2
+#define _SET_PTRS_STRICT_ONSITE_PAIR_ 3
+// Persistent strict hierarchy handle.  Keep it outside both the LatticeSet
+// slots (1..24) and the four-slot coarse-asset region (60..79).
+#define _SET_PTRS_STRICT_HIERARCHY_ 80
+// _MG_USE_GCR_ is a backwards-compatible mode bit mask.  Existing callers
+// that write 0/1 retain their original semantics; the additional algorithms
+// deliberately live in the unused high bits so the params[58] ABI remains
+// unchanged.
+#define _MG_MODE_GCR_ 1
+#define _MG_MODE_MR_SMOOTHER_ 2
+#define _MG_MODE_CHEBYSHEV_ 4
+#define _MG_MODE_CA_GCR_ 8
+#define _MG_MODE_W_CYCLE_ 16
+#define _MG_MODE_F_CYCLE_ 32
+#define _MG_MODE_K_CYCLE_ 64
+#define _MG_MODE_BICGSTABL_ 128
+#define _MG_MODE_CYCLE_MASK_ (_MG_MODE_W_CYCLE_ | _MG_MODE_F_CYCLE_ | _MG_MODE_K_CYCLE_)
+#define _PARAMS_SIZE_ 58
+#define _MASS_ 0
+#define _ATOL_ 1
+#define _SIGMA_ 2
+#define _MG_LEVEL1_ATOL_ 3
+#define _MG_LEVEL2_ATOL_ 4
+#define _MG_LEVEL3_ATOL_ 5
+#define _MG_LEVEL4_ATOL_ 6
+#define _ARGV_SIZE_ 7
+#define _DIM_ 4
+#define _1DIM_ 4
+#define _2DIM_ 6
+#define _3DIM_ 4
+#define _B_X_ 0
+#define _F_X_ 1
+#define _B_Y_ 2
+#define _F_Y_ 3
+#define _B_Z_ 4
+#define _F_Z_ 5
+#define _B_T_ 6
+#define _F_T_ 7
+#define _BX_BY_ 8
+#define _FX_BY_ 9
+#define _BX_FY_ 10
+#define _FX_FY_ 11
+#define _BX_BZ_ 12
+#define _FX_BZ_ 13
+#define _BX_FZ_ 14
+#define _FX_FZ_ 15
+#define _BX_BT_ 16
+#define _FX_BT_ 17
+#define _BX_FT_ 18
+#define _FX_FT_ 19
+#define _BY_BZ_ 20
+#define _FY_BZ_ 21
+#define _BY_FZ_ 22
+#define _FY_FZ_ 23
+#define _BY_BT_ 24
+#define _FY_BT_ 25
+#define _BY_FT_ 26
+#define _FY_FT_ 27
+#define _BZ_BT_ 28
+#define _FZ_BT_ 29
+#define _BZ_FT_ 30
+#define _FZ_FT_ 31
+#define _B_X_B_Y_ 0
+#define _F_X_B_Y_ 1
+#define _B_X_F_Y_ 2
+#define _F_X_F_Y_ 3
+#define _B_X_B_Z_ 4
+#define _F_X_B_Z_ 5
+#define _B_X_F_Z_ 6
+#define _F_X_F_Z_ 7
+#define _B_X_B_T_ 8
+#define _F_X_B_T_ 9
+#define _B_X_F_T_ 10
+#define _F_X_F_T_ 11
+#define _B_Y_B_Z_ 12
+#define _F_Y_B_Z_ 13
+#define _B_Y_F_Z_ 14
+#define _F_Y_F_Z_ 15
+#define _B_Y_B_T_ 16
+#define _F_Y_B_T_ 17
+#define _B_Y_F_T_ 18
+#define _F_Y_F_T_ 19
+#define _B_Z_B_T_ 20
+#define _F_Z_B_T_ 21
+#define _B_Z_F_T_ 22
+#define _F_Z_F_T_ 23
+#define _WARDS_ 8
+#define _WARDS_2DIM_ 24
+#define _XY_ 0
+#define _XZ_ 1
+#define _XT_ 2
+#define _YZ_ 3
+#define _YT_ 4
+#define _ZT_ 5
+#define _YZT_ 0
+#define _XZT_ 1
+#define _XYT_ 2
+#define _XYZ_ 3
+#define _EVEN_ 0
+#define _ODD_ 1
+#define _EVEN_ODD_ 2
+#define _LAT_P_ 2
+#define _LAT_C_ 3
+#define _LAT_S_ 4
+#define _LAT_CC_ 9
+#define _LAT_1C_ 3
+#define _LAT_2C_ 6
+#define _LAT_3C_ 9
+#define _LAT_HALF_SC_ 6
+#define _LAT_SC_ 12
+#define _LAT_SCSC_ 144
+#define _LAT_D_ 4
+#define _LAT_CD_ 12
+#define _LAT_CCD_ 36
+#define _LAT_PCCD_ 72
+#define _LAT_3D_ 3
+#define _B_ 0
+#define _F_ 1
+#define _BF_ 2
+#define _REAL_IMAG_ 2
+#define _OUTPUT_SIZE_ 10
+#define _BACKWARD_ -1
+#define _NOWARD_ 0
+#define _FORWARD_ 1
+#define _SR_ 2
+#define _LAT_EXAMPLE_ 32
+#define _GRID_EXAMPLE_ 1
+#define _MEM_POOL_ 0
+#define _CHECK_ERROR_ 1
+// When 1: single-GPU runs go through the full MPI codepath (Isend/Irecv to self),
+// ensuring MPI paths are tested even on single-GPU setups. When 0: single-GPU
+// shortcut is used (send buffer directly feeds recv kernel), bypassing MPI.
+// NOTE (2026-08-02): set to 0 for the single-rank fast path in run_mpi() —
+// the full MPI halo exchange (send->D2H->MPI->H2D->recv) costs ~9 stream
+// syncs per dslash (~170 us each on this WSL2/V100 box).  Multi-rank runs
+// (grid != 1x1x1x1) always use the MPI codepath regardless of this flag, so
+// MPI correctness is still validated by `mpirun -np N` tests.
+#define _WILSON_AND_LAPLACIAN_TEST_SINGLE_IN_MULTI_ 0
+// When 1: multi-GPU clover test runs within a single-GPU environment.
+// Default 0 (production: multi-GPU clover runs on multi-GPU only).
+#define _CLOVER_TEST_MULTI_IN_SINGLE_ 0
+// When 1: every rank binds device 0 instead of getLocalRank(), allowing
+// multi-rank (mpirun -np N) MPI tests on a single-GPU machine.  The full MPI
+// codepath (halo exchange, Allgather, Allreduce) runs for real — only the
+// device mapping is shared.  Default 0 (production: one rank per GPU).
+#define _TEST_SINGLE_GPU_MULTI_RANK_ 0
+// cublas API error checking
+#define CUBLAS_CHECK(err)                                                      \
+  do {                                                                         \
+    cublasStatus_t err_ = (err);                                               \
+    if (err_ != CUBLAS_STATUS_SUCCESS) {                                       \
+      std::printf("cublas error %d at %s:%d\n", err_, __FILE__, __LINE__);     \
+      throw std::runtime_error("cublas error");                                \
+    }                                                                          \
+  } while (0)
+#define checkCudaErrors(err)                                                   \
+  do {                                                                         \
+    if (_CHECK_ERROR_) {                                                       \
+      cudaError_t err_ = (err);                                                \
+      if (err_ != cudaSuccess) {                                               \
+        fprintf(stderr,                                                        \
+                "Failed: CUDA error %04d \"%s\" from file <%s>, "              \
+                "line %i.\n",                                                  \
+                err_, cudaGetErrorString(err_), __FILE__, __LINE__);           \
+        exit(EXIT_FAILURE);                                                    \
+      }                                                                        \
+    }                                                                          \
+  } while (0)
+#define checkMpiErrors(err)                                                    \
+  do {                                                                         \
+    if (_CHECK_ERROR_) {                                                       \
+      int err_ = (err);                                                        \
+      if (err_ != MPI_SUCCESS) {                                               \
+        fprintf(stderr,                                                        \
+                "Failed: MPI error %04d from file <%s>, "                      \
+                "line %i.\n",                                                  \
+                err_, __FILE__, __LINE__);                                     \
+        exit(EXIT_FAILURE);                                                    \
+      }                                                                        \
+    }                                                                          \
+  } while (0)
+#define move_backward(move, o, lat_o)                                          \
+  {                                                                            \
+    move = -1 + (o == 0) * lat_o;                                              \
+  }
+#define move_forward(move, o, lat_o)                                           \
+  {                                                                            \
+    move = 1 - (o == lat_o - 1) * lat_o;                                       \
+  }
+#define move_backward_t(move, t, lat_t, eo, parity)                            \
+  {                                                                            \
+    move = (-1 + (t == 0) * lat_t) * (eo == parity);                           \
+  }
+#define move_forward_t(move, t, lat_t, eo, parity)                             \
+  {                                                                            \
+    move = (1 - (t == lat_t - 1) * lat_t) * (eo != parity);                    \
+  }
+#define get_u(U, tmp_U, lat_xyzt)                                              \
+  {                                                                            \
+    for (int i = 0; i < _LAT_2C_; i++) {                                       \
+      U[i] = tmp_U[i * _LAT_D_ * lat_xyzt];                                    \
+    }                                                                          \
+    U[6] = (U[1] * U[5] - U[2] * U[4]).conj();                                 \
+    U[7] = (U[2] * U[3] - U[0] * U[5]).conj();                                 \
+    U[8] = (U[0] * U[4] - U[1] * U[3]).conj();                                 \
+  }
+// #define get_u(U, tmp_U, lat_xyzt) \
+//   { \
+//     for (int i = 0; i < _LAT_CC_; i++) { \
+//       U[i] = tmp_U[i * _LAT_D_ * lat_xyzt]; \
+//     } \
+//   }
+#define get_u_comm(parity, U, tmp_U, _lat_xyzt)                                \
+  {                                                                            \
+    for (int i = 0; i < _LAT_2C_; i++) {                                       \
+      U[i] = tmp_U[((parity) * _LAT_CCD_ + (i * _LAT_D_)) * _lat_xyzt];        \
+    }                                                                          \
+    U[6] = (U[1] * U[5] - U[2] * U[4]).conj();                                 \
+    U[7] = (U[2] * U[3] - U[0] * U[5]).conj();                                 \
+    U[8] = (U[0] * U[4] - U[1] * U[3]).conj();                                 \
+  }
+// #define get_u_comm(parity, U, tmp_U, _lat_xyzt) \
+//   { \
+//     for (int i = 0; i < _LAT_CC_; i++) { \
+//       U[i] = tmp_U[((parity) * _LAT_CCD_ + (i * _LAT_D_)) * _lat_xyzt]; \
+//     } \
+//   }
+#define give_u_naive(parity, dim, origin_U, U, lat_xyzt)                       \
+  {                                                                            \
+    for (int i = 0; i < _LAT_CC_; i++) {                                       \
+      origin_U[((parity) * _LAT_CCD_ + (i * _LAT_D_ + dim)) * lat_xyzt] =      \
+          U[i];                                                                \
+    }                                                                          \
+  }
+#define get_u_laplacian(U, tmp_U, lat_xyzt)                                    \
+  {                                                                            \
+    for (int i = 0; i < _LAT_CC_; i++) {                                       \
+      U[i] = tmp_U[i * _LAT_3D_ * lat_xyzt];                                   \
+    }                                                                          \
+  }
+#define get_src(src, origin_src, lat_xyzt)                                     \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SC_; i++) {                                       \
+      src[i] = origin_src[i * lat_xyzt];                                       \
+    }                                                                          \
+  }
+#define get_src_laplacian(src, origin_src, lat_xyzt)                           \
+  {                                                                            \
+    for (int i = 0; i < _LAT_C_; i++) {                                        \
+      src[i] = origin_src[i * lat_xyzt];                                       \
+    }                                                                          \
+  }
+#define give_dest(origin_dest, dest, lat_xyzt)                                 \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SC_; i++) {                                       \
+      origin_dest[i * lat_xyzt] = dest[i];                                     \
+    }                                                                          \
+  }
+#define give_dest_laplacian(origin_dest, dest, lat_xyzt)                       \
+  {                                                                            \
+    for (int i = 0; i < _LAT_C_; i++) {                                        \
+      origin_dest[i * lat_xyzt] = dest[i];                                     \
+    }                                                                          \
+  }
+#define give_send(origin_send, send, lat_3dim)                                 \
+  {                                                                            \
+    for (int i = 0; i < _LAT_HALF_SC_; i++) {                                  \
+      origin_send[i * lat_3dim] = send[i];                                     \
+    }                                                                          \
+  }
+#define give_send_t(origin_send, send, lat_3dim, _)                            \
+  {                                                                            \
+    for (int i = 0; i < _LAT_HALF_SC_ * _; i++) {                              \
+      origin_send[i * lat_3dim] = send[i];                                     \
+    }                                                                          \
+  }
+#define give_send_laplacian(origin_send, send, lat_3dim)                       \
+  {                                                                            \
+    for (int i = 0; i < _LAT_C_; i++) {                                        \
+      origin_send[i * lat_3dim] = send[i];                                     \
+    }                                                                          \
+  }
+#define add_dest(origin_dest, dest, lat_xyzt)                                  \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SC_; i++) {                                       \
+      origin_dest[i * lat_xyzt] += dest[i];                                    \
+    }                                                                          \
+  }
+#define add_dest_t(origin_dest, dest, lat_xyzt, _)                             \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SC_ * _; i++) {                                   \
+      origin_dest[i * lat_xyzt] += dest[i];                                    \
+    }                                                                          \
+  }
+#define add_dest_laplacian(origin_dest, dest, lat_xyzt)                        \
+  {                                                                            \
+    for (int i = 0; i < _LAT_C_; i++) {                                        \
+      origin_dest[i * lat_xyzt] += dest[i];                                    \
+    }                                                                          \
+  }
+#define get_recv(recv, origin_recv, lat_3dim)                                  \
+  {                                                                            \
+    for (int i = 0; i < _LAT_HALF_SC_; i++) {                                  \
+      recv[i] = origin_recv[i * lat_3dim];                                     \
+    }                                                                          \
+  }
+#define get_recv_laplacian(recv, origin_recv, lat_3dim)                        \
+  {                                                                            \
+    for (int i = 0; i < _LAT_C_; i++) {                                        \
+      recv[i] = origin_recv[i * lat_3dim];                                     \
+    }                                                                          \
+  }
+#define give_clr(origin_clr, clr, lat_xyzt)                                    \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SCSC_; i++) {                                     \
+      origin_clr[i * lat_xyzt] = clr[i];                                       \
+    }                                                                          \
+  }
+#define add_clr(origin_clr, clr, lat_xyzt)                                     \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SCSC_; i++) {                                     \
+      origin_clr[i * lat_xyzt] += clr[i];                                      \
+    }                                                                          \
+  }
+#define get_clr(clr, origin_clr, lat_xyzt)                                     \
+  {                                                                            \
+    for (int i = 0; i < _LAT_SCSC_; i++) {                                     \
+      clr[i] = origin_clr[i * lat_xyzt];                                       \
+    }                                                                          \
+  }
+// little strange, but don't want change
+#define get_vals(U, zero, n)                                                   \
+  {                                                                            \
+    for (int i = 0; i < n; i++) {                                              \
+      U[i] = zero;                                                             \
+    }                                                                          \
+  }
+#define add_vals(U, tmp, n)                                                    \
+  {                                                                            \
+    for (int i = 0; i < n; i++) {                                              \
+      U[i] += tmp[i];                                                          \
+    }                                                                          \
+  }
+#define subt_vals(U, tmp, n)                                                   \
+  {                                                                            \
+    for (int i = 0; i < n; i++) {                                              \
+      U[i] -= tmp[i];                                                          \
+    }                                                                          \
+  }
+#define mult_vals(U, tmp, n)                                                   \
+  {                                                                            \
+    for (int i = 0; i < n; i++) {                                              \
+      U[i] *= tmp[i];                                                          \
+    }                                                                          \
+  }
+#define divi_vals(U, tmp, n)                                                   \
+  {                                                                            \
+    for (int i = 0; i < n; i++) {                                              \
+      U[i] /= tmp[i];                                                          \
+    }                                                                          \
+  }
+#define mult_u_none_none(tmp0, tmp1, tmp2, tmp3, zero)                         \
+  {                                                                            \
+    for (int c0 = 0; c0 < _LAT_C_; c0++) {                                     \
+      for (int c1 = 0; c1 < _LAT_C_; c1++) {                                   \
+        tmp0 = zero;                                                           \
+        for (int cc = 0; cc < _LAT_C_; cc++) {                                 \
+          tmp0 += tmp1[c0 * _LAT_C_ + cc] * tmp2[cc * _LAT_C_ + c1];           \
+        }                                                                      \
+        tmp3[c0 * _LAT_C_ + c1] = tmp0;                                        \
+      }                                                                        \
+    }                                                                          \
+  }
+#define mult_u_none_dag(tmp0, tmp1, tmp2, tmp3, zero)                          \
+  {                                                                            \
+    for (int c0 = 0; c0 < _LAT_C_; c0++) {                                     \
+      for (int c1 = 0; c1 < _LAT_C_; c1++) {                                   \
+        tmp0 = zero;                                                           \
+        for (int cc = 0; cc < _LAT_C_; cc++) {                                 \
+          tmp0 += tmp1[c0 * _LAT_C_ + cc] * tmp2[c1 * _LAT_C_ + cc].conj();    \
+        }                                                                      \
+        tmp3[c0 * _LAT_C_ + c1] = tmp0;                                        \
+      }                                                                        \
+    }                                                                          \
+  }
+#define mult_u_dag_none(tmp0, tmp1, tmp2, tmp3, zero)                          \
+  {                                                                            \
+    for (int c0 = 0; c0 < _LAT_C_; c0++) {                                     \
+      for (int c1 = 0; c1 < _LAT_C_; c1++) {                                   \
+        tmp0 = zero;                                                           \
+        for (int cc = 0; cc < _LAT_C_; cc++) {                                 \
+          tmp0 += tmp1[cc * _LAT_C_ + c0].conj() * tmp2[cc * _LAT_C_ + c1];    \
+        }                                                                      \
+        tmp3[c0 * _LAT_C_ + c1] = tmp0;                                        \
+      }                                                                        \
+    }                                                                          \
+  }
+#define mult_u_dag_dag(tmp0, tmp1, tmp2, tmp3, zero)                           \
+  {                                                                            \
+    for (int c0 = 0; c0 < _LAT_C_; c0++) {                                     \
+      for (int c1 = 0; c1 < _LAT_C_; c1++) {                                   \
+        tmp0 = zero;                                                           \
+        for (int cc = 0; cc < _LAT_C_; cc++) {                                 \
+          tmp0 +=                                                              \
+              tmp1[cc * _LAT_C_ + c0].conj() * tmp2[c1 * _LAT_C_ + cc].conj(); \
+        }                                                                      \
+        tmp3[c0 * _LAT_C_ + c1] = tmp0;                                        \
+      }                                                                        \
+    }                                                                          \
+  }
+#define _inverse(input_matrix, inverse_matrix, augmented_matrix, pivot,        \
+                 factor, size)                                                 \
+  {                                                                            \
+    for (int i = 0; i < size; i++) {                                           \
+      for (int j = 0; j < size; j++) {                                         \
+        inverse_matrix[i * size + j] = input_matrix[i * size + j];             \
+        augmented_matrix[i * 2 * size + j] = inverse_matrix[i * size + j];     \
+      }                                                                        \
+      augmented_matrix[i * 2 * size + size + i] = 1.0;                         \
+    }                                                                          \
+    for (int i = 0; i < size; i++) {                                           \
+      pivot = augmented_matrix[i * 2 * size + i];                              \
+      for (int j = 0; j < 2 * size; j++) {                                     \
+        augmented_matrix[i * 2 * size + j] /= pivot;                           \
+      }                                                                        \
+      for (int j = 0; j < size; j++) {                                         \
+        if (j != i) {                                                          \
+          factor = augmented_matrix[j * 2 * size + i];                         \
+          for (int k = 0; k < 2 * size; ++k) {                                 \
+            augmented_matrix[j * 2 * size + k] -=                              \
+                factor * augmented_matrix[i * 2 * size + k];                   \
+          }                                                                    \
+        }                                                                      \
+      }                                                                        \
+    }                                                                          \
+    for (int i = 0; i < size; i++) {                                           \
+      for (int j = 0; j < size; j++) {                                         \
+        inverse_matrix[i * size + j] =                                         \
+            augmented_matrix[i * 2 * size + size + j];                         \
+      }                                                                        \
+    }                                                                          \
+  }
+#define free_vec(device_send_vec, device_recv_vec, host_send_vec,              \
+                 host_recv_vec)                                                \
+  {                                                                            \
+    for (int i = 0; i < _WARDS_; i++) {                                        \
+      cudaFree(device_send_vec[i]);                                            \
+      cudaFree(device_recv_vec[i]);                                            \
+      free(host_send_vec[i]);                                                  \
+      free(host_recv_vec[i]);                                                  \
+    }                                                                          \
+  }
+} // namespace qcu
+// Define Gell-Mann matrices as macros (flattened 3x3 row-major order)
+// λ1
+#define LAMBDA1 {0, 1, 0, 1, 0, 0, 0, 0, 0}
+// λ2
+#define LAMBDA2                                                                \
+  {0, -1.0, 0, 1.0, 0, 0, 0, 0, 0} // actually should be 0, -i, 0, i, 0, 0, 0,
+                                   // 0, 0 (complex part handled separately)
+// λ3
+#define LAMBDA3 {1, 0, 0, 0, -1, 0, 0, 0, 0}
+// λ4
+#define LAMBDA4 {0, 0, 1, 0, 0, 0, 1, 0, 0}
+// λ5
+#define LAMBDA5 {0, 0, -1.0, 0, 0, 0, 1.0, 0, 0} // same note as λ2
+// λ6
+#define LAMBDA6 {0, 0, 0, 0, 0, 1, 0, 1, 0}
+// λ7
+#define LAMBDA7 {0, 0, 0, 0, 0, -1.0, 0, 1.0, 0} // same note as λ2
+// λ8
+#define LAMBDA8                                                                \
+  {1.0 / 1.7320508075688772, 0, 0, 0, 1.0 / 1.7320508075688772, 0, 0, 0,       \
+   -2.0 / 1.7320508075688772}
+// Pack them into one static array
+#define GELL_MANN                                                              \
+  {LAMBDA1, LAMBDA2, LAMBDA3, LAMBDA4, LAMBDA5, LAMBDA6, LAMBDA7, LAMBDA8}
+static inline int getLocalRank() {
+  int localRank;
+  MPI_Comm localComm;
+  MPI_Comm_split_type(MPI_COMM_WORLD, MPI_COMM_TYPE_SHARED, 0, MPI_INFO_NULL,
+                      &localComm);
+  MPI_Comm_rank(localComm, &localRank);
+  MPI_Comm_free(&localComm);
+  return localRank;
+}
+static inline int getRuntimeDevice() {
+  const char *value = std::getenv("PYQCU_MPI_DEVICE_ID");
+  if (value != nullptr && value[0] != '\0') {
+    char *end = nullptr;
+    long parsed = std::strtol(value, &end, 10);
+    if (end != value && *end == '\0' && parsed >= 0) {
+      return static_cast<int>(parsed);
+    }
+  }
+  return getLocalRank();
+}
+#endif
