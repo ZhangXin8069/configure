@@ -64,6 +64,7 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
 - 与其他技能配合：生成项目 → 首轮调用 make；中途报错 → 该轮转 debug；
   性能不足 → 该轮转 optim；收敛后打标签 → tag；收敛后复查 → diff；
   多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；skill 库升级 → up；
+  仓库命名/目录/交付格式整改 → form；
   需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；
   多独立子任务（多失败/多文件/多目标）→ dispatch 并行派发；
   循环中断后续接 → go-on（多源汇聚恢复上下文，优先原生会话继续）；
@@ -76,6 +77,7 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
 | 项目生成/代码生成 | plan → init →（实现）→ test → debug/optim → diff → tag | 首轮即调用 make 完整流程，本技能在其后叠加收敛循环 |
 | 复杂多步任务（用户未指定技能） | plan → diff/analy →（实现）→ test → debug/optim → diff | 先计划再动手；调查阶段只读 |
 | 修改/优化已有内容 | diff →（实现）→ test → optim → diff | 先看改动范围再动 |
+| 仓库命名/目录/交付格式整改 | form → test → diff → init/tag | 先只读冲突表再分批整改；功能复现后收尾 |
 | 修复类任务 | debug → test → diff | 复现→根因→修复→回归 |
 | 分析/报告类 | analy →（按需） | 结论附 `文件:行号` |
 | 多独立子任务（多失败/多文件/多目标） | dispatch →（整合）→ test/diff | 拆域并行（无共享状态/无顺序依赖/互不改同文件才并行），一轮一动作不冲突 |

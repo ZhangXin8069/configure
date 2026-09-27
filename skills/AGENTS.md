@@ -6,6 +6,10 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 
 - `analy/references/analysis-framework.md`：具体工作主题的代码/物理 15 步分析框架。
 - `analy/references/report-guide.md`：分析报告主线、色彩、防溢出、交付检查与示例。
+- `form/references/naming-and-layout.md`：语言/构件命名矩阵、简单库与复杂库规则、目录白名单。
+- `form/references/observed-conventions.md`：固定明文快照中可直接验证的多语言格式规则。
+- `form/references/source-snapshots/README.md`：四个范例 URL 的提交、明文快照、排除项与哈希索引。
+- `form/references/git-artifacts-and-workflow.md`：交付目录、任务清理、Git 流程和本地特化模板。
 - `tag/references/tag-operations.md`：Git 标签创建、查询、删除、改写与区间操作的详细命令。
 - `up/references/awesome-opencode.md`：opencode 生态精选索引（官方/插件/主题/agent/资源），供 up 差距分析与候选发现使用。
 
@@ -46,7 +50,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - 按需调用，不强制：任务确实需要时才调用（打标前看改动 → diff、报错 → debug、
   优化后验证 → test），避免无意义的技能链；
 - 被调用技能按其 SKILL.md 规范执行（TODO 任务清单、前置上下文和 Git 检查约定一并生效）；
-- 新增/修改技能时须维护「与其他技能配合」条目，保持范式完整（26/26）。
+- 新增/修改技能时须维护「与其他技能配合」条目，保持范式完整（27/27）。
 - **并行优先**：任务含 2+ 个独立子任务（无共享状态/无顺序依赖/互不改同文件）时，
   优先调用 `dispatch` 并行派发（多独立失败排查、多文件调查、多目标审查、多用例测试），
   单任务或任务有依赖时不并行。
@@ -56,7 +60,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 **所有技能的核心点必须登记在技能表中**（下方「技能」节的 `| 技能 | 用途 |` 表）：
 
 - 每次**新增**技能：登记技能表（用途行，概括核心能力与产出）+ 互鉴表（标志性优点，
-  如适用）+ 技能计数更新（21/21 → 26/26 等）；
+  如适用）+ 技能计数更新（21/21 → 27/27 等）；
 - 每次**更改**技能（SKILL.md 核心流程/产出/命名变化）：同步更新技能表对应行，避免
   表格与实际技能脱节；仅措辞级微调可不动表格；
 - 技能表行须概括核心点：做什么 + 关键机制（如 analy 的 15 步框架、pure 的三态闭环、
@@ -64,7 +68,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - 本约定由 up/skill-creator/make/all 等流程执行时落实，任意技能会话发现脱节时
   可顺手修正（先读后写、最小改动）。
 
-## 技能范式总览（26 个技能的统一范式）
+## 技能范式总览（27 个技能的统一范式）
 
 所有技能遵循同一文档结构与执行范式，新增/修改技能时必须对齐：
 
@@ -81,7 +85,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | 错误处理 | 表格：场景 → 处理 |
 | 注意事项 | 边界、安全、临时产物清理 |
 
-**执行范式**（26 个技能共通的行为准则）：
+**执行范式**（27 个技能共通的行为准则）：
 
 1. **先问对问题（一次问全）**：需求缺项时，所有问题在第一次交互一次性全部提出，用户一次回答，不逐次追问；
 2. **证据驱动 / 诚实**：结论与统计以实测为准（命令输出、退出码、数值），不虚报通过、失败与收益；
@@ -120,6 +124,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `follow-up` | 先压缩再分发，行动项可执行、状态与动作分离、跨会话可续 | 周报、交接、复盘、行动项清单 |
 | `dispatch` | 优先 `agent-dispatch.sh --task --json`，默认继承父 launcher/provider/model/strength；并行派发纪律（2+ 独立任务拆域、同消息派发=并行）；代理指令四要素；整合验证不豁免；派发失败复用当前启动链重试，最终串行降级 | 多独立任务的并行提速；派发子代理时的指令构造与整合纪律 |
 | `team` | 状态机 + worker 隔离 + 能力匹配 + 单文件单写者/只读审查者 + 健康检查 + 失败重派；优先 `agent-dispatch.sh` 且默认继承父设置，派发链失败复用当前 agent 启动方式并最终串行 | 长流程、多 worker 协作、模型/工具能力选择、重派和收敛收尾场景 |
+| `form` | 规则先于范例；参考 URL 固化为可校验明文快照；简单库/复杂库分类；语言×构件命名矩阵；目录白名单；只读冲突表→较高权限整改→功能复现；docs/logs/data/testing 分域；生成目标库特化 skill 与根 AGENTS 明文规则；最终执行 diff/init/dev tag | Git 库命名、结构、框架、清洁度和交付格式治理；跨目录大范围重整 |
 | `up` | 四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜 + awesome-opencode 生态清单；API→网页重试降级；候选固定 ref/许可证/哈希/测试/决策留痕；差距分析；插件推荐与一键安装器（按 harness 分支 Codex/opencode，manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
 
 ## 技能
@@ -140,6 +145,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `test` | 系统化测试：默认测试对象为上次 agent 生成的工作（参考 `.agent.*.list` 格式），可指定项目；中间变量自行计算并保存，中间/最终结果与图表落盘 `test_out/`，失败按 debug 循环修复、通过按 optim 循环优化，支持设备切换（GPU 优先/CPU/NPU）与多精度切换（默认 fp32），数据读写间精度转换显式管理|
 | `make` | 项目生成：生成对象为用户指定的项目，编排调用本目录全部技能（init/tag/debug/optim/diff/analy/test）完成全流程（解析需求→调查规划→最小改动实现→系统化测试→循环优化→复查→归档→打标），细节要求为所有技能的汇总|
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范|
+| `form` | Git 库格式治理：固定并校验参考 URL 的离线明文快照，识别简单/复杂库与 cpp/python/bash/other 语言族，按规则审计文件/函数/变量/对象/目录命名；执行只读冲突表与较高权限整改，维护 docs/logs/data/testing 和框架入口，复现功能，生成目标库特化 skill 与根 AGENTS 明文规则，最后执行 diff/init/dev tag |
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，派发失败时回到本会话内联执行；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；dispatch 失败按启动链重试后串行；生成类任务首轮复用 make，单步任务转对应技能|
 | `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化（继承用户时间/资源上限）→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名、固定 ref、许可证、哈希、测试、采纳决策与 URL |

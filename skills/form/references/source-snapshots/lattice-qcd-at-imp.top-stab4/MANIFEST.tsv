@@ -1,0 +1,37 @@
+url	https://gitee.com/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static
+ref_kind	tag
+ref	stab4
+ref_object	2b0c03639b11dde522d6e79dffa6d8c1d4b58aff
+commit	5ee896da0be245ce3477fa13428fe5c96b1ca760
+path	static
+mode	type	object	size	path	local
+100644	blob	b2818676117d650dc57af2c70e8673534ef491e4	6148	static/.DS_Store	excluded-binary
+100644	blob	4d4b7d103e0013f64e4dedd2ad0b2947cc0d11a5	3645	static/css/bulma-carousel.min.css	included
+100644	blob	09b4aeb2fb19d7d883a0b01cb1982cb382992f95	13782	static/css/bulma-slider.min.css	included
+100644	blob	ed3a9d377ba3c30e6eb8b2a35e08e8dc814a0725	96528	static/css/bulma.css.map.txt	included
+100644	blob	a807a314caa0df0ddccacd6b732d83f5ffde7a89	204030	static/css/bulma.min.css	included
+100644	blob	cbeaa76a1f624412d148a03b600afa54b2684114	59190	static/css/fontawesome.all.min.css	included
+100644	blob	de7335ec89a9c8b403a5ae15304ac85bde904057	46281	static/css/index.css	included
+100644	blob	8b14d41f730e3642c5986d15e956bb8af5134367	203726	static/images/carousel1.jpg	excluded-binary
+100644	blob	8871abfdc9c3745a372d1b55952f4d24481e3ea0	372056	static/images/carousel2.jpg	excluded-binary
+100644	blob	a70d291241eea483a3e2ca58d7c779b17cc164b8	507607	static/images/carousel3.jpg	excluded-binary
+100644	blob	14411fd93d699377c6e17280cabaf9a39d67dbdc	201734	static/images/carousel4.jpg	excluded-binary
+100644	blob	101a82765cbd4a6a1a1daa705aae04c2634f806a	12014	static/images/favicon.ico	excluded-binary
+100644	blob	658f910f6de5a2cda64010f3c7b9758c4db64358	949	static/js/AGENTS.md	included
+100644	blob	7bb95af49254188a4a83f8a56d6c7dc74e4f8b5e	15197	static/js/animations.js	included
+100644	blob	229edba242bb190698662cdce6bdacde9f0769fe	82823	static/js/bulma-carousel.js	included
+100644	blob	5fff0695f00cf9da60dd87aa72c51367b00e92ff	40723	static/js/bulma-carousel.min.js	included
+100644	blob	c6718de5c5ae59d2c22141a147f5afba41af9cbb	16404	static/js/bulma-slider.js	included
+100644	blob	7e62685763cf7668cfa8857fac0b27af2c277286	6926	static/js/bulma-slider.min.js	included
+100644	blob	81d6c79a1df56b0c8673a10b9d83e0e158d28386	19239	static/js/fontawesome-subset.js	included
+100644	blob	9ee22fdb7753983bae3986b2436bdd167730cd5b	1194960	static/js/fontawesome.all.min.js	included
+100644	blob	716b6f96a6959e8a12dc5bf83b29c9dcc8014530	2881	static/js/i18n.js	included
+100644	blob	c5537d91661539e4e7f773eba65476080614c915	19968	static/js/index.js	included
+100644	blob	c28f33acf4896db7d31b6783878d7d5f13736b94	8071	static/js/music.js	included
+100644	blob	e621cb448b0ddf3ba94a41c76b610420d84dcca1	6194	static/js/papers.js	included
+100644	blob	2fdf2518c690cf4ecc3c89cf5c933c94493a15d0	2651	static/js/theme.js	included
+100644	blob	80f9dedb22582266a9daa4b5a74a2b7ef60f99a4	14062	static/pdfs/sample.pdf	excluded-binary
+100644	blob	68eb69b23434984ce6053d307b6b6b7f709a7e7e	2527585	static/videos/banner_video.mp4	excluded-binary
+100644	blob	3dc429a6613bf85898a47643fe31d4439fe9d973	1339736	static/videos/carousel1.mp4	excluded-binary
+100644	blob	f47c06cc18baa434989aa2d46756a0b678957242	2804617	static/videos/carousel2.mp4	excluded-binary
+100644	blob	698e9f972a96948e15606d89ceda254e571d2692	1638525	static/videos/carousel3.mp4	excluded-binary
