@@ -1,0 +1,49 @@
+参考此目录下的其他skill,编写form skill:
+```
+1.约定
+1.1 各种命名(在此分为所谓的[cpp(编译型编程语言,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu}),python(一般解释型编程语言,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/lattice}),bash(特殊解释型编程语言,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/bin}),other(其他型编程语言,例如{https://gitee.com/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static/css})]*[文件命名(例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/testing/qcu/conftest.clover.bistabcg.py}),函数命名(例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu/include/clover_dslash.h:pick_up_u_x}和{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/cuda/qcu/qcu.pyx:applyInitQcu}),变量命名(例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/lattice/__init__.py:gamma_5}和{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu/include/define.h:_BLOCK_SIZE_}),对象命名(例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu/include/lattice_clover_bistabcg.h:LatticeCloverBistabCg}),其他命名(例如{https://gitee.com/zhangxin8069/PyQCD/tree/dev15/docs/格点QCD中的DGLAP演化方程.tex})]*[大驼峰命名法(例如上述的{LatticeCloverBistabCg}),小驼峰命名法(例如上述的{applyInitQcu}),下划线命名法(例如上述的{pick_up_u_x}),点划分命名法(例如上述的{conftest.clover.bistabcg.py})](其中穿插'-'作为命名时的补充关系的连接符号,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/bin/agent-custom.json.refer}))(当本身可以使用全小写且较简短的名称时,可以不使用上述命名法)
+1.2 此skill的对象锁定为git库(在此分为所谓的[简单库,复杂库])
+1.2.1 简单库(库名为全为小写,例如上述的{configure}和{lattice-qcd-at-imp.top},一般以简单编程语言(例如bash和html)为主导),以{https://gitee.com/zhangxin8069/configure}作为格式范例(范例参考优先度低于此skill中的明确说明)
+1.2.2 复杂库(库名为存在大写,例如上述的{PyQCU}和{PyQCD},一般以生产编程语言(例如cpp和python)为主导),以{https://gitee.com/zhangxin8069/PyQCU}作为格式范例(范例参考优先度低于此skill中的明确说明)
+1.3 命名的明确要求(有时大写存在特殊含义,例如当'I'作为单位矩阵的表示,例如{https://gitee.com/zhangxin8069/configure/blob/stab80/bin/ddu.sh}的'_SRC'作为当前路径变量,此时可以适当放宽全小写的要求,反之亦然)(有时命名的含义为单一词汇或其他简单缩写,例如{https://gitee.com/zhangxin8069/PyQCU/blob/dev89/pyqcu/dslash/_operator.py:hopping,此时可以适当放宽使用驼峰命名法的要求,反之亦然})(所有命名都应简单易懂且无歧义)
+1.3.1 文件名:
+编译型编程语言和解释型编程语言的头文件(被当作{include}的文件):全小写的下划线命名法,作为复杂库内解释型编程语言文件时,前缀'_'作为库自用文件标识(例如{https://gitee.com/zhangxin8069/PyQCU/blob/dev89/pyqcu/dslash/_wilson.py})
+编译型编程语言和解释型编程语言的源文件(被当作{src}的文件):全小写的下划线命名法
+编译型编程语言和解释型编程语言的主文件(含有main函数或者有相同效果的文件):全小写的点划分命名法
+1.3.2 函数名:
+除了相对独立的接口函数(例如上述的{applyInitQcu})使用{小驼峰命名法},其余的统一使用{全小写的下划线命名法},作为复杂库内解释型编程语言函数时,前缀'_'作为库自用函数标识(例如{https://gitee.com/zhangxin8069/PyQCU/blob/dev89/pyqcu/tools/_io.py:_dict_h5_write})
+
+1.3.3 变量名:
+除了相对独立的宏名(例如上述的{_BLOCK_SIZE_})使用{全大写的下划线命名法},其余的统一使用{全小写的下划线命名法},作为复杂库内解释型编程语言变量时,前缀'_'作为库自用变量标识(例如{https://gitee.com/zhangxin8069/PyQCU/blob/dev89/pyqcu/cuda/define.py:_SET_PTRS_SIZE_})
+
+1.3.4 对象名:
+除本身可以使用全小写且较简短的名称外,其余的统一使用{大驼峰命名法},作为复杂库内解释型编程语言对象时,前缀'_'作为库自用对象标识(例如{https://gitee.com/zhangxin8069/PyQCU/blob/dev89/pyqcu/cuda/_schur_op.py:_SetIndexAllocator})
+
+1.3.5 文件夹名:
+允许的库根文件夹名称:小写本库名(适用于复杂库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu}),cpp(适用于复杂库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp}),data(适用于所有库,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/data}),docs(适用于所有库,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/docs}),refer(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCD/tree/dev15/docs}),skills(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCD/tree/dev15/skills}),logs(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCD/tree/dev15/logs}),bin(适用于简单库,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/bin}),lib(适用于简单库,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/lib}),特殊功能名称(适用于简单库,例如{https://gitee.com/zhangxin8069/configure/tree/stab80/hooks}和{https://gitee.com/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static})
+允许的库子文件夹名称:子功能名称(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/solver}),子对象名称(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/lattice}),子环境名称(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda}),参考库名称(包括refer/books和refer/papers和refer/git-rep和refer/**)(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCD/tree/dev15/refer/git-rep/EasyDistillation}),特殊接口名称(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu/python}),include(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu/include}),src(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu/src}),docs(适用于所有库,例如{https://gitee.com/zhangxin8069/PyQCD/tree/dev15/refer/donghx/docs})
+上述之外的文件夹名,除非用户特别说明,一律不准
+1.4 框架的明确要求
+1.4.1 编译型编程语言:框架参考{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu}
+1.4.2 一般解释型编程语言:框架参考{https://gitee.com/zhangxin8069/PyQCD/blob/dev15/pyqcd}
+1.4.3 特殊解释型编程语言:框架参考{https://gitee.com/zhangxin8069/configure/tree/main/bin}
+1.4.4 其他型编程语言:框架参考{https://gitee.com/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static}
+1.5 git的明确要求
+1.5.1 所有改动在git-commit后自动提交到git远程,包括最终的git-tag,并确保其中标注的{message}的信息详实且格式规范
+1.5.2 每次大任务开始前:1.确认git工作区是否干净;2.在git工作区上清除上个git-tag留下的对本次任务意义不大的文档和日志和测试代码及其其他非本库功能性的文件(清除这些文件不应影响本库的正常工作,如果任务中需要回顾已被删除的文件,则使用git的相关回顾功能);
+1.5.3 每次大任务结束后:~diff~init~tag
+1.5.4 git-tag只有标签作用,禁止将tag名作为命名和说明和注释的参考,必须使用有实际意义的名称作为命名和说明和注释的参考,比如{时间}和{目的}和{功能}和{相关名词}
+1.5.5 在本库历史文件有git同步保护的情况下,可以放宽对当前工作区的文件操作
+1.6 其他要求
+1.6.1 文档存放在docs文件夹,此文件夹只能包含本次任务的文档文件(tex文件和pdf文件和md文件和作为附件的图片文件),以此保持纯净
+1.6.2 日志存放在logs文件夹,此文件夹只能包含本次任务的日志文件(log文件和json文件和tsv文件和csv文件和txt文件)以及所有的用户自定义的历史日志文件(例如{https://gitee.com/zhangxin8069/PyQCU/blob/dev89/logs/v20260820.txt}),以此保持纯净与便捷
+1.6.3 数据存放在data文件夹,此文件夹包含所有历史任务的数据文件(h5文件和hdf5文件和pt文件和npy文件和npz文件和lime文件),以此保持便捷(使用.gitignore在git工作区排除此目录所有文件,只保留.gitignore和AGENTS.md和README.md)
+1.6.4 测试代码存放在{小写库名/testing}文件夹(例如{https://gitee.com/zhangxin8069/PyQCU/tree/dev89/pyqcu/testing},注意按功能有序存放,简单库则直接保留在工作文件夹下,例如{https://gitee.com/zhangxin8069/configure/blob/main/bin/agent-dispatch.test.sh}),测试成功后将仍有意义的测试代码打包合并到本库中,以此作为通用的自用的功能性代码,并保留可以直接调用此功能性代码的脚本(例如python脚本与bash脚本,坚持简单即用,默认值全有),此脚本使用点划分命名法
+2 本skill的工作流
+2.1 检查当前工作库与上述约定的冲突,快速制定全面的修改当前工作库的方案,待用户同意后执行此方案(等待超时则默认用户同意)
+2.2 按照上述的新建方案与上述约定,对当前工作库进行快速整改并快速迭代
+2.3 所有整改完成后,进行全面的功能性复现,确保本skill在完成整改的同时没有影响当前工作库的功能,同时注意同步改正各种说明和注释和文档和AGENTS.md和skill等等以确保当前工作库全面无误
+2.4 持续快速地debug并快速迭代,直至完美
+2.5 总结此通用skill在当前工作库下的特化版本,将此新生成的专属版本写入本库的skills目录,并在本库的根AGENTS.md中明确要求遵守此专属skill的约定和要求(此约定和要求全部明文写入本库根AGENTS.md)
+2.6 ~diff~init~tag(dev,注意在docs编写此skill的md任务文档)
+```
