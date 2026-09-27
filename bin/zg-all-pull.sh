@@ -29,9 +29,9 @@ ensure_repo ../../MyQCD MyQCD || MYQCD_CLONED=1
 PYQCU_CLONED=0
 ensure_repo ../../PyQCU PyQCU || PYQCU_CLONED=1
 
-bash ${_PATH}/zgCONFIGUREpull.sh
-[ "${PYQCD_CLONED}" -eq 0 ] && bash ${_PATH}/zgPyQCDpull.sh
-[ "${MYQCD_CLONED}" -eq 0 ] && bash ${_PATH}/zgMyQCDpull.sh
-[ "${PYQCU_CLONED}" -eq 0 ] && bash ${_PATH}/zgPYQCUpull.sh
+bash ${_PATH}/zg-configure-pull.sh
+[ "${PYQCD_CLONED}" -eq 0 ] && bash ${_PATH}/zg-pyqcd-pull.sh
+[ "${MYQCD_CLONED}" -eq 0 ] && bash ${_PATH}/zg-myqcd-pull.sh
+[ "${PYQCU_CLONED}" -eq 0 ] && bash ${_PATH}/zg-pyqcu-pull.sh
 
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

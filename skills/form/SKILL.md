@@ -1,9 +1,10 @@
 ---
 name: form
 description: |
-  当用户要求审计或整改 Git 库的命名、目录结构、代码框架、文档/日志/数据/测试布局、
-  仓库清洁度与交付格式，或说 form / 格式治理 / 命名规范 / 命名整改 / 结构治理 /
-  仓库规范化 / 格式审计时使用；不用于单点语法错误或性能优化。
+  当用户要求审计、整改或初始化 Git 库的命名、目录结构、代码框架、文档/日志/数据/测试
+  布局、仓库清洁度与交付格式，检查命名/目录重构是否合规，或说 form / 格式治理 /
+  命名规范 / 目录规范 / 结构治理 / 仓库规范化 / 格式审计 / dry-run form 时使用；
+  不用于单点语法错误或性能优化。
 metadata:
   openclaw:
     emoji: 📐
@@ -20,6 +21,19 @@ metadata:
 `~diff → ~init → ~tag(dev)` 收尾。
 
 明确文字规则的优先级高于范例链接；范例只用于确认风格，不覆盖本 skill 的规则。
+
+## configure 特化
+
+- 当前仓库为 simple 库，主导语言为 bash；框架参照
+  `references/source-snapshots/configure-main/bin/`。
+- 代码文件全小写；批量 Git 命令使用 `gz-<repo>-push.sh` 和 `zg-<repo>-pull.sh`，
+  聚合入口为 `gz-all-push.sh`、`zg-all-pull.sh`。
+- 顶层目录白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`。
+- 包依赖清单位于 `lib/requirements/{apt,pip}.txt`，由 `bin/{apt,pip}_install.sh` 消费。
+- `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 只允许 `log/json/tsv/csv/txt`。
+- 本库缺少独立构建系统时，验证入口为 `bash -n bin/*.sh`、
+  `scripts/form-audit.sh --root /root/configure --strict --quiet` 和
+  `scripts/form-snapshot-verify.sh --quiet`。
 
 ## 核心原则
 
@@ -66,9 +80,12 @@ metadata:
 - `references/observed-conventions.md`：从固定明文快照归纳的 C++/Python/Bash/静态前端规则。
 - `references/source-snapshots/README.md`：四个参考 URL 的提交、文件清单、排除项和校验方式。
 - `references/git-artifacts-and-workflow.md`：目录职责、清理边界、提交消息、验收和本地特化模板。
+- `scripts/form-audit.sh`：只读检查已跟踪路径的顶层目录、代码文件名、docs/logs/data 和测试位置。
+- `scripts/form-snapshot-verify.sh`：离线校验快照哈希、manifest、二进制排除项和符号链接。
 
 执行命名或目录审计前读取第一个和第二个；需要核对参考原义、提交或例外证据时读取第三个。
-涉及清理、Git 交付、文档/日志/数据/测试或根 `AGENTS.md` 特化时读取第四个。
+涉及清理、Git 交付、文档/日志/数据/测试或根 `AGENTS.md` 特化时读取第四个。脚本只提供
+确定性基线信号，函数、变量、对象和公开接口的语义命名仍须按规则人工判断。
 
 ## 工作流程
 
@@ -102,7 +119,15 @@ cd "$REPO_ROOT"
 git ls-files | sort
 find . -maxdepth 3 -type d -not -path './.git*' -not -path './data*' | sort
 git status --short
+FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
+"$FORM_SKILL_DIR/scripts/form-audit.sh" --root "$REPO_ROOT" --quiet
 ```
+
+`FORM_SKILL_DIR` 指向当前正在执行的 `form` 技能目录；使用全局技能而目标库尚无本地副本时，
+显式设置为该技能的实际路径。
+
+`form-audit.sh` 仅审计 Git 已跟踪路径，默认不跟随 `data/`、`refer/`、
+`source-snapshots/` 和 vendored/generated 目录；输出是候选冲突，不是自动改名授权。
 
 2. 读取与本次范围相关的根 `AGENTS.md`、各目录 `AGENTS.md`、构建/测试入口和现有
    `skills/form/SKILL.md`；不递归读取无关文档。需要参考范例时，先读
@@ -118,8 +143,8 @@ git status --short
 5. 使用本地快照前校验完整性；任一失败都停止引用该快照，不使用损坏副本推断规则：
 
 ```bash
-(cd skills/form/references/source-snapshots/pyqcu-dev89 && \
-  sha256sum -c SHA256SUMS.txt)
+FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
+"$FORM_SKILL_DIR/scripts/form-snapshot-verify.sh" --quiet
 ```
 
 6. 运行 `~diff` 查看上一基线以来的改动；若尚未有基线，记录 `git status` 与当前提交作为基线。
@@ -178,9 +203,13 @@ rg -n --hidden --glob '!.git/**' '旧名称|OldName|old_name'
 git diff --check
 git status --short
 rg -n --hidden --glob '!.git/**' '<<<<<<<|=======|>>>>>>>|TBD|FIXME'
+FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
+"$FORM_SKILL_DIR/scripts/form-audit.sh" --root "$REPO_ROOT" --strict --quiet
 ```
 
-4. 若测试失败，转 `~debug` 定位根因，不以修改期望值或删除测试绕过；修复后重跑完整验证。
+4. 自动检查不覆盖函数、变量、对象、公开接口和既有兼容例外；这些项目逐条回填审计表，
+   每条给出 `文件:行号` 和修正或保留理由。
+5. 若测试失败，转 `~debug` 定位根因，不以修改期望值或删除测试绕过；修复后重跑完整验证。
 
 ### Step 7. 生成当前库特化版本
 
@@ -210,6 +239,18 @@ rg -n --hidden --glob '!.git/**' '<<<<<<<|=======|>>>>>>>|TBD|FIXME'
 5. 最终确认本地分支、远程分支和 `dev` 标签指向同一验收提交，并确认标签已推送；
    有漂移时停止并报告，不猜测远程状态。
 
+## 验收矩阵
+
+| 维度 | 证据 | 通过条件 |
+|---|---|---|
+| 规则来源 | 快照 metadata、commit、manifest、SHA-256 | 使用的四条示例规则均来自固定提交，校验通过 |
+| 目录布局 | `form-audit.sh` TSV 输出、根 AGENTS 白名单 | 计划内冲突清零，例外逐条登记 |
+| 文件命名 | 自动 TSV、文件路径、重命名后旧引用搜索 | 代码文件名符合规则，兼容例外有理由 |
+| 符号命名 | 审计表 `文件:行号`、公开接口清单 | 函数/变量/对象逐项判定，例外可追溯 |
+| 交付目录 | docs/logs/data/testing 清单 | 内容类型和职责符合边界 |
+| 功能复现 | 构建、测试、主入口冒烟命令与退出码 | 整改前后同一验证集通过；缺口明确写出 |
+| Git 收尾 | diff、init、dev tag、远程对象 | 提交消息有意义，分支与标签指向验收提交 |
+
 ## 错误处理
 
 | 场景 | 处理 |
@@ -222,6 +263,9 @@ rg -n --hidden --glob '!.git/**' '<<<<<<<|=======|>>>>>>>|TBD|FIXME'
 | 清理候选可能被引用 | 运行仓库级引用搜索；计划未列明或仍有歧义时不删除 |
 | 没有测试入口 | 至少执行语法检查和主入口冒烟；在特化 skill 与最终报告写明覆盖缺口 |
 | 用户未回复计划 | `~form` 的较高权限允许继续计划内整改；计划外和不可逆项停止 |
+| 快照校验失败 | 停止引用该快照，先恢复固定提交内容；不能用损坏副本推断命名规则 |
+| 自动审计命中合法例外 | 在根 AGENTS 登记理由，并通过 `--exclude` 或本地包装脚本精确豁免，不禁用整项检查 |
+| 审计脚本不可执行或缺失 | 恢复脚本并执行 `chmod +x`，随后运行 `form-scripts.test.sh` |
 | 提交/推送失败 | 保留已完成的本地改动与本地产物，检查分支和远端后重试；禁止强推掩盖冲突 |
 | 标签或远程对象漂移 | 停止自动修正，交 `tag` 技能检查，不擅自改写已推送对象 |
 
@@ -232,4 +276,6 @@ rg -n --hidden --glob '!.git/**' '<<<<<<<|=======|>>>>>>>|TBD|FIXME'
 - 目录白名单之外的名称只有用户明确批准或目标库特化规则明确登记后才能保留。
 - 清理不等于删除历史；需要回顾旧文件时使用 `git show <revision>:<path>`。
 - `data/` 中的历史数据默认不作为提交对象，文档和日志不得混入数据目录。
+- 修改任一步脚本后运行 `scripts/form-scripts.test.sh`；修改快照后立即运行
+  `scripts/form-snapshot-verify.sh`，以测试和哈希输出作为脚本可用性的证据。
 - 本 skill 负责格式治理，不替代 `debug`、`test`、`optim` 或 `tag` 的专业实现。
