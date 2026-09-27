@@ -72,7 +72,7 @@ cat << 'USAGE'
   │    gpush.sh / gpull.sh   Git 推送/拉取                       │
   │    gback.sh              Git 分支备份                        │
   │    gls.sh                Git 仓库列表                        │
-  │    gzALLpush.sh          推送所有 repo                       │
+  │    gz-all-push.sh        推送所有 repo                       │
   │    ssub.sh / ssqueue.sh  Slurm 作业管理                      │
   │    zipython.sh           IPython 启动                        │
   │    zjulab.sh             Jupyter Lab 启动                    │

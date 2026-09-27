@@ -2,6 +2,9 @@
 
 版本化环境配置与基础点文件模板，用于向异构机器（工作站、笔记本、macOS、HPC 集群、GPU/NPU 节点、Docker 容器、云端）部署 ZhangXin 的 shell 环境。
 
+`requirements/` 保存 `apt_install.sh` 与 `pip_install.sh` 消费的功能输入清单，不放入
+`docs/`；清单采用一行一个包，`#` 起始行或行尾注释由安装脚本按各自规则处理。
+
 ## 目录组织
 
 ### 基础模板（`_` 前缀）

@@ -4,8 +4,8 @@ case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.
 if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
-bash ${_PATH}/gzCONFIGUREpush.sh
-bash ${_PATH}/gzPyQCDpush.sh
-bash ${_PATH}/gzMyQCDpush.sh
-bash ${_PATH}/gzPYQCUpush.sh
+bash ${_PATH}/gz-configure-push.sh
+bash ${_PATH}/gz-pyqcd-push.sh
+bash ${_PATH}/gz-myqcd-push.sh
+bash ${_PATH}/gz-pyqcu-push.sh
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
