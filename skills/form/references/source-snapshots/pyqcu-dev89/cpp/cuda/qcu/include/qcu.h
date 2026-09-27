@@ -1,0 +1,21 @@
+#ifndef _QCU_H
+#define _QCU_H
+#pragma once
+#include "./define.h"
+#include "./gauss_gauge.h"
+#include "./include.h"
+#include "./lattice_clover_bistabcg.h"
+#include "./lattice_clover_dslash.h"
+#include "./lattice_complex.h"
+#include "./lattice_cuda.h"
+#include "./lattice_laplacian.h"
+#include "./lattice_mpi.h"
+#include "./lattice_set.h"
+#include "./lattice_wilson_bistabcg.h"
+#include "./lattice_wilson_cg.h"
+#include "./lattice_wilson_dslash.h"
+#include "./multigrid.h"
+#include "./lattice_multigrid.h"
+#include "./lattice_clover_multigrid.h"
+#include "./lattice_sap.h"
+#endif

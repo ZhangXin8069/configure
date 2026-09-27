@@ -1,0 +1,35 @@
+#ifndef _INCLUDE_H
+#define _INCLUDE_H
+#pragma once
+#include <chrono>
+#include <cmath>
+#include <complex>
+#include <cstdio>
+#include <cstdlib>
+#include <cstring>
+#include <ctime>
+#include <cuComplex.h>
+// #include <cublas_api.h>
+#include <cublas_v2.h>
+#include <cuda.h>
+#include <cuda_runtime.h>
+#include <cuda_runtime_api.h>
+#include <curand.h>
+#include <curand_kernel.h>
+#include <fstream>
+#include <functional>
+#include <iostream>
+#include <library_types.h>
+#include <memory>
+#include <mpi.h>
+#include <mutex>
+#include <random>
+#include <sstream>
+#include <stdexcept>
+#include <stdio.h>
+#include <stdlib.h>
+#include <type_traits>
+#include <string>
+#include <atomic>
+#include <unistd.h>
+#endif

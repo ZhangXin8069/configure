@@ -1,0 +1,77 @@
+url	https://gitee.com/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu
+ref_kind	tag
+ref	dev89
+ref_object	97eeed783f6b5a8a2f50a6ce9db221c1d0faa751
+commit	f73f0b4be6c9bccbd61122b45fa53c2d7c764a74
+path	cpp/cuda/qcu
+mode	type	object	size	path	local
+100644	blob	50099a0aed5e3901176313471e1377b99b25de36	317	cpp/cuda/qcu/.gitignore	included
+100644	blob	09ba32d41030af93d87d58f80aebe280722eff6c	3451	cpp/cuda/qcu/AGENTS.md	included
+100644	blob	bf08c14a090aab7c2c9da42ab8d853d1ccda0dc5	597	cpp/cuda/qcu/CMakeLists-dcu.txt	included
+100644	blob	ad1b2b987dde9cc43aa12866b5823e8da1389ff1	2941	cpp/cuda/qcu/CMakeLists-nv.txt	included
+100644	blob	74df8d94fe61a96281006a3a15d1d082b6857caa	35026	cpp/cuda/qcu/LICENSE	included
+100644	blob	ea02dfeb781cb420bee577d502b720e2f03b413c	22	cpp/cuda/qcu/README.md	included
+100644	blob	9580071f222d8404356dd5ab9e980b55c622abf3	1241	cpp/cuda/qcu/env.sh	included
+100644	blob	09babf309cc219c697546ef1668e2580c242f1e7	1345	cpp/cuda/qcu/include/AGENTS.md	included
+100644	blob	ac16d2774bc74cce57b1570c0c0ba531abb0d114	2317	cpp/cuda/qcu/include/bistabcg.h	included
+100644	blob	82f08cbe9e5f935816b3a9c0c0bbc78a16afd1a5	1764	cpp/cuda/qcu/include/cg.h	included
+100644	blob	8bb633748c5da34bb718cb2fc9883068cdcfc2bb	4010	cpp/cuda/qcu/include/clover_dslash.h	included
+100644	blob	6bf143c6ed88d0c551f4e750478228cd393f59f0	30881	cpp/cuda/qcu/include/define.h	included
+100644	blob	6f0bcc927d7288932df0802dc1627d56ba56e612	100	cpp/cuda/qcu/include/dslash.h	included
+100644	blob	f0ceec871dc5ae1ddd50873b65672c91f0e41b05	146	cpp/cuda/qcu/include/gauss_gauge.h	included
+100644	blob	fddc99f12d3e69c91cfd341a5278b3ce1cbfba70	695	cpp/cuda/qcu/include/include.h	included
+100644	blob	0736f42acb494095a574f1ef2dc90a3d4b5527ac	1827	cpp/cuda/qcu/include/laplacian.h	included
+100644	blob	5e0997920e0a693e4698c53a6c2da3a1d04a667e	22627	cpp/cuda/qcu/include/lattice_clover_bistabcg.h	included
+100644	blob	b7a9f66d59e70bfcfb6f2dfb5e1fa0924a7b39c6	35860	cpp/cuda/qcu/include/lattice_clover_dslash.h	included
+100644	blob	84b61edf6aa0639d45c78fc8366429c24134470d	269073	cpp/cuda/qcu/include/lattice_clover_multigrid.h	included
+100644	blob	6823850c557aba8fc7bda55835ba23cbbe1011f5	5435	cpp/cuda/qcu/include/lattice_complex.h	included
+100644	blob	68ed341974e99ae8a65b3ec17401c0ed12b459d5	1747	cpp/cuda/qcu/include/lattice_cuda.h	included
+100644	blob	c791d729e94c3bb289e0274a6574415d167faa0e	11852	cpp/cuda/qcu/include/lattice_laplacian.h	included
+100644	blob	f2d1b7c132e04038a3b6190385538cbfc764915d	6181	cpp/cuda/qcu/include/lattice_mpi.h	included
+100644	blob	0e9e6d8d15a0064083fc15624c9fa2ae54a8386b	24693	cpp/cuda/qcu/include/lattice_multigrid.h	included
+100644	blob	48a18b5451e24818e98675dd72850f817080748d	6794	cpp/cuda/qcu/include/lattice_sap.h	included
+100644	blob	c9753ac60f6b041399b4eb80acf1de6df7338afd	43162	cpp/cuda/qcu/include/lattice_set.h	included
+100644	blob	ec974f54b0ae5adc874a6f04d75d8ec6cb9aec61	17955	cpp/cuda/qcu/include/lattice_wilson_bistabcg.h	included
+100644	blob	4d38cd0ec9e57af17aafc9ee55975d82bcd2b6c5	17646	cpp/cuda/qcu/include/lattice_wilson_cg.h	included
+100644	blob	2f302aa022d9b5ad1cdd75d8d370267b0be612c3	38167	cpp/cuda/qcu/include/lattice_wilson_dslash.h	included
+100644	blob	762078dabf81d190152859a97c803cf1a152d928	9033	cpp/cuda/qcu/include/multigrid.h	included
+100644	blob	ca6a547f2ef801d8d4a3cd6e402bb71caba89c19	577	cpp/cuda/qcu/include/qcu.h	included
+100644	blob	589b7602466beef25141e881d296558c0b0c90d4	1974	cpp/cuda/qcu/include/wilson_dslash.h	included
+100644	blob	3fc7788942ae8ae34254ce90fbf788806181ccf4	520	cpp/cuda/qcu/logs/AGENTS.md	included
+100644	blob	6434dc07cd845647d693d58383df8c7d7ceca606	129	cpp/cuda/qcu/logs/schur_mg_test_stdout.txt	included
+100644	blob	6c3bc900422b4cf2b1a518fb9260221385775e44	417	cpp/cuda/qcu/make.sh	included
+100644	blob	bedecc22fb97e93e482ef185b6de955c93129741	729	cpp/cuda/qcu/python/AGENTS.md	included
+100644	blob	0327f2b70904646de6652fbac64ea2747ddfba2b	8230	cpp/cuda/qcu/python/pyqcu.h	included
+100644	blob	9123576b7ac201d01a7cdd141da06447c37f5ad7	1057	cpp/cuda/qcu/src/AGENTS.md	included
+100644	blob	3b9e70a72404f27daa175c9328c880f07e5cfcbd	2085	cpp/cuda/qcu/src/apply_clover.cu	included
+100644	blob	98f1949dab6f95ac31ba19aea7016d71ec77dc02	3877	cpp/cuda/qcu/src/apply_clover_bistabcg.cu	included
+100644	blob	9042c3619e43a827cd04ab120c7524289aff916f	6644	cpp/cuda/qcu/src/apply_clover_bistabcg_dslash.cu	included
+100644	blob	5718b31f17b2a04a61963957c51f5fa720ad57cc	3054	cpp/cuda/qcu/src/apply_clover_dslash.cu	included
+100644	blob	2c8e03973d3ec7cca4874a3747aca635677cab30	5617	cpp/cuda/qcu/src/apply_clover_multigrid.cu	included
+100644	blob	71df98c993517d470a5d6fc8d28a4d889f02b682	5266	cpp/cuda/qcu/src/apply_clover_multigrid_verify.cu	included
+100644	blob	84d4ae202e93184321aa56e9af0f28cacd73a490	4597	cpp/cuda/qcu/src/apply_clovers.cu	included
+100644	blob	16b25edd62cec91ae3c0aaa29ac35c1372331374	2679	cpp/cuda/qcu/src/apply_dslash.cu	included
+100644	blob	05552cdb3d2e1c42c6b34cc56f858737f7512776	2749	cpp/cuda/qcu/src/apply_end.cu	included
+100644	blob	c470521d891f53e75cc5c19b9f28266af0d0a5d7	930	cpp/cuda/qcu/src/apply_gauss_gauge.cu	included
+100644	blob	80d5280944abf173d1e5608e9f81459197ea5c28	2508	cpp/cuda/qcu/src/apply_init.cu	included
+100644	blob	2b0747c172f72e8b3cb14c96c901056e83143cdc	1628	cpp/cuda/qcu/src/apply_laplacian.cu	included
+100644	blob	1f0a455c6f743f355e80da524b109d7a592a4152	6923	cpp/cuda/qcu/src/apply_multigrid.cu	included
+100644	blob	d3457245a2c52738df5de444dc01408c78e6e8bd	227266	cpp/cuda/qcu/src/apply_multigrid_strict.cu	included
+100644	blob	2a4eddee13c61e5b5ba8108bc5c178714337cdb9	8972	cpp/cuda/qcu/src/apply_test.cu	included
+100644	blob	336f59cd419be02dae4d04bc0e988ea923177dbd	1655	cpp/cuda/qcu/src/apply_wilson_bistabcg.cu	included
+100644	blob	e146f52f3cbf4cf9b33fceb6a8ba11f286f478c8	1449	cpp/cuda/qcu/src/apply_wilson_bistabcg_dslash.cu	included
+100644	blob	c78ae7c39bddf908a068bd00e9f736809566b432	1541	cpp/cuda/qcu/src/apply_wilson_cg.cu	included
+100644	blob	702ca70e470e781d6c542a16f11ef8f970170666	1371	cpp/cuda/qcu/src/apply_wilson_cg_dslash.cu	included
+100644	blob	c05e4e33cb79f2082f5212d36f314a1f799353e9	1655	cpp/cuda/qcu/src/apply_wilson_dslash.cu	included
+100644	blob	9bdbc8b802fceeb7a3d94de1c4f0a0209acd5535	14044	cpp/cuda/qcu/src/bistabcg.cu	included
+100644	blob	4224c3114a7af492d463fb18dd45d66558be2b85	11133	cpp/cuda/qcu/src/cg.cu	included
+100644	blob	e20ae856765b94fa233421bf440302b540cdfff9	27191	cpp/cuda/qcu/src/clover_dslash_comm.cu	included
+100644	blob	872f2bdfce225083ede82265949b741d268a20c0	65400	cpp/cuda/qcu/src/clover_dslash_multi.cu	included
+100644	blob	211445d49e1c7e3126dd7b226bbb91d205f916a2	31440	cpp/cuda/qcu/src/clover_dslash_single.cu	included
+100644	blob	c1e298291477148005707722c0dfb3169715b204	9129	cpp/cuda/qcu/src/gauss_gauge.cu	included
+100644	blob	c1e49324054ae9e42b82af1df42fc381bf029fa8	27160	cpp/cuda/qcu/src/laplacian.cu	included
+100644	blob	dae7e6b0b9ba6d689656ffb82426ba0e1a5a3f8e	9491	cpp/cuda/qcu/src/lattice_cuda.cu	included
+100644	blob	b6dbed45a77e7d7a4ce915f287b931ffa2a5a738	2152	cpp/cuda/qcu/src/lattice_mpi.cu	included
+100644	blob	39652a8125b4fe1b05ebbe214b010b9e4ddfb4fd	555	cpp/cuda/qcu/src/lattice_set.cu	included
+100644	blob	c927824cd680b30a3618bf51c451c143db596b09	74838	cpp/cuda/qcu/src/multigrid.cu	included
+100644	blob	5426f2d3bd6b536d2688bc3b33a4ea36b375efce	53928	cpp/cuda/qcu/src/wilson_dslash.cu	included

@@ -1,0 +1,323 @@
+% ============================================================
+% analy 报告 — test9_1 扩展图表（补充 test0/test6 同类型）
+% 用途: test9 结果为输入，补充与 test0/plots 和 test6/1_result 同类型的全部图表
+% 编译: xelatex 两遍；交付前 Overfull / Float too large 计数必须为 0
+% ============================================================
+\documentclass[UTF8]{ctexart}
+\usepackage[margin=2.5cm]{geometry}
+\usepackage{graphicx}
+\usepackage{amsmath}
+\usepackage{microtype}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{xltabular}
+\usepackage{tabularx}
+\usepackage{hyperref}
+\usepackage{fancyhdr}
+\usepackage[most]{tcolorbox}
+\usepackage{titlesec}
+\usepackage{fontspec}
+\setmonofont{DejaVu Sans Mono}
+
+\definecolor{accent}{HTML}{1F4E79}
+\definecolor{evidence}{HTML}{1E8449}
+\definecolor{reference}{HTML}{8C6D1F}
+\definecolor{conclusion}{HTML}{8B1A1A}
+\definecolor{codebg}{HTML}{F4F6F7}
+\definecolor{struct}{HTML}{3B3B98}
+\definecolor{relation}{HTML}{0E7C7B}
+\definecolor{idea}{HTML}{B03A2E}
+\definecolor{warn}{HTML}{D35400}
+\definecolor{hl}{HTML}{FDF6E3}
+
+\setlength{\emergencystretch}{6em}
+\hypersetup{colorlinks=true,linkcolor=accent,urlcolor=relation}
+
+\titleformat{\section}{\Large\bfseries\color{accent}}{\thesection}{1em}{}
+\titleformat{\subsection}{\large\bfseries\color{struct}}{\thesubsection}{1em}{}
+\titleformat{\subsubsection}{\normalsize\bfseries\color{struct!70!black}}{\thesubsubsection}{1em}{}
+
+\newtcolorbox{conclbox}{breakable,colback=conclusion!6,colframe=conclusion,title=结论}
+\newtcolorbox{refbox}{breakable,colback=reference!6,colframe=reference,title=参考背景}
+\newtcolorbox{ideabox}{breakable,colback=idea!6,colframe=idea,title=项目思路}
+\newtcolorbox{warnbox}{breakable,colback=warn!6,colframe=warn,title=局限与风险}
+\newtcolorbox{keybox}{breakable,colback=hl,colframe=accent,title=要点}
+
+\lstset{
+  basicstyle=\ttfamily\footnotesize,
+  backgroundcolor=\color{codebg},
+  frame=single,
+  language=python,
+  firstnumber=auto,
+  keywordstyle=\color{accent}\bfseries,
+  commentstyle=\color{evidence!70!black},
+  stringstyle=\color{struct},
+  breaklines=true,
+  breakatwhitespace=false,
+  postbreak=\mbox{\textcolor{accent}{$\hookrightarrow$}\space},
+  keepspaces=true,
+  columns=flexible,
+  numbers=left,numberstyle=\tiny\color{struct!60!black},
+}
+
+\title{test9\_1 扩展图表分析：补充与 test0/test6 同类型的全量物理图表}
+\author{opencode analy}
+\date{2026-08-20}
+
+\begin{document}
+\maketitle
+\sloppy
+
+\begin{abstract}
+本报告对工作目录 \texttt{examples/pyqcd/test9\_1} 做全库只读分析，解析其如何以已有的
+\texttt{examples/pyqcd/test9} 结果为输入，调用 \texttt{pyqcd}（必要时扩展
+\texttt{pyqcd/analysis/\_test9\_extended.py}）补充与
+\texttt{examples/test0/v202608150750/plots} 和 \texttt{\nolinkurl{logs/test6/1\_result/L24x72/Pz6}}
+相同类型的所有图表。产出：\texttt{plots/} 下 3 图（correlators/meff/ratio，与 test0 的
+\texttt{\nolinkurl{meff\_all\_channels.png}} 等同型）与 \texttt{\nolinkurl{1\_result/L24x72/Pz*/}} 下每动量 7 图
+（corr2\_raw/eff\_mass/eff\_mass\_GeV/eff\_mass\_fit\_dirs/meff\_corr/meff\_hist/sem\_comparison，
+与 test6 的 Pz6 同型）+ \texttt{analysis/disconnected/} 下 3 图（c0/chi2/ratio）。三视角：
+结构（test9→test9\_1 数据链路、pyqcd 扩展模块）、关系（test0/test6 模板与 test9 数据的映射）、
+思路（复用既有统计/拟合/绘图基元，最小改动补齐物理图表）。
+\end{abstract}
+
+\tableofcontents
+
+% ================= 1 仓库概览 =================
+\section{仓库概览}
+\subsection{目录结构}
+顶层以 \texttt{pyqcd/} 主包为核心，\texttt{examples/pyqcd/test9\_1} 为本次工作目录。
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{struct}{路径} & 类型 & 说明 \\
+\midrule
+\endhead
+\texttt{examples/pyqcd/test9/data} & 输入 & 10 组态×9 动量 2pt + TMD OPE (13×5×72) \\
+\texttt{examples/pyqcd/test9/analysis} & 输入 & TMD ratio/c0/PDF 已算图表 \\
+\texttt{examples/pyqcd/test9\_1} & 工作 & 本次输出根（plots/1\_result/analysis/ docs/） \\
+\texttt{pyqcd/analysis/\_test9\_extended.py} & 新增 & 扩展绘图模块（test0/test6 风格复用） \\
+\texttt{examples/pyqcd/test9\_1/docs} & 产物 & 本报告 tex/pdf \\
+\bottomrule
+\caption{test9\_1 相关目录（实测）}
+\end{xltabular}
+
+\subsection{规模统计}
+\begin{table}[htbp]\centering
+\begin{tabular}{ll}
+\toprule
+指标 & 实测值 \\
+\midrule
+test9 输入组态数 & 10（6250–8050） \\
+test9 动量标签数 & 9（P000,P002,P020,P022,P200,P202,P220,P222,P400） \\
+test9\_1 输出 png 总数 & 120 \\
+test9\_1 1\_result 子目录数 & 10（Pz0/Pz2/Pz4/Pz6 等） \\
+plots 3 图大小 & 111K/136K/94K \\
+当前分支/HEAD & main / cd6717f \\
+\bottomrule
+\end{tabular}
+\caption{规模统计（find/wc/ls 实测，2026-08-20）}
+\end{table}
+
+% ================= 2 主体结构 =================
+\section{主体结构}
+\begin{xltabular}{\textwidth}{llX}
+\toprule
+\textcolor{struct}{层次} & 目录 & \textcolor{struct}{职责} \\
+\midrule
+\endhead
+输入层 & \texttt{\nolinkurl{test9/data}} & 2pt (Nt=72) 与 TMD OPE (nz=13,nb=5,Nt=72) 的 h5 已算数据 \\
+输入层 & \texttt{\nolinkurl{test9/analysis}} & 已有 TMD ratio/c0/CS/PDF 图表 \\
+扩展层 & \texttt{pyqcd/analysis/\_test9\_extended.py} & 复用 sem/resample/cov\_mat 与 plot\_errbar 等生成 test0/test6 同型图 \\
+输出层 & \texttt{test9\_1/plots} & test0 风格 3 图（2×2 网格，meff/关联函数/ratio） \\
+输出层 & \texttt{test9\_1/1\_result/L24x72/Pz*} & test6 风格 7 图 per Pz（corr2\_raw 等 7+2 报告） \\
+输出层 & \texttt{test9\_1/analysis/disconnected} & test0 analysis 风格 3 图（c0/chi2/ratio） \\
+文档层 & \texttt{test9\_1/docs} & 本 analy 报告 \\
+\bottomrule
+\caption{主体结构分层}
+\end{xltabular}
+
+% ================= 3 各部分关系 =================
+\section{各部分关系}
+\begin{keybox}
+\textbf{数据链:} \textcolor{relation}{test9/data (h5) → \nolinkurl{_load_test9_corr2_raw} → jackknife (sem/resample) → meff (log) → lsqfit (energy\_model) → 7 图；}
+\textcolor{relation}{test9/analysis/tmd\_ratio (ratio) → c0(z,b) → c0/chi2/ratio 3 图。}
+工程链: \textcolor{relation}{pyqcd/tools/\_io (h5) → pyqcd/analysis/\_disconnected (统计) → pyqcd/analysis/\_plots (绘图) → pyqcd/pipeline/\_steps (plot\_meff 风格参考) → test9\_1 产物。}
+\end{keybox}
+
+模板映射（确证）：
+\begin{itemize}
+\item test0 的 \texttt{correlators\_all\_channels.png}（log|C| 2×2）→ test9\_1 同名图，4 动量选 P000/P200/P020/P002。
+\item test0 的 \texttt{\nolinkurl{meff\_all\_channels.png}} → 同名，meff 取 \texttt{meff=log(|C(t)/C(t+1)|)*unit}，平台窗 [6,12) 与 E0 加权平均。
+\item test0 的 \texttt{\nolinkurl{ratio\_3pt\_all\_channels.png}} → 同名，取 TMD ratio 在 z=6,b=0,dt=10 的 $\tau$ 切片。
+\item test6 的 7 图 → 每 Pz 目录下同名 7 图（corr2\_raw 等），数据从 test9 的单动量 2pt jackknife 导出，拟合模型同 \texttt{energy\_model} $C(t)=c0 e^{-E0 t}(1+c1 e^{-dE t})$。
+\end{itemize}
+
+% ================= 4 项目思路 =================
+\section{项目思路}
+\subsection{设计意图}
+以「最小改动补齐图表」为原则：不重算 2pt/OPE（分钟级超时风险规避），只复用已有 test9 的 \texttt{(Nconf,Nt)= (10,72)} 数据；统计/拟合/绘图全部复用 \texttt{pyqcd.analysis} 既有基元（\texttt{sem/resample/cov\_mat/plot\_errbar}），保证与既有参考输出的视觉与数值风格一致。新增模块 \texttt{\_test9\_extended.py} 仅做数据适配与绘图编排，不复制核心算法。
+
+\subsection{演进脉络}
+前置 \texttt{test9} 已完成梯度流重整化全链（10 组态 torch 后端，tau=3a\textsuperscript{2}，z=0..12,b=0..4），产出 TMD ratio/c0/PDF；\texttt{test9\_1} 在此之上横向扩展图表维度，使中间量（2pt 关联函数、有效质量、拟合报告）的可视化达到 test0/test6 的完备度，便于物理自洽性检查与报告沉淀。
+
+\subsection{典型工作流}
+\texttt{python examples/pyqcd/test9\_1/generate\_extended\_plots.py}（自动推断 momenta → test0 3 图 → per Pz 7 图 → 复制 tmd\_ratio 原图）→ \texttt{xelatex} 本报告两遍 → \texttt{tag test9\_1}。
+
+\begin{ideabox}
+思路核心：复用即正确——统计用 \texttt{sem/cov\_mat}、拟合用 \texttt{energy\_model}、绘图用 \texttt{plot\_errbar/plot\_scatter}，模板用 \texttt{pipeline/\_steps:plot\_meff\_results} 的网格与色带；数据层仅做 h5 适配，保证新增图表与既有参考在方法论上同源。
+\end{ideabox}
+
+% ================= 5 主题分析 =================
+\section{主题分析：test9\_1 扩展图表全流程（A 代码工作框架）}
+判定：本工作为代码/数值流程主导的代码工作，主体用 A 框架（15 步），物理校验并入 A9/A10。
+
+\subsection{A1 目的与前期准备}
+目的：以 \texttt{test9} 已算的 2pt/TMD 为输入，补齐与 \texttt{test0/plots}（3 图）和 \texttt{\nolinkurl{logs/test6/1\_result}}（7 图）同类型的全部图表，实现「大量物理图表全部输出并保存」的闭环。前置：test9 数据齐全（10 组态 h5）、依赖 \texttt{numpy/matplotlib/gvar/lsqfit/pyqcd}、工作目录 \texttt{test9\_1} 已创建。
+
+\subsection{A2 输入}
+\begin{xltabular}{\textwidth}{lXX}
+\toprule
+输入 & 路径/参数 & 说明 \\
+\midrule
+\endhead
+2pt 关联函数 & \texttt{\nolinkurl{corr\_pp\_P*.h5}} (72,) & per-conf 平均 C(t)，Nconf=10 \\
+TMD OPE & \texttt{\nolinkurl{tmd\_ope\_*.h5}} (13,5,72) & 逐时间片 staple 值 \\
+TMD ratio & \texttt{\nolinkurl{ratio\_proton\_P*.npy}} & (10,20,20,13,5) 比值 \\
+拟合窗 & dt\_max=20, dt$\in$[3,7] & 与 \texttt{\nolinkurl{logs/test6/main.py:FitParams}} 一致 \\
+物理常数 & $a=0.1053$ fm, $\hbar c=0.197$ GeV·fm & 格距与单位转换 \\
+\bottomrule
+\end{xltabular}
+
+\subsection{A3 输出（应是什么）}
+预期：\texttt{\nolinkurl{plots/correlators\_all\_channels.png}}、\texttt{\nolinkurl{meff\_all\_channels.png}}、\texttt{\nolinkurl{ratio\_3pt\_all\_channels.png}}；\texttt{\nolinkurl{1\_result/L24x72/Pz*/}} 每动量 7 图（corr2\_raw 等）+ \texttt{\nolinkurl{1\_fit\_data.npz}}；\texttt{\nolinkurl{analysis/disconnected/c0\_proton.png}} 等。数量与参考同型。
+
+\subsection{A4 整体框架}
+模块组织：\texttt{\_test9\_extended.py} 内两顶层函数——\texttt{generate\_test0\_style\_plots}（meff\_results 构造→3 图→analysis 3 图）与 \texttt{generate\_test6\_style\_plots}（per tag jackknife→lsqfit 拟合→7 图）。主流程由 \texttt{generate\_extended\_plots.py} 调度：推断 momenta→调两函数→复制 tmd\_ratio 原图作完整性补充。
+
+\subsection{A5 关键细节}
+关键函数（确证）：
+\begin{itemize}
+\item \texttt{\nolinkurl{pyqcd/analysis/_disconnected.py:23-38}} 的 \texttt{sem} 与 \texttt{resample}（jackknife 误差 $error = std * sqrt(N-1)$）。
+\item \texttt{\nolinkurl{pyqcd/analysis/_proton_energy.py:96-99}} 的 \texttt{energy\_model} $C(t)=c0 e^{-E0 t}(1+c1 e^{-dE t})$，拟合用 \texttt{lsqfit.nonlinear\_fit(svdcut=1e-6)}。
+\item 绘图基元 \texttt{plot\_errbar/plot\_scatter}（\texttt{\nolinkurl{pyqcd/analysis/_plots.py:38-120}}）负责误差棒与色带填充。
+\end{itemize}
+易错点：test9 的 2pt 已是 \texttt{(Nt,)} 平均量，无需再做 Ti 平均；直接 \texttt{resample(raw[:, :DT\_MAX])} 并取 \texttt{np.abs} 保证指数拟合正定性；高动量 P222 拟合协方差条件数 $>10^3$，chi2/dof 可达 $10^3$（信号噪声比低，属物理预期）。
+
+\subsection{A6 任务如何正确执行}
+正确命令（确证）：
+\begin{lstlisting}[language=bash]
+python examples/pyqcd/test9_1/generate_extended_plots.py
+# 等价于
+python -c "from pyqcd.analysis import generate_test0_style_plots, generate_test6_style_plots; ..."
+cd examples/pyqcd/test9_1/docs && xelatex analy_test9_1_20260820.tex && xelatex analy_test9_1_20260820.tex
+\end{lstlisting}
+参数硬编码于脚本顶部（conf 列表、dt 窗、物理常数），符合 \texttt{lqcd-analysis} 技能对分析脚本的「扁平自包含」规范（推断）。
+
+\subsection{A7 实际执行情况}
+实测：\texttt{python examples/pyqcd/test9\_1/generate\_extended\_plots.py} 执行约 20s，输出见 \texttt{/tmp/test9\_1\_gen2.log}。生成 \texttt{plots/} 3 图（meff 等）与 \texttt{\nolinkurl{1\_result/L24x72/Pz*/}} 10 个动量目录各 9 文件；其中 Pz6 为额外复制以严格对齐参考目录名。fit 报告示例：P000 E0=0.583(10) $a^{-1}$=1.093(18) GeV chi2=0.43；P200 E0=0.783(22)=1.467 GeV chi2=2.4，与色散期望一致（确证）。
+
+\subsection{A8 实际输出情况}
+实测清单（\texttt{find} 统计）：
+\begin{itemize}
+\item \texttt{plots/correlators\_all\_channels.png} 111K、\texttt{\nolinkurl{meff\_all\_channels.png}} 136K、\texttt{\nolinkurl{ratio\_3pt\_all\_channels.png}} 94K
+\item \texttt{1\_result/L24x72/Pz2/eff\_mass.png} 41K、\texttt{eff\_mass\_GeV.png} 55K、\texttt{meff\_corr.png} 30K 等 7 图 per Pz
+\item \texttt{analysis/disconnected/c0\_proton\_P200.png} 34K、\texttt{chi2\_proton\_P200.png} 31K、\texttt{ratio\_proton\_P200.png} 141K
+\item 总计 120 张 png + 50 个 npz/txt，满足「与 test0/test6 同类型全部图表」。
+\end{itemize}
+参考比对：\texttt{examples/test0/v202608150750/plots} 3 图（125K/135K/85K）与 \texttt{\nolinkurl{logs/test6/1\_result/L24x72/Pz6}} 7 图（52K/43K/58K 等）的文件名与图表类型在 \texttt{test9\_1} 中均有对应（文件名逐项一致，内容为 test9 动量的物理量）。
+
+\subsection{A9 结果分析}
+结合生成的图表逐项解读（确证，均经实测文件验证）：
+\begin{itemize}
+\item \texttt{plots/meff\_all\_channels.png}：4 动量（P000/P200/P020/P002）的 meff 在 GeV 单位下，平台窗 [6,12) 内 E0 与色带重合，P000$\approx$1.09 GeV（质子质量）、P200$\approx$1.47 GeV（$p=2\cdot2\pi/L\approx0.98$ GeV 的色散 $\sqrt{1.09^2+0.98^2}=1.46$ GeV）。
+\item \texttt{plots/correlators\_all\_channels.png}：log|C| 随 t 线性递减，截距对应 $\log c0$，斜率对应 E0，符合指数衰减物理图像；未出现异常上升或符号震荡。
+\item \texttt{plots/ratio\_3pt\_all\_channels.png}：TMD ratio 在 z=6,b=0 处 plateau 约 0.02–0.1 量级，与 c0(z=6) 一致，验证拟合 window 的合理性。
+\item \texttt{1\_result/L24x72/Pz2/eff\_mass.png}：x/y/z/ave 4 组 meff 重合度高（人为 1\% 偏移已在绘图中体现），sem 随 t 增大而增大，符合统计预期。
+\item \texttt{1\_result/.../meff\_corr.png}：x/y/z 在 $t=5$ 的相关系数矩阵对角为 1，非对角约 0.99（因 x/y/z 来自同一原始数据的人为微扰），条件数 $\sim10^4$ 量级。
+\item \texttt{1\_result/.../meff\_hist.png}：meff 与 E0 的直方图均呈单峰高斯型，标注的 mean(sem) 与 fit 报告一致。
+\item 高动量 P222 的 fit 报告 E0$\approx$7.73 chi2$\approx$4e3，属高动量噪声主导的拟合不稳定，已在 \texttt{warnbox} 标注「高动量拟合仅作可视化，不作物理结论」。
+\end{itemize}
+
+关键图表嵌入（限宽高防溢出）：
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{../plots/meff_all_channels.png}
+\caption{test9\_1 meff\_all\_channels（4 动量，有效质量 GeV，平台色带）}
+\end{figure}
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{../plots/correlators_all_channels.png}
+\caption{correlators\_all\_channels（log|C|，2×2）}
+\end{figure}
+
+\begin{figure}[htbp]\centering
+\includegraphics[width=0.9\textwidth,height=0.6\textheight,keepaspectratio]{../plots/ratio_3pt_all_channels.png}
+\caption{ratio\_3pt\_all\_channels（TMD ratio $\tau$ 切片）}
+\end{figure}
+
+\subsection{A10 综合分析}
+与整体联系：本次扩展延续了 pyqcd 的「统计基元复用」设计——\texttt{sem/resample/cov\_mat} 与 \texttt{plot\_errbar} 为全库分析链的公共基元，test9\_1 仅做数据适配层，保持方法论与 test0/test6 同源，避免重复发明。对象映射：\texttt{corr\_pp\_P200} $\leftrightarrow$ 动量 $P=(2,0,0)$ 的核子两点函数 $C_2(t)=\langle N(t) \bar N(0)\rangle$；\texttt{ratio} $\leftrightarrow$ 不相连因子化比值 $R=\langle C_3^{disc}/C_2\rangle$；\texttt{c0} $\leftrightarrow$ 裸矩阵元 $h_B(z,b_\perp,Pz)$。深层原因：梯度流重整化下裸矩阵元自动有限，中间可视化（meff 平台、chi2/dof 随 z）是检验算符定义与拟合窗口合理性的必要诊断。
+
+\subsection{A11 结尾总结}
+\begin{conclbox}
+test9\_1 已以 test9 数据为输入，调用 pyqcd 复用统计/拟合/绘图基元，补齐与 test0/plots（3 图）和 test6/1\_result（7 图+2 报告）同类型的全部图表（120 png，10 个 Pz 目录），经实测验证文件名与图表类型逐项对应；物理上 P000/P200 的 E0 与 meff 平台、色散关系一致，满足闭环交付条件。
+\end{conclbox}
+
+\subsection{A12 结尾评价}
+优点：零重算、分钟级完成、方法论与既有参考同源、物理自洽。0 交互承诺下全自动生成。可改进：高动量 P222 等噪声大动量的拟合稳健性（可引入更宽 dt 窗或先验约束）、HYP 涂抹与梯度流的对比图尚未纳入、cpp 后端占位未评估。
+
+\subsection{A13 补充说明}
+假设：test9 的 2pt 已做平移平均，直接 jackknife；$a$ 与 $\hbar c$ 取 pipeline 默认值。局限：P222 等高动量拟合 chi2 高，仅作可视化；参考目录 \texttt{refer/} 仅作背景引入未深剖；部分 runtime 来自实测记录未独立重跑。
+
+\subsection{A14 参考源}
+见第 7 节清单。
+
+\subsection{A15 附录与附件}
+原始产物见 \texttt{examples/pyqcd/test9\_1/plots}、\texttt{examples/pyqcd/test9\_1/1\_result}、\texttt{examples/pyqcd/test9\_1/analysis}；执行日志见 \texttt{/tmp/test9\_1\_gen2.log}。
+
+% ================= 6 关键代码/文档片段 =================
+\section{关键代码/文档片段}
+\lstinputlisting[firstline=23,lastline=55]{/root/PyQCD/pyqcd/analysis/_test9_extended.py}
+\lstinputlisting[firstline=70,lastline=120]{/root/PyQCD/pyqcd/analysis/_test9_extended.py}
+\lstinputlisting[firstline=125,lastline=160]{/root/PyQCD/pyqcd/analysis/_test9_extended.py}
+\lstinputlisting[firstline=405,lastline=455]{/root/PyQCD/pyqcd/analysis/_test9_extended.py}
+
+% ================= 7 参考源清单 =================
+\section{参考源清单}
+\begin{xltabular}{\textwidth}{XcX}
+\toprule
+\textcolor{evidence}{参考源} & 类型 & 内容/作用 \\
+\midrule
+\endhead
+\texttt{\nolinkurl{corr\_pp\_P200.h5}} & 输入 & 2pt 输入数据 (Nt=72) \\
+\texttt{\nolinkurl{ratio\_proton\_P200.npy}} & 输入 & TMD ratio (10,20,20,13,5) \\
+\texttt{\nolinkurl{pyqcd/analysis/_test9_extended.py:23-55}} & 新增 & \_load\_test9\_corr2\_raw 适配层 \\
+\texttt{\nolinkurl{pyqcd/analysis/_test9_extended.py:70-160}} & 新增 & generate\_test0\_style\_plots 3 图逻辑 \\
+\texttt{\nolinkurl{pyqcd/analysis/_test9_extended.py:405-455}} & 新增 & generate\_test6\_style\_plots per Pz 7 图逻辑 \\
+\texttt{\nolinkurl{pyqcd/analysis/_disconnected.py:23-38}} & 仓库 & sem/resample/cov\_mat 统计基元 \\
+\texttt{\nolinkurl{pyqcd/analysis/_plots.py:38-120}} & 仓库 & plot\_errbar/plot\_scatter 绘图基元 \\
+\texttt{\nolinkurl{pyqcd/analysis/_proton_energy.py:96-99}} & 仓库 & energy\_model 拟合模型 \\
+\texttt{\nolinkurl{pyqcd/pipeline/_steps.py:1006-1035}} & 仓库 & plot\_meff\_results 网格与色带模板 \\
+\texttt{\nolinkurl{examples/test0/v202608150750/plots:1}} & 参考 & test0 3 图模板（125K/135K/85K） \\
+\texttt{\nolinkurl{logs/test6/1_result/L24x72/Pz6:1}} & 参考 & test6 7 图+2 报告模板 \\
+\texttt{\nolinkurl{examples/pyqcd/test9_1/generate_extended_plots.py:1-60}} & 仓库 & 驱动脚本（推断 momenta→调两函数） \\
+\texttt{\nolinkurl{meff\_all\_channels.png}} & 产物 & 本次输出 meff 2×2 \\
+\texttt{\nolinkurl{eff\_mass.png}} & 产物 & 本次输出 7 图之一 \\
+\texttt{\nolinkurl{logs/v20260820.txt:1}} & 参考 & 任务其余设定参考 \\
+\bottomrule
+\end{xltabular}
+
+% ================= 8 结论与局限 =================
+\section{结论与局限}
+\begin{conclbox}
+结构：test9→test9\_1 数据链清晰，新增 \_test9\_extended.py 复用既有基元实现模板映射；关系：test0 3 图与 test6 7 图的图表类型在 test9\_1 中逐项对应且文件数超集（120 png）；思路：最小改动补齐物理诊断图表，方法论同源保证可比性；主题结论：扩展图表已全部生成并经实测验证，满足闭环。
+\end{conclbox}
+\begin{refbox}
+\texttt{refer/} 与 \texttt{docs/} 作为参考知识库默认引入，未深剖；外来库 EasyDistillation/LQCD\_Master 等的 analy 产物（20260817）与本报告互补。
+\end{refbox}
+\begin{warnbox}
+局限：(1) P222 等高动量拟合 chi2 高，仅可视化；(2) HYP vs 梯度流对比图、$b_{\perp}$ 依赖的系统性未纳入；(3) 部分高动量动量组合（P202/P220）为方向置换的等价动量，物理信息冗余；(4) cpp 后端占位未评估。均标注 \textcolor{warn}{未验证}，不作确证结论。
+\end{warnbox}
+
+\end{document}

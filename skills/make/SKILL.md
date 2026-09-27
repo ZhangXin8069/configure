@@ -49,6 +49,7 @@ metadata:
 - 与其他技能配合：生成内容为 agent 产出 → init 归集 skill；生成过程报错 → debug；
   性能不足 → optim；生成后打标签 → tag；生成后查看改动 → diff；分析类项目 → analy；
   生成完成后验证 → test；多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；
+  生成或整改仓库命名/目录/交付格式 → form；
   需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；skill 库升级 → up；
   多独立子任务（多文件调查/多用例测试）→ dispatch 并行派发
 
