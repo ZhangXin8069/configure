@@ -119,7 +119,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `plan` | 假设执行者零上下文（计划自包含）；任务间 Consumes/Produces 显式声明接口；任务粒度 = 最小独立测试单元（2-5 分钟）；无占位符铁律；自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，失败回到本会话内联执行 | 多步骤任务拆解；跨任务命名/接口一致性检查 |
 | `review` | 早审查常审查；优先 agent-dispatch.sh 审查；精确上下文裁剪（只给产物信息，不传会话历史）；问题分级 Critical/Important/Minor；反馈可反驳（技术推理 + 证据）；接收审查"先验证后实现"（不表演性同意）；子代理失败按启动链重试后串行审查 | 任何提交前质量把关；派发子代理时的上下文纪律 |
 | `skill-creator` | 触发描述是唯一机制（写"何时使用"而非总结工作流）；分级披露（SKILL.md <500 行，长内容拆 references/）；规则形式匹配失败类型（明知故犯→禁止式+红旗表，输出形状→正配方）；措辞微测试（必须带无指令对照、≥5 次重复）；触发率评估 60/40 拆分 + 3 次重复 | 文档/指令类内容的结构设计；规则措辞与触发描述编写 |
-| `md-tex-sync` | Markdown 唯一源、TeX 派生源、PDF 编译件与全附件哈希清单四层分离；公式/代码保护后转换；`Overfull/Missing/Error=0`；全页栅格化；重复构建哈希幂等 | 大型文档双格式交付、公式算法显示整改、全附件全集归档 |
+| `md-tex-sync` | `{除非用户明确要求，否则不启用}`；Markdown 唯一源、TeX 派生源、PDF 编译件与全附件哈希清单四层分离；公式/代码保护后转换；`Overfull/Missing/Error=0`；全页栅格化；重复构建哈希幂等 | 仅在用户显式要求同源维护、双格式交付或全附件全集归档时使用 |
 | `tdd` | 铁律"无失败测试则无生产代码"（先写代码即删除重来）；RED-GREEN-REFACTOR 双强制验证（看过失败、看过通过）；反合理化表 + 红旗清单；修 bug 也是 TDD（先写复现测试） | 新功能/修复实现；防"后补测试"自我欺骗的纪律工具 |
 | `brainstorm` | 路径分类（spike/bounded/architectural）按复杂度定产物规模；棘轮单向升级（不降级）；HARD-GATE 批准闸门（简单任务缩短设计不缩短批准）；分节设计按复杂度缩放；红旗表（"太简单不用设计"等自欺借口） | 需求模糊的任务；设计前的假设检视 |
 | `auto` | 前缀式包装不重复实现（细节以目标技能为权威）；启动时绑定/继承 Codex goal（界面 `/goal` 入口）并贯穿轮次与收尾；一次性预授权分级（L1/L2/自定义）实现 0 交互；0 交互 ≠ 0 报告；停滞保护（连续 N 轮无进展换方向）；子代理失败按启动链重试后自动串行；中断报告含恢复方式 | 无人值守长任务；需要把自动执行进度纳入 Codex goal 生命周期的场景 |
@@ -153,7 +153,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，派发失败时回到本会话内联执行；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；dispatch 失败按启动链重试后串行；生成类任务首轮复用 make，单步任务转对应技能|
 | `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化（继承用户时间/资源上限）→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名、固定 ref、许可证、哈希、测试、采纳决策与 URL |
-| `md-tex-sync` | Markdown/LaTeX/PDF 同源：Markdown 为唯一内容源，确定性转换生成独立 TeX，XeLaTeX 两遍编译 PDF；全文源文件按 SHA256 去重快照，全附件与数据生成哈希清册；排除生成物自引用；校验源哈希、幂等重建、零 Overfull/缺字/错误和全页栅格化 |
+| `md-tex-sync` | `{除非用户明确要求，否则不启用}`。仅在用户显式要求 Markdown/LaTeX/PDF 同源维护、双格式同步交付或全文全集与全附件归档时启用；以 Markdown 为唯一内容源，确定性转换生成独立 TeX，XeLaTeX 两遍编译 PDF，并按 SHA256 校验源哈希、幂等重建、零 Overfull/缺字/错误和全页栅格化 |
 | `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论|
 | `review` | 代码审查：早审查常审查、优先 agent-dispatch.sh 审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；子代理失败按启动链重试后串行；接收审查"先验证后实现"（不表演性同意、技术性反驳附证据）；吸收 superpowers requesting/receiving-code-review|
 | `dispatch` | 并行子代理派发：优先 `agent-dispatch.sh --task --json` 且默认继承父设置；2+ 个独立子任务拆域并行，同消息派发=并行，代理指令四要素，返回后整合验证；派发失败复用当前启动链并最终串行；吸收 obra/superpowers dispatching-parallel-agents|
