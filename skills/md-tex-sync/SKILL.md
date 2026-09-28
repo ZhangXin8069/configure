@@ -1,10 +1,10 @@
 ---
 name: md-tex-sync
 description: |
-  当用户要求 Markdown 与 LaTeX/PDF 保持同步、把大型 Markdown/TeX 文档整合成
-  全文全集、修复公式/表格/伪代码在 Markdown 或 PDF 中的显示错误、生成源码
-  快照与全附件 SHA256 清册，或说“md 和 tex 同步”“同源编译”“双格式交付”
-  “全附件全集”“文档渲染整改”时使用。
+  {除非用户明确要求，否则不启用}。仅当当前用户明确点名 `md-tex-sync` /
+  `~md-tex-sync`，或明确要求 Markdown 与 LaTeX/PDF 同源维护、双格式同步交付、
+  全文全集与全附件归档时使用；普通 Markdown/LaTeX/PDF 编辑、一般文档转换，
+  以及 auto/all/make 等上游从文档任务中推断出的调用，都不构成启用请求。
 metadata:
   openclaw:
     emoji: 🔄
@@ -14,6 +14,20 @@ metadata:
 
 把可编辑 Markdown 作为唯一内容源，生成可编译 LaTeX 和可交付 PDF；同时把原始
 源文档、附件、图表和数据清册纳入可哈希、可重建、可审阅的归档结构。
+
+## 启用闸门
+
+本技能是显式启用技能，默认不启用。收到候选调用时，先核对当前用户的原始请求；
+只有以下任一条件成立才继续：
+
+1. 用户点名 `md-tex-sync`，或明确要求使用 `~md-tex-sync`。
+2. 用户明确要求 Markdown 与 LaTeX/PDF 同源维护、双格式同步交付、全文全集与
+   全附件归档，或要求执行本技能的完整哈希与渲染验收流程。
+
+仅提到 Markdown、LaTeX、PDF、文档转换或排版问题，不构成明确要求；
+`auto/all/make/report` 等技能从任务上下文推断出的调用也不构成明确要求。
+闸门未通过时立即停止本技能，改由相应通用技能处理，并说明
+“未启用 md-tex-sync”。
 
 ## 执行前置
 
@@ -44,12 +58,17 @@ metadata:
 
 ## 触发时机
 
+仅在「启用闸门」通过后，匹配以下请求：
+
 - 用户要求“md 与 tex/PDF 同步”“同源维护”“双格式交付”“编译 PDF”。
 - 用户要求修复公式、表格、算法、图片或代码块在 Markdown/PDF 中的显示错误。
 - 用户要求把多份文档整合成“全文全集”“全附件”“全数据”，并保留来源与冲突裁决。
 - 用户要求把大型 Markdown 转成 LaTeX，且不能依赖在线 Pandoc、MathJax 或浏览器。
 - 与其他技能配合：内容裁决用 `analy/pure`，源码核验用 `debug/review`，
   排版验收用 `report`，最终归档和技能索引用 `init/skill-creator/form`。
+
+不触发场景：普通 Markdown/LaTeX/PDF 编辑、一般格式转换、仅因任务涉及文档而启用，
+以及由 `auto/all/make` 等技能隐式推断的调用。
 
 ## 工作流程
 
