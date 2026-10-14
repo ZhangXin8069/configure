@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 # Install OpenCode V2 (Linux / macOS) into ~/.local/bin
-# Usage: bash install.sh [VERSION]   (default: latest)
+# Usage: bash install.sh [VERSION|--new]   (default: 1.18.31, --new: latest)
 # Env:   OPENCODE_INSTALL_DIR  安装目录（默认 $HOME/.local/bin）
 #        OPENCODE_BASE_URL     二进制源（默认 https://opencode.ai/files/bin）
 
 set -euo pipefail
 
 APP="opencode"
+DEFAULT_VERSION="1.18.31"
 INSTALL_DIR="${OPENCODE_INSTALL_DIR:-$HOME/.local/bin}"
 BASE_URL="${OPENCODE_BASE_URL:-https://opencode.ai/files/bin}"
 
@@ -73,15 +74,23 @@ ext=".zip"
 filename="$APP-$target$ext"
 
 # --- 版本解析 ---
-version="${1:-}"
-if [ -z "$version" ]; then
-    version="$(curl -fsSL "https://opencode.ai/update/api/latest/cli/npm" \
-        | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
-    if [ -z "$version" ]; then
-        echo "Error: failed to resolve latest OpenCode V2 version" >&2
-        exit 1
-    fi
+arg="${1:-}"
+if [ "$#" -gt 1 ]; then
+    echo "Error: expected at most one argument" >&2
+    exit 1
 fi
+case "$arg" in
+    --new)
+        version="$(curl -fsSL "https://opencode.ai/update/api/latest/cli/npm" \
+            | sed -n 's/.*"version":"\([^"]*\)".*/\1/p')"
+        if [ -z "$version" ]; then
+            echo "Error: failed to resolve latest OpenCode V2 version" >&2
+            exit 1
+        fi
+        ;;
+    -*) echo "Error: unknown option: $arg" >&2; exit 1 ;;
+    *)  version="${arg:-$DEFAULT_VERSION}" ;;
+esac
 version="${version#v}"
 url="$BASE_URL/$version/$filename"
 

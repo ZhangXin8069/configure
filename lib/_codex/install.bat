@@ -1,9 +1,12 @@
 @echo off
 rem Install Codex CLI (Windows x64) via npm into %USERPROFILE%\.local\bin
-rem Usage: install.bat [VERSION]   (default: latest)
+rem Usage: install.bat [--new] [VERSION]
+rem        default: 0.154.0 ; --new: latest ; VERSION: explicit (overrides --new)
 rem Env:   CODEX_INSTALL_DIR  install directory (default %USERPROFILE%\.local\bin)
 
 setlocal EnableExtensions EnableDelayedExpansion
+
+set "DEFAULT_VERSION=0.154.0"
 
 rem ---- 安装目录 ----
 set "INSTALL_DIR=%USERPROFILE%\.local\bin"
@@ -23,18 +26,37 @@ if errorlevel 1 (
     exit /b 1
 )
 
+rem ---- 参数解析 ----
+rem 无参数 => %DEFAULT_VERSION%；--new => latest；显式 VERSION 优先级最高
+set "USE_LATEST="
+set "VER="
+:parse_args
+if "%~1"=="" goto args_parsed
+set "ARG=%~1"
+if /i "!ARG!"=="--new" (
+    set "USE_LATEST=1"
+) else (
+    if "!ARG:~0,1!"=="-" (
+        echo   ERROR: unknown option: !ARG!
+        exit /b 1
+    )
+    set "VER=!ARG!"
+)
+shift
+goto parse_args
+:args_parsed
+
 rem ---- 版本解析 / 安装 ----
 rem 注意: Windows 下 npm 全局 bin 目录即 prefix 目录本身（Unix 下为 prefix/bin），
 rem       故 --prefix 指向 %INSTALL_DIR%，codex.cmd 直接落于其中（连同 node_modules/）。
-set "VER=%~1"
 set "PKG=@openai/codex"
-if not "%VER%"=="" (
-    echo   Installing %PKG%@%VER% ...
-    call npm install -g --prefix "%INSTALL_DIR%" "%PKG%@%VER%"
-) else (
-    echo   Installing %PKG%@latest ...
-    call npm install -g --prefix "%INSTALL_DIR%" "%PKG%@latest"
+set "SPEC=%PKG%@%DEFAULT_VERSION%"
+if not "%VER%"=="" set "SPEC=%PKG%@%VER%"
+if defined USE_LATEST (
+    if "%VER%"=="" set "SPEC=%PKG%@latest"
 )
+echo   Installing %SPEC% ...
+call npm install -g --prefix "%INSTALL_DIR%" "%SPEC%"
 if errorlevel 1 (
     echo   ERROR: npm install failed.
     exit /b 1
