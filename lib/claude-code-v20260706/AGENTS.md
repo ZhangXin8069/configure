@@ -7,7 +7,7 @@ Claude Code 离线安装包 v2026-07-06（当前最新版，`../_claude-code/` �
 | `cc-v20260706.sh` / `cc-v20260706.ps1` | Claude Code 安装/升级脚本（Linux/macOS 与 Windows） |
 | `cc_cli-v20260708.sh` | CLI 包装脚本（v2026-07-08） |
 | `download_all.sh` | 下载全部安装文件 |
-| `install.sh` | 安装封装：默认联网下载最新版（GCS + SHA-256 校验），指定 VERSION 时本地离线包优先、缺失则联网下载；均装到 `~/.local/bin/claude-<ver>` + 软链，写 `~/.claude.json`；`--npm` 走 npm，`--check` 只读检查 |
+| `install.sh` | 安装封装：默认安装 2.1.210（本地离线包优先，缺失时从 GCS 下载并校验 SHA-256），指定 VERSION 时安装对应版本，`--new` 才安装官方最新版；均装到 `~/.local/bin/claude-<ver>` + 软链，写 `~/.claude.json`；`--npm` 走 npm 并沿用相同版本规则，`--check` 只读检查 |
 | `config.sh` | 一键配置脚本（幂等合并 `~/.claude/settings.json`，默认 dry-run，`--apply` 写盘） |
 | `setup.md` | 安装指南 |
 | `uninstall_cc-v20260812.sh` / `uninstall_cc-v20260812.bat` | Claude Code 卸载脚本（v2026-08-12，agent 会话生成） |

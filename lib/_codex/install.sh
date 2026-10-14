@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Install Codex CLI (Linux / macOS) from GitHub releases into ~/.local/bin
-# Usage: bash install.sh [VERSION]   (default: latest)
+# Usage: bash install.sh [--new] [VERSION]
+#        default: 0.154.0 ; --new: 最新版 ; VERSION: 指定版本（优先级高于 --new）
 # Env:   CODEX_INSTALL_DIR  安装目录（默认 $HOME/.local/bin）
 
 set -euo pipefail
 
 APP="codex"
+DEFAULT_VERSION="0.154.0"
 INSTALL_DIR="${CODEX_INSTALL_DIR:-$HOME/.local/bin}"
 REPO="https://github.com/openai/codex/releases"
 
@@ -48,9 +50,23 @@ fi
 target="$arch-$os"
 filename="$APP-$target.tar.gz"
 
+# --- 参数解析 ---
+# 无参数 => $DEFAULT_VERSION；--new => 最新版；显式 VERSION 优先级最高
+use_latest=0
+version=""
+for arg in "$@"; do
+    case "$arg" in
+        --new) use_latest=1 ;;
+        -*)    echo "Error: unknown option: $arg" >&2; exit 1 ;;
+        *)     version="$arg" ;;
+    esac
+done
+
 # --- 版本解析 ---
-version="${1:-}"
-if [ -z "$version" ]; then
+if [ -n "$version" ]; then
+    version="${version#v}"
+    url="$REPO/download/rust-v${version}/$filename"
+elif [ "$use_latest" = 1 ]; then
     url="$REPO/latest/download/$filename"
     tag="$(curl -fsSL "https://api.github.com/repos/openai/codex/releases/latest" \
         | sed -n 's/.*"tag_name"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p')"
@@ -61,7 +77,7 @@ if [ -z "$version" ]; then
     version="${tag#rust-v}"
     version="${version#v}"
 else
-    version="${version#v}"
+    version="$DEFAULT_VERSION"
     url="$REPO/download/rust-v${version}/$filename"
 fi
 
