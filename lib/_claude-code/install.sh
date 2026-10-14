@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Install Claude Code (Linux / macOS)：默认联网从官方 GCS 下载最新版安装到 ~/.local/bin，
-# 指定 VERSION 时优先用本目录离线包（缺失则联网下载该版本），--npm 走官方 npm 全局安装。
+# Install Claude Code (Linux / macOS)：默认安装 2.1.210 到 ~/.local/bin，
+# 指定 VERSION 时优先用本目录离线包（缺失则联网下载该版本）；
+# --new 联网获取最新版，--npm 走官方 npm 全局安装。
 # Usage: bash install.sh [VERSION] [选项]
 # 安装布局（与 setup.md 一致）:
 #   ~/.local/bin/claude-<ver>   二进制（软链 ~/.local/bin/claude -> claude-<ver>）
@@ -20,15 +21,18 @@ TMP_DIR=""
 
 NPM=0
 CHECK=0
+USE_LATEST=0
 VERSION=""
+DEFAULT_VERSION="2.1.210"
 
 usage() {
     cat <<EOF
 用法: bash install.sh [VERSION] [选项]
 
   [VERSION]   安装指定版本（本地离线包 $PKG_DIR/<ver> 优先，缺失时联网下载）
-              省略则联网从官方 GCS 下载最新版
-  --npm       改为 npm 全局安装 @anthropic-ai/claude-code@latest（需联网）
+              省略则安装默认版本 $DEFAULT_VERSION
+  --new       联网获取并安装官方最新版（不可与 VERSION 同时使用）
+  --npm       改为 npm 全局安装 @anthropic-ai/claude-code@<VERSION>（需联网）
   --check     只读检查安装现状，不安装
   -h, --help  显示帮助
 EOF
@@ -36,7 +40,11 @@ EOF
 
 die() { printf '错误: %s\n' "$1" >&2; exit 1; }
 
-cleanup() { [ -n "${TMP_DIR:-}" ] && rm -rf "$TMP_DIR"; }
+cleanup() {
+    if [ -n "${TMP_DIR:-}" ]; then
+        rm -rf "$TMP_DIR"
+    fi
+}
 trap cleanup EXIT
 
 check_status() {
@@ -44,8 +52,9 @@ check_status() {
         printf 'claude: %s\n' "$(claude --version 2>/dev/null | head -1 || echo '版本未知')"
         printf '路径:   %s\n' "$(command -v claude)"
     else
-        printf 'claude: 未安装（bash install.sh 联网装最新版，或 --npm / 指定离线包版本）\n'
+        printf 'claude: 未安装（bash install.sh 默认安装 %s，--new 安装最新版，或 --npm / 指定离线包版本）\n' "$DEFAULT_VERSION"
     fi
+    printf '默认版本: %s\n' "$DEFAULT_VERSION"
     printf '本地包: '
     if [ -f "$PKG_DIR/latest.txt" ]; then
         printf '%s（latest.txt）\n' "$(cat "$PKG_DIR/latest.txt")"
@@ -190,16 +199,18 @@ finish_install() {
 }
 
 install_npm() {
+    local ver="$1"
     command -v npm >/dev/null 2>&1 || die "需要 npm（Node.js）；离线环境请改用本地离线包"
-    npm install -g "@anthropic-ai/claude-code@latest"
+    npm install -g "@anthropic-ai/claude-code@$ver"
     echo ""
-    echo "Claude Code 已通过 npm 安装；检查: claude --version"
+    echo "Claude Code $ver 已通过 npm 安装；检查: claude --version"
 }
 
 main() {
     while [ $# -gt 0 ]; do
         case "$1" in
             --npm)  NPM=1; shift;;
+            --new)  USE_LATEST=1; shift;;
             --check) CHECK=1; shift;;
             -h|--help) usage; exit 0;;
             --*) die "未知选项: $1";;
@@ -207,19 +218,26 @@ main() {
         esac
     done
 
+    if [ -n "$VERSION" ] && [ "$USE_LATEST" = 1 ]; then
+        die "--new 不能与 VERSION 同时使用"
+    fi
+
     if [ "$CHECK" = 1 ]; then
         check_status
         return 0
     fi
 
-    if [ "$NPM" = 1 ]; then
-        install_npm
-        return 0
-    fi
-
-    if [ -z "$VERSION" ]; then
+    if [ "$USE_LATEST" = 1 ]; then
         VERSION="$(fetch_latest_version)"
         printf '最新版本: %s\n' "$VERSION"
+    elif [ -z "$VERSION" ]; then
+        VERSION="$DEFAULT_VERSION"
+        printf '默认版本: %s\n' "$VERSION"
+    fi
+
+    if [ "$NPM" = 1 ]; then
+        install_npm "$VERSION"
+        return 0
     fi
 
     if [ -f "$PKG_DIR/$VERSION/claude" ]; then
