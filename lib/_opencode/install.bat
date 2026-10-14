@@ -1,6 +1,6 @@
 @echo off
 rem Install OpenCode V2 (Windows x64/ARM64) into %USERPROFILE%\.local\bin
-rem Usage: install.bat [VERSION]   (default: latest)
+rem Usage: install.bat [VERSION|--new]   (default: 1.18.31, --new: latest)
 rem Env:   OPENCODE_INSTALL_DIR  install directory (default %USERPROFILE%\.local\bin)
 rem        OPENCODE_BASE_URL     binary source (default https://opencode.ai/files/bin)
 
@@ -11,6 +11,7 @@ set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 if defined OPENCODE_INSTALL_DIR set "INSTALL_DIR=%OPENCODE_INSTALL_DIR%"
 set "OPENCODE_BASE=https://opencode.ai/files/bin"
 if defined OPENCODE_BASE_URL set "OPENCODE_BASE=%OPENCODE_BASE_URL%"
+set "DEFAULT_VER=1.18.31"
 
 title OpenCode Installer
 
@@ -42,15 +43,28 @@ if not defined TARGET (
 )
 
 rem ---- 版本解析 / 下载地址 ----
-set "VER=%~1"
-if defined VER if /i "%VER:~0,1%"=="v" set "VER=%VER:~1%"
-if not defined VER (
+set "VER="
+set "WANT_NEW="
+set "ARG=%~1"
+if not "%~2"=="" (
+    echo   ERROR: expected at most one argument.
+    exit /b 1
+)
+if not defined ARG set "VER=%DEFAULT_VER%"
+if /i "%ARG%"=="--new" set "WANT_NEW=1"
+if not defined WANT_NEW if defined ARG set "VER=%ARG%"
+if not defined WANT_NEW if "%ARG:~0,1%"=="-" (
+    echo   ERROR: unknown option: %ARG%
+    exit /b 1
+)
+if defined WANT_NEW (
     for /f "usebackq delims=" %%i in (`powershell -NoProfile -NonInteractive -Command "(Invoke-RestMethod -Uri 'https://opencode.ai/update/api/latest/cli/npm').version"`) do set "VER=%%i"
 )
 if not defined VER (
-    echo   ERROR: failed to resolve latest OpenCode V2 version.
+    echo   ERROR: failed to resolve OpenCode V2 version.
     exit /b 1
 )
+if /i "%VER:~0,1%"=="v" set "VER=%VER:~1%"
 set "FILENAME=opencode-%TARGET%.zip"
 set "URL=%OPENCODE_BASE%/%VER%/%FILENAME%"
 

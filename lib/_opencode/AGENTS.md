@@ -3,7 +3,8 @@
 OpenCode V2 跨平台安装与一键配置脚本（不部署到 `$HOME`，手动运行；保留 V1 配置兼容分支）：
 
 - `install.sh` / `install.bat` — Linux/macOS 与 Windows 安装脚本，从
-  `https://opencode.ai/files/bin/<version>/` 下载官方 V2 二进制；默认安装到
+  `https://opencode.ai/files/bin/<version>/` 下载官方 V2 二进制；默认安装固定版本
+  1.18.31（`--new` 取上游最新版，也可显式传入 VERSION）；默认安装到
   `~/.local/bin` / `%USERPROFILE%\.local\bin`，可用 `OPENCODE_INSTALL_DIR` 覆盖，
   测试可用 `OPENCODE_BASE_URL` 切换镜像源
 - `config.sh` — 幂等配置脚本。OpenCode V2 生成 `opencode.json` + `cli.json` 原生配置
