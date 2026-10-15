@@ -2,6 +2,7 @@
 """Minimal Responses-to-Chat Completions bridge for agent launchers."""
 
 import argparse
+import base64
 import json
 import os
 import sys
@@ -11,6 +12,48 @@ import urllib.parse
 import urllib.request
 import uuid
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+
+# DeepSeek 等 thinking 模式上游要求下一轮把上一条 assistant 消息的
+# reasoning_content 原样回传（丢弃会被以 invalid_request_error 拒绝）。Codex 只
+# 回放它见过的 Responses 项，因此桥把思维内容编码进 reasoning 项的
+# encrypted_content（对 Codex 不透明，仅原样回传），入站时再解回 reasoning_content。
+REASONING_PAYLOAD_PREFIX = b"configure-agent-bridge/reasoning/v1:"
+
+
+def encode_reasoning(text):
+    payload = REASONING_PAYLOAD_PREFIX + text.encode("utf-8")
+    return base64.b64encode(payload).decode("ascii")
+
+
+def decode_reasoning(value):
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        payload = base64.b64decode(value, validate=True)
+    except Exception:
+        return None
+    if not payload.startswith(REASONING_PAYLOAD_PREFIX):
+        return None
+    return payload[len(REASONING_PAYLOAD_PREFIX):].decode("utf-8", "replace")
+
+
+def reasoning_from_item(item):
+    if not isinstance(item, dict):
+        return None
+    text = decode_reasoning(item.get("encrypted_content"))
+    if text is not None:
+        return text
+    summary = item.get("summary")
+    if isinstance(summary, list):
+        parts = [
+            str(part.get("text") or "")
+            for part in summary
+            if isinstance(part, dict) and str(part.get("type") or "") == "summary_text"
+        ]
+        text = "\n".join(part for part in parts if part)
+        if text:
+            return text
+    return None
 
 
 def json_text(value):
@@ -58,6 +101,7 @@ def responses_to_chat(payload):
     if instructions:
         messages.append({"role": "system", "content": instructions})
 
+    pending_reasoning = None
     for item in payload.get("input") or []:
         if isinstance(item, str):
             messages.append({"role": "user", "content": item})
@@ -65,30 +109,50 @@ def responses_to_chat(payload):
         if not isinstance(item, dict):
             continue
         item_type = str(item.get("type") or "message")
-        if item_type == "message":
+        if item_type == "reasoning":
+            pending_reasoning = reasoning_from_item(item)
+        elif item_type == "message":
             role = str(item.get("role") or "user")
             if role == "developer":
                 role = "system"
             if role not in {"system", "user", "assistant", "tool"}:
                 role = "user"
-            messages.append({"role": role, "content": content_text(item.get("content"))})
+            entry = {"role": role, "content": content_text(item.get("content"))}
+            # reasoning 项紧跟它所属的 assistant 输出项，故挂到本回合的消息上；
+            # 随后的 function_call 合并进同一条时思维内容一并保留。
+            if role == "assistant":
+                if pending_reasoning:
+                    entry["reasoning_content"] = pending_reasoning
+                    pending_reasoning = None
+            else:
+                pending_reasoning = None
+            messages.append(entry)
         elif item_type == "function_call":
-            messages.append(
-                {
-                    "role": "assistant",
-                    "content": None,
-                    "tool_calls": [
-                        {
-                            "id": str(item.get("call_id") or item.get("id") or "call_" + uuid.uuid4().hex),
-                            "type": "function",
-                            "function": {
-                                "name": str(item.get("name") or ""),
-                                "arguments": json_text(item.get("arguments")),
-                            },
-                        }
-                    ],
-                }
-            )
+            tool_call = {
+                "id": str(item.get("call_id") or item.get("id") or "call_" + uuid.uuid4().hex),
+                "type": "function",
+                "function": {
+                    "name": str(item.get("name") or ""),
+                    "arguments": json_text(item.get("arguments")),
+                },
+            }
+            # 并行调用的 function_call 在 Responses 输入里连续出现，须合并进同一条
+            # assistant 消息：上游（DeepSeek 等）要求 assistant tool_calls 后紧跟
+            # 覆盖全部 tool_call_id 的 tool 消息，连续多条 assistant 会被拒绝。
+            if messages and messages[-1].get("role") == "assistant":
+                last = messages[-1]
+                last.setdefault("tool_calls", []).append(tool_call)
+                if not last.get("content"):
+                    last["content"] = None
+                if pending_reasoning and not last.get("reasoning_content"):
+                    last["reasoning_content"] = pending_reasoning
+                    pending_reasoning = None
+            else:
+                entry = {"role": "assistant", "content": None, "tool_calls": [tool_call]}
+                if pending_reasoning:
+                    entry["reasoning_content"] = pending_reasoning
+                    pending_reasoning = None
+                messages.append(entry)
         elif item_type == "function_call_output":
             messages.append(
                 {
@@ -328,6 +392,27 @@ def chat_to_response_events(payload, chat):
         text = ""
     elif not isinstance(text, str):
         text = content_text(text)
+
+    reasoning = message.get("reasoning_content")
+    if reasoning is None:
+        reasoning = ""
+    elif not isinstance(reasoning, str):
+        reasoning = content_text(reasoning)
+    if reasoning:
+        # thinking 模式上游要求下轮回传思维内容；Codex 只回放它见过的 Responses 项，
+        # 故以 reasoning 项输出（encrypted_content 对 Codex 不透明，仅供回传）。
+        item_id = "rs_" + uuid.uuid4().hex
+        output_index = len(output_items)
+        in_progress = {"id": item_id, "type": "reasoning", "summary": []}
+        completed = {
+            "id": item_id,
+            "type": "reasoning",
+            "summary": [{"type": "summary_text", "text": reasoning}],
+            "encrypted_content": encode_reasoning(reasoning),
+        }
+        add("response.output_item.added", {"output_index": output_index, "item": in_progress})
+        add("response.output_item.done", {"output_index": output_index, "item": completed})
+        output_items.append(completed)
 
     if text:
         item_id = "msg_" + uuid.uuid4().hex
