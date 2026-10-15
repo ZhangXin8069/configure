@@ -72,12 +72,12 @@ export HDF5_MPI="ON"
 # # export CFLAGS="-I/path/to/include"
 export MPI_INCLUDE_PATH=$(dirname $(which mpirun))/../include
 export CUDA_INCLUDE_PATH=${CUDA_HOME}/include
-export CFLAGS="-I${CUDA_INCLUDE_PATH} -I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src":${CFLAGS}
+# export CFLAGS="-I${CUDA_INCLUDE_PATH} -I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
 # # export LDFLAGS="-L/path/to/lib"
-export LDFLAGS="-L${LD_LIBRARY_PATH}":${LDFLAGS}
+# export LDFLAGS="-L${LD_LIBRARY_PATH}"
 # pip install --no-binary=mpi4py mpi4py -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
 # pip install --no-binary=h5py h5py -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
-# pip install --no-binary=cupy cupy -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
+# pip install --only-binary=:all: cupy-cuda12x==14.2.0 -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
 
 ## PYQCU
 [ -r "${HOME}/PyQCU/env.sh" ] && source "${HOME}/PyQCU/env.sh"
