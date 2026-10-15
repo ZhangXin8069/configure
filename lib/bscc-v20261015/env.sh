@@ -32,7 +32,7 @@ else
     if [ -f "/home/bingxing2/apps/anaconda/2021.11/etc/profile.d/conda.sh" ]; then
         . "/home/bingxing2/apps/anaconda/2021.11/etc/profile.d/conda.sh"
     else
-        export PATH="/home/bingxing2/apps/anaconda/2021.11/bin:$PATH"
+        export PATH="/home/bingxing2/apps/anaconda/2021.11/bin:${PATH}"
     fi
 fi
 unset __conda_setup
@@ -48,7 +48,7 @@ conda activate qcu
 # ./autogen.sh
 # ./configure --prefix=${HOME}/lib/htop
 # make -j8
-export PATH=${HOME}/lib/htop:$PATH
+export PATH=${HOME}/lib/htop:${PATH}
 
 ## TORCH
 # pip install /home/bingxing2/apps/package/pytorch/2.7.0-cu124_cp311/torch-2.7.0+cu124-cp311-cp311-linux_aarch64.whl -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
@@ -65,18 +65,22 @@ export PATH=${HOME}/lib/htop:$PATH
 # cp ./hl/src/hdf5_hl* include/
 # cp ./hl/src/.libs/libhdf5_hl* lib
 export HDF5_DIR=${HOME}/lib/hdfsrc
-export PATH=${HOME}/lib/hdfsrc/bin:$PATH
+export PATH=${HOME}/lib/hdfsrc/bin:${PATH}
 export HDF5_INCLUDE_PATH=${HOME}/lib/hdfsrc/include
-export LD_LIBRARY_PATH=${HOME}/lib/hdfsrc/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=${HOME}/lib/hdfsrc/lib:${LD_LIBRARY_PATH}
 export HDF5_MPI="ON"
 # # export CFLAGS="-I/path/to/include"
-export MPI_INCLUDE_PATH="/home/bingxing2/apps/mpi/4.1.5-gcc11.3.0-cuda12.4/include"
-# export CFLAGS="-I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src"
+export MPI_INCLUDE_PATH=$(dirname $(which mpirun))/../include
+export CUDA_INCLUDE_PATH=${CUDA_HOME}/include
+export CFLAGS="-I${CUDA_INCLUDE_PATH} -I${MPI_INCLUDE_PATH} -I${HDF5_INCLUDE_PATH} -I${HDF5_DIR}/hl/src":${CFLAGS}
 # # export LDFLAGS="-L/path/to/lib"
-# export LDFLAGS="-L${LD_LIBRARY_PATH}"
+export LDFLAGS="-L${LD_LIBRARY_PATH}":${LDFLAGS}
 # pip install --no-binary=mpi4py mpi4py -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
 # pip install --no-binary=h5py h5py -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
 # pip install --no-binary=cupy cupy -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple --verbose
 
 ## PYQCU
 [ -r "${HOME}/PyQCU/env.sh" ] && source "${HOME}/PyQCU/env.sh"
+
+## PYQUDA
+export PYTHONPATH=${HOME}/lib/PyQuda-master:${PYTHONPATH}
