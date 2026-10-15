@@ -130,6 +130,22 @@ class BridgeTest(unittest.TestCase):
             "usage": {"prompt_tokens": 2, "completion_tokens": 1, "total_tokens": 3},
         }
 
+    def assert_tool_call_adjacency(self, messages):
+        # 上游（DeepSeek 等）校验规则：任一 assistant tool_calls 消息后必须紧跟覆盖
+        # 全部 tool_call_id 的 tool 消息；连续多条带 tool_calls 的 assistant 属非法序列。
+        for index, message in enumerate(messages):
+            tool_calls = message.get("tool_calls")
+            if message.get("role") != "assistant" or not tool_calls:
+                continue
+            expected = [call["id"] for call in tool_calls]
+            following = messages[index + 1 : index + 1 + len(expected)]
+            self.assertEqual(
+                [item.get("role") for item in following],
+                ["tool"] * len(expected),
+                "assistant tool_calls 后必须紧跟 tool 消息: %r" % (messages,),
+            )
+            self.assertEqual([item.get("tool_call_id") for item in following], expected)
+
     def test_responses_text_and_native_session_header(self):
         self.upstream.responses.put(self.chat_response(content="bridge-ok"))
         output = post_json(
@@ -219,20 +235,65 @@ class BridgeTest(unittest.TestCase):
         )
         self.assertIn("after-tools", output)
         messages = self.upstream.requests[-1]["body"]["messages"]
-        # 上游（DeepSeek 等）校验规则：任一 assistant tool_calls 消息后必须紧跟覆盖其
-        # 全部 tool_call_id 的 tool 消息；连续多条带 tool_calls 的 assistant 属非法序列。
-        for index, message in enumerate(messages):
-            tool_calls = message.get("tool_calls")
-            if message.get("role") != "assistant" or not tool_calls:
-                continue
-            expected = [call["id"] for call in tool_calls]
-            following = messages[index + 1 : index + 1 + len(expected)]
-            self.assertEqual(
-                [item.get("role") for item in following],
-                ["tool"] * len(expected),
-                "assistant tool_calls 后必须紧跟 tool 消息: %r" % (messages,),
-            )
-            self.assertEqual([item.get("tool_call_id") for item in following], expected)
+        self.assert_tool_call_adjacency(messages)
+
+    def test_responses_interleaved_assistant_text_keeps_tool_replies_adjacent(self):
+        self.upstream.responses.put(self.chat_response(content="after-tools"))
+        post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "deepseek-v4.1-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "run one command"},
+                    {
+                        "type": "function_call",
+                        "call_id": "call_interleaved",
+                        "name": "exec_command",
+                        "arguments": '{"cmd":"pwd"}',
+                    },
+                    {"type": "message", "role": "assistant", "content": "继续执行。"},
+                    {
+                        "type": "function_call_output",
+                        "call_id": "call_interleaved",
+                        "output": "/root/configure",
+                    },
+                ],
+                "stream": True,
+            },
+        )
+        messages = self.upstream.requests[-1]["body"]["messages"]
+        self.assert_tool_call_adjacency(messages)
+        assistant = next(message for message in messages if message.get("role") == "assistant")
+        self.assertEqual(assistant["content"], "继续执行。")
+
+    def test_responses_missing_tool_output_is_synthesized_before_next_turn(self):
+        self.upstream.responses.put(self.chat_response(content="after-tools"))
+        post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "deepseek-v4.1-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "run one command"},
+                    {
+                        "type": "function_call",
+                        "call_id": "call_missing",
+                        "name": "exec_command",
+                        "arguments": '{"cmd":"pwd"}',
+                    },
+                    {"type": "message", "role": "assistant", "content": "工具未返回。"},
+                    {"type": "message", "role": "user", "content": "继续"},
+                ],
+                "stream": True,
+            },
+        )
+        messages = self.upstream.requests[-1]["body"]["messages"]
+        self.assert_tool_call_adjacency(messages)
+        assistant_index = next(
+            index
+            for index, message in enumerate(messages)
+            if message.get("role") == "assistant" and message.get("tool_calls")
+        )
+        self.assertIn("unavailable", messages[assistant_index + 1]["content"])
 
     def test_responses_reasoning_content_round_trip(self):
         # thinking 模式上游要求下一轮把 reasoning_content 原样回传；桥须把它作为

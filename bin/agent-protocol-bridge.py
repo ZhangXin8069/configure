@@ -95,6 +95,84 @@ def normalize_tool_choice(value):
     return "auto"
 
 
+def merge_assistant_entries(target, source):
+    source_content = source.get("content")
+    if source_content:
+        target_content = target.get("content")
+        target["content"] = (
+            str(target_content) + "\n" + str(source_content)
+            if target_content
+            else source_content
+        )
+    if source.get("reasoning_content") and not target.get("reasoning_content"):
+        target["reasoning_content"] = source["reasoning_content"]
+    source_calls = source.get("tool_calls")
+    if isinstance(source_calls, list) and source_calls:
+        target.setdefault("tool_calls", []).extend(source_calls)
+
+
+def normalize_chat_tool_sequences(messages):
+    """Enforce the tool-call adjacency required by DeepSeek-compatible APIs."""
+    merged = []
+    for message in messages:
+        if not isinstance(message, dict):
+            continue
+        message = dict(message)
+        if (
+            merged
+            and merged[-1].get("role") == "assistant"
+            and merged[-1].get("tool_calls")
+            and message.get("role") == "assistant"
+        ):
+            merge_assistant_entries(merged[-1], message)
+            continue
+        merged.append(message)
+
+    normalized = []
+    consumed = set()
+    for index, message in enumerate(merged):
+        if index in consumed:
+            continue
+        tool_calls = message.get("tool_calls") if message.get("role") == "assistant" else None
+        if not isinstance(tool_calls, list) or not tool_calls:
+            if message.get("role") != "tool":
+                normalized.append(message)
+            continue
+
+        expected = [str(call.get("id") or "") for call in tool_calls if isinstance(call, dict)]
+        if not expected or any(not call_id for call_id in expected):
+            continue
+        normalized.append(message)
+
+        found = {}
+        for candidate_index in range(index + 1, len(merged)):
+            if candidate_index in consumed:
+                continue
+            candidate = merged[candidate_index]
+            candidate_calls = (
+                candidate.get("tool_calls") if candidate.get("role") == "assistant" else None
+            )
+            if isinstance(candidate_calls, list) and candidate_calls:
+                break
+            if candidate.get("role") != "tool":
+                continue
+            call_id = str(candidate.get("tool_call_id") or "")
+            if call_id in expected and call_id not in found:
+                found[call_id] = candidate
+                consumed.add(candidate_index)
+
+        for call_id in expected:
+            normalized.append(
+                found.get(call_id)
+                or {
+                    "role": "tool",
+                    "tool_call_id": call_id,
+                    "content": "Tool result unavailable in replayed conversation history.",
+                }
+            )
+    return normalized
+
+
 def responses_to_chat(payload):
     messages = []
     instructions = str(payload.get("instructions") or "").strip()
@@ -668,7 +746,10 @@ class UpstreamError(Exception):
 
 def fetch_chat(args, payload, incoming_headers, converter):
     url = args.upstream_base.rstrip("/") + "/chat/completions"
-    body = json.dumps(converter(payload), ensure_ascii=False, separators=(",", ":")).encode("utf-8")
+    chat_payload = converter(payload)
+    if isinstance(chat_payload, dict):
+        chat_payload["messages"] = normalize_chat_tool_sequences(chat_payload.get("messages") or [])
+    body = json.dumps(chat_payload, ensure_ascii=False, separators=(",", ":")).encode("utf-8")
     headers = {
         "Content-Type": "application/json",
         "User-Agent": "configure-agent-bridge/1.0",
