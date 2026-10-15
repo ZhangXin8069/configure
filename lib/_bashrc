@@ -121,4 +121,5 @@ fi
 
 # ---- 环境入口 (与 ~/.zshrc 一致; 存在才 source, 避免报错) ----
 [ -r "${HOME}/configure/env.sh" ] && source "${HOME}/configure/env.sh"
+[ -r "${HOME}/env-key.sh" ] && source "${HOME}/env-key.sh"
 [ -r "${HOME}/env.sh" ] && source "${HOME}/env.sh"
