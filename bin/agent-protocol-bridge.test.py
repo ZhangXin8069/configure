@@ -102,8 +102,25 @@ class BridgeTest(unittest.TestCase):
         cls.upstream.server_close()
         cls.tempdir.cleanup()
 
-    def chat_response(self, content=None, tool_calls=None, finish="stop"):
+    @staticmethod
+    def sse_events(body):
+        events = []
+        for line in body.splitlines():
+            if not line.startswith("data: "):
+                continue
+            payload = line[6:].strip()
+            if not payload or payload == "[DONE]":
+                continue
+            try:
+                events.append(json.loads(payload))
+            except json.JSONDecodeError:
+                continue
+        return events
+
+    def chat_response(self, content=None, tool_calls=None, finish="stop", reasoning=None):
         message = {"role": "assistant", "content": content, "tool_calls": tool_calls}
+        if reasoning is not None:
+            message["reasoning_content"] = reasoning
         return {
             "id": "chatcmpl-test",
             "object": "chat.completion",
@@ -173,6 +190,126 @@ class BridgeTest(unittest.TestCase):
         self.assertIn("response.function_call_arguments.delta", output)
         self.assertIn('"name":"exec_command"', output)
         self.assertIn('"call_id":"call_probe"', output)
+
+    def test_responses_parallel_tool_calls_form_valid_chat_sequence(self):
+        self.upstream.responses.put(self.chat_response(content="after-tools"))
+        output = post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "glm-5.3-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "run two commands"},
+                    {
+                        "type": "function_call",
+                        "call_id": "call_a",
+                        "name": "exec_command",
+                        "arguments": '{"cmd":"echo a"}',
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": "call_b",
+                        "name": "exec_command",
+                        "arguments": '{"cmd":"echo b"}',
+                    },
+                    {"type": "function_call_output", "call_id": "call_a", "output": "a"},
+                    {"type": "function_call_output", "call_id": "call_b", "output": "b"},
+                ],
+                "stream": True,
+            },
+        )
+        self.assertIn("after-tools", output)
+        messages = self.upstream.requests[-1]["body"]["messages"]
+        # 上游（DeepSeek 等）校验规则：任一 assistant tool_calls 消息后必须紧跟覆盖其
+        # 全部 tool_call_id 的 tool 消息；连续多条带 tool_calls 的 assistant 属非法序列。
+        for index, message in enumerate(messages):
+            tool_calls = message.get("tool_calls")
+            if message.get("role") != "assistant" or not tool_calls:
+                continue
+            expected = [call["id"] for call in tool_calls]
+            following = messages[index + 1 : index + 1 + len(expected)]
+            self.assertEqual(
+                [item.get("role") for item in following],
+                ["tool"] * len(expected),
+                "assistant tool_calls 后必须紧跟 tool 消息: %r" % (messages,),
+            )
+            self.assertEqual([item.get("tool_call_id") for item in following], expected)
+
+    def test_responses_reasoning_content_round_trip(self):
+        # thinking 模式上游要求下一轮把 reasoning_content 原样回传；桥须把它作为
+        # Responses reasoning 项交给 Codex，并在回放时映射回 assistant 消息。
+        reasoning = "先并行探测环境，再汇总。"
+        self.upstream.responses.put(
+            self.chat_response(
+                content="先探测。",
+                tool_calls=[
+                    {
+                        "id": "call_r1",
+                        "type": "function",
+                        "function": {"name": "exec_command", "arguments": '{"cmd":"uname -a"}'},
+                    },
+                    {
+                        "id": "call_r2",
+                        "type": "function",
+                        "function": {"name": "exec_command", "arguments": '{"cmd":"date"}'},
+                    },
+                ],
+                finish="tool_calls",
+                reasoning=reasoning,
+            )
+        )
+        output = post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "deepseek-v4.1-flash",
+                "input": [{"type": "message", "role": "user", "content": "探测环境"}],
+                "stream": True,
+            },
+        )
+        reasoning_items = [
+            event["item"]
+            for event in self.sse_events(output)
+            if event.get("type") == "response.output_item.done"
+            and event["item"].get("type") == "reasoning"
+        ]
+        self.assertEqual(len(reasoning_items), 1)
+        self.assertIn("encrypted_content", reasoning_items[0])
+
+        self.upstream.responses.put(self.chat_response(content="汇总完成"))
+        post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "deepseek-v4.1-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "探测环境"},
+                    *reasoning_items,
+                    {"type": "message", "role": "assistant", "content": "先探测。"},
+                    {
+                        "type": "function_call",
+                        "call_id": "call_r1",
+                        "name": "exec_command",
+                        "arguments": '{"cmd":"uname -a"}',
+                    },
+                    {
+                        "type": "function_call",
+                        "call_id": "call_r2",
+                        "name": "exec_command",
+                        "arguments": '{"cmd":"date"}',
+                    },
+                    {"type": "function_call_output", "call_id": "call_r1", "output": "Linux"},
+                    {"type": "function_call_output", "call_id": "call_r2", "output": "2026-10-15"},
+                ],
+                "stream": True,
+            },
+        )
+        messages = self.upstream.requests[-1]["body"]["messages"]
+        assistant_turns = [message for message in messages if message.get("role") == "assistant"]
+        self.assertEqual(len(assistant_turns), 1, "同一回合的文本与 tool_calls 应合并为一条消息")
+        self.assertEqual(assistant_turns[0]["reasoning_content"], reasoning)
+        self.assertEqual(
+            [call["id"] for call in assistant_turns[0]["tool_calls"]],
+            ["call_r1", "call_r2"],
+        )
+        self.assertEqual(assistant_turns[0]["content"], "先探测。")
 
     def test_messages_text_and_tool_result(self):
         self.upstream.responses.put(self.chat_response(content="claude-ok"))
