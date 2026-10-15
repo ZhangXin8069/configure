@@ -62,12 +62,7 @@
       "models_metadata_provider": "opencode-go",
       "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
       "codex": {
-        "bridge_models": [ "glm-*" ],
-        "bridge_protocol": "chat_completions",
-        "bridge_auth": "bearer"
-      },
-      "claude": {
-        "bridge_models": [ "glm-*" ],
+        "bridge_models": [ "deepseek-*" ],
         "bridge_protocol": "chat_completions",
         "bridge_auth": "bearer"
       },
