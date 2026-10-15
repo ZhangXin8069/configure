@@ -63,6 +63,7 @@ clear
 # @ENV@
 # 环境入口 (与 ~/.bashrc 一致; 存在才 source, 避免报错; env.sh 内部已做 PATH 防重复)
 [ -r "${HOME}/configure/env.sh" ] && source "${HOME}/configure/env.sh"
+[ -r "${HOME}/env-key.sh" ] && source "${HOME}/env-key.sh"
 [ -r "${HOME}/env.sh" ] && source "${HOME}/env.sh"
 # @CLEAR
 # clear
