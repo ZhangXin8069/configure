@@ -266,7 +266,8 @@ assert_file_contains "$call_log" '--model deepseek-v4.1-flash'
 assert_file_contains "$call_log" 'features.fast_mode=false'
 assert_file_contains "$call_log" 'model_reasoning_effort="max"'
 assert_file_contains "$call_log" 'check_for_update_on_startup=false'
-assert_file_contains "$call_log" 'model_providers.opencode-go.base_url="https://opencode.ai/zen/go/v1"'
+assert_contains "$default_codex_output" 'bridge: Responses -> chat_completions'
+assert_file_contains "$call_log" 'model_providers.opencode-go.base_url="http://127.0.0.1:'
 assert_file_contains "$call_log" 'model_providers.opencode-go.env_key="OPENCODE_GO_API_KEY"'
 assert_file_contains "$call_log" 'model_providers.opencode-go.wire_api="responses"'
 assert_file_contains "$call_log" 'model_providers.opencode-go.supports_websockets=false'
@@ -934,7 +935,8 @@ set -e
 switch_co_go_new=$(tail -n +$((switch_co_go_before + 1)) "$call_log")
 assert_contains "$switch_co_go_new" '--model deepseek-v4.1-flash'
 assert_contains "$switch_co_go_new" 'model_provider="opencode-go"'
-assert_contains "$switch_co_go_new" 'model_providers.opencode-go.base_url="https://opencode.ai/zen/go/v1"'
+assert_contains "$switch_co_go_new" 'model_providers.opencode-go.base_url="http://127.0.0.1:'
+assert_contains "$switch_co_go_output" 'bridge: Responses -> chat_completions'
 assert_contains "$switch_co_go_new" 'model_providers.opencode-go.wire_api="responses"'
 assert_contains "$switch_co_go_new" 'supports_websockets=false'
 assert_file_contains "$call_log" 'codex-opencode-keys go=test-go-key zen=test-go-key api=test-go-key'
@@ -1015,21 +1017,24 @@ printf 'PASS: go/zen/默认方案的 OpenCode key 优先级正确\n'
 
 bridge_co_before=$(call_count)
 set +e
-co_bridge_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go glm-5.3-flash --once 2>&1)
+co_bridge_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go deepseek-v4.1-flash --once 2>&1)
 co_bridge_status=$?
 set -e
-(( co_bridge_status == 0 )) || fail "co go GLM 协议桥失败：${co_bridge_output}"
+(( co_bridge_status == 0 )) || fail "co go 协议桥失败：${co_bridge_output}"
 assert_contains "$co_bridge_output" 'bridge: Responses -> chat_completions'
-(( $(call_count) == bridge_co_before + 1 )) || fail 'co go GLM 应调用一次 Codex 可执行文件'
+(( $(call_count) == bridge_co_before + 1 )) || fail 'co go 应调用一次 Codex 可执行文件'
 
+# go 的 Claude 侧现无桥接模型：deepseek 走原生 /messages，不应启动协议桥
 bridge_cl_before=$(call_count)
 set +e
-cl_bridge_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" go glm-5.3-flash --once 2>&1)
+cl_bridge_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" go --once 2>&1)
 cl_bridge_status=$?
 set -e
-(( cl_bridge_status == 0 )) || fail "cl go GLM 协议桥失败：${cl_bridge_output}"
-assert_contains "$cl_bridge_output" 'bridge: Anthropic Messages -> chat_completions'
-(( $(call_count) == bridge_cl_before + 1 )) || fail 'cl go GLM 应调用一次 Claude 可执行文件'
+(( cl_bridge_status == 0 )) || fail "cl go 失败：${cl_bridge_output}"
+case "$cl_bridge_output" in
+    *'bridge:'*) fail 'cl go 不应启动协议桥（deepseek 走原生 /messages）' ;;
+esac
+(( $(call_count) == bridge_cl_before + 1 )) || fail 'cl go 应调用一次 Claude 可执行文件'
 
 set +e
 co_zen_bridge_output=$(OPENCODE_ZEN_API_KEY=test-zen-key run_launcher co "$fake_codex" zen glm-5.3-flash --once 2>&1)
@@ -1041,7 +1046,7 @@ set -e
 (( cl_zen_bridge_status == 0 )) || fail "cl zen GLM 协议桥失败：${cl_zen_bridge_output}"
 assert_contains "$co_zen_bridge_output" 'provider: opencode-zen'
 assert_contains "$cl_zen_bridge_output" 'provider=opencode-zen'
-printf 'PASS: cl/co go/zen GLM 自动启用协议桥并完成调用\n'
+printf 'PASS: co go / cl·co zen 自动启用协议桥，cl go 保持原生直连\n'
 
 # ---- Codex 模型元数据目录：内置目录之外的模型自动补齐（消除 metadata 告警） ----
 catalog_path=$(printf '%s\n' "$switch_co_go_new" | sed -n 's/.*model_catalog_json="\([^"]*\)".*/\1/p' | head -1)
@@ -1202,13 +1207,13 @@ assert_contains "$discovery_co_output" 'Codex: deepseek-v4-pro（override）（�
 [[ -s "$discovery_data/cache/provider-models/opencode-go.json" ]] || fail 'opencode-go 模型目录缓存未生成'
 
 set +e
-discovery_glm_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
-    AGENT_MODEL_DISCOVERY=1 run_launcher co "$fake_codex" go glm-5.3-flash max --once 2>&1)
-discovery_glm_status=$?
+discovery_bridge_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
+    AGENT_MODEL_DISCOVERY=1 run_launcher co "$fake_codex" go deepseek-v4-pro max --once 2>&1)
+discovery_bridge_status=$?
 set -e
-(( discovery_glm_status == 0 )) || fail "co go GLM 协议桥失败：$discovery_glm_output"
-assert_contains "$discovery_glm_output" 'Codex: glm-5.3-flash（override） | reasoning=max'
-assert_contains "$discovery_glm_output" 'bridge: Responses -> chat_completions'
+(( discovery_bridge_status == 0 )) || fail "co go 协议桥失败：$discovery_bridge_output"
+assert_contains "$discovery_bridge_output" 'Codex: deepseek-v4-pro（override） | reasoning=max'
+assert_contains "$discovery_bridge_output" 'bridge: Responses -> chat_completions'
 
 discovery_cl_before=$(wc -l < "$call_log")
 set +e
