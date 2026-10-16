@@ -204,6 +204,10 @@ check_shell_tree() {
         fail "$tree 文件枚举失败"
     else
         while IFS= read -r -d '' script_path; do
+            if [[ "$tree" == skills &&
+                "$script_path" == "$ROOT/skills/form/references/source-snapshots/"* ]]; then
+                continue
+            fi
             script_count=$((script_count + 1))
             if [[ ! -x "$script_path" ]]; then
                 fail "$tree 脚本不可执行：${script_path#"$ROOT/"}"

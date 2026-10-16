@@ -8,6 +8,9 @@
 
 只读检查当前配置仓库的四棵 agent 配置树（`skills/`、`tools/`、`hooks/`、`plugins/`）：检查技能 frontmatter、技能目录说明和技能表登记，检查 `skills/`、`tools/` 与 `hooks/` 中 Shell 脚本的语法和执行权限，以及已有 Codex 插件 manifest 的基本 JSON/name/version/path 完整性。
 
+`skills/form/references/source-snapshots/` 保留上游快照的文件权限和 shebang 状态，
+因此该子树不参与本库 Shell 脚本语法、执行权限和 shebang 检查。
+
 ```bash
 tools/configure-check.sh
 tools/configure-check.sh --root /path/to/configure

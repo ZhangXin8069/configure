@@ -3,7 +3,7 @@ name: up
 description: |
   当用户要求升级、更新、优化或整理 agent 配置，或要扩展/修补 skills、tools、hooks、plugins，
   维护插件推荐清单、提供或校验一键安装脚本，引入 GitHub、Gitee、GitLab 等外部最佳实践、
-  按 star 热榜检索候选，或要求 up 技能自我进化时使用。
+  按 star 热榜检索候选，刷新网络参考源条目，或要求 up 技能自我进化时使用。
 metadata:
   openclaw:
     emoji: ⬆️
@@ -16,20 +16,22 @@ metadata:
 遵循当前目录 `AGENTS.md`「技能执行公共契约」；仅按需读取技能正文与 reference。
 
 
-把“agent 配置持续更新”固化为可重复流程：本地四类目录基线调查 → 多源最佳实践与热榜调研
-（连接失败重试至成功）→ 差距分析 → 执行（优化/补充/新增/debug）→ 自我进化 → 验证 →
-收敛评估 → 升级汇总。默认目标是当前 Git 仓库根目录下的 `skills/`、`tools/`、`hooks/`、
-`plugins/`；目录缺失或为空只记录事实，不凭空创建内容。若存在 `.opencode/skills/`，它是
-技能加载镜像，按双目录约定同步核对，不另行扩大主目标范围。借鉴来源必须写出网站、仓库或
-技能名与 URL。
+把“agent 配置持续更新”固化为可重复流程：**网络参考源条目刷新** → 本地四类目录基线调查 →
+多源最佳实践与热榜调研（连接失败重试至成功）→ 差距分析 → 执行（优化/补充/新增/debug）→
+自我进化 → 验证 → 收敛评估 → 升级汇总。每次运行先执行 Step 0，避免参考源 URL、接口参数、
+回退入口和派生索引落后或缺失。默认目标是当前 Git 仓库根目录下的 `skills/`、`tools/`、
+`hooks/`、`plugins/`；目录缺失或为空只记录事实，不凭空创建内容。若存在 `.opencode/skills/`，
+它是技能加载镜像，按双目录约定同步核对，不另行扩大主目标范围。借鉴来源必须写出网站、仓库
+或技能名与 URL。
 
 ## 核心原则
 
-1. **本地四树基线先行**：先只读检查当前 Git 根目录下的 `skills/`、`tools/`、`hooks/`、
-   `plugins/`，掌握目录完整性、格式、接口和安全边界后再谈升级；不调查就升级是臆断。
-2. **多源互证并启用热榜**：代码托管源至少覆盖 GitHub、Gitee、GitLab，并可补充 Codeberg；
-   规范/实践源至少核对一个权威规范和一个社区实践。各源按自身 star 字段降序取榜，star 只
-   是发现候选的信号，不是质量结论；跨源合并时保留来源，不把不同站点的 star 当成同一标尺。
+1. **本地四树基线先行**：Step 0 完成后，先只读检查当前 Git 根目录下的 `skills/`、`tools/`、
+   `hooks/`、`plugins/`，掌握目录完整性、格式、接口和安全边界后再谈升级；不调查就升级是臆断。
+2. **参考源先刷新、再互证并启用热榜**：每次运行先按 Step 0 核验并更新参考源条目；代码托管
+   源至少覆盖 GitHub、Gitee、GitLab，并可补充 Codeberg，规范/实践源至少核对一个权威规范和
+   一个社区实践。各源按自身 star 字段降序取榜，star 只是发现候选的信号，不是质量结论；
+   跨源合并时保留来源，不把不同站点的 star 当成同一标尺。
 3. **网络调研重试至成功**：连接、超时、DNS、TLS 或解码失败时沿 API → 网页 → 备用域名/
    延长超时路径持续重试，直至成功或用户终止；HTTP 4xx/不支持的接口切换回退并报告，
    不把永久错误伪装成“正在重试”；每次失败记录 URL、错误类别和重试次数。
@@ -72,6 +74,35 @@ metadata:
 
 ## 工作流程
 
+### Step 0. 刷新网络参考源条目（强制首步）
+
+每次运行先维护 `3.1` 参考源表，再解析升级目标。此步只刷新“发现来源与规则来源”的目录，
+不替代 Step 3 的真实候选调研；先直接从用户原始请求读取任何时间/资源上限作为 Step 0 预算，
+不等待 Step 1 再补记。若用户明确禁止写文件，则只读核验并输出拟更新表/diff；用户只说
+“别改其他的”或只收窄升级范围时，仍执行 Step 0 的白名单写入，但不得越过 Step 0 的写入范围。
+
+1. 对 `3.1` 每个主入口执行一次 GET 或文档规定的查询，至少覆盖一个真实查询/正文读取；
+   记录 `来源 | URL | 最终 URL/重定向 | HTTP | 查询或排序探测 | 状态 | 获取时间`。连接、
+   超时、DNS、TLS、解码失败或 HTTP 429/5xx 按 Step 3.3 重试；HTTP 429 优先遵守
+   `Retry-After`，永久 4xx、参数变化或页面迁移时更新入口并保留回退页，不得伪造可用状态。
+2. 状态只分为 `可用`、`网页回退`、`待复核`、`迁移/替代`。主入口 `可用` 时可只记录一次；
+   HTTP 200 但结果为空时记为 `可用（空结果）`，不得误标 `待复核`；依赖回退或重试的条目
+   必须写明具体入口与限制。旧条目暂时不可达时先保留并标 `待复核`，只有拿到替代 URL、
+   名称或明确不可用证据后才迁移或替换，不直接删除。
+3. 检查类别覆盖：代码托管至少 GitHub、Gitee、GitLab，热榜默认可补 Codeberg；规范至少
+   一个权威来源，实践至少一个官方或社区来源。发现缺口时用通用查询词
+   `agent skills`、`skill creator`、`awesome opencode` 做有界检索，再核对候选的稳定 URL、
+   许可证/条款、查询参数、回退入口和与既有来源的去重关系；只有补齐类别或替代失效来源时
+   才登记，star 高不是登记理由。
+4. 将已确认的变化最小回写到 `3.1`：更新名称、canonical URL、查询/排序/回退参数、用途和
+   `最近验证`；同步刷新 `references/awesome-opencode.md` 等派生的外部索引元数据。没有变化时
+   只更新 `最近验证`，不重写正文。该步只允许修改参考源表、其新鲜度字段和派生索引元数据，
+   不顺手修改其他 up 规则；此例行维护不计入 Step 5.4 的单轮自我进化候选。
+5. 终端输出 `参考源刷新: N 条已核验，U 条更新，P 条待复核`；无变化写
+   `参考源刷新: 无变更`。完成或如实记录降级后才进入 Step 1；Step 3 必须使用本次刷新后的
+   条目，并在总结中区分已核验、网页回退、空结果和待复核来源。用户禁止写文件时输出拟更新
+   条目/diff 和写回状态，不把未写回内容描述成已更新。
+
 ### Step 1. 解析升级目标
 
 确认以下边界并输出一句**任务定义**：
@@ -83,7 +114,8 @@ metadata:
 3. 热榜默认开启：按任务主题生成同一查询词，每个可达代码托管源取前 `N`（默认 10）个结果，
    按该源原生 star 字段降序；用户明确关闭时才不检索热榜。
 4. 自我进化在目标包含 `skills/up`、用户明确要求 up 自改，或当前运行发现 up 规则缺口时启用；
-   其余任务不借机修改 up 自身。
+   其余任务不借机修改 up 自身。Step 0 的参考源条目刷新是每次运行的例行维护，不属于自我
+   进化候选，也不因它触发对其他 up 规则的连带修改。
 5. 收敛标准为差距表清零或明确记录遗留项，并通过与改动对应的结构、行为和安全验证。
 6. 用户明确的时间或资源上限是硬约束：写入任务定义，按阶段分配预算；“重试至成功”和
    “循环至收敛”均不得越过该上限，预算耗尽时按用户约束停止并如实报告未完成项。
@@ -131,6 +163,13 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
   "$REPO_ROOT/skills" "$REPO_ROOT/tools" "$REPO_ROOT/hooks" "$REPO_ROOT/plugins" 2>/dev/null || true
 ```
 
+若仓库提供 `tools/configure-check.sh`，先执行
+`"$REPO_ROOT/tools/configure-check.sh" --root "$REPO_ROOT"` 并记录退出码，再把手检结果与
+检查器输出交叉核对。默认模式中 `FAIL:`/非零错误阻塞基线，`WARN` 要逐条分类为预期状态或
+真实差距，只有真实差距进入差距表；仅在用户要求零警告或 CI 门禁时追加 `--strict`，并如实
+报告其额外失败。检查器固定只读扫描四树；用户收窄目标时，范围外 `WARN` 只作上下文，不扩大
+升级动作。检查器缺失或返回参数错误时继续手工调查，并在摘要中记录该降级。
+
 - 输出摘要：四树是否存在及文件数、技能目录完整性、frontmatter 一致性、脚本/清单类型、
   占位符匹配和技能表登记情况。空目录与缺失目录必须分别报告。
 - `skills/` 分三层检查：`SKILL.md` 的触发描述与固定章节、同目录 `AGENTS.md`/references、
@@ -151,20 +190,21 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
 #### 3.1 参考源与排序接口
 
-| 类型 | 参考源 | 热榜/检索入口 | 排序字段与用途 |
-|---|---|---|---|
-| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` |
-| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 |
-| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` |
-| 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc`，保留其原生 star 字段；用于补充开源生态样本 |
-| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 |
-| 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 |
-| 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 |
-| 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 |
-| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 |
+| 类型 | 参考源 | 热榜/检索入口 | 排序字段与用途 | 最近验证 |
+|---|---|---|---|---|
+| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` | 2026-10-16: API 200；网页回退 000，待复核 |
+| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 | 2026-10-16: API 200（空结果）；网页 200 外壳 |
+| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` | 2026-10-16: API 200；网页 200 |
+| 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc&includeDesc=true`，保留其原生 star 字段；用于补充开源生态样本（遗漏 `includeDesc=true` 时描述命中会返回空列表） | 2026-10-16: API 200（includeDesc=true）；网页 200 |
+| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 | 2026-10-16: GitHub API 200；stars=10609 |
+| 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 | 2026-10-16: 200 |
+| 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 | 2026-10-16: raw 200 |
+| 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 | 2026-10-16: raw 200 |
+| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 | 2026-10-16: 200 |
 
 以上来源是“发现候选”和“核对规则”的不同层：热榜只决定先看谁，规范/官方/社区原文才决定是否吸收。
 外部页面可能调整参数，执行时以接口返回和当前文档为准，并在终端记录实际 URL、HTTP 状态和读取时间。
+`最近验证` 只登记本次 Step 0 的最近状态；连接重试次数、空结果和详细命令留在终端摘要，不创建过程日志。
 
 #### 3.2 热榜执行配方
 
@@ -181,6 +221,14 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
    Gitee 将 `sort` 换为 `stars_count`，GitLab 将接口换为 `/api/v4/projects` 并使用
    `order_by=star_count&sort=desc`，Codeberg 使用 `sort=stars&order=desc`。
+   Codeberg 还需传 `includeDesc=true`，否则仅匹配仓库名/主题，容易把描述中的有效候选漏掉：
+
+   ```bash
+   curl --fail --location --silent --show-error --max-time 30 --get \
+     'https://codeberg.org/api/v1/repos/search' \
+     --data-urlencode "q=$QUERY" --data 'sort=stars' --data 'order=desc' \
+     --data 'limit=10' --data 'includeDesc=true'
+   ```
 3. 解析器先检测 `jq`；不可用时使用 Python 标准库或当前环境已有的等价解析器，不自动安装
    依赖。解析失败属于本地工具问题，应先换解析器，不得误报为网站不可达。
 4. 将结果归一化为 `来源 | 项目 | stars | forks | 更新时间 | URL | HTTP 状态 | 获取时间`，
@@ -193,8 +241,10 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 #### 3.3 重试与来源降级
 
 - 连接、超时、DNS、TLS 或响应解码失败：按“API → 官方网页 → 备用域名/API → 延长超时”
-  顺序持续重试，直至成功或用户终止；若任务有 Step 1 记录的时间/资源上限，则在上限内
-  重试，达到上限即停止并在遗留项中记录；在终端输出每次 URL、错误类别和第几次尝试。
+  顺序持续重试，直至成功或用户终止；若用户原始请求或 Step 1 记录了时间/资源上限，则在
+  上限内重试，达到上限即停止并在遗留项中记录；在终端输出每次 URL、错误类别和第几次尝试。
+- HTTP 429/5xx 是暂时性失败：429 优先遵守 `Retry-After`，其余先延迟重试，再按网页回退、
+  备用接口和延长超时降级；达到预算后标 `待复核`，不得伪造成功或删除旧条目。
 - HTTP 401/403/404、参数不支持或权限不足不是连接失败：切换该来源的网页/文档回退，
   记录状态并继续保留其他来源结果；不得伪造榜单，也不得把 `[]` 空结果改写成“找到候选”。
 - 访问接口只用 GET；令牌只能从已有环境变量/凭据机制读取，不写入 URL、日志、补丁或总结。
@@ -274,7 +324,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
    不提交/不推送和镜像同步等既有契约；不得把临时 URL、令牌、运行日志或机器特征写进技能。
 4. **单轮单变更**：每轮最多采纳一个候选，只改 `skills/up/SKILL.md` 及其必要的技能表、
    `AGENTS.md` 和 `.opencode/skills` 镜像；不在自我进化轮中顺带改其他技能。在终端摘要中记录
-   采纳/拒绝理由与验证证据，不创建过程记录文件。
+   采纳/拒绝理由与验证证据，不创建过程记录文件。Step 0 的 `3.1` 刷新和派生索引元数据更新是
+   例行维护，不计入这里的候选数。
 5. **回归与停止**：改动后重跑结构检查和三类真实提示词（四树升级、多源 star 热榜、up 自改）；
    候选未改善行为、破坏不变量或验证失败则修正该候选并保留遗留项。一次 up 调用最多进行一轮
    自我进化，下一轮只在出现新证据时继续，避免递归自改和无效空转。
@@ -296,6 +347,11 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 ### Step 6. 验证
 
 每处改动后核验（**结构验证必做，行为验证按改动性质做**）：
+
+**参考源刷新验证（每次必做）**：确认 `3.1` 的每条 `最近验证` 都来自本次 Step 0；主入口、
+回退入口、查询/排序探测和获取时间可追溯；`可用`、`网页回退`、`待复核`、`迁移/替代` 状态
+分别有实测证据。未完成该验证时，不得进入 Step 3 或声称收敛；用户禁止写文件时改为核验未
+写回的拟更新表。
 
 1. **结构验证**（每次必做）：`SKILL.md` 的 frontmatter 完整（name/description/metadata）、
    name 与目录一致、固定章节齐备、行数合理（参考 <500 行分级披露）、技能表登记正确；
@@ -326,6 +382,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
 ### Step 7. 收敛评估
 
+- Step 0 参考源刷新已完成且 `3.1` 条目有本次验证证据，才进入下述收敛判断；用户禁止写文件时，
+  以已输出并留存的拟更新条目/diff 作为本次验证证据，不要求存在写回内容；
 - 差距表全部动作完成且验证通过 → 收敛，进入 Step 8；
 - 存在未落实差距（如网络失败被用户终止）→ 如实列入遗留项；
 - 热榜只在取得结构化排序或明确标注网页/空结果时算完成；单一来源成功不等于多源调研完成；
@@ -337,6 +395,7 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 ```text
 ✓ up 升级完成
    目标:   <任务定义；目标树与是否启用热榜/自我进化>
+   参考源: <Step 0 结果：N 条已核验，U 条更新，P 条待复核；迁移/替代 URL；写回状态>
    来源:   <各网站/仓库/技能名 + URL + 吸收点；各源重试次数与状态>
    热榜:   <每源查询词、排序字段、前 N 结果；空结果/网页回退如实标注>
    差距:   <N 项差距全部处理 / 遗留 M 项>
@@ -364,6 +423,7 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 | "tools/hooks/plugins 不是 skill，不用查" | 它们同样改变 agent 的入口、生命周期和权限；默认四树都在升级对象内 |
 | "up 自己属于元技能，不用回归" | 自我修改最容易造成递归、漂移和验证缺口；必须单轮单变更并重跑触发测试 |
 | "API 返回空就当作热榜失败继续猜" | 空结果可能是合法无匹配；必须保留原始状态，换来源或报告无结构化结果 |
+| "参考源上次刚验证过，这次不用刷新" | URL、排序参数、回退入口和上游内容会变化；每次运行必须先执行 Step 0，旧结果不能替代本次证据 |
 | "结构检查就够了" | 结构完整 ≠ 行为正确；新增/大改技能必做行为试跑 |
 | "时间紧，先升级再说" | 未验证的升级部署后修复成本更高（同 TDD 反合理化） |
 
@@ -374,6 +434,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 | 场景 | 处理 |
 |---|---|
 | 升级范围不明确 | **一次性列出全部候选**（全部技能/指定技能/仅引入外部实践）提问，不逐次追问 |
+| Step 0 参考源超时、429/5xx、迁移或缺失 | 按 Step 3.3 重试；迁移则更新 canonical URL 并保留回退页，缺失类别则按 Step 0 有界发现规则补入；超预算时旧条目保留并标 `待复核`，正式调研不得把它当成已确认 |
+| 用户禁止本次写文件 | Step 0 只读核验，输出拟更新条目/差异，不写回；在摘要中记录未写回，后续步骤使用当前条目并标明验证状态 |
 | 任一参考源连接失败 | 一直重试（API→网页→备用域名→加长超时），记录 URL、错误类别和重试次数；用户终止才停 |
 | API 返回 401/403/404 或不支持排序 | 视为访问/接口问题而非网络断线，切换网页或文档回退并如实报告；不伪造热榜 |
 | 本机缺少 `jq` 或 JSON 解析失败 | 先改用 Python 标准库/已有解析器；解析器故障与网站连通性分开记录，不自动安装依赖 |
@@ -395,6 +457,8 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 ## 注意事项
 
 - 本地基线、差距表、验证结果均以实测为准，不编造；
+- Step 0 是每次运行的强制首步：先刷新 `3.1` 网络参考源条目，再解析目标和调查本地四树；
+  该刷新只维护来源目录与派生索引元数据，不删除失效条目、不顺带改写其他规则、不创建日志；
 - 网络重试按用户要求执行直至成功，但向用户报告各来源重试进展；
 - 借鉴外部实践注明出处（网站 + 仓库 + 技能名 + URL），不照搬不署名；
 - 热榜查询只读、默认按各来源原生 star 降序；不把榜单排名当成安全或质量批准；

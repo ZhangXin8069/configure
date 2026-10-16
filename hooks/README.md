@@ -43,6 +43,7 @@ hooks/codex-verify.sh --paths hooks/codex-hook.sh skills/all/SKILL.md
 - 所有输入只作为数据处理，不 `source`、不 `eval`、不执行目标仓库代码；统一入口会执行本目录受信的 hook 实现，Shell 文件只运行 `bash -n` 或 `zsh -n`。
 - 必需：`bash`、`git`；检查 zsh 文件时需要 `zsh`。
 - `realpath` 用于路径边界规范化；`python3` 仅用于解析通知 JSON；`notify-send` 不存在时自动降级为终端输出。
+- 运行 `hooks.test.sh` 的 JSON 断言时，`jq` 与 `python3` 至少需要一个；两者都缺失时测试会明确失败。
 - 这些脚本不会自动修改 `core.hooksPath`、Codex 配置或工作树。启用方式取决于调用方的 Codex/agent runner 配置。
 
 回归测试：

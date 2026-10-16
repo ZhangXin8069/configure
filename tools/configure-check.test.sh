@@ -133,3 +133,28 @@ set -e
 (( drift_status != 0 )) || fail 'skills 镜像漂移不应通过检查'
 assert_contains "$mirror_output" '镜像内容不一致'
 printf 'PASS: skills 镜像漂移被拒绝\n'
+
+snapshot_repo=$test_root/snapshot-repo
+mkdir -p "$snapshot_repo/skills/demo" "$snapshot_repo/skills/form" \
+    "$snapshot_repo/skills/form/references/source-snapshots/vendor" \
+    "$snapshot_repo/tools" "$snapshot_repo/hooks" "$snapshot_repo/plugins"
+printf '%s\n' '| 技能 | 用途 |' '|---|---|' '| `demo` | 测试 |' '| `form` | 测试快照 |' > "$snapshot_repo/skills/AGENTS.md"
+cp "$repo/skills/demo/SKILL.md" "$snapshot_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$snapshot_repo/skills/demo/AGENTS.md"
+sed 's/^name: demo$/name: form/' "$repo/skills/demo/SKILL.md" > "$snapshot_repo/skills/form/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$snapshot_repo/skills/form/AGENTS.md"
+printf '%s\n' '#!/usr/bin/env bash' 'printf ok' > "$snapshot_repo/skills/form/references/source-snapshots/vendor/executable.sh"
+chmod 0755 "$snapshot_repo/skills/form/references/source-snapshots/vendor/executable.sh"
+printf '%s\n' 'printf no-shebang' > "$snapshot_repo/skills/form/references/source-snapshots/vendor/upstream-owned.sh"
+chmod 0644 "$snapshot_repo/skills/form/references/source-snapshots/vendor/upstream-owned.sh"
+mkdir -p "$snapshot_repo/skills/form/scripts"
+printf '%s\n' '#!/usr/bin/env bash' 'printf maintained' > "$snapshot_repo/skills/form/scripts/maintained.sh"
+chmod 0755 "$snapshot_repo/skills/form/scripts/maintained.sh"
+
+set +e
+snapshot_output=$(bash "$checker" --root "$snapshot_repo" 2>&1)
+snapshot_status=$?
+set -e
+(( snapshot_status == 0 )) || fail "vendored 快照脚本不应被当作仓库脚本检查\n输出：\n$snapshot_output"
+assert_contains "$snapshot_output" 'skills 脚本检查完成：1 个'
+printf 'PASS: vendored source-snapshots 被排除在仓库脚本检查之外\n'
