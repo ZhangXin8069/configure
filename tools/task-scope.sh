@@ -13,9 +13,11 @@ usage() {
     cat <<'EOF'
 用法：task-scope.sh [任务文本]
        task-scope.sh --task "任务文本"
+       task-scope.sh -- "以 - 开头的任务文本"
        printf '%s\n' "任务文本" | task-scope.sh
 
 把自然语言任务分类为合适的技能组合，并给出子任务拆分建议。
+以 - 开头的字面任务文本须放在 -- 之后。
 EOF
 }
 
@@ -114,6 +116,11 @@ while (($# > 0)); do
                 TASK_TEXT="${TASK_TEXT:+$TASK_TEXT }$*"
             fi
             break
+            ;;
+        -*)
+            printf '未知参数：%s\n' "$1" >&2
+            usage >&2
+            exit 2
             ;;
         *)
             TASK_TEXT="${TASK_TEXT:+$TASK_TEXT }$1"

@@ -7,6 +7,7 @@
 ### `configure-check.sh`
 
 只读检查当前配置仓库的四棵 agent 配置树（`skills/`、`tools/`、`hooks/`、`plugins/`）：检查技能 frontmatter、技能目录说明和技能表登记，检查 `skills/`、`tools/` 与 `hooks/` 中 Shell 脚本的语法和执行权限，以及已有 Codex 插件 manifest 的基本 JSON/name/version/path 完整性。
+技能表和互鉴表检查会忽略 Markdown 转义竖线 `\|`，并要求各自表头与每个数据行列数一致。
 
 `skills/form/references/source-snapshots/` 保留上游快照的文件权限和 shebang 状态，
 因此该子树不参与本库 Shell 脚本语法、执行权限和 shebang 检查。
@@ -70,6 +71,19 @@ bash tools/task-scope.test.sh
 | fd | [sharkdp/fd](https://github.com/sharkdp/fd) | 更易读的文件查找，适合交互式定位配置文件 | 可选交互工具，不参与检查器正确性 |
 | fzf | [junegunn/fzf](https://github.com/junegunn/fzf) | 交互式筛选日志、技能和配置路径 | 可选交互工具，不作为 agent 自动流程依赖 |
 | Agent Skills 参考实现 | [agentskills/agentskills](https://github.com/agentskills/agentskills) | 需要对外发布标准 Agent Skills 时，核对规范和参考校验工具 | 参考工具；本库仍以本地 `skills/AGENTS.md` 约定为准 |
+
+### 固定 SHA 外部只读技能候选
+
+以下技能来自
+[`Shubhamsaboo/awesome-llm-apps@40b16b66`](https://github.com/Shubhamsaboo/awesome-llm-apps/tree/40b16b66e5257c528059bb93ca9410b55d39278a/agent_skills)
+（Apache-2.0，核验日期 2026-10-16）。仅在确有对应诊断需求时按固定 SHA 外链使用，不复制到本库，
+也不加入默认技能链：
+
+| 技能 | 用途 | 安全边界 | 内容 SHA256 |
+|---|---|---|---|
+| [`commit-archaeologist`](https://github.com/Shubhamsaboo/awesome-llm-apps/tree/40b16b66e5257c528059bb93ca9410b55d39278a/agent_skills/commit-archaeologist) | 从本地 Git 历史重建代码存在原因、后续改动与共变文件 | 完全离线、只读，不扫描兄弟仓库 | `8f21eb5ff270b4f4d403494fe606aa23b7faa73232dfe8ab0aed4fba1f94dfe5` |
+| [`scope-creep-detector`](https://github.com/Shubhamsaboo/awesome-llm-apps/tree/40b16b66e5257c528059bb93ca9410b55d39278a/agent_skills/scope-creep-detector) | 对照声明意图分析 diff 的范围漂移并给出保留/拆分/说明建议 | 完全离线，不改工作树、索引、提交或分支 | `a21a28ce59694554c16ddc19cb3b27620b1e3e5040803df0e40b22f6a34da159` |
+| [`dependency-doctor`](https://github.com/Shubhamsaboo/awesome-llm-apps/tree/40b16b66e5257c528059bb93ca9410b55d39278a/agent_skills/dependency-doctor) | 检查依赖清单中的直接依赖坑位与可选 PyPI yank | 默认离线；只有显式 `--online` 才访问 PyPI，修改依赖前需用户确认 | `3b9a4728a8ec7daae2a82723d01c7a4c18cd2cf5851ea24faa5fdc3a779c6d09` |
 
 ## 选择原则
 

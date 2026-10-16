@@ -22,5 +22,6 @@ hooks/codex-hook.sh after-edit
 bash hooks/hooks.test.sh
 ```
 
-必需依赖为 `bash`、`git`；路径规范化需要 `realpath`，通知 JSON 解析可选用 `python3`。
+必需依赖为 `bash`、`git`；路径规范化需要 `realpath`，`before-edit` JSON payload 解析需要 `python3`；
+事件 JSONL 编码优先使用 `python3`、缺失时回退 `jq`，通知 JSON 解析也可选用 `python3`。
 测试中的 JSON envelope 断言需要 `jq` 或 `python3` 任一解析器。

@@ -7,6 +7,10 @@ command -v git >/dev/null 2>&1 || {
     printf 'codex-preflight: 未找到 git\n' >&2
     exit 2
 }
+command -v realpath >/dev/null 2>&1 || {
+    printf 'codex-preflight: 未找到 realpath\n' >&2
+    exit 2
+}
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
     printf 'codex-preflight: 当前目录不在 Git 仓库中\n' >&2
@@ -35,7 +39,11 @@ is_seen_instruction() {
 
 # 从当前目录向仓库根收集全部说明文件，近处优先；这比只取一个根文件
 # 更接近实际的层级覆盖语义，同时仍只输出路径和行数，不自动读取正文。
-context_dir="$PWD"
+context_dir=$(pwd -P)
+case "$context_dir" in
+    "$repo_root"|"$repo_root"/*) ;;
+    *) context_dir=$repo_root ;;
+esac
 priority=1
 while :; do
     for instruction_name in AGENTS.md CODEX.md CLAUDE.md OPENCODE.md; do
@@ -44,9 +52,15 @@ while :; do
             continue
         fi
         seen_instructions+=("$instruction")
-        if [[ -f "$instruction" ]]; then
-            instruction_lines=$(wc -l < "$instruction" | tr -d ' ')
-            printf 'instruction[%d]=%s|lines=%s\n' "$priority" "$instruction" "$instruction_lines"
+        if [[ -f "$instruction" || -L "$instruction" ]]; then
+            resolved_instruction=$(realpath "$instruction" 2>/dev/null) || continue
+            case "$resolved_instruction" in
+                "$repo_root"|"$repo_root"/*) ;;
+                *) continue ;;
+            esac
+            [[ -f "$resolved_instruction" ]] || continue
+            instruction_lines=$(wc -l < "$resolved_instruction" | tr -d ' ')
+            printf 'instruction[%d]=%s|lines=%s\n' "$priority" "$resolved_instruction" "$instruction_lines"
             instruction_count=$((instruction_count + 1))
             priority=$((priority + 1))
         fi
@@ -55,7 +69,10 @@ while :; do
     parent="${context_dir%/*}"
     [[ -n "$parent" ]] || parent=/
     [[ "$parent" == "$context_dir" ]] && break
-    context_dir="$parent"
+    case "$parent" in
+        "$repo_root"|"$repo_root"/*) context_dir=$parent ;;
+        *) break ;;
+    esac
 done
 
 if [[ -d "$repo_root/skills" ]]; then
