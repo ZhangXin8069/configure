@@ -168,6 +168,11 @@ if ! diff_output=$(git diff --check -- "${paths[@]}" 2>&1); then
     failures=$((failures + 1))
 fi
 
+if ! diff_output=$(git diff --cached --check -- "${paths[@]}" 2>&1); then
+    printf '✗ git diff --cached --check 失败：\n%s\n' "$diff_output" >&2
+    failures=$((failures + 1))
+fi
+
 validate_untracked_whitespace() {
     local path=$1
     local index_status

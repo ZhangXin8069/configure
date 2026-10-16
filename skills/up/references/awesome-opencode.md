@@ -3,8 +3,10 @@
 来源：**awesome-opencode/awesome-opencode**（CC0-1.0）
 URL：<https://github.com/awesome-opencode/awesome-opencode>
 抓取日期：2026-08-27；元数据复核：2026-10-16（GitHub API stars=10609，
-`updated_at=2026-10-16`）。本轮只复核上游元数据，清单正文仍以 2026-08-27 快照为基线；
-上游正文发生变化时再整体刷新并保留固定 ref。
+`updated_at=2026-10-16`；README SHA256
+`e2ccbdd8bc238c405aaddd5fb3ee95f1d27c9c521027805a9343fa8f1e12f858`，最后 README 提交
+`bcc5c03cec19789b45ef9af4a969e3fe3fd7431b` 为 2026-07-03，早于本快照）。本轮只复核上游
+元数据，清单正文仍以 2026-08-27 快照为基线；上游正文发生变化时再整体刷新并保留固定 ref。
 
 用途：up 技能做 opencode 生态差距分析、插件/主题/agent 候选发现时的**精选索引**；
 候选仍须逐一核对仓库 README、manifest、许可证与近期兼容性后才登记（不因 star 高而直接采纳）。
