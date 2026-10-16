@@ -177,6 +177,23 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 
 GitHub API 首次请求曾收到 HTTP 504，重试第 1 次（30 秒超时）即恢复为 HTTP 200；前述四个平台的结果均为本轮只读获取。网页回退页面可访问但未取得结构化排名，未用于伪造排序。
 
+### 2026-10-16 复核
+
+同一查询词 `agent skills` 的复核结果如下；各平台 star 字段仍不可直接跨源比较：
+
+- GitHub API HTTP 200：前列仍为 `obra/superpowers`、`mattpocock/skills`、`affaan-m/ECC`、
+  `anthropics/skills`、`addyosmani/agent-skills`；`obra/superpowers`、`affaan-m/ECC` 和
+  `addyosmani/agent-skills` 均为 MIT 且 `.codex-plugin/plugin.json` HTTP 200，
+  `anthropics/skills` 保持参考定位，`mattpocock/skills` 的 manifest 为 HTTP 404，继续暂不纳入。
+- GitLab Projects API HTTP 200：前 10 名最高仅 6 star，主要是 GitLab 内部效能与低 star
+  技能库；未发现超过现有推荐证据门槛的新插件。
+- Gitee API HTTP 200 但结构化结果为 0；网页入口 HTTP 200 仅为前端壳，未取得可复现排序。
+- Codeberg API 使用 `sort=stars&order=desc&includeDesc=true` 后 HTTP 200，取得 10 条结构化
+  结果；前列为 3 star 的 `leeg/chiron-codex-agent-skills` 及 1 star 的
+  `hanlho/skills-primer`、`ky64/agent-skills`，未见许可证或兼容性证据足以纳入。
+
+本轮没有新增采纳项，现有推荐和“暂不纳入”决策保持不变。
+
 - 本轮重点核对的原生入口：[openai/plugins marketplace](https://github.com/openai/plugins/tree/main/.agents/plugins)、
   [ECC Codex manifest](https://github.com/affaan-m/ECC/tree/main/.codex-plugin)、
   [Agent Skills Codex manifest](https://github.com/addyosmani/agent-skills/tree/main/.codex-plugin)、

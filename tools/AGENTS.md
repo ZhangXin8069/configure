@@ -9,3 +9,5 @@
 - 工具不得自动安装依赖、执行 hook/plugin 或修改仓库；第三方项目只记录在 `README.md`。
 - 新增 shell 工具后同步说明用途、参数、退出码和依赖，并做权限、语法和边界参数验证；只读诊断工具的“成功”指报表或建议成功生成，不要求仓库被修改。
 - `configure-check.sh` 的路径枚举失败必须 fail-closed；其临时 NUL 清单仅用于检查过程并在退出时清理。
+- `skills/form/references/source-snapshots/` 是保留上游名称、权限和 shebang 状态的只读
+  明文快照；`configure-check.sh` 必须排除该目录，不把 vendored 脚本当作本库维护脚本。
