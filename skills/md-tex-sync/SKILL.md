@@ -1,9 +1,9 @@
 ---
 name: md-tex-sync
 description: |
-  {除非用户明确要求，否则不启用}。仅当当前用户明确点名 `md-tex-sync` /
-  `~md-tex-sync`，或明确要求 Markdown 与 LaTeX/PDF 同源维护、双格式同步交付、
-  全文全集与全附件归档时使用；普通 Markdown/LaTeX/PDF 编辑、一般文档转换，
+  当用户明确点名 `md-tex-sync` / `~md-tex-sync`，或明确要求 Markdown 与
+  LaTeX/PDF 同源维护、双格式同步交付、全文全集与全附件归档时使用。
+  {除非用户明确要求，否则不启用}；普通 Markdown/LaTeX/PDF 编辑、一般文档转换，
   以及 auto/all/make 等上游从文档任务中推断出的调用，都不构成启用请求。
 metadata:
   openclaw:
@@ -55,6 +55,11 @@ metadata:
    缺字 `=0`、TeX 错误 `=0`；全部页面可栅格化，无空白页和边缘裁切。
 9. **构建必须幂等可追踪**：重复运行不得改变 Markdown 与 TeX 内容；PDF 允许编译
    时间元数据变化。每次交付记录三种文件的 SHA256、页数、文件大小和验证命令。
+
+## Git 检查
+
+有 Git 且有本次文件改动时执行 `git diff --check` 与定向复查；不自动暂存、提交或推送。
+无 Git 或无本次改动时立即跳过。
 
 ## 触发时机
 

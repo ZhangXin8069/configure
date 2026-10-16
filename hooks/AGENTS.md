@@ -23,3 +23,4 @@ bash hooks/hooks.test.sh
 ```
 
 必需依赖为 `bash`、`git`；路径规范化需要 `realpath`，通知 JSON 解析可选用 `python3`。
+测试中的 JSON envelope 断言需要 `jq` 或 `python3` 任一解析器。
