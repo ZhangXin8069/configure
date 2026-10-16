@@ -68,3 +68,20 @@ assert_contains "$output_three" '方案比较'
 assert_contains "$output_three" '任务计划'
 assert_contains "$output_three" '设计/方案'
 printf 'PASS: 设计请求得到规划链路建议\n'
+
+set +e
+output_unknown=$(bash "$scope_script" --unknown-option 2>&1)
+status_unknown=$?
+set -e
+(( status_unknown == 2 )) || fail "未知选项应返回 2，实际为 $status_unknown\n输出：\n$output_unknown"
+assert_contains "$output_unknown" '未知参数：--unknown-option'
+printf 'PASS: 未知选项返回参数错误\n'
+
+literal_task='--report 分析并汇报模块结构'
+set +e
+output_literal=$(bash "$scope_script" -- "$literal_task" 2>&1)
+status_literal=$?
+set -e
+(( status_literal == 0 )) || fail "分隔符后的字面量任务应成功\n输出：\n$output_literal"
+assert_contains "$output_literal" "任务：$literal_task"
+printf 'PASS: -- 可将以 - 开头的文本作为字面量传入\n'

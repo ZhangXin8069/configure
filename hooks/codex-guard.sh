@@ -96,8 +96,11 @@ caller_dir=$PWD
 declare -a paths=()
 if (( $# > 0 )); then
     paths+=("$@")
-elif [[ ! -t 0 ]]; then
-    input=$(< /dev/stdin)
+else
+    input=
+    if [[ ! -t 0 ]]; then
+        input=$(< /dev/stdin)
+    fi
     if [[ "$input" == \{* || "$input" == \[* ]]; then
         command -v python3 >/dev/null 2>&1 || {
             printf 'codex-guard: 解析 JSON payload 需要 python3\n' >&2
@@ -141,19 +144,23 @@ PY
             printf 'codex-guard: JSON payload 未能提取路径\n' >&2
             exit 1
         fi
-        while IFS= read -r path; do
-            paths+=("$path")
+        while IFS= read -r path || [[ -n "$path" ]]; do
+            if [[ -n "$path" ]]; then
+                paths+=("$path")
+            fi
         done <<< "$json_paths"
-    else
-        while IFS= read -r path; do
-            paths+=("$path")
+    elif [[ -n "$input" ]]; then
+        while IFS= read -r path || [[ -n "$path" ]]; do
+            if [[ -n "$path" ]]; then
+                paths+=("$path")
+            fi
         done <<< "$input"
     fi
 fi
 
 if (( ${#paths[@]} == 0 )); then
-    printf 'codex-guard: 未收到路径，跳过\n'
-    exit 0
+    printf 'codex-guard: 未收到路径，拒绝执行\n' >&2
+    exit 2
 fi
 
 failures=0

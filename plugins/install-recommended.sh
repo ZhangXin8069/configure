@@ -19,7 +19,7 @@ usage() {
   --profile NAME       core、recommended、research-workbench、workspace、
                        app-dev、gpu-research、bioinformatics、
                        engineering、orchestration、all
-  --ref REF            marketplace Git ref；社区插件必须提供 tag 或 commit
+  --ref REF            覆盖单个社区插件的固定 commit/tag；省略时使用内建完整 commit
   --ref-policy POLICY  社区来源策略：default 或 commit（仅接受 40/64 位提交哈希）
   --dry-run            只打印命令，不写入 Codex 配置
   --status, --audit    只读查询插件和 marketplace 状态，不安装或修改配置
@@ -31,17 +31,21 @@ usage() {
   ./install-recommended.sh --profile gpu-research
   ./install-recommended.sh --profile research-workbench
   ./install-recommended.sh --profile app-dev
-  ./install-recommended.sh ecc agent-skills
-  ./install-recommended.sh --ref v2.1.0 ecc
-  ./install-recommended.sh --ref-policy commit --ref 0123456789abcdef0123456789abcdef01234567 ecc
+  ./install-recommended.sh --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
+  ./install-recommended.sh --ref-policy commit --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
   ./install-recommended.sh --status --profile recommended
-  ./install-recommended.sh --profile all --dry-run
+  ./install-recommended.sh --profile app-dev --dry-run
 
 说明：
   - 需要 Codex CLI 的 `codex plugin marketplace` 和 `codex plugin add` 子命令。
   - 官方插件优先复用当前已配置的官方 marketplace；没有时注册 openai/plugins。
-  - 重复注册和重复安装由 Codex 处理；脚本不会自动信任 hooks。
-  - 社区插件必须用 --ref 或 CODEX_PLUGIN_REF 固定到 tag 或 commit；官方 marketplace 可省略。
+  - 官方 marketplace 可复用；社区 marketplace 已配置但 source/ref 不可证明时会拒绝复用。
+  - 社区插件默认使用内建完整 40/64 位 commit；可用 --ref 或 CODEX_PLUGIN_REF 覆盖单个社区目标。
+    非 commit ref 会先用 git check-ref-format 校验，再用 git ls-remote --exit-code --tags 验证；
+    dry-run 也需要 git 和网络。
+  - 多社区插件 profile 默认使用每个插件内建的完整 commit；显式 --ref 只能覆盖单个社区目标。
+  - 已配置的社区 marketplace 因 Codex JSON 不含 source/ref 而无法证明与目标 ref 一致，脚本会拒绝复用。
+  - Codex JSON 解析或 schema 异常返回状态 2，并停止当前目标的写操作。
   - --status/--audit 只查询 Codex JSON 状态；未知状态返回非零，不调用 add 命令。
 EOF
 }
@@ -82,10 +86,10 @@ plugin_spec() {
     netlify)                 printf '%s\n' 'official|openai/plugins|openai-curated|netlify' ;;
     ngs-analysis)            printf '%s\n' 'official|openai/plugins|openai-curated|ngs-analysis' ;;
     life-science-research)   printf '%s\n' 'official|openai/plugins|openai-curated|life-science-research' ;;
-    ecc)                     printf '%s\n' 'community|affaan-m/ECC|ecc|ecc' ;;
-    agent-skills)            printf '%s\n' 'community|addyosmani/agent-skills|agent-skills|agent-skills' ;;
-    compound-engineering)   printf '%s\n' 'community|EveryInc/compound-engineering-plugin|compound-engineering-plugin|compound-engineering' ;;
-    babysitter)              printf '%s\n' 'community|a5c-ai/babysitter-codex|babysitter|babysitter' ;;
+    ecc)                     printf '%s\n' 'community|affaan-m/ECC|ecc|ecc|76aaa77df6adc5b889e689007bf99b9a4f74af34' ;;
+    agent-skills)            printf '%s\n' 'community|addyosmani/agent-skills|agent-skills|agent-skills|aeac41d4d005999432bb7312f7ff06383a91d59d' ;;
+    compound-engineering)   printf '%s\n' 'community|EveryInc/compound-engineering-plugin|compound-engineering-plugin|compound-engineering|fac349c0c31a543d497fd4825af9b44bdb7e7dfe' ;;
+    babysitter)              printf '%s\n' 'community|a5c-ai/babysitter-codex|babysitter|babysitter|694028503ae14a1111d4e32eaa5279752bc2194c' ;;
     *) return 1 ;;
   esac
 }
@@ -155,7 +159,10 @@ json_has_marketplace() {
   local marketplace="$1"
   local json="$2"
   if command -v jq >/dev/null 2>&1; then
-    if ! printf '%s' "$json" | jq -e 'type == "object" and (.marketplaces | type == "array")' >/dev/null 2>&1; then
+    if ! printf '%s' "$json" | jq -e \
+      'type == "object" and (.marketplaces | type == "array") and
+       all(.marketplaces[]; type == "object" and (.name | type == "string"))' \
+      >/dev/null 2>&1; then
       return 2
     fi
     printf '%s' "$json" | jq -e --arg name "$marketplace" \
@@ -168,9 +175,12 @@ try:
     data = json.load(sys.stdin)
 except Exception:
     raise SystemExit(2)
-if not isinstance(data, dict) or not isinstance(data.get("marketplaces"), list):
+marketplaces = data.get("marketplaces") if isinstance(data, dict) else None
+if not isinstance(marketplaces, list):
     raise SystemExit(2)
-raise SystemExit(0 if any(item.get("name") == name for item in data.get("marketplaces", [])) else 1)' "$marketplace" 2>/dev/null
+if not all(isinstance(item, dict) and isinstance(item.get("name"), str) for item in marketplaces):
+    raise SystemExit(2)
+raise SystemExit(0 if any(item.get("name") == name for item in marketplaces) else 1)' "$marketplace" 2>/dev/null
 }
 
 configured_marketplace_for_plugin() {
@@ -186,13 +196,17 @@ configured_marketplace_for_plugin() {
 
   if command -v jq >/dev/null 2>&1; then
     if ! printf '%s' "$json" | jq -e \
-      'type == "object" and (.installed | type == "array") and (.available | type == "array")' \
+      'type == "object" and (.installed | type == "array") and (.available | type == "array") and
+       all((.installed + .available)[]; type == "object" and (.name | type == "string") and
+         ((.marketplaceName // "") | type == "string"))' \
       >/dev/null 2>&1; then
       return 2
     fi
     if printf '%s' "$json" | jq -er --arg name "$plugin" \
       '((.installed + .available)[]
-       | select(.name == $name and ((.marketplaceName // "") | startswith("openai")))
+       | select(.name == $name and
+         ((.marketplaceName // "") == "openai-curated" or
+          (.marketplaceName // "") == "openai-api-curated"))
        | .marketplaceName)' 2>/dev/null | sed -n '1p'; then
       return 0
     fi
@@ -206,9 +220,13 @@ except Exception:
     raise SystemExit(2)
 if not isinstance(data, dict) or not isinstance(data.get("installed"), list) or not isinstance(data.get("available"), list):
     raise SystemExit(2)
-for item in (data.get("installed", []) + data.get("available", [])):
-    marketplace = item.get("marketplaceName", "")
-    if item.get("name") == name and marketplace.startswith("openai"):
+items = data.get("installed", []) + data.get("available", [])
+if not all(isinstance(item, dict) and isinstance(item.get("name"), str) and
+           isinstance(item.get("marketplaceName", ""), (str, type(None))) for item in items):
+    raise SystemExit(2)
+for item in items:
+    marketplace = item.get("marketplaceName") or ""
+    if item.get("name") == name and marketplace in ("openai-curated", "openai-api-curated"):
         print(marketplace)
         raise SystemExit(0)
 raise SystemExit(1)' "$plugin" 2>/dev/null
@@ -229,51 +247,126 @@ marketplace_is_configured() {
 
 plugin_is_installed() {
   local plugin="$1"
+  local marketplace="$2"
   local json
-  json="$(codex plugin list --json 2>/dev/null || true)"
-  [[ -n "$json" ]] || return 1
+  local status
+  set +e
+  json="$(codex plugin list --json 2>/dev/null)"
+  status=$?
+  set -e
+  ((status == 0)) || return 2
+  [[ -n "$json" ]] || return 2
 
   if command -v jq >/dev/null 2>&1; then
-    printf '%s' "$json" | jq -e --arg name "$plugin" \
-      'any((.installed // [])[]; .name == $name and .installed == true)' >/dev/null 2>&1
+    if ! printf '%s' "$json" | jq -e \
+      'type == "object" and (.installed | type == "array") and
+       all(.installed[]; type == "object" and (.name | type == "string") and
+         (.marketplaceName | type == "string") and (.installed | type == "boolean"))' \
+      >/dev/null 2>&1; then
+      return 2
+    fi
+    printf '%s' "$json" | jq -e --arg name "$plugin" --arg marketplace "$marketplace" \
+      'any(.installed[]; .name == $name and .marketplaceName == $marketplace and .installed == true)' \
+      >/dev/null 2>&1
     return
   fi
   printf '%s' "$json" | python3 -c 'import json, sys
 name = sys.argv[1]
+marketplace = sys.argv[2]
 try:
     data = json.load(sys.stdin)
 except Exception:
-    raise SystemExit(1)
-raise SystemExit(0 if any(item.get("name") == name and item.get("installed") is True for item in data.get("installed", [])) else 1)' "$plugin" 2>/dev/null
+    raise SystemExit(2)
+if not isinstance(data, dict) or not isinstance(data.get("installed"), list):
+    raise SystemExit(2)
+if not all(isinstance(item, dict) and isinstance(item.get("name"), str) and
+           isinstance(item.get("marketplaceName"), str) and
+           isinstance(item.get("installed"), bool)
+           for item in data.get("installed", [])):
+    raise SystemExit(2)
+raise SystemExit(0 if any(item.get("name") == name and item.get("marketplaceName") == marketplace and item.get("installed") is True for item in data.get("installed", [])) else 1)' "$plugin" "$marketplace" 2>/dev/null
+}
+
+is_full_commit_ref() {
+  local ref="$1"
+  [[ "$ref" =~ ^[0-9a-fA-F]+$ ]] && ((${#ref} == 40 || ${#ref} == 64))
+}
+
+community_repo_url() {
+  local source="$1"
+  case "$source" in
+    *://*|git@*:*) printf '%s\n' "$source" ;;
+    *) printf 'https://github.com/%s.git\n' "$source" ;;
+  esac
+}
+
+validate_community_ref() {
+  local ref="$1"
+  local source="$2"
+  local repo_url
+
+  [[ -n "$ref" ]] || {
+    printf '错误：社区插件必须显式指定固定 Git ref（使用 --ref 或 CODEX_PLUGIN_REF）。\n' >&2
+    return 1
+  }
+  if is_full_commit_ref "$ref"; then
+    return 0
+  fi
+  if [[ "$REF_POLICY" == commit ]]; then
+    printf '错误：--ref-policy commit 要求 40 或 64 位十六进制提交哈希。\n' >&2
+    return 1
+  fi
+  case "$ref" in
+    main|master|HEAD|refs/heads/*)
+      printf '错误：拒绝浮动分支 ref：%s。请使用完整 commit 或固定 tag。\n' "$ref" >&2
+      return 1
+      ;;
+  esac
+  command -v git >/dev/null 2>&1 || {
+    printf '错误：验证社区 tag 需要 git，但当前 PATH 中找不到 git。\n' >&2
+    return 1
+  }
+  if ! git check-ref-format "refs/tags/$ref" >/dev/null 2>&1; then
+    printf '错误：社区 ref 不是合法固定 tag：%s。通配符或非法 ref 会被拒绝。\n' "$ref" >&2
+    return 1
+  fi
+  repo_url="$(community_repo_url "$source")"
+  if git ls-remote --exit-code --tags "$repo_url" "refs/tags/$ref" >/dev/null 2>&1; then
+    return 0
+  fi
+  printf '错误：无法用 git ls-remote 验证 tag %s（%s）；请确认 tag 存在且网络可访问。\n' \
+    "$ref" "$repo_url" >&2
+  return 1
 }
 
 ensure_community_marketplace() {
   local source="$1"
   local marketplace="$2"
+  local ref="$3"
   local status
-  [[ -n "$REF" ]] || {
-    printf '错误：社区插件必须显式指定固定 Git ref（使用 --ref 或 CODEX_PLUGIN_REF）。\n' >&2
-    return 1
-  }
-  if [[ "$REF_POLICY" == commit ]] &&
-    { [[ ! "$REF" =~ ^[0-9a-fA-F]+$ ]] ||
-      ((${#REF} != 40 && ${#REF} != 64)); }; then
-    printf '错误：--ref-policy commit 要求 40 或 64 位十六进制提交哈希。\n' >&2
-    return 1
-  fi
+
   if [[ "$DRY_RUN" == true ]]; then
-    run_cmd codex plugin marketplace add "$source" --ref "$REF"
+    validate_community_ref "$ref" "$source" || return $?
+    run_cmd codex plugin marketplace add "$source" --ref "$ref"
   else
     set +e
     marketplace_is_configured "$marketplace"
     status=$?
     set -e
     case "$status" in
-      0) printf '已复用 marketplace：%s\n' "$marketplace" ;;
-      1) run_cmd codex plugin marketplace add "$source" --ref "$REF" ;;
-      *)
-        printf '错误：marketplace 查询失败，已停止安装：%s\n' "$marketplace" >&2
+      0)
+        printf '错误：marketplace 已配置但 Codex JSON 不提供 source/ref，无法证明其与本次 --ref %s 一致：%s。\n' \
+          "$ref" "$marketplace" >&2
+        printf '请先从 Codex 移除该 marketplace，再用同一 --ref 重新登记。\n' >&2
         return 1
+        ;;
+      1)
+        validate_community_ref "$ref" "$source" || return $?
+        run_cmd codex plugin marketplace add "$source" --ref "$ref"
+        ;;
+      *)
+        printf '错误：marketplace 查询失败，或 JSON 解析/schema 校验失败，已停止安装：%s\n' "$marketplace" >&2
+        return 2
         ;;
     esac
   fi
@@ -298,35 +391,46 @@ status_json_state() {
   if command -v jq >/dev/null 2>&1; then
     case "$kind" in
       installed)
-        printf '%s' "$json" | jq -e \
-          --arg name "$name" \
+        if ! printf '%s' "$json" | jq -e \
           'type == "object" and (.installed | type == "array") and
-           any(.installed[]; .name == $name and .installed == true)' \
-          >/dev/null 2>&1
-        return
+           all(.installed[]; type == "object" and (.name | type == "string") and
+             (.installed | type == "boolean"))' >/dev/null 2>&1; then
+          return 2
+        fi
+        printf '%s' "$json" | jq -e --arg name "$name" \
+          'any(.installed[]; .name == $name and .installed == true)' >/dev/null 2>&1
+        return $?
         ;;
       available)
-        printf '%s' "$json" | jq -e \
-          --arg name "$name" \
+        if ! printf '%s' "$json" | jq -e \
           'type == "object" and (.available | type == "array") and
-           any(.available[]; .name == $name)' \
-          >/dev/null 2>&1
-        return
+           all(.available[]; type == "object" and (.name | type == "string"))' >/dev/null 2>&1; then
+          return 2
+        fi
+        printf '%s' "$json" | jq -e --arg name "$name" \
+          'any(.available[]; .name == $name)' >/dev/null 2>&1
+        return $?
         ;;
       marketplace)
         if [[ "$marketplace_kind" == official ]]; then
-          printf '%s' "$json" | jq -e \
+          if ! printf '%s' "$json" | jq -e \
             'type == "object" and (.marketplaces | type == "array") and
-             any(.marketplaces[]; (.name // "") | startswith("openai"))' \
+             all(.marketplaces[]; type == "object" and (.name | type == "string"))' >/dev/null 2>&1; then
+            return 2
+          fi
+          printf '%s' "$json" | jq -e \
+            'any(.marketplaces[]; .name == "openai-curated" or .name == "openai-api-curated")' \
             >/dev/null 2>&1
         else
-          printf '%s' "$json" | jq -e \
-            --arg name "$name" \
+          if ! printf '%s' "$json" | jq -e \
             'type == "object" and (.marketplaces | type == "array") and
-             any(.marketplaces[]; .name == $name)' \
-            >/dev/null 2>&1
+             all(.marketplaces[]; type == "object" and (.name | type == "string"))' >/dev/null 2>&1; then
+            return 2
+          fi
+          printf '%s' "$json" | jq -e --arg name "$name" \
+            'any(.marketplaces[]; .name == $name)' >/dev/null 2>&1
         fi
-        return
+        return $?
         ;;
     esac
     return 2
@@ -348,20 +452,27 @@ if kind == "installed":
     rows = data.get("installed")
     if not isinstance(rows, list):
         raise SystemExit(2)
-    raise SystemExit(0 if any(item.get("name") == name and item.get("installed") is True for item in rows if isinstance(item, dict)) else 1)
+    if not all(isinstance(item, dict) and isinstance(item.get("name"), str)
+               and isinstance(item.get("installed"), bool) for item in rows):
+        raise SystemExit(2)
+    raise SystemExit(0 if any(item.get("name") == name and item.get("installed") is True for item in rows) else 1)
 if kind == "available":
     rows = data.get("available")
     if not isinstance(rows, list):
         raise SystemExit(2)
-    raise SystemExit(0 if any(item.get("name") == name for item in rows if isinstance(item, dict)) else 1)
+    if not all(isinstance(item, dict) and isinstance(item.get("name"), str) for item in rows):
+        raise SystemExit(2)
+    raise SystemExit(0 if any(item.get("name") == name for item in rows) else 1)
 if kind == "marketplace":
     rows = data.get("marketplaces")
     if not isinstance(rows, list):
         raise SystemExit(2)
+    if not all(isinstance(item, dict) and isinstance(item.get("name"), str) for item in rows):
+        raise SystemExit(2)
     if marketplace_kind == "official":
-        matched = any(str(item.get("name", "")).startswith("openai") for item in rows if isinstance(item, dict))
+        matched = any(item.get("name") in ("openai-curated", "openai-api-curated") for item in rows)
     else:
-        matched = any(item.get("name") == name for item in rows if isinstance(item, dict))
+        matched = any(item.get("name") == name for item in rows)
     raise SystemExit(0 if matched else 1)
 raise SystemExit(2)
 ' "$kind" "$name" "$marketplace_kind" 2>/dev/null
@@ -394,7 +505,7 @@ plugin_status() {
 
   if ((STATUS_INSTALLED_RC != 0)); then
     printf '状态未知（无法读取已安装插件）'
-    return 1
+    return 2
   fi
   if status_json_state installed "$STATUS_INSTALLED_JSON" "$plugin"; then
     state=0
@@ -407,12 +518,12 @@ plugin_status() {
   fi
   ((state == 1)) || {
     printf '状态未知（已安装列表 JSON 无效）'
-    return 1
+    return 2
   }
 
   if ((STATUS_AVAILABLE_RC != 0)); then
     printf '状态未知（无法读取可用插件）'
-    return 1
+    return 2
   fi
   if status_json_state available "$STATUS_AVAILABLE_JSON" "$plugin"; then
     state=0
@@ -425,12 +536,12 @@ plugin_status() {
   fi
   ((state == 1)) || {
     printf '状态未知（可用列表 JSON 无效）'
-    return 1
+    return 2
   }
 
   if ((STATUS_MARKETPLACES_RC != 0)); then
     printf '状态未知（无法读取 marketplace）'
-    return 1
+    return 2
   fi
   if status_json_state marketplace "$STATUS_MARKETPLACES_JSON" "$marketplace" "$kind"; then
     state=0
@@ -443,14 +554,14 @@ plugin_status() {
   fi
   ((state == 1)) || {
     printf '状态未知（marketplace JSON 无效）'
-    return 1
+    return 2
   }
   printf 'marketplace 未配置'
   return 0
 }
 
 status_selected() {
-  local key status status_code
+  local key status status_code result_status=0
   local -a unknown=()
   load_status_json
   printf '状态查询：只读，不会调用 marketplace add 或 plugin add\n'
@@ -464,11 +575,14 @@ status_selected() {
     else
       printf '%-28s %s\n' "$key" "$status" >&2
       unknown+=("$key")
+      if ((status_code > result_status)); then
+        result_status=$status_code
+      fi
     fi
   done
   if ((${#unknown[@]} > 0)); then
     printf '状态未知目标：%s\n' "${unknown[*]}" >&2
-    return 1
+    return "$result_status"
   fi
 }
 
@@ -500,8 +614,8 @@ official_marketplace_for() {
       marketplace=openai-curated
       ;;
     *)
-      printf '错误：marketplace 查询失败，已停止安装：%s\n' "$plugin" >&2
-      return 1
+      printf '错误：marketplace 查询、JSON 解析或 schema 校验失败，已停止安装：%s\n' "$plugin" >&2
+      return 2
       ;;
   esac
   printf '%s\n' "$marketplace"
@@ -509,12 +623,13 @@ official_marketplace_for() {
 
 install_one() {
   local key="$1"
-  local spec kind source marketplace plugin
+  local spec kind source marketplace plugin default_ref plugin_ref
+  local status
   spec="$(plugin_spec "$key")" || {
     printf '未知插件：%s（使用 --list 查看可用名称）\n' "$key" >&2
     return 1
   }
-  IFS='|' read -r kind source marketplace plugin <<<"$spec"
+  IFS='|' read -r kind source marketplace plugin default_ref <<<"$spec"
 
   case "$key" in
     superpowers|ecc|agent-skills|compound-engineering)
@@ -536,21 +651,30 @@ install_one() {
 
   if [[ "$kind" == official ]]; then
     if [[ "$DRY_RUN" == true ]]; then
-      official_marketplace_for "$plugin" >/dev/null || return 1
+      official_marketplace_for "$plugin" >/dev/null || return $?
       marketplace=openai-curated
     else
-      marketplace="$(official_marketplace_for "$plugin")"
+      marketplace="$(official_marketplace_for "$plugin")" || return $?
     fi
   else
-    ensure_community_marketplace "$source" "$marketplace" || return 1
+    plugin_ref="$REF"
+    [[ -n "$plugin_ref" ]] || plugin_ref="$default_ref"
+    ensure_community_marketplace "$source" "$marketplace" "$plugin_ref" || return $?
   fi
-  run_cmd codex plugin add "$plugin" --marketplace "$marketplace" || return 1
+  run_cmd codex plugin add "$plugin" --marketplace "$marketplace" || return $?
 
   if [[ "$DRY_RUN" != true ]]; then
-    if plugin_is_installed "$plugin"; then
+    if plugin_is_installed "$plugin" "$marketplace"; then
       printf '已验证插件注册：%s@%s\n' "$plugin" "$marketplace"
     else
-      printf '警告：命令已返回成功，但未在 codex plugin list --json 中找到：%s\n' "$plugin" >&2
+      status=$?
+      if ((status == 2)); then
+        printf '错误：安装后插件列表 JSON 解析或 schema 校验失败：%s@%s\n' \
+          "$plugin" "$marketplace" >&2
+        return 2
+      fi
+      printf '警告：命令已返回成功，但未在 codex plugin list --json 中找到匹配注册：%s@%s\n' \
+        "$plugin" "$marketplace" >&2
       return 1
     fi
   fi
@@ -659,7 +783,9 @@ main() {
   [[ "$STATUS_ONLY" != true || "$DRY_RUN" != true ]] || die '--status/--audit 不能与 --dry-run 同时使用。'
 
   local -a selected=()
-  local selected_plugin
+  local selected_plugin selected_spec selected_kind
+  local selected_source selected_marketplace selected_name selected_default_ref
+  local community_selected=0
   if [[ -n "$PROFILE" ]]; then
     while IFS= read -r selected_plugin; do
       selected+=("$selected_plugin")
@@ -676,8 +802,25 @@ main() {
     printf '未指定目标，使用默认 profile：%s\n' "$DEFAULT_PROFILE"
   fi
 
+  for selected_plugin in "${selected[@]}"; do
+    if selected_spec=$(plugin_spec "$selected_plugin" 2>/dev/null); then
+      IFS='|' read -r selected_kind selected_source selected_marketplace \
+        selected_name selected_default_ref <<<"$selected_spec"
+      if [[ "$selected_kind" == community ]]; then
+        community_selected=$((community_selected + 1))
+      fi
+    fi
+  done
+  if [[ "$STATUS_ONLY" != true && -n "$REF" ]] && ((community_selected > 1)); then
+    die '单次 --ref 只能覆盖一个社区插件；多社区 profile 请移除 --ref，使用各自内建固定 commit。'
+  fi
+
   printf '目标插件：%s\n' "${selected[*]}"
-  printf 'Git ref：%s\n' "$REF"
+  if [[ -n "$REF" ]]; then
+    printf 'Git ref：%s\n' "$REF"
+  else
+    printf 'Git ref：社区插件使用内建固定 commit；官方 marketplace 不固定版本\n'
+  fi
   printf '来源策略：%s\n' "$REF_POLICY"
   if [[ "$STATUS_ONLY" == true ]]; then
     require_codex_status
@@ -689,20 +832,28 @@ main() {
   [[ "$DRY_RUN" == true ]] && printf '模式：dry-run（不会写入 Codex 配置）\n'
 
   local -a failed=()
-  local key
+  local key result exit_status=0
   for key in "${selected[@]}"; do
     printf '\n==> 安装 %s\n' "$key"
     if install_one "$key"; then
       printf '完成：%s\n' "$key"
     else
+      result=$?
       failed+=("$key")
+      if ((result > exit_status)); then
+        exit_status=$result
+      fi
       printf '失败：%s（继续处理其余目标）\n' "$key" >&2
+      if ((result == 2)); then
+        printf '检测到状态 2，停止处理后续目标。\n' >&2
+        break
+      fi
     fi
   done
 
   if ((${#failed[@]} > 0)); then
     printf '\n失败目标：%s\n' "${failed[*]}" >&2
-    return 1
+    return "$exit_status"
   fi
   printf '\n全部目标处理完成。需要时重启 Codex 或打开 /plugins 检查启用状态。\n'
 }

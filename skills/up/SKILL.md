@@ -192,15 +192,15 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
 | 类型 | 参考源 | 热榜/检索入口 | 排序字段与用途 | 最近验证 |
 |---|---|---|---|---|
-| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` | 2026-10-16: API 200；网页回退 000，待复核 |
-| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 | 2026-10-16: API 200（空结果）；网页 200 外壳 |
-| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` | 2026-10-16: API 200；网页 200 |
-| 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc&includeDesc=true`，保留其原生 star 字段；用于补充开源生态样本（遗漏 `includeDesc=true` 时描述命中会返回空列表） | 2026-10-16: API 200（includeDesc=true）；网页 200 |
-| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 | 2026-10-16: GitHub API 200；stars=10609 |
-| 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 | 2026-10-16: 200 |
-| 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 | 2026-10-16: raw 200 |
-| 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 | 2026-10-16: raw 200 |
-| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 | 2026-10-16: 200 |
+| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` | 2026-10-16 17:58 CST: docs/API/search 均 200；`agent skills` total=140596，top=`obra/superpowers`（stars=300296） |
+| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 | 2026-10-16 17:58 CST: swagger/API/search 均 200；API `agent skills` 返回 0（可用，空结果） |
+| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` | 2026-10-16 17:58 CST: docs/API/explore 均 200；`agent skills` total=354，top=`gitlab-org/ai-engineering/agent-foundations/agentic-productivity`（star_count=6） |
+| 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc&includeDesc=true`，保留其原生 star 字段；用于补充开源生态样本（遗漏 `includeDesc=true` 时描述命中会返回空列表） | 2026-10-16 17:58 CST: API/explore 均 200；`includeDesc=true` 且 `agent skills` total=36，top=`leeg/chiron-codex-agent-skills`（stars=3） |
+| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 | 2026-10-16 17:58 CST: GitHub API 200；stars=10609，`updated_at=2026-10-16T09:39:31Z`，CC0-1.0 |
+| 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 | 2026-10-16 17:58 CST: 200 |
+| 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 | 2026-10-16 17:58 CST: raw 200 |
+| 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 | 2026-10-16 17:58 CST: raw 200 |
+| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 | 2026-10-16 17:58 CST: 200 |
 
 以上来源是“发现候选”和“核对规则”的不同层：热榜只决定先看谁，规范/官方/社区原文才决定是否吸收。
 外部页面可能调整参数，执行时以接口返回和当前文档为准，并在终端记录实际 URL、HTTP 状态和读取时间。
@@ -303,10 +303,14 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
    `--dry-run`、可选 Git ref 和 `--help`/`--list`。安装器不得在仓库加载时自启，不复制第三方源码，
    不创建个人 marketplace，不删除已有插件，不隐式安装 npm/系统依赖，不自动信任 hooks；带 hooks、
    MCP 或大规模重叠技能的项目只能显式选择，并在输出中警告。
-4. **保持幂等与可审查**：重复运行先复用已配置 marketplace，安装后用 CLI 的 JSON 查询验证注册；
-   多目标安装逐项报告并继续处理，最后以非零退出码汇总失败项。对上游使用 `main` 时支持 ref 覆盖，
-   文档同时给出 tag/commit 固定方式。`wshobson/agents` 等需要额外生成器或 npm 工具的项目，
-   不得伪装成通用原生安装路径，可保留人工安装说明。
+4. **保持安全幂等与可审查**：官方 marketplace 可复用；社区 marketplace 若 CLI JSON 无法证明
+   source/ref 与本次目标一致，必须 fail-closed 并提示移除后按目标 ref 重登，不得静默复用。安装后
+   用 CLI JSON 同时验证插件名与目标 marketplaceName，官方别名只用经核验的精确值而非前缀。
+   多目标业务失败（状态 1）逐项继续并汇总；查询/schema 等安全失败（状态 2）必须停止后续目标。
+   tag 先通过 `git check-ref-format`，再用 `git ls-remote --exit-code --tags` 验证；文档优先给出
+   完整 commit，禁止把浮动 `main` 写成默认来源；多社区插件 profile 为每项保存完整 commit，显式
+   `--ref` 只能覆盖一个社区目标。`wshobson/agents` 等需要额外生成器或 npm 工具的项目，不得伪装成
+   通用原生安装路径，可保留人工安装说明。
 5. **同步说明**：更新 `plugins/README.md` 与 `plugins/AGENTS.md`，写清脚本不会被本库自动调用；若
    安装器改变了 Codex 配置入口，再核对相关 `skills` 的调用说明和安全边界。实际安装只有在用户明确
    要求执行时进行；本任务只提供脚本时不替用户写入 `CODEX_HOME`。
@@ -355,6 +359,7 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
 1. **结构验证**（每次必做）：`SKILL.md` 的 frontmatter 完整（name/description/metadata）、
    name 与目录一致、固定章节齐备、行数合理（参考 <500 行分级披露）、技能表登记正确；
+   技能表与互鉴表各自在忽略转义 `\|` 后必须表头/数据行列数一致，防止登记内容漂移；
    `tools/hooks` 的 shell 文件用其实际解释器做 `bash -n`/等价语法检查并核对可执行权限，
    `plugins` 的 JSON/YAML manifest 用已有解析器校验入口、版本和依赖；占位符匹配逐条分类，
    不把命令示例字面量误判为缺陷；

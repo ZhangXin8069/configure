@@ -39,8 +39,8 @@ bash install-recommended.sh --profile gpu-research
 bash install-recommended.sh --profile research-workbench
 bash install-recommended.sh --profile workspace
 bash install-recommended.sh --profile app-dev
-bash install-recommended.sh ecc agent-skills
-bash install-recommended.sh --ref v2.1.0 ecc
+bash install-recommended.sh --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
+bash install-recommended.sh --ref-policy commit --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
 ```
 
 安装前可只读检查当前 Codex 状态，不会调用安装命令：
@@ -51,18 +51,27 @@ bash install-recommended.sh --audit superpowers nvidia
 ```
 
 状态会区分“已安装”“可用但未安装”“marketplace 已配置但未列出”“marketplace 未配置”和“状态未知”；
-查询失败或 JSON 无法解析时返回非零，并保持 fail-closed。社区来源默认接受固定 tag 或 commit；需要只接受
-提交哈希时使用 `--ref-policy commit --ref <40-or-64-hex-sha>`，浮动分支会被拒绝。
+查询失败时保持 fail-closed，Codex JSON 解析或 schema 异常返回状态 2 且不执行写入。社区 ref 默认直接
+接受完整 40/64 位十六进制 commit，其他值必须能通过
+`git ls-remote --exit-code --tags <repo-url> refs/tags/<ref>` 验证；`main`、`master`、`HEAD` 等
+浮动分支会被拒绝。dry-run 同样执行该验证，缺少 `git`、tag 不存在或网络失败都会停止。需要只接受提交
+哈希时使用 `--ref-policy commit --ref <40-or-64-hex-sha>`。
+多社区插件 profile 默认使用每项内建的完整 commit；显式 `--ref` 只能覆盖单个社区目标，避免把一个
+仓库的 tag/commit 错配到另一个仓库。
 
 `recommended` 仍然是最小平衡包；`research-workbench` 偏物理/ML 和报告，`workspace` 偏日常协作，`app-dev` 偏工程交付和端侧应用。需要更细的组合时，直接按插件名指定更透明。
 
 安装器要求 Codex CLI 支持 `codex plugin marketplace` 与 `codex plugin add`，并要求已有
-`jq` 或 `python3` 解析 JSON；不会自动安装这些依赖。它会优先复用已配置的官方
-marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list --json` 验证插件注册。
+`jq` 或 `python3` 解析 JSON；使用 tag 时还需要 `git` 与网络访问，脚本不会自动安装这些依赖。
+它会优先复用已配置的官方 marketplace，必要时注册 `openai/plugins`。安装后用
+`codex plugin list --json` 同时验证插件名和目标 `marketplaceName`，任一不匹配都不算成功。
 不同 CLI/账户可能将官方 marketplace 显示为 `openai-curated` 或 `openai-api-curated`，安装器会从
-`codex plugin list --available --json` 读取实际名称，不硬编码当前环境的别名。
-社区 marketplace 必须通过 `--ref <tag-or-commit>` 或 `CODEX_PLUGIN_REF` 提供固定 Git ref；未提供时
-安装器拒绝执行，以免默认跟踪浮动分支。官方 marketplace 的 ref 可选，dry-run 即使本机没有
+`codex plugin list --available --json` 读取实际名称，但只接受这两个精确受信别名；其他
+`openai-*` 或相似名称均不视为官方来源。
+社区插件默认使用每项内建完整 commit；`--ref <tag-or-commit>` 或 `CODEX_PLUGIN_REF` 只用于覆盖
+单个社区目标，不默认跟踪浮动分支。Codex JSON 不提供已配置社区 marketplace 的 source/ref，
+因此无法证明现有登记与本次目标 ref 一致；安装器会 fail-closed，要求用户先移除该 marketplace，
+再用目标 ref 重新登记，不会直接复用。官方 marketplace 的 ref 可选，dry-run 即使本机没有
 `codex` 也会打印完整的 `codex plugin marketplace add openai/plugins` 注册命令。
 带 hooks、MCP 或大量技能的插件不会被自动信任；重启 Codex 后可用 `/plugins` 检查启用状态。
 
@@ -79,8 +88,10 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 - 来源：[openai/plugins](https://github.com/openai/plugins)；仓库的
   [marketplace manifest](https://github.com/openai/plugins/blob/main/.agents/plugins/marketplace.json)
   声明官方 Codex 插件目录。
-- `superpowers`：MIT，版本 6.3.0；规划、TDD、系统调试、并行协作和代码审查。其上游项目
-  [obra/superpowers](https://github.com/obra/superpowers) 提供原生 `.codex-plugin/plugin.json`，
+- `superpowers`：MIT；官方 marketplace 当前提供版本 6.3.0。上游
+  [obra/superpowers@bb92a77](https://github.com/obra/superpowers/tree/bb92a77741419a4ab5f06e711a283343f1ada0c3)
+  的原生 `.codex-plugin/plugin.json` 已到 7.0.0（SHA256
+  `58c36fd4185719c9bee12fab1a03ce6cce48051c36ee9bdd9492235dd7ab2cfd`），且 `hooks` 为空；
   适合通用工程流程，但与本库 `brainstorm`、`plan`、`debug`、`review`、`test`、`all` 重叠。
 - `nvidia`：Apache-2.0 与 CC-BY-4.0，版本 1.0.4；CUDA、GPU 加速、推理、机器人、物理仿真和
   Omniverse，适合 HPC/GPU 工作流；上游技能仓库为 [NVIDIA/skills](https://github.com/NVIDIA/skills)。详情见其
@@ -107,11 +118,14 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 ### EveryInc/compound-engineering-plugin
 
 - 来源：[GitHub](https://github.com/EveryInc/compound-engineering-plugin)
-- 许可证：MIT；仓库提供原生 `.codex-plugin/plugin.json` 和 `.agents/plugins/marketplace.json`，README 标注包含 33 个技能并支持 Codex CLI。
-- 版本：3.24.0；
+- 许可证元数据：`.codex-plugin/plugin.json`、`package.json` 与 README 均声明 MIT，但仓库未发现
+  `LICENSE`/`COPYING` 正文，使用前需再次复核；固定
+  [commit `fac349c`](https://github.com/EveryInc/compound-engineering-plugin/tree/fac349c0c31a543d497fd4825af9b44bdb7e7dfe)
+  的版本为 3.30.5，提供原生 `.codex-plugin/plugin.json`；manifest SHA256 为
+  `77a986beb5395e1fd96f4065dd5d3b7d73bf6374d88454d25af08527d09ecf60`。
 - 适用场景：需要独立的 brainstorm → plan → work → simplify → review → compound 工程闭环时，按需作为外部插件安装。
 - 本库处理：推荐但不 vendoring。它与本库的 `brainstorm`、`plan`、`debug`、`review`、`test`、`optim` 和 `all` 存在明显职责重叠，默认同时加载会增加触发歧义和上下文开销。
-- 安装入口：`codex plugin marketplace add EveryInc/compound-engineering-plugin`，然后
+- 安装入口：`codex plugin marketplace add EveryInc/compound-engineering-plugin --ref <tag-or-commit>`，然后
   `codex plugin add compound-engineering --marketplace compound-engineering-plugin`。
 - 使用前：先阅读上游 manifest 与技能内容，按版本或提交固定来源；确认项目目录中的本地技能优先级后再安装。
 
@@ -126,30 +140,41 @@ marketplace，必要时注册 `openai/plugins`，安装后用 `codex plugin list
 ### affaan-m/ECC
 
 - 来源：[GitHub](https://github.com/affaan-m/ECC)
-- 许可证：MIT；版本 2.2.1，提供原生 `.codex-plugin/plugin.json`、Codex marketplace manifest、技能、MCP 配置和 Codex hooks。
+- 许可证：MIT；固定
+  [commit `76aaa77`](https://github.com/affaan-m/ECC/tree/76aaa77df6adc5b889e689007bf99b9a4f74af34)
+  的版本为 2.2.3，提供原生 `.codex-plugin/plugin.json`、Codex marketplace manifest、技能、MCP 配置和
+  Codex hooks；manifest SHA256 为
+  `09d1f838f55e4463aa9da6673f812edc33952572e3425eb77dee9ec31280d424`。
 - 适用场景：需要较完整的 TDD、安全审查、代码审查、持续验证和自主开发工作流时按需选择。
-- 安装入口：`codex plugin marketplace add affaan-m/ECC`，然后
+- 安装入口：`codex plugin marketplace add affaan-m/ECC --ref <tag-or-commit>`，然后
   `codex plugin add ecc --marketplace ecc`。
-- 风险与重叠：内容规模大，且包含 hooks/MCP；与本库 `all`、`debug`、`review`、`test`、`up` 等能力
-  有重叠。不要与旧版手工 sync 流程叠加，安装后另行审查并信任 hooks。
+- 风险与重叠：内容规模大（固定 ref 下登记约 281 个 Codex 技能），且显式加载 hooks 与
+  Chrome DevTools MCP；与本库 `all`、`debug`、`review`、`test`、`up` 等能力有重叠。不要与旧版手工
+  sync 流程叠加，安装后另行审查并信任 hooks/MCP。
 
 ### addyosmani/agent-skills
 
 - 来源：[GitHub](https://github.com/addyosmani/agent-skills)
-- 许可证：MIT；版本 0.6.9，提供原生 `.codex-plugin/plugin.json` 和生命周期工程技能，覆盖
-  spec、plan、build、test、review、ship。
+- 许可证：MIT；固定
+  [commit `aeac41d`](https://github.com/addyosmani/agent-skills/tree/aeac41d4d005999432bb7312f7ff06383a91d59d)
+  的版本为 0.6.13，提供原生 `.codex-plugin/plugin.json` 和 25 个生命周期工程技能，覆盖
+  spec、plan、build、test、review、ship；manifest SHA256 为
+  `7476c2cb57371bbf5900a37bc9f6cf53e62ccb110a2e948349889615d49e9773`。
 - 适用场景：希望使用较小、可组合的工程生命周期技能，而不是引入完整运行时或 hooks 时按需选择。
-- 安装入口：`codex plugin marketplace add addyosmani/agent-skills`，然后
+- 安装入口：`codex plugin marketplace add addyosmani/agent-skills --ref <tag-or-commit>`，然后
   `codex plugin add agent-skills --marketplace agent-skills`。
 - 风险与重叠：与本库 `plan`、`tdd`、`test`、`review`、`all` 有明显重叠；建议二选一并先检查触发优先级。
 
 ### a5c-ai/babysitter-codex
 
 - 来源：[GitHub](https://github.com/a5c-ai/babysitter-codex)
-- 许可证：MIT；版本 6.0.3，提供原生 `.codex-plugin/plugin.json`、`skills/`、`hooks.json` 和
-  Codex marketplace manifest；上游将 Codex 支持标为 Beta。
+- 许可证：MIT；固定
+  [commit `6940285`](https://github.com/a5c-ai/babysitter-codex/tree/694028503ae14a1111d4e32eaa5279752bc2194c)
+  的版本为 6.0.3，提供原生 `.codex-plugin/plugin.json`、`skills/`、`hooks.json` 和
+  Codex marketplace manifest；manifest SHA256 为
+  `8b6dd6a8a41469e4c9d2b64906f6899531fc684303fe9fc235dccb5f2ceff017`；上游将 Codex 支持标为 Beta。
 - 适用场景：需要事件溯源状态、可恢复的长流程、质量闸门和人工审批断点时使用。
-- 安装入口：`codex plugin marketplace add a5c-ai/babysitter-codex`，然后
+- 安装入口：`codex plugin marketplace add a5c-ai/babysitter-codex --ref <tag-or-commit>`，然后
   `codex plugin add babysitter --marketplace babysitter`。
 - 前置条件：完整运行还需要按上游说明安装 `@a5c-ai/babysitter` CLI/SDK；本库安装器不会隐式执行
   npm 安装，也不会替用户信任 hooks。
@@ -192,7 +217,9 @@ GitHub API 首次请求曾收到 HTTP 504，重试第 1 次（30 秒超时）即
   结果；前列为 3 star 的 `leeg/chiron-codex-agent-skills` 及 1 star 的
   `hanlho/skills-primer`、`ky64/agent-skills`，未见许可证或兼容性证据足以纳入。
 
-本轮没有新增采纳项，现有推荐和“暂不纳入”决策保持不变。
+本轮完整核对 GitHub、GitLab、Codeberg 各前 10 项（Gitee 为结构化空结果），没有新增默认采纳项；
+现有推荐和“暂不纳入”决策保持不变。三个已推荐插件项的核验证据更新为 `superpowers@bb92a77`、
+`ECC@76aaa77`、`agent-skills@aeac41d`，其中前两项的官方/上游版本差异和 hooks/MCP 风险已在上文标注。
 
 - 本轮重点核对的原生入口：[openai/plugins marketplace](https://github.com/openai/plugins/tree/main/.agents/plugins)、
   [ECC Codex manifest](https://github.com/affaan-m/ECC/tree/main/.codex-plugin)、
@@ -206,6 +233,16 @@ GitHub API 首次请求曾收到 HTTP 504，重试第 1 次（30 秒超时）即
 - [mattpocock/skills](https://github.com/mattpocock/skills)：GitHub 本轮 `agent skills` 热榜前列、MIT；实际仓库含 Agent Skills 集合但未发现原生 `.codex-plugin/plugin.json`，且与本库 `plan`、`test`、`review` 等职责重叠，因此不登记为 Codex marketplace 插件。
 - [openai/codex-plugin-cc](https://github.com/openai/codex-plugin-cc)：它是“在 Claude Code 中调用 Codex”的 Claude Code 插件，依赖 Node.js 和 Claude Code；不是本仓库所需的 Codex 原生插件。
 - [anthropics/skills](https://github.com/anthropics/skills)：适合作为技能写作参考来源，但不是本目录要直接加载的插件项目；本库已有自己的技能规范和登记表。
+- [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)：Apache-2.0、原生 Codex manifest，但完整插件含会发送文件、
+  覆盖原文件并创建外部备份的 compressor；上游自身标注高风险。拒绝作为默认插件，最多按固定 ref 单独审阅无副作用的
+  风格技能，不启用 root hook/MCP。
+- [Shubhamsaboo/awesome-llm-apps](https://github.com/Shubhamsaboo/awesome-llm-apps)：整个仓库包含多种网络、凭据和写盘型技能；
+  仅将 `commit-archaeologist`、`scope-creep-detector`、`dependency-doctor` 三个离线优先的只读技能按固定 SHA 登记到
+  `tools/README.md`，不整体安装。
+- [farion1231/cc-switch](https://github.com/farion1231/cc-switch)：适配多 harness 的桌面配置管理器，与本库 provider/配置文件管理链重叠，
+  且可运行非 loopback 代理；不登记为插件，仅建议需要 GUI 的用户自行备份配置后评估。
+- [langgenius/dify](https://github.com/langgenius/dify)：技能与 Dify monorepo/远程 API 强绑定，许可证含附加限制，
+  且 `difyctl` 包含无二次确认的删除/撤销路径；不纳入本库。
 - [wshobson/agents](https://github.com/wshobson/agents) 的全量安装：它仍是推荐项目，但上游 Codex 路径使用
   `npx codex-marketplace add wshobson/agents` 后再选择单个插件；为避免引入额外 npm 工具和 93 个插件，
   不纳入本脚本的一键全量 profile。请只按领域手工选择。

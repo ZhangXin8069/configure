@@ -61,6 +61,31 @@ shell_count=0
 skill_count=0
 log_count=0
 
+index_mode() {
+    local path=$1
+    local entry
+
+    if ! IFS= read -r -d '' entry < <(git ls-files --stage -z -- "$path"); then
+        return 1
+    fi
+    printf '%s\n' "${entry%% *}"
+}
+
+validate_shell_mode() {
+    local path=$1
+    local mode
+
+    if ! mode=$(index_mode "$path"); then
+        printf '✗ %s：无法读取索引权限\n' "$path" >&2
+        failures=$((failures + 1))
+        return
+    fi
+    if [[ "$mode" != 100755 ]]; then
+        printf '✗ %s：Shell 入口索引权限应为 100755，实际为 %s\n' "$path" "$mode" >&2
+        failures=$((failures + 1))
+    fi
+}
+
 if [[ "$mode" == staged ]]; then
     if ! diff_output=$(git diff --cached --check -- hooks skills 2>&1); then
         printf '✗ 暂存区存在空白或冲突标记问题：\n%s\n' "$diff_output" >&2
@@ -194,6 +219,10 @@ for path in "${paths[@]}"; do
         continue
     fi
     if [[ -n "$interpreter" ]]; then
+        case "$path" in
+            skills/form/references/source-snapshots/*) ;;
+            *) validate_shell_mode "$path" ;;
+        esac
         validate_shell "$path" "$interpreter"
     fi
 done

@@ -79,7 +79,7 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
 | 修改/优化已有内容 | diff →（实现）→ test → optim → diff | 先看改动范围再动 |
 | 仓库命名/目录/交付格式整改 | form → test → diff → init/tag | 先只读冲突表再分批整改；功能复现后收尾 |
 | 修复类任务 | debug → test → diff | 复现→根因→修复→回归 |
-| 分析/报告类 | analy →（按需） | 结论附 `文件:行号` |
+| 分析/报告类 | analy → pure → report | analy 建立整体结构与依赖链，pure 深挖核心细节，report 消费证据成稿；结论附 `文件:行号` |
 | 多独立子任务（多失败/多文件/多目标） | dispatch →（整合）→ test/diff | 拆域并行（无共享状态/无顺序依赖/互不改同文件才并行），一轮一动作不冲突 |
 | 仓库初始化/归档 | init → diff | 两阶段执行 |
 | 单步任务（纯 debug/纯 optim/纯 test/纯 analy/纯 init） | 直接转对应技能 | 注明"单步任务无需循环"，不强行套用 |
@@ -115,15 +115,15 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
 
 1. 按「技能编排矩阵」确定所需技能集合与执行顺序；
 2. 单步任务：转对应技能（各技能自带完整流程），不套用循环；
-3. 复杂任务：首轮执行顺序 = plan → 调查（diff/analy）→ 实现 → test；
+3. 复杂任务：首轮执行顺序 = plan → 调查（diff/analy，格式/结构问题按需接入 form）→ 实现 → test；
 4. 输出首轮计划（技能 | 阶段 | 通过标准）在终端摘要中说明。
 
 ### Step 3. 执行首轮
 
 按计划调用对应技能执行（各技能按自身 SKILL.md 流程运行）：
 
-1. 生成类任务：调用 make 技能完成首轮全流程（其内部已编排 init/tag/debug/optim/
-   diff/analy/test），接收其终端摘要；
+1. 生成类任务：调用 make 技能完成首轮全流程（其内部按需编排 init/tag/debug/optim/
+   diff/analy/pure/report/form/test 等技能），接收其终端摘要；
 2. 非生成任务：直接编排所需技能（如 debug → test）；
 3. 每个阶段记录命令、输出与结论（`$ <命令>` + `exit=<退出码>`）；
 4. 首轮产物明确后，进入 Step 4 收敛评估。
