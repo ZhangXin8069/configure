@@ -129,7 +129,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `dispatch` | 优先 `agent-dispatch.sh --task --json`，默认继承父 launcher/provider/model/strength；并行派发纪律（2+ 独立任务拆域、同消息派发=并行）；代理指令四要素；整合验证不豁免；派发失败复用当前启动链重试，最终串行降级 | 多独立任务的并行提速；派发子代理时的指令构造与整合纪律 |
 | `team` | 状态机 + worker 隔离 + 能力匹配 + 单文件单写者/只读审查者 + 健康检查 + 失败重派；优先 `agent-dispatch.sh` 且默认继承父设置，派发链失败复用当前 agent 启动方式并最终串行 | 长流程、多 worker 协作、模型/工具能力选择、重派和收敛收尾场景 |
 | `form` | 规则先于范例；参考 URL 固化为可校验明文快照；简单库/复杂库分类；语言×构件命名矩阵；目录白名单；只读冲突表→较高权限整改→功能复现；docs/logs/data/testing 分域；自动布局审计与人工语义命名双闸门；生成目标库特化 skill 与根 AGENTS 明文规则；最终执行 diff/init/dev tag | Git 库命名、结构、框架、清洁度和交付格式治理；跨目录大范围重整 |
-| `up` | 四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜 + awesome-opencode 生态清单；API→网页重试降级；候选固定 ref/许可证/哈希/测试/决策留痕；差距分析；插件推荐与一键安装器（按 harness 分支 Codex/opencode，manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
+| `up` | 强制首步刷新网络参考源（canonical URL、排序参数、回退入口、最近验证、待复核）；四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜 + awesome-opencode 生态清单；API→网页重试降级；候选固定 ref/许可证/哈希/测试/决策留痕；差距分析；插件推荐与一键安装器（按 harness 分支 Codex/opencode，manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
 
 ## 技能
 
@@ -152,7 +152,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `form` | Git 库格式治理：固定并校验参考 URL 的离线明文快照，用 `form-audit.sh` 检查目录/文件布局，人工判定函数/变量/对象语义命名；执行只读冲突表与较高权限整改，维护 docs/logs/data/testing 和框架入口，复现功能，生成目标库特化 skill 与根 AGENTS 明文规则，最后执行 diff/init/dev tag |
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，派发失败时回到本会话内联执行；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/test/plan/make/skill-creator/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；dispatch 失败按启动链重试后串行；生成类任务首轮复用 make，单步任务转对应技能|
-| `up` | agent 配置升级：扫描 Git 根目录 `skills/tools/hooks/plugins` 四树→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化（继承用户时间/资源上限）→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名、固定 ref、许可证、哈希、测试、采纳决策与 URL |
+| `up` | agent 配置升级：每次先刷新网络参考源条目（URL/排序/回退/最近验证，避免落后与缺失）→扫描 Git 根目录 `skills/tools/hooks/plugins` 四树并优先复用 `tools/configure-check.sh` 基线→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、幂等验证）→up 自身单轮证据约束进化（继承用户时间/资源上限）→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环→收敛；外部借鉴记录网站、仓库/技能名、固定 ref、许可证、哈希、测试、采纳决策与 URL |
 | `md-tex-sync` | `{除非用户明确要求，否则不启用}`。仅在用户显式要求 Markdown/LaTeX/PDF 同源维护、双格式同步交付或全文全集与全附件归档时启用；以 Markdown 为唯一内容源，确定性转换生成独立 TeX，XeLaTeX 两遍编译 PDF，并按 SHA256 校验源哈希、幂等重建、零 Overfull/缺字/错误和全页栅格化 |
 | `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论|
 | `review` | 代码审查：早审查常审查、优先 agent-dispatch.sh 审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；子代理失败按启动链重试后串行；接收审查"先验证后实现"（不表演性同意、技术性反驳附证据）；吸收 superpowers requesting/receiving-code-review|

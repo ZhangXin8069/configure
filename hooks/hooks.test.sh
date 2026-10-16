@@ -26,6 +26,58 @@ assert_contains() {
     esac
 }
 
+if ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+    fail 'JSON hook 测试需要 jq 或 python3 解析 JSON'
+fi
+
+json_envelope_valid() {
+    local json=$1
+    if command -v jq >/dev/null 2>&1; then
+        printf '%s\n' "$json" | jq -e '
+            .schema_version == "1" and
+            .event == "session-start" and
+            .run_id == "hook-run" and
+            .session_id == "session-hook" and
+            .turn_id == "3" and
+            .status == "ok"
+        ' >/dev/null
+    else
+        printf '%s\n' "$json" | python3 -c '
+import json
+import sys
+
+data = json.load(sys.stdin)
+ok = (
+    data.get("schema_version") == "1"
+    and data.get("event") == "session-start"
+    and data.get("run_id") == "hook-run"
+    and data.get("session_id") == "session-hook"
+    and data.get("turn_id") == "3"
+    and data.get("status") == "ok"
+)
+raise SystemExit(0 if ok else 1)
+'
+    fi
+}
+
+jsonl_event_valid() {
+    local file=$1
+    if [[ "${HOOK_TEST_JSON_PARSER:-auto}" != python ]] &&
+        command -v jq >/dev/null 2>&1; then
+        jq -e '.event == "session-start"' "$file" >/dev/null
+    else
+        python3 -c '
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    events = [json.loads(line) for line in handle if line.strip()]
+valid = events and all(item.get("event") == "session-start" for item in events)
+raise SystemExit(0 if valid else 1)
+' "$file"
+    fi
+}
+
 repo=$test_root/repo
 mkdir -p "$repo"
 git -C "$repo" init -q
@@ -68,20 +120,19 @@ json_status=$?
 set -e
 
 (( json_status == 0 )) || fail "JSON hook 失败\n输出：\n$json_output"
-if ! printf '%s\n' "$json_output" | jq -e '
-    .schema_version == "1" and
-    .event == "session-start" and
-    .run_id == "hook-run" and
-    .session_id == "session-hook" and
-    .turn_id == "3" and
-    .status == "ok"
-' >/dev/null; then
+if ! json_envelope_valid "$json_output"; then
     fail "JSON hook envelope 无效：$json_output"
 fi
 event_file="$hook_data/events.jsonl"
 [[ -s "$event_file" ]] || fail 'JSON hook 没有写入持久事件文件'
-if ! jq -e '.event == "session-start"' "$event_file" >/dev/null; then
+if ! jsonl_event_valid "$event_file"; then
     fail '持久事件文件不是合法 JSONL'
+fi
+multi_event_file="$hook_data/events-multiple.jsonl"
+printf '%s\n' '{"event":"session-start"}' '{"event":"session-start"}' > "$multi_event_file"
+if command -v python3 >/dev/null 2>&1 &&
+    ! HOOK_TEST_JSON_PARSER=python jsonl_event_valid "$multi_event_file"; then
+    fail 'Python JSONL 回退不能解析多条事件'
 fi
 printf 'PASS: JSON hook envelope 与持久事件日志\n'
 
