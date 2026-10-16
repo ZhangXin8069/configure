@@ -59,6 +59,72 @@ pass() {
     printf 'PASS: %s\n' "$*"
 }
 
+check_table_columns() {
+    local heading="$1"
+    local header="$2"
+    local label="$3"
+    local required="$4"
+    local file="$ROOT/skills/AGENTS.md"
+    local line
+    local normalized
+    local line_number=0
+    local header_columns=0
+    local columns
+    local pipe_count
+    local in_table=false
+    local table_errors=0
+    local heading_seen=false
+
+    [[ -f "$file" ]] || return 0
+
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line_number=$((line_number + 1))
+        if [[ "$line" == "## $heading" ]]; then
+            in_table=true
+            header_columns=0
+            heading_seen=true
+            continue
+        fi
+        if [[ "$line" == "$header" ]]; then
+            in_table=true
+            header_columns=0
+        fi
+        [[ "$in_table" == true ]] || continue
+        if [[ "$line" =~ ^##[[:space:]]+ ]]; then
+            break
+        fi
+        [[ "$line" == \|* ]] || continue
+
+        normalized=${line//\\|/}
+        pipe_count=$(printf '%s' "$normalized" | tr -cd '|' | wc -c)
+        columns=$((pipe_count - 1))
+        if ((columns < 1)); then
+            fail "skills/AGENTS.md:$line_number ${label}行缺少有效列"
+            table_errors=$((table_errors + 1))
+            continue
+        fi
+        if ((header_columns == 0)); then
+            header_columns=$columns
+            continue
+        fi
+        if ((columns != header_columns)); then
+            fail "skills/AGENTS.md:$line_number ${label}列数不一致：表头 ${header_columns} 列，当前 ${columns} 列"
+            table_errors=$((table_errors + 1))
+        fi
+    done < "$file"
+
+    if ((table_errors > 0)); then
+        return
+    fi
+    if ((header_columns == 0)); then
+        if [[ "$required" == true || "$heading_seen" == true ]]; then
+            fail "skills/AGENTS.md 缺少${label}"
+        fi
+    else
+        pass "${label}列数检查完成：${header_columns} 列"
+    fi
+}
+
 while (($# > 0)); do
     case "$1" in
         --help|-h)
@@ -114,6 +180,12 @@ done
 if [[ -d "$ROOT/skills" ]]; then
     if [[ ! -f "$ROOT/skills/AGENTS.md" ]]; then
         fail 'skills/ 缺少权威 AGENTS.md 技能表'
+    else
+        check_table_columns '技能' '| 技能 | 用途 |' '技能表' true
+        check_table_columns \
+            '各技能优点互鉴（可供其他技能借鉴的亮点）' \
+            '| 技能 | 标志性优点（可借鉴处） | 适合借鉴到的场景 |' \
+            '互鉴表' false
     fi
     new_temp_file
     skill_list=$TEMP_FILE

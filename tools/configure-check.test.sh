@@ -107,6 +107,48 @@ set -e
 assert_contains "$strict_output" '严格模式'
 printf 'PASS: --strict 将警告提升为失败\n'
 
+malformed_repo=$test_root/malformed-repo
+mkdir -p "$malformed_repo/skills/demo" "$malformed_repo/tools" "$malformed_repo/hooks" "$malformed_repo/plugins"
+cp "$repo/skills/demo/SKILL.md" "$malformed_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$malformed_repo/skills/demo/AGENTS.md"
+printf '%s\n' \
+    '| 技能 | 用途 |' \
+    '|---|---|' \
+    '| `demo` | 测试 | 额外列 |' > "$malformed_repo/skills/AGENTS.md"
+
+set +e
+malformed_output=$(bash "$checker" --root "$malformed_repo" 2>&1)
+malformed_status=$?
+set -e
+(( malformed_status != 0 )) || fail '技能表列数漂移不应通过检查'
+assert_contains "$malformed_output" '技能表列数不一致'
+printf 'PASS: 技能表列数漂移被拒绝\n'
+
+mutual_repo=$test_root/mutual-repo
+mkdir -p "$mutual_repo/skills/demo" "$mutual_repo/tools" "$mutual_repo/hooks" "$mutual_repo/plugins"
+cp "$repo/skills/demo/SKILL.md" "$mutual_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$mutual_repo/skills/demo/AGENTS.md"
+printf '%s\n' \
+    '## 技能' \
+    '' \
+    '| 技能 | 用途 |' \
+    '|---|---|' \
+    '| `demo` | 测试 |' \
+    '' \
+    '## 各技能优点互鉴（可供其他技能借鉴的亮点）' \
+    '' \
+    '| 技能 | 标志性优点（可借鉴处） | 适合借鉴到的场景 |' \
+    '|---|---|---|' \
+    '| `demo` | 优点 |' > "$mutual_repo/skills/AGENTS.md"
+
+set +e
+mutual_output=$(bash "$checker" --root "$mutual_repo" 2>&1)
+mutual_status=$?
+set -e
+(( mutual_status != 0 )) || fail '互鉴表列数漂移不应通过检查'
+assert_contains "$mutual_output" '互鉴表列数不一致'
+printf 'PASS: 互鉴表列数漂移被拒绝\n'
+
 mirror_repo=$test_root/mirror-repo
 mkdir -p "$mirror_repo/skills/demo" "$mirror_repo/.opencode/skills/demo" \
     "$mirror_repo/tools" "$mirror_repo/hooks" "$mirror_repo/plugins"
