@@ -7,19 +7,57 @@
 
 ## 目录组织
 
-### 基础模板（`_` 前缀）
+### 稳定入口与基础模板（`_` 前缀）
 
-由 `bin/sh_init.sh` / `bin/vim_init.sh` 部署到 `$HOME` 的源文件：
+`_` 前缀承担两类职责：
+
+1. 由初始化脚本部署到 `$HOME` 的源文件或运行时目录。
+2. 面向用户的操作说明、安装脚本、资源和稳定入口，不随登录自动部署。
+
+部署源：
 
 | 目录 | 部署到 | 用途 |
 |---|---|---|
 | `_bashrc` | `~/.bashrc` | Bash 配置（交互检测/历史/PS1 含窗口标题+dircolors/补全/函数；末尾存在才 source env.sh） |
 | `_zshrc` | `~/.zshrc` | Zsh 配置（oh-my-zsh + p10k instant prompt；存在才 source env.sh；`DISABLE_UNTRACKED_FILES_DIRTY` 勿启用，未跟踪文件需显示 ✗） |
 | `_vimrc` | `~/.vimrc` | Vim 配置 |
-| `_vim/` | `~/.vim/` | 完整 vim 运行时（plugged 插件、colors、UltiSnips、spell） |
+| `_vim/` | `~/.vim/` | Vim 运行时（autoload、colors、运行目录；plugged 为未配置 `.gitmodules` 的 gitlink） |
 | `_oh-my-zsh/` | `~/.oh-my-zsh/` | 完整 oh-my-zsh 安装（含 custom 插件/主题） |
 
-仅参考不部署：`_docker/`（Docker 开发环境指南）、`_snsc/`（NSC 集群共享配置）、`_clash/`（Clash 代理环境安装包与 `setup.sh` 检查入口）、`_claude-code/`（`claude-code-v20260706/` 的兼容目录，真实文件副本、内容一致，含安装 `install.sh`〔默认联网下载最新版，指定版本离线包优先〕与配置 `config.sh`）、`_codex/`（Codex CLI 安装 `install.sh`/`install.bat` 与配置 `config.sh`）、`_deepseek-harness/`（DeepSeek Harness（dsh）安装 `install.sh`/`install.bat` 与配置 `config.sh`）、`_opencode/`（opencode CLI 安装与配置）、`_mac/`（macOS 更新开关脚本）、`_gitignore`（符号链接→仓库根 `.gitignore`，通用忽略模板：16 编号分节，含 C++/Java/PHP 等语言分节与「全局规则→树级放行→运行时例外」三层护栏）。
+稳定操作入口：
+
+| 目录 | 用途 |
+|---|---|
+| `_agent/` | `cl/cls/op/ops/co/cos` 配置分层、密钥、派发、运行状态 |
+| `_clash/` | Clash 离线归档、解压检查和代理启用边界 |
+| `_claude-code/` | Claude Code / cc-switch 安装、配置、离线下载和卸载 |
+| `_codex/` | Codex CLI 安装、配置、provider 协议与认证 |
+| `_commands/` | `bin/` 用户命令总索引及跨主题风险说明 |
+| `_deepseek/` | DeepSeek 的 Claude Code、Codex 与桌面端配置 |
+| `_docker/` | Docker Desktop、GPU、镜像和容器生命周期 |
+| `_env/` | 环境入口、机器版本快照、本机覆盖和自动恢复边界 |
+| `_font/` | Linux/Windows 字体安装、授权和刷新 |
+| `_git/` | Git 身份、别名、忽略模板和辅助命令风险 |
+| `_linux/` | Linux 包、Swap、调频、电源和系统入口 |
+| `_mac/` | macOS 更新、Gatekeeper、Keychain 与维护脚本 |
+| `_opencode/` | OpenCode 安装、V1/V2 配置分流与插件 |
+| `_package/` | APT/Python 清单和随库可执行资源 |
+| `_shell/` | Bash/Zsh/oh-my-zsh 部署、启动链和本机覆盖 |
+| `_slurm/` | Slurm 用户命令与 DCU 作业模板 |
+| `_snsc/` | SNSC 集群 VS Code Server sysroot 兼容 |
+| `_ssh/` | SSH 密钥、agent、主机别名与快捷入口 |
+| `_vim/` | Vim 部署、gitlink 插件状态、验证和回滚 |
+| `_vscode/` | VS Code Remote Server 清理与兼容入口 |
+| `_windows/` | Windows 批处理、PowerShell、PATH 与安装前提 |
+| `_zerotier/` | ZeroTier 安装、授权、验证和固定网络参数 |
+
+其他稳定入口：
+
+- `_gitignore` 是符号链接，指向仓库根 `.gitignore`；模板包含语言、系统、编辑器、密钥和本仓库历史规则。
+- `_ohmyzsh_install.sh` 保留上游安装流程，用于离线目录不可用时的替代安装。
+- `_claude-code/` 与 `claude-code-v20260706/` 的脚本文件当前都是真实副本；修改脚本行为时应先改版本化维护源，再同步稳定目录。稳定目录 `setup.md` 已完成文档重构，版本化目录中的历史说明保留原状。
+
+操作文档只描述现有脚本和模板，不改变其行为。涉及删除、硬重置、系统升级、重启、密钥覆盖或凭据删除时，文档必须明确风险，执行仍由用户单独确认。
 
 ### 版本化环境配置（`{name}-v{YYYYMMDD}/`）
 

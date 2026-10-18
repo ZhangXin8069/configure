@@ -133,11 +133,13 @@ is_excluded() {
       return 0
       ;;
   esac
-  for pattern in "${USER_EXCLUDES[@]}"; do
-    if [[ "$path" =~ $pattern ]]; then
-      return 0
-    fi
-  done
+  if ((${#USER_EXCLUDES[@]} > 0)); then
+    for pattern in "${USER_EXCLUDES[@]}"; do
+      if [[ "$path" =~ $pattern ]]; then
+        return 0
+      fi
+    done
+  fi
   return 1
 }
 
@@ -163,14 +165,30 @@ is_named_exception() {
   esac
 }
 
-declare -A SEEN_TOP=()
+is_agent_log_name() {
+  local base=$1
+  [[ "$base" =~ ^v[0-9]{8}(-[0-9]+)?\.txt$ ]] ||
+    [[ "$base" =~ ^v[0-9]{10}(-[0-9]+)?\.txt$ ]] ||
+    [[ "$base" =~ ^v[0-9]{12}(-[0-9]+)?\.txt$ ]] ||
+    [[ "$base" =~ ^v[0-9]{14}(-[0-9]+)?\.txt$ ]] ||
+    [[ "$base" =~ ^v[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.txt$ ]] ||
+    [[ "$base" =~ ^v[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.txt$ ]] ||
+    [[ "$base" =~ ^v[0-9]{4}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}-[0-9]{2}(-[0-9]+)?\.txt$ ]]
+}
+
+path_has_tag_name() {
+  local path=$1
+  [[ "$path" =~ (^|[/._-])(stab|dev|bug|test)[0-9]+(_[0-9]+)*([/._-]|$) ]]
+}
+
+SEEN_TOP=$'\n'
 while IFS= read -r -d '' path; do
   [[ "$path" == */* ]] || continue
   top=${path%%/*}
-  if [[ -n "${SEEN_TOP[$top]+seen}" ]]; then
-    continue
-  fi
-  SEEN_TOP[$top]=1
+  case "$SEEN_TOP" in
+    *$'\n'"$top"$'\n'*) continue ;;
+  esac
+  SEEN_TOP="${SEEN_TOP}${top}"$'\n'
   if ! is_excluded "$top/" && ! is_allowed_top "$top"; then
     report WARNING UNLISTED_TOP_DIR "$top/" \
       "top-level directory is outside the form whitelist"
@@ -185,6 +203,11 @@ while IFS= read -r -d '' path; do
   base=${path##*/}
   ext=
   [[ "$base" == *.* ]] && ext=${base##*.}
+
+  if path_has_tag_name "$path"; then
+    report WARNING TAG_NAME_IN_PATH "$path" \
+      "Git tag names may be referenced in update notes, comments, and logs, but must not name paths"
+  fi
 
   if [[ "$base" =~ [[:space:]] ]]; then
     report WARNING FILE_WHITESPACE "$path" "filename contains whitespace"
@@ -215,12 +238,20 @@ while IFS= read -r -d '' path; do
   esac
 
   case "$path" in
+    logs/AGENT.md) ;;
     logs/*)
       case "$ext" in
         log|json|tsv|csv|txt) ;;
         *)
           report WARNING LOG_EXTENSION "$path" \
-            "logs/ only allows log/json/tsv/csv/txt files"
+            "logs/ only allows AGENT.md and log/json/tsv/csv/txt files"
+          ;;
+      esac
+      case "$base" in
+        v[0-9]*.txt)
+          is_agent_log_name "$base" ||
+            report WARNING LOG_TIMESTAMP_NAME "$path" \
+              "agent log must use vYYYYMMDD[HH[MM[SS]]].txt, optional -N suffix, or hyphenated equivalent"
           ;;
       esac
       ;;

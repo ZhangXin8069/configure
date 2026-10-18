@@ -168,7 +168,9 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 检查器输出交叉核对。默认模式中 `FAIL:`/非零错误阻塞基线，`WARN` 要逐条分类为预期状态或
 真实差距，只有真实差距进入差距表；仅在用户要求零警告或 CI 门禁时追加 `--strict`，并如实
 报告其额外失败。检查器固定只读扫描四树；用户收窄目标时，范围外 `WARN` 只作上下文，不扩大
-升级动作。检查器缺失或返回参数错误时继续手工调查，并在摘要中记录该降级。
+升级动作。检查器缺失或返回参数错误时继续手工调查，并在摘要中记录该降级。每个 `FAIL` 都要
+回指具体规则和文件内容；若规则本身误判（例如触发词匹配过窄），先在 `tools/` 增加回归测试并
+修复检查器，不修改合规技能内容。
 
 - 输出摘要：四树是否存在及文件数、技能目录完整性、frontmatter 一致性、脚本/清单类型、
   占位符匹配和技能表登记情况。空目录与缺失目录必须分别报告。
@@ -192,15 +194,15 @@ rg -n 'TBD|TODO|FIXME|实现细节后补|待补充' \
 
 | 类型 | 参考源 | 热榜/检索入口 | 排序字段与用途 | 最近验证 |
 |---|---|---|---|---|
-| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` | 2026-10-16 17:58 CST: docs/API/search 均 200；`agent skills` total=140596，top=`obra/superpowers`（stars=300296） |
-| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 | 2026-10-16 17:58 CST: swagger/API/search 均 200；API `agent skills` 返回 0（可用，空结果） |
-| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` | 2026-10-16 17:58 CST: docs/API/explore 均 200；`agent skills` total=354，top=`gitlab-org/ai-engineering/agent-foundations/agentic-productivity`（star_count=6） |
-| 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc&includeDesc=true`，保留其原生 star 字段；用于补充开源生态样本（遗漏 `includeDesc=true` 时描述命中会返回空列表） | 2026-10-16 17:58 CST: API/explore 均 200；`includeDesc=true` 且 `agent skills` total=36，top=`leeg/chiron-codex-agent-skills`（stars=3） |
-| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 | 2026-10-16 17:58 CST: GitHub API 200；stars=10609，`updated_at=2026-10-16T09:39:31Z`，CC0-1.0 |
-| 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 | 2026-10-16 17:58 CST: 200 |
-| 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 | 2026-10-16 17:58 CST: raw 200 |
-| 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 | 2026-10-16 17:58 CST: raw 200 |
-| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 | 2026-10-16 17:58 CST: 200 |
+| 代码托管 | GitHub | [REST 搜索文档](https://docs.github.com/en/rest/search/search?apiVersion=2022-11-28#search-repositories)；[Repositories API](https://api.github.com/search/repositories)；网页回退 [GitHub Search](https://github.com/search) | API 使用 `sort=stars&order=desc`，字段 `stargazers_count`；网页使用 `type=repositories&s=stars&o=desc` | 2026-10-19 03:20 CST: docs/API/search 均 200；`agent skills` total=143257，top=`obra/superpowers`（stars=301575） |
+| 代码托管 | Gitee | [API 文档](https://gitee.com/api/v5/swagger)；[Gitee API v5](https://gitee.com/api/v5/search/repositories)；[Gitee Search](https://so.gitee.com/) | API 使用 `sort=stars_count&order=desc`；结果字段按 `stars_count`/`stargazers_count` 归一化；网页排序能力不足时只作回退证据 | 2026-10-19 03:20 CST: swagger/API/search 均 200；API `agent skills` 返回 0（可用，空结果） |
+| 代码托管 | GitLab | [Projects API 文档](https://docs.gitlab.com/api/projects/)；[Projects API](https://gitlab.com/api/v4/projects)；[Explore Projects](https://gitlab.com/explore/projects?sort=stars_desc) | API 使用 `order_by=star_count&sort=desc`，字段 `star_count` | 2026-10-19 03:20 CST: docs/API/explore 均 200；`agent skills` 返回 10，top=`gitlab-org/ai-engineering/agent-foundations/agentic-productivity`（star_count=6） |
+| 代码托管 | Codeberg（可选扩展） | [Forgejo repository search API](https://codeberg.org/api/v1/repos/search)；[Explore repositories](https://codeberg.org/explore/repos?sort=stars&order=desc) | API 使用 `sort=stars&order=desc&includeDesc=true`，保留其原生 star 字段；用于补充开源生态样本（遗漏 `includeDesc=true` 时描述命中会返回空列表） | 2026-10-19 03:20 CST: API/explore 均 200；`includeDesc=true` 且 `agent skills` 返回 10，top=`leeg/chiron-codex-agent-skills`（stars=3） |
+| 生态清单 | awesome-opencode | [awesome-opencode/awesome-opencode](https://github.com/awesome-opencode/awesome-opencode)（精选索引见本技能 `references/awesome-opencode.md`） | opencode 生态候选发现入口（官方/插件/主题/agent/资源）；按清单条目核对 README、许可证与兼容性后再登记，不因 star 高直接采纳 | 2026-10-19 03:20 CST: GitHub API 200；stars=10643，`updated_at=2026-10-18T18:35:46Z`，CC0-1.0；README 哈希与固定提交未变 |
+| 规范 | Agent Skills 规范 | [agentskills.io/specification](https://agentskills.io/specification) | 核对目录、frontmatter、命名和加载约束，不参与热榜排名 | 2026-10-19 03:20 CST: 200 |
+| 官方实践 | Anthropic | [anthropics/skills](https://github.com/anthropics/skills/tree/main/skills/skill-creator) | 核对 skill-creator、分级披露和触发描述设计 | 2026-10-19 03:20 CST: raw 200 |
+| 社区实践 | obra/superpowers | [writing-skills](https://github.com/obra/superpowers/tree/main/skills/writing-skills)、[verification-before-completion](https://github.com/obra/superpowers/tree/main/skills/verification-before-completion) | 核对 SDO、验证闸门和证据闭环 | 2026-10-19 03:20 CST: writing raw 200；verification 首次 30s 超时，延长至 60s 后 200 |
+| 用户指定实践 | chx6/muIon-beam | [`.codex/skills`](https://gitee.com/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills) | 仅吸收 `team` 的能力匹配/写者隔离与 `evolution` 的固定来源/安全采纳原则；项目路径、会话脚本和领域流程不纳入本库 | 2026-10-19 03:20 CST: 200 |
 
 以上来源是“发现候选”和“核对规则”的不同层：热榜只决定先看谁，规范/官方/社区原文才决定是否吸收。
 外部页面可能调整参数，执行时以接口返回和当前文档为准，并在终端记录实际 URL、HTTP 状态和读取时间。

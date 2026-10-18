@@ -24,10 +24,13 @@ complex="$TMP_ROOT/PyQCU"
 make_repo "$complex"
 mkdir -p "$complex/pyqcu" "$complex/docs" "$complex/logs" "$complex/Misc"
 printf '' >"$complex/pyqcu/GoodName.py"
+printf '' >"$complex/pyqcu/dev26_1_solver.py"
 printf '' >"$complex/pyqcu/test_bad.py"
 printf '' >"$complex/pyqcu/notes.log"
 printf '' >"$complex/docs/guide.txt"
 printf '' >"$complex/logs/run.log"
+printf '' >"$complex/logs/v20261016bad.txt"
+printf '' >"$complex/logs/notes.md"
 printf '' >"$complex/Misc/tool.sh"
 git -C "$complex" add -f .
 complex_status_before=$(git -C "$complex" status --porcelain=v1)
@@ -41,12 +44,20 @@ set -e
   fail "audit modified the complex fixture"
 grep -q $'^WARNING\tFILE_UPPERCASE\tpyqcu/GoodName.py\t' <<<"$complex_output" ||
   fail "missing FILE_UPPERCASE finding"
+grep -q $'^WARNING\tTAG_NAME_IN_PATH\tpyqcu/dev26_1_solver.py\t' <<<"$complex_output" ||
+  fail "missing TAG_NAME_IN_PATH finding"
 grep -q $'^WARNING\tDOC_EXTENSION\tdocs/guide.txt\t' <<<"$complex_output" ||
   fail "missing DOC_EXTENSION finding"
 grep -q $'^WARNING\tLOG_OUTSIDE_LOGS\tpyqcu/notes.log\t' <<<"$complex_output" ||
   fail "missing LOG_OUTSIDE_LOGS finding"
+grep -q $'^WARNING\tLOG_TIMESTAMP_NAME\tlogs/v20261016bad.txt\t' <<<"$complex_output" ||
+  fail "missing LOG_TIMESTAMP_NAME finding"
+grep -q $'^WARNING\tLOG_EXTENSION\tlogs/notes.md\t' <<<"$complex_output" ||
+  fail "missing LOG_EXTENSION finding"
 grep -q $'^WARNING\tUNLISTED_TOP_DIR\tMisc/\t' <<<"$complex_output" ||
   fail "missing UNLISTED_TOP_DIR finding"
+[[ "$(grep -c $'^WARNING\tUNLISTED_TOP_DIR\tMisc/\t' <<<"$complex_output")" -eq 1 ]] ||
+  fail "top-level warning should be reported once"
 grep -q $'^WARNING\tTEST_LOCATION\tpyqcu/test_bad.py\t' <<<"$complex_output" ||
   fail "missing TEST_LOCATION finding"
 
@@ -72,6 +83,15 @@ printf '' >"$simple/data/AGENTS.md"
 printf '' >"$simple/data/README.md"
 printf '' >"$simple/docs/task.md"
 printf '' >"$simple/logs/run.log"
+printf '' >"$simple/logs/AGENT.md"
+printf '' >"$simple/logs/v20261016.txt"
+printf '' >"$simple/logs/v2026101617.txt"
+printf '' >"$simple/logs/v202610161725.txt"
+printf '' >"$simple/logs/v20261016172512.txt"
+printf '' >"$simple/logs/v202610161725-2.txt"
+printf '' >"$simple/logs/v2026-10-16-17.txt"
+printf '' >"$simple/logs/v2026-10-16-17-25.txt"
+printf '' >"$simple/logs/v2026-10-16-17-25-12.txt"
 printf '' >"$simple/refer/README.md"
 printf '' >"$simple/skills/README.md"
 printf '' >"$simple/hooks/README.md"

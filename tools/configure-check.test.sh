@@ -107,6 +107,35 @@ set -e
 assert_contains "$strict_output" '严格模式'
 printf 'PASS: --strict 将警告提升为失败\n'
 
+agent_trigger_repo=$test_root/agent-trigger-repo
+mkdir -p "$agent_trigger_repo/skills/demo" "$agent_trigger_repo/tools" "$agent_trigger_repo/hooks" "$agent_trigger_repo/plugins"
+sed 's/description: Use when testing configure-check fixtures./description: 当 agent 主任务完成并需要归档时使用。/' \
+    "$repo/skills/demo/SKILL.md" > "$agent_trigger_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$agent_trigger_repo/skills/demo/AGENTS.md"
+cp "$strict_repo/skills/AGENTS.md" "$agent_trigger_repo/skills/AGENTS.md"
+
+set +e
+agent_trigger_output=$(bash "$checker" --root "$agent_trigger_repo" 2>&1)
+agent_trigger_status=$?
+set -e
+(( agent_trigger_status == 0 )) || fail "合法的“当 agent”触发描述不应失败\n输出：\n$agent_trigger_output"
+printf 'PASS: “当 agent”触发描述被接受\n'
+
+missing_trigger_repo=$test_root/missing-trigger-repo
+mkdir -p "$missing_trigger_repo/skills/demo" "$missing_trigger_repo/tools" "$missing_trigger_repo/hooks" "$missing_trigger_repo/plugins"
+sed 's/description: Use when testing configure-check fixtures./description: 归档任务日志。/' \
+    "$repo/skills/demo/SKILL.md" > "$missing_trigger_repo/skills/demo/SKILL.md"
+cp "$repo/skills/demo/AGENTS.md" "$missing_trigger_repo/skills/demo/AGENTS.md"
+cp "$strict_repo/skills/AGENTS.md" "$missing_trigger_repo/skills/AGENTS.md"
+
+set +e
+missing_trigger_output=$(bash "$checker" --root "$missing_trigger_repo" 2>&1)
+missing_trigger_status=$?
+set -e
+(( missing_trigger_status != 0 )) || fail '缺少触发条件的 description 不应通过检查'
+assert_contains "$missing_trigger_output" 'description 缺少明确触发条件'
+printf 'PASS: 缺少触发条件的 description 被拒绝\n'
+
 malformed_repo=$test_root/malformed-repo
 mkdir -p "$malformed_repo/skills/demo" "$malformed_repo/tools" "$malformed_repo/hooks" "$malformed_repo/plugins"
 cp "$repo/skills/demo/SKILL.md" "$malformed_repo/skills/demo/SKILL.md"
