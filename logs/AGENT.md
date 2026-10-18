@@ -18,3 +18,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## dev28-local-tag - final - 2026-10-19 04:05:44 +0800
+- 主任务: 提交常驻 log 技能改动并创建 dev28 本地开发标签
+- 日志文件: logs/v2026101904-2.txt
+- 文件大小: 5110 bytes
+- 触发原因: 任务完成
+- 关键内容: 提交 9 个路径，创建 annotated tag dev28；本地 follow 链与 peeled commit 校验通过，未推送远程
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
