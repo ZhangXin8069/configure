@@ -9,5 +9,6 @@
 改写已推送标签、系统配置和凭据操作仍须单独确认。其他情况下遵循上级 `AGENTS.md` 公共契约。
 
 `scripts/form-audit.sh` 和 `scripts/form-snapshot-verify.sh` 必须保持只读；前者只报告
-路径/布局候选冲突，后者只校验离线参考快照。任何修复都由 `SKILL.md` 的批准流程驱动。
+路径/布局候选冲突，包括 `logs/AGENT.md`、agent 时间戳日志命名和标签形路径；后者只校验
+离线参考快照。任何修复都由 `SKILL.md` 的批准流程驱动。
 修改脚本后运行 `scripts/form-scripts.test.sh`。

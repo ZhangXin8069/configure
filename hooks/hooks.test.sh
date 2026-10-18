@@ -105,6 +105,7 @@ raise SystemExit(0 if valid else 1)
 
 repo=$test_root/repo
 mkdir -p "$repo"
+repo_realpath=$(cd -- "$repo" && pwd -P)
 git -C "$repo" init -q
 
 set +e
@@ -123,6 +124,7 @@ printf '%s\n' '# nested instructions' > "$repo/nested/AGENTS.md"
 printf '%s\n' '# codex instructions' > "$repo/CODEX.md"
 instruction_outside_dir=$test_root/outside-instructions
 mkdir -p "$instruction_outside_dir"
+instruction_outside_realpath=$(cd -- "$instruction_outside_dir" && pwd -P)
 printf '%s\n' '# outside instructions' > "$instruction_outside_dir/AGENTS.md"
 ln -s "$repo/nested" "$instruction_outside_dir/linked-nested"
 set +e
@@ -132,14 +134,14 @@ set -e
 
 (( hierarchical_status == 0 )) || fail "层级说明文件预检失败\n输出：\n$output"
 assert_contains "$output" 'instruction[1]='
-assert_contains "$output" "$repo/nested/AGENTS.md"
+assert_contains "$output" "$repo_realpath/nested/AGENTS.md"
 assert_contains "$output" 'instruction[2]='
-assert_contains "$output" "$repo/AGENTS.md"
+assert_contains "$output" "$repo_realpath/AGENTS.md"
 assert_contains "$output" 'instruction[3]='
-assert_contains "$output" "$repo/CODEX.md"
+assert_contains "$output" "$repo_realpath/CODEX.md"
 assert_contains "$output" 'instruction_count=3'
-assert_not_contains "$output" "$instruction_outside_dir/AGENTS.md"
-assert_not_contains "$output" "$instruction_outside_dir/linked-nested"
+assert_not_contains "$output" "$instruction_outside_realpath/AGENTS.md"
+assert_not_contains "$output" "$instruction_outside_realpath/linked-nested"
 printf 'PASS: session-start 使用物理路径并限制层级说明文件在仓库内\n'
 
 instruction_symlink_repo=$test_root/instruction-symlink-repo
