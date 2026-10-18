@@ -2,6 +2,8 @@
 
 Clash 代理环境的本地安装包包装目录，不直接部署到 `$HOME`。目录中的 `clash-for-linux.tar.gz` 是外来 `clash-for-linux` gitlink 的离线归档，`setup.sh` 负责动态定位、解压和检查。
 
+- `setup.md`：解压、检查、临时启用代理、验证和清理边界。
+
 ## 使用约定
 
 - `bash setup.sh --check`：只检查已解压的 `env.sh`，包括 Bash 语法、代理变量和增强检查函数。

@@ -213,29 +213,71 @@ if [[ -d "$ROOT/skills" ]]; then
                 fail "技能 $skill_name 未登记到 skills/AGENTS.md 技能表"
             fi
 
-            first_line="$(sed -n '1p' "$skill_file")"
-            frontmatter_end="$(awk 'NR > 1 && $0 == "---" { print NR; exit }' "$skill_file")"
-            if [[ "$first_line" != "---" || -z "$frontmatter_end" ]]; then
+            if ! skill_content=$(<"$skill_file"); then
+                fail "技能 $skill_name 的 SKILL.md 无法读取"
+                continue
+            fi
+
+            first_line=${skill_content%%$'\n'*}
+            frontmatter_closed=false
+            name_matches=false
+            description_seen=false
+            description_text=
+            in_description=false
+            metadata_seen=false
+            openclaw_seen=false
+            line_number=0
+
+            if [[ "$first_line" == "---" ]]; then
+                while IFS= read -r line || [[ -n "$line" ]]; do
+                    line_number=$((line_number + 1))
+                    ((line_number == 1)) && continue
+                    if [[ "$line" == '---' ]]; then
+                        frontmatter_closed=true
+                        break
+                    fi
+                    if [[ "$line" == "name: $skill_name" ]]; then
+                        name_matches=true
+                    fi
+                    if [[ "$line" == 'metadata:' ]]; then
+                        metadata_seen=true
+                        in_description=false
+                    elif [[ "$line" == '  openclaw:' ]]; then
+                        openclaw_seen=true
+                    elif [[ "$line" =~ ^description:[[:space:]]*(.*)$ ]]; then
+                        description_seen=true
+                        in_description=true
+                        description_text="${BASH_REMATCH[1]}"$'\n'
+                    elif [[ "$in_description" == true &&
+                        "$line" =~ ^[A-Za-z_][A-Za-z0-9_-]*: ]]; then
+                        in_description=false
+                    elif [[ "$in_description" == true ]]; then
+                        description_text+="$line"$'\n'
+                    fi
+                done <<< "$skill_content"
+            fi
+
+            if [[ "$first_line" != "---" || "$frontmatter_closed" != true ]]; then
                 fail "技能 $skill_name 的 frontmatter 不完整"
             else
-                frontmatter="$(sed -n "1,${frontmatter_end}p" "$skill_file")"
-                if ! grep -Fqx "name: $skill_name" <<< "$frontmatter"; then
+                if [[ "$name_matches" != true ]]; then
                     fail "技能 $skill_name 的 frontmatter name 与目录不一致"
                 fi
-                if ! grep -Eq '^description:[[:space:]]*' <<< "$frontmatter"; then
+                if [[ "$description_seen" != true ]]; then
                     fail "技能 $skill_name 缺少 description"
                 fi
-                if ! grep -Eq '当用户|Use when' <<< "$frontmatter"; then
+                if [[ "$description_text" != *'当用户'* &&
+                    "$description_text" != *'当 agent'* &&
+                    "$description_text" != *'Use when'* ]]; then
                     fail "技能 $skill_name 的 description 缺少明确触发条件"
                 fi
-                if ! grep -Eq '^metadata:[[:space:]]*$' <<< "$frontmatter" ||
-                    ! grep -Eq '^  openclaw:[[:space:]]*$' <<< "$frontmatter"; then
+                if [[ "$metadata_seen" != true || "$openclaw_seen" != true ]]; then
                     fail "技能 $skill_name 缺少 metadata.openclaw"
                 fi
             fi
 
             for heading in '执行前置' '核心原则' 'Git 检查' '触发时机' '工作流程' '错误处理' '注意事项'; do
-                if ! grep -Fq "## $heading" "$skill_file"; then
+                if [[ "$skill_content" != *"## $heading"* ]]; then
                     fail "技能 $skill_name 缺少章节：$heading"
                 fi
             done

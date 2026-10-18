@@ -2,8 +2,8 @@
 
 来源：**awesome-opencode/awesome-opencode**（CC0-1.0）
 URL：<https://github.com/awesome-opencode/awesome-opencode>
-抓取日期：2026-08-27；元数据复核：2026-10-16（GitHub API stars=10609，
-`updated_at=2026-10-16`；README SHA256
+抓取日期：2026-08-27；元数据复核：2026-10-19（GitHub API stars=10643，
+`updated_at=2026-10-18`；README SHA256
 `e2ccbdd8bc238c405aaddd5fb3ee95f1d27c9c521027805a9343fa8f1e12f858`，最后 README 提交
 `bcc5c03cec19789b45ef9af4a969e3fe3fd7431b` 为 2026-07-03，早于本快照）。本轮只复核上游
 元数据，清单正文仍以 2026-08-27 快照为基线；上游正文发生变化时再整体刷新并保留固定 ref。
