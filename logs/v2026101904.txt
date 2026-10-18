@@ -1,0 +1,116 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-19 04:01:54 +0800
+批次: persistent-log-skill
+主任务: 将 log 技能追加为默认常驻辅助技能
+触发原因: 任务完成
+摘要: log 默认随任一所选技能启用，用户明确关闭仅作用于当前任务；启动器、公共契约与 auto/all/make 编排已同步
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+
+### S1 — 定位技能默认启用链路
+- 目标:
+  - 确认“常驻 skill”需要在启动器提示、技能公共契约和技能正文中同时落实。
+- 命令/操作:
+  - 定向读取 `bin/agent-prompt.txt`、`skills/AGENTS.md`、`skills/log/SKILL.md`、`skills/auto/SKILL.md`、`skills/all/SKILL.md`、`skills/make/SKILL.md`。
+  - 检索现有 `log` 调用与默认技能规则。
+- 关键输出:
+  - 启动器原先只规定未指定技能时默认使用 `auto+all`。
+  - 公共契约原先写 `log` 在阶段成果或任务完成时“按需调用”，无法覆盖单独调用其他技能。
+- 退出码: 0
+- 证据与判断:
+  - 必须同时修改注入提示与技能契约，才能让常驻规则跨 agent、跨单技能调用生效。
+
+### S2 — 实施常驻语义
+- 目标:
+  - 让 `log` 在当前任务未被用户明确关闭时，默认随任一技能启用。
+- 命令/操作:
+  - 更新启动器提示，明确 `log` 是常驻辅助技能，包括单独调用其他技能。
+  - 更新技能公共契约，定义默认启用、门控点执行、当前任务级显式退出。
+  - 更新 `log` 的 description、执行前置、触发时机、错误处理和注意事项。
+  - 更新 `auto`、`all`、`make` 的收尾流程与技能表摘要。
+- 关键输出:
+  - 常驻不等于逐命令创建日志，只在阶段成果、一般记录或最终完成门控点执行。
+  - 用户明确说“不记录日志/关闭 log”时，仅对当前任务停用。
+- 退出码: 0
+- 证据与判断:
+  - 双保险链路为启动器默认注入 + 技能目录公共契约；编排器正文再次明确收尾行为。
+
+### S3 — 验证
+- 目标:
+  - 验证文档结构、日志写入、Shell 语法和启动器集成未回归。
+- 命令/操作:
+  - `bash skills/form/scripts/form-audit.sh --root . --strict --quiet`
+  - `bash skills/form/scripts/form-snapshot-verify.sh --quiet`
+  - `bash skills/log/scripts/write-log.test.sh`
+  - `bash -n bin/agent.sh bin/agent-dispatch.sh skills/log/scripts/write-log.sh skills/log/scripts/write-log.test.sh`
+  - `bash bin/agent.test.sh`
+  - `git diff --check`
+- 关键输出:
+  - 格式审计、快照校验、Shell 语法检查和 `git diff --check` 均以退出码 0 通过。
+  - `write-log tests: PASS`。
+  - 启动器集成测试全部 PASS，覆盖 Codex、OpenCode、Claude、配置解析、恢复、锁、模型目录和 secure 变体。
+- 退出码: 0
+- 证据与判断:
+  - 本次修改未引入结构、日志写入或启动器回归。
+
+## 验证与证据
+- 测试/检查:
+  - 格式审计、快照校验、log 写入回归、Shell 语法、启动器集成、Git whitespace 检查。
+- 结果:
+  - 全部通过。
+- 未验证项:
+  - 未在真实的 Windows PowerShell 运行时执行测试；本次未改 PowerShell 代码，Windows 运行时复用同一份 `agent-prompt.txt`。
+
+## 变更与产物
+- 文件:
+  - `bin/agent-prompt.txt`
+  - `skills/AGENTS.md`
+  - `skills/log/AGENTS.md`
+  - `skills/log/SKILL.md`
+  - `skills/auto/SKILL.md`
+  - `skills/all/SKILL.md`
+  - `skills/make/SKILL.md`
+- 产物:
+  - 常驻 `log` 默认启用规则与当前任务级显式退出语义。
+  - 单技能调用、`auto`、`all`、`make` 的一致归档收口。
+- 未改动范围:
+  - 未修改日志写入脚本。
+  - 未暂存、提交、推送或打标签。
+
+## 风险、限制与下一步
+- 风险:
+  - 常驻规则会增加每项任务对 `log/SKILL.md` 的读取开销，但不会自动为每条命令生成日志。
+- 阻塞:
+  - 无。
+- 下一步:
+  - 新启动或后续任务自动应用新规则；若需关闭，用户可在当前任务明确说明“关闭 log”或“不记录日志”。
+
+## 用户输入指令
+将log-skill追加为常驻skill:除非用户明确说明,本skill默认保持启用(包括单独调用其他skill时)
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- 在 [agent-prompt.txt](/Users/zhangxin/configure/bin/agent-prompt.txt:21) 将 `log` 定义为启动器常驻辅助技能：用户未明确关闭时，包括单独调用其他技能在内都必须加载并在门控点执行。
+- 在 [skills/AGENTS.md](/Users/zhangxin/configure/skills/AGENTS.md:26) 增加公共契约，明确默认启用、显式退出只作用于当前任务，并说明常驻不要求逐命令记录。
+- 在 [log/SKILL.md](/Users/zhangxin/configure/skills/log/SKILL.md:21) 与 [log/AGENTS.md](/Users/zhangxin/configure/skills/log/AGENTS.md:5) 固化常驻触发语义。
+- 同步 [auto/SKILL.md](/Users/zhangxin/configure/skills/auto/SKILL.md:59)、[all/SKILL.md](/Users/zhangxin/configure/skills/all/SKILL.md:169) 和 [make/SKILL.md](/Users/zhangxin/configure/skills/make/SKILL.md:162) 的收尾流程及技能表摘要。
+
+**推理依据**
+常驻规则必须同时写入启动器提示与技能公共契约，才会对 Codex、OpenCode、Claude 及工作区单技能调用共同生效。保留阶段、一般、最终三个门控点，避免“常驻”退化为逐命令记录。用户显式关闭按当前任务处理，避免一次例外永久关闭后续日志。
+
+**验证结果**
+- `form-audit.sh --strict --quiet`：通过。
+- `form-snapshot-verify.sh --quiet`：通过。
+- `write-log.test.sh`：`PASS`。
+- `bash -n`：通过。
+- `bin/agent.test.sh`：全部通过。
+- `git diff --check`：通过。
+
+**后续步骤**
+无。新启动的 agent 或后续任务会自动应用常驻规则；当前任务可用“关闭 log/不记录日志”明确退出。
+--- report end ---
