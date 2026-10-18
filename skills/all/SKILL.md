@@ -63,6 +63,7 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
 - 用户要求分派："看情况用合适的技能"、"你看着办，反复试到最好"
 - 与其他技能配合：生成项目 → 首轮调用 make；中途报错 → 该轮转 debug；
   性能不足 → 该轮转 optim；收敛后打标签 → tag；收敛后复查 → diff；
+  阶段成果或收敛后归档 → 常驻 log（用户明确关闭除外）；
   多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；skill 库升级 → up；
   仓库命名/目录/交付格式整改 → form；
   需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；
@@ -165,7 +166,7 @@ fast 激活时，先把 `fast_context.optimization_gain_stop` 和 `fast_context.
    `effective_rounds_max`；未收敛且未超限 → 继续下一轮；向用户简报（本轮结论/改动/收益/
    剩余轮数与有效配置），重大方向变更先与用户确认。
 
-### Step 6. 收尾（diff + init + tag）
+### Step 6. 收尾（diff + init + tag + log）
 
 1. **改动复查**（diff）：先概览（`git diff --stat`）后详情（逐文件）；
    边界校验：冲突标记（`git diff --check`）、调试残留、未跟踪文件、二进制、重命名；
@@ -174,7 +175,9 @@ fast 激活时，先把 `fast_context.optimization_gain_stop` 和 `fast_context.
 3. **版本标签**（tag，用户要求时）：先看后打——分析基线以来变更，构建诚实分组变更清单；
    注释标签消息格式 `follow <前一标签>, 1. 变更一; [opencode].`；
    仅在用户明确要求对外发布时推送；破坏性操作先警告；
-4. **Git 检查**：涉及文件改动时按上级公共契约执行 `git diff --check` 与定向复查；不自动暂存、提交或推送。
+4. **常驻归档**（log，默认启用）：用户未明确关闭日志时，在最终报告正文形成后按 `log` 的
+   `final` 模式归档；阶段成果按 `stage` 模式归档。归档不替代 diff、init 或 tag；
+5. **Git 检查**：涉及文件改动时按上级公共契约执行 `git diff --check` 与定向复查；不自动暂存、提交或推送。
 
 ### Step 7. 总结（结构化输出）
 
@@ -188,6 +191,7 @@ fast 激活时，先把 `fast_context.optimization_gain_stop` 和 `fast_context.
    optim:  <N 次迭代>（基线 → 优化后，收益量化，无则省略）
    产物:   <产物路径与格式>
    子技能: <实际调用的技能>
+   日志:   <log 模式、文件与索引；用户明确关闭或写入失败时说明>
    Git:    <git diff --check 与定向复查结果；无 Git 或无改动则跳过>
    标签:   <tag 创建与推送结果，无则省略>
    遗留:   <未收敛项/权衡/待确认项，无则省略>

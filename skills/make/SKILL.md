@@ -16,8 +16,8 @@ metadata:
 
 
 生成对象为**用户指定的项目**。本技能不重复发明流程，而是**按需编排**本目录下的全部相关技能；
-核心链为 `init/diff/analy/plan → 实现 → test → debug/optim → diff → init/tag`，
-并按"解析需求 → 调查规划 → 实现 → 测试 → 优化 → 复查 → 归档 → 打标"推进；分析报告、
+核心链为 `init/diff/analy/plan → 实现 → test → debug/optim → diff → init/tag/log`，
+并按"解析需求 → 调查规划 → 实现 → 测试 → 优化 → 复查 → skill 归集 → 打标 → 日志归档"推进；分析报告、
 格式治理、技能维护、并行派发等阶段按需接入相应技能，执行时逐项落实其要求。
 
 ## 核心原则（本目录所有技能要求汇总）
@@ -66,6 +66,7 @@ metadata:
 | 分析报告 | analy | 结论附 `文件:行号`；`\lstinputlisting` 直引原文件；编译 PDF 到 `docs/` |
 | 复查 | diff | 只读概览（--stat）→详情；边界校验（冲突标记/调试残留/未跟踪/二进制/重命名） |
 | 归档 | init | agent 生成内容 → 完整 skill 归集到本库根 `.opencode/skills/`；AGENTS.md 维护 |
+| 日志归档 | log | 默认常驻；阶段成果或最终报告写入 Git 根目录 `logs/` 并维护 `logs/AGENT.md` |
 | 打标 | tag | 先看后打；注释标签；消息格式 `follow <前标签>, 1. ...; [opencode].`；远程同步须获授权 |
 
 ## 工作流程
@@ -158,7 +159,7 @@ find . -type f -not -path "./.git/*" -not -path "*/node_modules/*" \
   - LaTeX（中文用 ctex+xelatex）编译 PDF 到当前工作目录 `docs/`，
   命名 `analy_<slug>_<YYYYMMDD>.pdf`；依据编译退出码和终端错误重试。
 
-### Step 8. 收尾（diff + init + tag）
+### Step 8. 收尾（diff + init + tag + log）
 
 1. **改动复查**（diff）：先概览（`git diff --stat` / `--numstat`）后详情（逐文件），
    边界校验：冲突标记（`git diff --check`）、调试残留、未跟踪文件（`git status` 中 `??`）、
@@ -170,7 +171,9 @@ find . -type f -not -path "./.git/*" -not -path "*/node_modules/*" \
    注释标签消息格式 `follow <前一标签>, 1. 变更一; 2. 变更二; [opencode].`；
    远程同步须获明确授权；类型按上下文推断（无信号默认 dev）；
    破坏性操作（删除/改写已推送标签）先警告再执行；
-4. **Git 检查**：按公共契约执行检查；不自动暂存、提交或推送；无 Git 或无改动立即跳过。
+4. **日志归档**（log，默认启用）：用户未明确关闭日志时，形成最终报告正文后按 `final`
+   模式归档；阶段成果按 `stage` 模式归档。归档不替代 init 或 tag；
+5. **Git 检查**：按公共契约执行检查；不自动暂存、提交或推送；无 Git 或无改动立即跳过。
 
 ### Step 9. 总结（结构化输出）
 
@@ -183,6 +186,7 @@ find . -type f -not -path "./.git/*" -not -path "*/node_modules/*" \
    optim:  <N 次迭代>（基线 → 优化后，收益量化，无则省略）
    产物:   <产物路径与格式，如 test_out/、docs/xxx.pdf>
    归档:   <skill 归集/AGENTS.md 更新，无则省略>
+   日志:   <log 模式、文件与索引；用户明确关闭或写入失败时说明>
    标签:   <tag 创建与推送结果，无则省略>
   Git:    <git diff --check 与定向复查结果；无 Git 或无改动则跳过>
   遗留:   <未覆盖项/待确认项，无则省略>
