@@ -11,6 +11,8 @@
 `scripts/form-audit.sh`、`scripts/form-large-files-check.sh` 和
 `scripts/form-snapshot-verify.sh` 必须保持只读；审计脚本报告路径/布局候选冲突，大文件
 脚本报告超限暂存内容，快照脚本校验离线参考。`scripts/form-agents-sync.sh` 只更新根
-`AGENTS.md`/`AGENT.md` 的 `form-skill` 标记块，不改写块外本地约定。任何仓库修复都由
+`AGENTS.md` 的 `form-skill` 标记块，不改写块外本地约定。任何仓库修复都由
 `SKILL.md` 的批准流程驱动。
+所有目录的 agent 指令文件统一使用 `AGENTS.md`；`AGENT.md` 是历史输入错误。两者在同一
+目录并存时，必须先合并有效规则到 `AGENTS.md`、确认无内容丢失，再删除单数文件。
 修改脚本后运行 `scripts/form-scripts.test.sh`。

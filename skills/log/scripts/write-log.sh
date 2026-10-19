@@ -104,10 +104,10 @@ case "$LOG_DIR_REAL/" in
   *) die "logs directory resolves outside the Git root: $LOG_DIR_REAL" ;;
 esac
 
-INDEX_FILE="$LOG_DIR/AGENT.md"
-[[ ! -L "$INDEX_FILE" ]] || die "logs/AGENT.md must not be a symlink"
+INDEX_FILE="$LOG_DIR/AGENTS.md"
+[[ ! -L "$INDEX_FILE" ]] || die "logs/AGENTS.md must not be a symlink"
 [[ ! -e "$INDEX_FILE" || -f "$INDEX_FILE" ]] ||
-  die "logs/AGENT.md must be a regular file"
+  die "logs/AGENTS.md must be a regular file"
 
 GENERATED_AT=$(date '+%Y-%m-%d %H:%M:%S %z')
 BATCH=${BATCH:-$GENERATED_AT}
@@ -225,7 +225,7 @@ while :; do
   LOG_REL="logs/${LOG_FILE##*/}"
 
   if git -C "$REPO_ROOT" check-ignore -q -- "$LOG_REL" ||
-     git -C "$REPO_ROOT" check-ignore -q -- 'logs/AGENT.md'; then
+     git -C "$REPO_ROOT" check-ignore -q -- 'logs/AGENTS.md'; then
     die "log path is ignored by Git: $LOG_REL"
   fi
 

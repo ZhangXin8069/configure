@@ -66,7 +66,7 @@ metadata:
 | 分析报告 | analy | 结论附 `文件:行号`；`\lstinputlisting` 直引原文件；编译 PDF 到 `docs/` |
 | 复查 | diff | 只读概览（--stat）→详情；边界校验（冲突标记/调试残留/未跟踪/二进制/重命名） |
 | 归档 | init | agent 生成内容 → 完整 skill 归集到本库根 `.opencode/skills/`；AGENTS.md 维护 |
-| 日志归档 | log | 默认常驻；阶段成果或最终报告写入 Git 根目录 `logs/` 并维护 `logs/AGENT.md` |
+| 日志归档 | log | 默认常驻；阶段成果或最终报告写入 Git 根目录 `logs/` 并维护 `logs/AGENTS.md` |
 | 打标 | tag | 先看后打；注释标签；消息格式 `follow <前标签>, 1. ...; [opencode].`；远程同步须获授权 |
 
 ## 工作流程
