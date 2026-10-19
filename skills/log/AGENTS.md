@@ -1,7 +1,7 @@
 # AGENTS.md — log 技能目录
 
 本目录实现 `log` 技能：在主任务阶段成果、一般记录和任务完成三个门控点，将高价值日志、
-全文报告及最终用户指令归档到 Git 根目录的 `logs/`，并维护 `logs/AGENT.md` 批次索引。
+全文报告及最终用户指令归档到 Git 根目录的 `logs/`，并维护 `logs/AGENTS.md` 批次索引。
 `log` 是常驻辅助技能：当前任务用户未明确关闭日志时，单独调用其他技能也默认启用；
 常驻只控制门控点归档，不要求逐命令建日志。
 `SKILL.md` 是流程权威；`scripts/write-log.sh` 负责确定性写入，`scripts/write-log.test.sh` 覆盖

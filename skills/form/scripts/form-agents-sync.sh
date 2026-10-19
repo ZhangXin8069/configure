@@ -10,12 +10,12 @@ usage() {
 用法: form-agents-sync.sh [--root DIR] [--target FILE] [--content FILE]
                           [--check] [--quiet]
 
-在仓库根规则文件中插入或更新 form 标记块。未指定 --target 时优先 AGENTS.md，
-其次 AGENT.md；两者都不存在时创建 AGENTS.md。内容来自 --content 或标准输入。
+在仓库根规则文件 AGENTS.md 中插入或更新 form 标记块；文件不存在时创建。
+内容来自 --content 或标准输入。
 
 选项:
   --root DIR      Git 仓库根目录，默认使用当前仓库
-  --target FILE   根规则文件名：AGENTS.md 或 AGENT.md
+  --target FILE   根规则文件名，仅支持 AGENTS.md
   --content FILE  待托管的 Markdown 内容；省略时读取标准输入
   --check         只检查不写入；当前已一致返回 0，需要更新返回 1
   --quiet         隐藏成功状态
@@ -88,18 +88,12 @@ GIT_ROOT=$(cd "$GIT_ROOT" && pwd -P)
   die "--root 必须是 Git 根目录: $GIT_ROOT"
 
 if [[ -z "$TARGET" ]]; then
-  if [[ -e "$ROOT/AGENTS.md" ]]; then
-    TARGET=AGENTS.md
-  elif [[ -e "$ROOT/AGENT.md" ]]; then
-    TARGET=AGENT.md
-  else
-    TARGET=AGENTS.md
-  fi
+  TARGET=AGENTS.md
 fi
 
 case "$TARGET" in
-  AGENTS.md|AGENT.md) ;;
-  *) die "--target 只能是 AGENTS.md 或 AGENT.md" ;;
+  AGENTS.md) ;;
+  *) die "--target 只能是 AGENTS.md" ;;
 esac
 
 TARGET_PATH="$ROOT/$TARGET"

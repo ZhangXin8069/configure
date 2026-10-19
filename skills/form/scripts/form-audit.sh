@@ -214,6 +214,13 @@ while IFS= read -r -d '' path; do
   fi
 
   case "$base" in
+    AGENT.md)
+      report ERROR AGENT_FILE_SINGULAR "$path" \
+        "agent instruction files must use AGENTS.md; merge or rename AGENT.md"
+      ;;
+  esac
+
+  case "$base" in
     *.bak|*.tmp|*.orig|*.rej|*.swp|*.swo|*.sw?)
       report ERROR STALE_BACKUP "$path" "tracked temporary or backup file"
       ;;
@@ -238,13 +245,13 @@ while IFS= read -r -d '' path; do
   esac
 
   case "$path" in
-    logs/AGENT.md) ;;
+    logs/AGENTS.md) ;;
     logs/*)
       case "$ext" in
         log|json|tsv|csv|txt) ;;
         *)
           report WARNING LOG_EXTENSION "$path" \
-            "logs/ only allows AGENT.md and log/json/tsv/csv/txt files"
+            "logs/ only allows AGENTS.md and log/json/tsv/csv/txt files"
           ;;
       esac
       case "$base" in

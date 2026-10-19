@@ -5,7 +5,7 @@
 | 目录 | 允许内容 | 清理规则 |
 |---|---|---|
 | `docs/` | 本次任务 TeX、PDF、Markdown、图片附件 | 不保留旧任务临时文档；历史需要时用 Git 回溯 |
-| `logs/` | `AGENT.md` 索引、任务需求单、agent 三态时间戳日志、`log/json/tsv/csv/txt` 工具/历史日志 | 检查 `vYYYYMMDD[HH[MM[SS]]].txt` 命名；清理候选先查引用，保留用户历史日志 |
+| `logs/` | `AGENTS.md` 索引、任务需求单、agent 三态时间戳日志、`log/json/tsv/csv/txt` 工具/历史日志 | 检查 `vYYYYMMDD[HH[MM[SS]]].txt` 命名；清理候选先查引用，保留用户历史日志 |
 | `data/` | 历史任务 `h5/hdf5/pt/npy/npz/lime` 等数据 | `.gitignore` 排除内容，只跟踪说明和忽略文件 |
 | `<lowercase-repo>/testing/` | 复杂库测试代码与调用脚本 | 按功能组织；通用测试合并后保留默认可运行入口 |
 | 简单库功能目录 | `*.test.sh` 与简单 smoke 测试 | 清理失败实验与重复脚本，保留可复用回归 |
@@ -99,9 +99,10 @@ form 审计与整改
 
 ## 6. 根 AGENTS.md 本地章节模板
 
-每次在 Git 库运行 `form` 都同步根规则文件：优先已有 `AGENTS.md`，其次已有
-`AGENT.md`，二者都不存在时创建 `AGENTS.md`。同步器只更新
+每次在 Git 库运行 `form` 都同步根规则文件 `AGENTS.md`；不存在时创建。同步器只更新
 `<!-- form-skill:start -->` 与 `<!-- form-skill:end -->` 之间的区块，块外原有约定保持不变。
+根规则文件名和所有目录级 agent 指令文件只能使用 `AGENTS.md`；`AGENT.md` 是历史输入
+错误。两者并存时先合并有效内容并去重，再删除单数文件并同步全部现行引用。
 
 目标库根规则文件至少包含以下可执行内容；可按库情况增减字段，但不能只留外部链接：
 
@@ -121,7 +122,7 @@ form 审计与整改
 - 顶层目录白名单: <本库允许集合及职责>。
 - 测试入口: `<可直接执行的命令>`。
 - 功能复现: `<构建、测试、主入口冒烟命令>`。
-- 文档/日志/数据: `<docs/>` 职责；`logs/AGENT.md` 索引与 `vYYYYMMDD[HH[MM[SS]]].txt` 日志命名；`data/` 忽略与保留规则。
+- 文档/日志/数据: `<docs/>` 职责；`logs/AGENTS.md` 索引与 `vYYYYMMDD[HH[MM[SS]]].txt` 日志命名；`data/` 忽略与保留规则。
 - Git 交付: <提交、推送、标签流程；禁止强推>。
 - Git 大文件: 除用户明确要求外，禁止提交单个大于 `10,000,000` 字节的文件；每批暂存后运行 `scripts/form-large-files-check.sh`，命中时停止提交并提醒。
 - 本地例外: <每一项的可观察条件、示例和理由；无则写“无”>。

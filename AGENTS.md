@@ -24,7 +24,7 @@
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm、form、log），`{~skill-name}` 触发；具体索引与公共契约见 `skills/AGENTS.md` |
 | `docs/` | 参考文档、分析资料、图片素材；功能输入不放此目录 |
-| `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENT.md` 批次索引 |
+| `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENTS.md` 批次索引 |
 | `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
 | `data/` | agent 运行时本地数据：runs manifest/state/events/context/log/inputs，`cache/` 为 Codex 模型元数据目录缓存；默认不入库 |
 | `hooks/` | Codex agent hook 适配层与独立 Git 质量门禁；不会自动修改 Codex 配置或 `core.hooksPath` |
@@ -55,11 +55,13 @@
 - 变量名：普通变量使用 `snake_case`，环境变量和短脚本状态可使用 `_UPPER_CASE` 或
   `_snake_case`，例如 `_SRC`、`_PATH`、`_NAME`。
 - 命名质量：所有名称必须清晰、无歧义，在简短的同时承载最大实际意义；不得使用标签名替代业务语义。
+- Agent 规则文件：所有目录统一使用 `AGENTS.md`；`AGENT.md` 是历史输入错误，不是兼容别名。
+  同目录两者并存时，以 `AGENTS.md` 为主文件合并双方有效内容并去重，确认后再删除单数文件。
 - 目录：顶层白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`；
   功能输入不得放入 `docs/`，包依赖清单存放在 `lib/requirements/`。
 - 文档：`docs/` 只放当前任务文档和图片，允许 `md/tex/pdf/png/jpg/jpeg/gif/svg/webp`。
 - 日志与数据：日志放 `logs/`；agent 日志使用 `vYYYYMMDD[HH[MM[SS]]].txt` 或对应连字符
-  格式，批次索引为 `logs/AGENT.md`；数据放 `data/`，仅跟踪 `.gitignore`、`AGENTS.md`、
+  格式，批次索引为 `logs/AGENTS.md`；数据放 `data/`，仅跟踪 `.gitignore`、`AGENTS.md`、
   `README.md`。
 - 测试与验收：shell 至少执行 `bash -n`；结构检查运行
   `skills/form/scripts/form-audit.sh --root . --strict --quiet`；快照检查运行

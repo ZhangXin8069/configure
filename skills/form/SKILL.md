@@ -31,7 +31,7 @@ metadata:
   聚合入口为 `gz-all-push.sh`、`zg-all-pull.sh`。
 - 顶层目录白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`。
 - 包依赖清单位于 `lib/requirements/{apt,pip}.txt`，由 `bin/{apt,pip}_install.sh` 消费。
-- `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 允许 `AGENT.md` 索引以及
+- `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 允许 `AGENTS.md` 索引以及
   `log/json/tsv/csv/txt`，agent 日志按 `log` 技能的三态时间戳命名。
 - 本库缺少独立构建系统时，验证入口为 `bash -n bin/*.sh`、
   `scripts/form-audit.sh --root /root/configure --strict --quiet` 和
@@ -56,12 +56,15 @@ metadata:
    push 和最终标签；force push、改写已推送标签、系统配置、凭据操作和超过文件大小闸门的
    提交仍须单独确认。
 8. **本地特化是最终产物**：每次在 Git 库执行本 skill，都要把与目标库实际结构相关的规则
-   同步到根 `AGENTS.md`；只有根 `AGENT.md` 时才沿用该文件，二者都不存在时创建
-   `AGENTS.md`。目标库原有明确约定与通用规则冲突时保留原约定，并把冲突登记为本地例外，
+   同步到根 `AGENTS.md`；不存在时创建该文件。目标库原有明确约定与通用规则冲突时保留原约定，并把冲突登记为本地例外，
    不能为了统一格式覆盖原规则。整改完成后还须生成本库的 `skills/form/SKILL.md`。
 9. **标签名边界**：Git 标签名只用于版本定位和版本引用，可在更新说明、提交说明、注释、
    日志和审计记录中出现；不得进入文件、目录、对象、函数、变量、类型、字段、测试标识、
    配置键等名称。发现违规时必须整批重命名，并修复所有导入、引用、文档、配置和测试。
+10. **Agent 规则文件只用复数名**：所有目录的 agent 指令文件统一为 `AGENTS.md`；
+    `AGENT.md` 是历史输入错误，不是兼容别名。只存在单数文件时直接重命名为复数；同目录
+    两者并存时，以 `AGENTS.md` 为主文件，先合并并去重 `AGENT.md` 中的有效规则，确认
+    无内容丢失后再移除单数文件，并同步全部现行引用。历史日志可保留旧路径作为既往证据。
 
 ## Git 检查
 
@@ -79,6 +82,7 @@ metadata:
 - 新库初始化或大型重构后，需要统一语言框架、文件/函数/变量/对象命名和顶层目录。
 - 用户要求清理上一任务遗留的文档、日志、测试代码和非功能性文件，但必须保留 Git 回溯能力。
 - 用户要求把通用格式约定特化到当前库，并在根 `AGENTS.md` 写明本地规则。
+- 用户要求统一 `AGENT.md`/`AGENTS.md`，或修复 agent 规则文件的单复数命名冲突。
 - 与其他技能配合：先读改动用 `diff`；多步骤方案用 `plan`；报错用 `debug`；
   功能回归用 `test`；最终同步用 `init`；完成后用 `tag(dev)`；
   日志命名与索引一致性用 `log`；技能自身的描述或结构问题用 `skill-creator`；
@@ -92,8 +96,8 @@ metadata:
 - `references/source-snapshots/README.md`：四个参考 URL 的提交、文件清单、排除项和校验方式。
 - `references/git-artifacts-and-workflow.md`：目录职责、清理边界、提交消息、验收和本地特化模板。
 - `scripts/form-audit.sh`：只读检查已跟踪路径的顶层目录、代码文件名、docs/logs/data 和测试位置。
-- `scripts/form-agents-sync.sh`：把与目标库相关的 form 规则写入根 `AGENTS.md` 或
-  根 `AGENT.md` 的标记块；只更新标记块，保留块外全部本地约定。
+- `scripts/form-agents-sync.sh`：把与目标库相关的 form 规则写入根 `AGENTS.md`
+  的标记块；只更新标记块，保留块外全部本地约定。
 - `scripts/form-large-files-check.sh`：只读检查暂存的新增、修改、复制或重命名文件，
   默认阻止单个索引 blob 超过 `10,000,000` 字节。
 - `scripts/form-snapshot-verify.sh`：离线校验快照哈希、manifest、二进制排除项和符号链接。
@@ -144,7 +148,7 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 `form-audit.sh` 仅审计 Git 已跟踪路径，默认不跟随 `data/`、`refer/`、
 `source-snapshots/` 和 vendored/generated 目录；输出是候选冲突，不是自动改名授权。
 
-2. 读取与本次范围相关的根 `AGENTS.md`（或根 `AGENT.md`）、各目录 `AGENTS.md`、
+2. 读取与本次范围相关的根 `AGENTS.md`、各目录 `AGENTS.md`、
    构建/测试入口和现有 `skills/form/SKILL.md`；不递归读取无关文档。需要参考范例时，先读
    `references/observed-conventions.md`，再按其中的相对路径进入明文快照。
 3. 逐项建立冲突表：
@@ -155,7 +159,10 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 
 4. 命名冲突必须保留 `文件:行号` 或路径证据；引用快照时同时给出快照根、commit 和文件行号。
    把真正例外单列，不把普通违规伪装成例外。
-5. 检查名称质量和 Git 标签名边界。标签文法为
+5. 审计 agent 规则文件命名。所有 `AGENT.md` 都是待整改对象：同目录没有
+   `AGENTS.md` 时登记为重命名；同目录两者并存时登记为语义合并并删除单数文件。
+   `form-audit.sh` 的 `AGENT_FILE_SINGULAR` 是确定性基线信号，合并内容仍须人工核对。
+6. 检查名称质量和 Git 标签名边界。标签文法为
    `^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$`；路径命中由审计脚本报告，符号命中需人工判定：
 
 ```bash
@@ -165,14 +172,14 @@ git grep -n -E '\b(stab|dev|bug|test)[0-9]+(_[0-9]+)*\b' -- \
 
 更新说明、提交说明、注释和日志中的标签引用是允许的版本证据；若标签出现在文件名、
 目录名、对象、函数、变量、类型、字段、测试标识或配置键中，登记为违规并要求整批纠正。
-6. 使用本地快照前校验完整性；任一失败都停止引用该快照，不使用损坏副本推断规则：
+7. 使用本地快照前校验完整性；任一失败都停止引用该快照，不使用损坏副本推断规则：
 
 ```bash
 FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 "$FORM_SKILL_DIR/scripts/form-snapshot-verify.sh" --quiet
 ```
 
-7. 运行 `~diff` 查看上一基线以来的改动；若尚未有基线，记录 `git status` 与当前提交作为基线。
+8. 运行 `~diff` 查看上一基线以来的改动；若尚未有基线，记录 `git status` 与当前提交作为基线。
 
 ### Step 3. 生成整改方案
 
@@ -190,26 +197,29 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 
 ### Step 4. 分批实施格式整改
 
-1. 先运行目标库已有测试或冒烟命令，保存基线退出码；没有入口时明确记录验证缺口。
-2. 先建/整理目录，再使用 `git mv` 或补丁做重命名；一次提交批内的移动与引用更新必须
+1. 先运行目标库已有测试或冒烟命令，保存退出码；没有入口时明确记录验证缺口。
+2. 对 `AGENT.md` 先执行语义迁移：同目录仅单数文件时使用 `git mv` 改为 `AGENTS.md`；
+   两者并存时读取两份内容，将 `AGENTS.md` 作为主文件并合并去重单数文件中的有效规则，
+   确认无误后删除 `AGENT.md`。历史日志可保留旧路径，现行脚本、配置和文档必须同步引用。
+3. 先建/整理目录，再使用 `git mv` 或补丁做其他重命名；一次提交批内的移动与引用更新必须
    在同一逻辑批次完成。
-3. 符号重命名后用仓库级搜索确认旧名清零，或只保留明确兼容别名：
+4. 符号重命名后用仓库级搜索确认旧名清零，或只保留明确兼容别名：
 
 ```bash
 rg -n --hidden --glob '!.git/**' '旧名称|OldName|old_name'
 ```
 
-4. 标签名进入路径或标识符时，以业务语义重新命名；同时更新构建清单、导入、调用点、
+5. 标签名进入路径或标识符时，以业务语义重新命名；同时更新构建清单、导入、调用点、
    配置键、文档、测试、hook、脚本和 AGENTS.md，不能只改声明而保留旧引用。
-5. 更新构建清单、导入、文档、注释、测试、hook、脚本和 AGENTS.md 中的全部引用。
-6. 命名例外必须符合 `references/naming-and-layout.md` 的可观察条件；不能仅写“特殊”后跳过。
+6. 更新构建清单、导入、文档、注释、测试、hook、脚本和 AGENTS.md 中的全部引用。
+7. 命名例外必须符合 `references/naming-and-layout.md` 的可观察条件；不能仅写“特殊”后跳过。
    新增规则来自快照时，在 `references/observed-conventions.md` 同步证据和适用边界。
 7. 每个批次完成即运行该批次的最小验证，不把全部风险积累到最后。
 
 ### Step 5. 整理交付目录
 
 1. `docs/` 仅保留本次任务文档及附件图片，格式限定为 TeX、PDF、Markdown 和图片。
-2. `logs/` 仅保留 `AGENT.md`、任务需求单、agent 三态日志、用户自定义历史日志，以及
+2. `logs/` 仅保留 `AGENTS.md`、任务需求单、agent 三态日志、用户自定义历史日志，以及
    `log/json/tsv/csv/txt`；agent 日志必须符合 `vYYYYMMDD[HH[MM[SS]]].txt`、
    对应连字符格式或冲突后缀。清理前列出候选并检查是否被源码或脚本引用。
 3. `data/` 汇集历史数据文件；通过 `.gitignore` 排除内容，仅保留 `.gitignore`、
@@ -242,8 +252,7 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 ### Step 7. 生成当前库特化版本
 
 1. 无论是否执行了重命名或目录整改，都把本 skill 中与目标库实际类型相关的规则投影到根
-   规则文件。先读取根 `AGENTS.md`；不存在时读取根 `AGENT.md`；两者都不存在时由同步脚本
-   创建根 `AGENTS.md`。
+   规则文件。先读取根 `AGENTS.md`；不存在时由同步脚本创建根 `AGENTS.md`。
 2. 根据 Step 2 的审计结果生成本库专用的 `form` 标记块，至少写明：
    - 库类型与主导语言；
    - 文件、函数、变量、对象和目录命名规则；
@@ -309,7 +318,8 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 | 文件命名 | 自动 TSV、文件路径、重命名后旧引用搜索 | 代码文件名符合规则，兼容例外有理由 |
 | 符号命名 | 审计表 `文件:行号`、公开接口清单 | 函数/变量/对象逐项判定，例外可追溯 |
 | 名称质量与标签边界 | 路径审计、`git grep`、冲突表、旧引用搜索 | 名称简短且语义完整；标签名只作版本引用，不进入路径或标识符 |
-| 交付目录 | docs/logs/data/testing 清单、`AGENT.md` 索引、`v*` 日志命名审计 | 内容类型、日志命名、索引位置和职责符合边界 |
+| Agent 规则文件名 | `form-audit.sh` 的 `AGENT_FILE_SINGULAR`、双文件 diff、合并后旧文件检查 | 全库无 `AGENT.md`；双文件内容已合并去重，现行引用全部指向 `AGENTS.md` |
+| 交付目录 | docs/logs/data/testing 清单、`AGENTS.md` 索引、`v*` 日志命名审计 | 内容类型、日志命名、索引位置和职责符合边界 |
 | 根规则同步 | `form-agents-sync.sh --check`、根规则文件 diff | 标记块存在且为当前版本；块外本地约定逐字保留；冲突项以本地原约定为准 |
 | 功能复现 | 构建、测试、主入口冒烟命令与退出码 | 整改前后同一验证集通过；缺口明确写出 |
 | 大文件闸门 | `form-large-files-check.sh` 输出与退出码 | 暂存新增、修改、复制或重命名文件均不超过 `10,000,000` 字节；命中时本批次未提交 |
@@ -322,6 +332,7 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 | 库名大小写无法判定类型 | 以大小写规则给默认值，并把“可能误分类”列为待确认项；用户指定优先 |
 | 工作区已有改动 | 先区分本任务与用户改动，只记录不覆盖；无法安全分离时停止写操作 |
 | 文件重命名破坏引用 | 用 `~debug` 定位全部引用点，将移动和引用更新合并为同一批次后重试 |
+| `AGENT.md` 与 `AGENTS.md` 并存 | 以 `AGENTS.md` 为主文件合并双方有效内容，确认无规则丢失后删除 `AGENT.md` 并更新现行引用 |
 | 标签名进入路径或标识符 | 按业务目的重命名，并同步导入、配置、文档、测试和旧引用；历史日志中的版本引用可保留 |
 | 规则与功能约束冲突 | 保留功能正确性，建立具名例外并写入根 AGENTS；不能 silent 跳过 |
 | 通用规则与根文件原约定冲突 | 保留原约定，不复制冲突的通用规则；把冲突和本地例外写入审计表 |
