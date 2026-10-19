@@ -72,3 +72,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-large-files-audit - stage - 2026-10-20 00:47:36 +0800
+- 主任务: 审计远端 Git 历史中大于 10MB 的文件并等待删除确认
+- 日志文件: logs/v202610200047.txt
+- 文件大小: 6405 bytes
+- 触发原因: 阶段成果
+- 关键内容: 远端 12 个分支、122 个标签、914 个可达提交中共发现 5 个大于 10 MiB 的唯一 blob，等待用户确认后重写历史。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## git-large-files-cleanup - final - 2026-10-20 01:04:02 +0800
+- 主任务: 保留当前工作区大文件并清理其余远程历史大文件
+- 日志文件: logs/v2026102001-2.txt
+- 文件大小: 6933 bytes
+- 触发原因: 任务完成
+- 关键内容: 保留当前树中的 3 个大文件，删除仅历史存在的 GOMOKU.DAT 与 background.png；已重写本地及远端历史、清理对象库并完成验证。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

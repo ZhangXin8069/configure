@@ -1,0 +1,65 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-10-20 00:47:36 +0800
+批次: git-large-files-audit
+主任务: 审计远端 Git 历史中大于 10MB 的文件并等待删除确认
+触发原因: 阶段成果
+摘要: 远端 12 个分支、122 个标签、914 个可达提交中共发现 5 个大于 10 MiB 的唯一 blob，等待用户确认后重写历史。
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 远端历史大文件审计
+- 目标: 列出 Gitee `origin` 当前全部远端分支和标签可达历史中大于 10 MiB 的文件，供用户审核；确认前不删除、不重写、不强推。
+- 命令/操作: `git fetch origin --prune --tags` 后，以 `git rev-list --objects --remotes=origin --tags` 枚举对象，并用 `git cat-file --batch-check` 按 `objectsize > 10485760` 过滤。
+- 关键输出: 12 个远端分支、122 个远端标签、914 个可达提交；发现 5 个唯一大文件 blob，逻辑总大小 301,282,054 bytes（287.325 MiB），本地对象磁盘占用合计 264,754,310 bytes（252.489 MiB）。
+- 退出码: 审计命令 0；`git fsck --connectivity-only --no-dangling` 为 0；远端 heads/tags 与本地跟踪/标签 refs 哈希比对一致。
+- 证据与判断: 3 个候选仍存在于 `origin/main` 当前树，2 个仅存在于历史提交。按十进制 10 MB 统计结果相同，因为下一个最大 blob 为 7,213,212 bytes。
+
+### S2 — 候选清单
+- `lib/_font/WindowsFonts.tar.xz`（旧路径 `lib/Font/WindowsFonts.tar.xz`）：blob `8af18932240c73399130dee55a3cc7f967cedc91`，104,502,984 bytes（99.662 MiB）；添加于 `e8b6edf7c12640e30ef481e4796deb04ed45f74b`（2024-09-24），重命名于 `f2421b6927d219bc3c3fa099c26cc431ed3e1b86`（2025-10-31）；当前存在于 `origin/main`。
+- `lib/_clash/clash-for-linux.tar.gz`：blob `ad06fdf31a1951f28cb52ca871ee79a06db9af88`，103,217,976 bytes（98.436 MiB）；添加于 `ea1e4b81022bca1be4e3fe5c5759dba74921fc45`（2026-08-23）；当前存在于 `origin/main`。
+- `lib/_package/GOMOKU.DAT`（旧路径 `lib/Package/GOMOKU.DAT`）：blob `b5a19afce24a4c40bd48c4596f61f8ce711bff59`，33,554,432 bytes（32.000 MiB）；添加于 `43068f64f3172d3e8bb17163c279ef947f4b326e`（2024-09-19），重命名于 `f2421b6927d219bc3c3fa099c26cc431ed3e1b86`，删除于 `2458d5d445f45f6a6b52a18494bfed913c5ee143`（2026-03-20）；仅历史存在。
+- `lib/_snsc/vscode-sysroot-x86_64-linux-gnu.tgz`：blob `9b298e707575afbbbdefa9275996ec79926244b0`，31,926,199 bytes（30.447 MiB）；添加于 `909b99234c1adac33aee0f23d426da33f4ea3af0`（2026-08-15）；当前存在于 `origin/main`。
+- `docs/background.png`：blob `6af16eb7e1a3abed8f822688168b0b9e795b168a`，28,080,463 bytes（26.780 MiB）；添加于 `4d06dcc29157f59c92857fb87aa0415329ef446f`，删除于 `24f4b5e1ced0ca934250ce725a3ae7a72f0f12a8`（均为 2026-08-14）；仅历史存在。
+
+## 验证与证据
+- 测试/检查: 远端 refs 已 fetch；heads 与 tags 哈希逐项匹配远端；对象连通性检查通过；pack/loose 对象磁盘大小逐一读取。
+- 结果: 仅上述 5 个唯一 blob 超过阈值，无遗漏的第 6 个候选。
+- 未验证项: 未执行删除或历史重写；Gitee 服务端垃圾回收时点不可由本地 Git 查询保证。
+
+## 变更与产物
+- 文件: 本阶段仅新增日志及 `logs/AGENT.md` 索引。
+- 产物: 大文件审核清单与破坏性操作范围。
+- 未改动范围: 未删除文件、未修改提交、未改写标签、未 force push、未执行 GC。
+
+## 风险、限制与下一步
+- 风险: 历史重写会改变自最早受影响提交以来所有后代提交的 SHA；三个候选会从当前 `origin/main` 树中消失；协作副本、fork、PR 缓存可能继续保留旧对象。
+- 阻塞: 等待用户逐项确认 5 个候选及允许本地历史重写、远端强制更新、reflog 过期和对象 GC。
+- 下一步: 确认后使用精确 blob ID 执行 `git filter-repo`，强制更新 12 个远端分支和 122 个标签，再清理本地不可达对象并复测大小和对象可达性。
+
+## Agent 全文报告
+--- report begin ---
+状态：userinterlude，等待审核确认。审计范围为 Gitee `origin` 当前 12 个远端分支与 122 个标签的 914 个可达提交，阈值为 `> 10 MiB`（10,485,760 bytes）。共发现 5 个大于阈值的唯一文件内容；按十进制 10 MB 统计结果相同。
+
+| # | 路径 | 大小 | 远端状态 | 引入/移除 |
+|---|---|---:|---|---|
+| 1 | `lib/_font/WindowsFonts.tar.xz`（旧路径 `lib/Font/WindowsFonts.tar.xz`） | 104,502,984 bytes / 99.662 MiB | `origin/main` 当前存在 | `e8b6edf7...` 添加，`f2421b69...` 重命名 |
+| 2 | `lib/_clash/clash-for-linux.tar.gz` | 103,217,976 bytes / 98.436 MiB | `origin/main` 当前存在 | `ea1e4b81...` 添加 |
+| 3 | `lib/_package/GOMOKU.DAT`（旧路径 `lib/Package/GOMOKU.DAT`） | 33,554,432 bytes / 32.000 MiB | 仅历史存在 | `43068f64...` 添加，`2458d5d4...` 删除 |
+| 4 | `lib/_snsc/vscode-sysroot-x86_64-linux-gnu.tgz` | 31,926,199 bytes / 30.447 MiB | `origin/main` 当前存在 | `909b9923...` 添加 |
+| 5 | `docs/background.png` | 28,080,463 bytes / 26.780 MiB | 仅历史存在 | `4d06dcc2...` 添加，`24f4b5e1...` 删除 |
+
+对应 blob ID：
+
+1. `8af18932240c73399130dee55a3cc7f967cedc91`
+2. `ad06fdf31a1951f28cb52ca871ee79a06db9af88`
+3. `b5a19afce24a4c40bd48c4596f61f8ce711bff59`
+4. `9b298e707575afbbbdefa9275996ec79926244b0`
+5. `6af16eb7e1a3abed8f822688168b0b9e795b168a`
+
+逻辑总大小为 301,282,054 bytes（287.325 MiB）；这些对象当前在本地仓库中的实际磁盘占用合计为 264,754,310 bytes（252.489 MiB）。实际节省低于该值，因为仍需保留其他 Git 对象和重写后的新对象。
+
+确认后将执行以下破坏性操作：用 5 个精确 blob ID 运行 `git filter-repo`；改写全部受影响分支和标签；强制更新远端 12 个分支和 122 个标签；清除本地 reflog；裁剪不可达对象并 GC；最后验证 5 个 blob 均不可由任何本地或远端 ref 到达，并比较仓库大小。三个当前文件会从 `origin/main` 消失。
+
+风险：所有受影响提交及其后代 SHA 都会改变；其他克隆必须重新克隆或重新同步；fork、缓存、PR、历史备份可能继续保留旧对象；Gitee 受保护分支/标签可能拒绝强推；服务端物理 GC 时点不能由本地 Git 保证。
+--- report end ---

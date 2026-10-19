@@ -1,0 +1,96 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 01:04:02 +0800
+批次: git-large-files-cleanup
+主任务: 保留当前工作区大文件并清理其余远程历史大文件
+触发原因: 任务完成
+摘要: 保留当前树中的 3 个大文件，删除仅历史存在的 GOMOKU.DAT 与 background.png；已重写本地及远端历史、清理对象库并完成验证。
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 审计与范围变更
+- 目标: 初始审计远端全部大于 10 MiB 文件，随后按用户最新指令保留当前工作区仍存在的文件，仅删除其余文件。
+- 命令/操作: fetch 远端 refs；用 `git rev-list --objects --remotes=origin --tags` 与 `git cat-file --batch-check` 审计；逐项检查当前工作区路径。
+- 关键输出: 共 5 个候选。当前存在的 3 个文件为 `lib/_font/WindowsFonts.tar.xz`、`lib/_clash/clash-for-linux.tar.gz`、`lib/_snsc/vscode-sysroot-x86_64-linux-gnu.tgz`；待删的 2 个为 `lib/_package/GOMOKU.DAT`（blob `b5a19afce24a4c40bd48c4596f61f8ce711bff59`）和 `docs/background.png`（blob `6af16eb7e1a3abed8f822688168b0b9e795b168a`）。
+- 退出码: 审计与 refs 比对均为 0。
+- 证据与判断: 2 个待删文件均不在当前工作树，仅由历史和 stash 父历史引用。
+
+### S2 — 本地历史重写
+- 命令/操作: 使用 `git filter-repo --strip-blobs-with-ids` 精确剥离两个 Blob，仅重写 `refs/heads/main` 与全部标签，并禁止裁剪空提交和退化合并提交。
+- 关键输出: 解析 701/759 个提交；`main` 从 `bb8c0a3f723f57af26314e10a0b9fb6b75c9600b` 重写为 `6812c55c6c596146b51f81408b60885b12ffe747`；121 个标签变化，`stab0` 与其余 11 个分支不变。
+- 退出码: 0。
+- 证据与判断: 重写后 `main + tags` 不再含两个目标 Blob，三个保留 Blob 仍在。
+
+### S3 — stash 保留性重写
+- 命令/操作: 识别 `refs/stash` 为最后一个引用旧历史的本地 ref；先导出 WIP 补丁，再以相同 Blob 清单重写 `refs/stash`。
+- 关键输出: stash 从 `c31227fd178b8071a27f55a1874f75a20f0e2f64` 重写为 `e53bea1304dcf50a0410a6a376be8947147e81b2`；重写前后补丁逐字一致。
+- 退出码: 补丁比较为 0；stash 列表保留。
+- 证据与判断: 用户 WIP 内容未丢失，stash 父历史不再引用两个目标 Blob。
+
+### S4 — 远端原子更新
+- 命令/操作: 使用逐 ref `--force-with-lease` 和 `--atomic` 推送 `main` 与 121 个变化标签。
+- 关键输出: 远端 `main` 与全部目标标签强制更新成功；其余 11 个远端分支未修改。
+- 退出码: 0。
+- 证据与判断: 远端 heads/tags 与本地 refs 哈希完全一致；Gitee 警告仅剩用户要求保留的 2 个超过 50 MB 文件。
+
+### S5 — 本地对象物理删除
+- 命令/操作: 清空旧 reflog，重写 stash reflog；以 `rev-list --objects --all` 的 12,959 个可达对象重建单一 pack，验证对象数一致且不含目标 Blob后，移除含 13,981 个对象的旧 pack。
+- 关键输出: 两个目标 Blob 已无法由 `git cat-file` 读取；`git fsck --full --no-dangling` 通过；旧 pack 备份已删除。
+- 退出码: 0；`fsck` 仅报告仓库既有的 `.gitignore` symlink 警告。
+- 证据与判断: 本地对象库只剩 1 个 pack、0 个 loose object；本地和远端可达历史均只剩 3 个大于 10 MiB 的保留文件。
+
+## 验证与证据
+- 测试/检查: `git cat-file --batch-all-objects` 不含两个目标 OID；本地 `rev-list --all` 与远端 `rev-list --remotes=origin --tags` 均只返回 3 个保留大文件；3 个保留文件 SHA-256 与操作前一致；stash 补丁一致；远端 refs 与本地一致；`git fsck --full --no-dangling` 通过。
+- 结果: 对象存储从 `size 111.15 MiB + size-pack 205.76 MiB` 降为单一 pack `270.54 MiB`，减少约 `46.37 MiB`（约 14.6%）。两个目标文件逻辑总大小 `61,634,895 bytes`，对应对象磁盘占用约 `27.00 MiB`。
+- 未验证项: Gitee 服务端何时物理回收不可达对象无法由本地 Git 查询证明；远端当前 refs 层面已删除。
+
+## 变更与产物
+- 文件: 重写 `refs/heads/main` 和 121 个标签；重写并保留 `refs/stash`；新增阶段日志、最终日志及 `logs/AGENT.md` 索引。
+- 产物: 清理后的本地对象库、更新后的 Gitee 远端 refs、stash 补丁审计副本。
+- 未改动范围: 当前工作区 3 个大文件内容未变；11 个未受影响的本地/远端分支未重写；检测到的工作区其他并发修改未触碰、未回退。
+
+## 风险、限制与下一步
+- 风险: 重写使受影响提交 SHA 变化，其他克隆必须重新同步或重新克隆；fork、缓存和外部副本可能仍保留旧对象。
+- 阻塞: 无。
+- 下一步: 若 Gitee 仓库容量未立即下降，需等待或联系 Gitee 执行服务端 GC；本地与远端逻辑历史清理已完成。
+
+## 用户输入指令
+给出本git库已经提交到远程的所有大于10MB的文件,给用户审核并经过用户确认后将这些文件从本地和远程git永久删除以此给本git库瘦身
+当前工作区中仍存在的文件不删除,其余的删除
+
+## Agent 全文报告
+--- report begin ---
+状态：finished。
+
+按要求保留当前工作区仍存在的 3 个文件：
+
+- `lib/_font/WindowsFonts.tar.xz`，104,502,984 bytes
+- `lib/_clash/clash-for-linux.tar.gz`，103,217,976 bytes
+- `lib/_snsc/vscode-sysroot-x86_64-linux-gnu.tgz`，31,926,199 bytes
+
+已从本地和远端 Git 历史删除：
+
+- `lib/_package/GOMOKU.DAT`（旧路径 `lib/Package/GOMOKU.DAT`），Blob `b5a19afce24a4c40bd48c4596f61f8ce711bff59`
+- `docs/background.png`，Blob `6af16eb7e1a3abed8f822688168b0b9e795b168a`
+
+执行结果：
+
+- 本地 `main` 从 `bb8c0a3f...` 重写为 `6812c55c...`。
+- 121 个受影响标签已重写，`stab0` 和其余 11 个分支未受影响。
+- Gitee 远端 `main` 与 121 个标签已原子强制更新，远端 refs 与本地一致。
+- 既有 stash 已重写而非丢弃，WIP 补丁在重写前后逐字一致。
+- 两个目标 Blob 已从本地对象库物理消失，旧 pack 备份已删除。
+- 本地和远端可达历史现在都只剩上述 3 个大于 10 MiB 的文件。
+
+验证：
+
+- `git fsck --full --no-dangling` 通过，仅有仓库既有的 `.gitignore` symlink 警告。
+- 三个保留文件的 SHA-256 与操作前一致。
+- `git cat-file --batch-all-objects` 中不存在两个目标 Blob。
+- 本地与远端 refs 哈希一致。
+- 对象存储从约 `316.91 MiB` 降至 `270.54 MiB`，减少约 `46.37 MiB`（约 14.6%）。
+
+限制：Gitee 的服务端物理垃圾回收时间无法通过本地 Git 验证。远端 refs 已不再包含目标文件，但若仓库容量页面未立即下降，需要等待平台 GC 或联系 Gitee。历史已重写，其他克隆应重新同步或重新克隆。
+
+最终日志：[v2026102001-2.txt](/root/configure/logs/v2026102001-2.txt)
+--- report end ---

@@ -1,0 +1,90 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 01:03:44 +0800
+批次: form-root-rule-sync
+主任务: 扩展 form 技能根规则同步与大文件提交闸门
+触发原因: 任务完成
+摘要: 新增根 AGENTS/AGENT 标记块同步、目标库原约定优先和 10,000,000 字节暂存文件闸门，并完成脚本测试与仓库门禁验证
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 - 读取技能与仓库约束
+- 目标: 确认 form 现有 Step 7/8、技能目录规范和 Git 交付边界。
+- 操作: 读取 `form`、`skill-creator`、`log` 的 `SKILL.md`，定向读取 Git 交付参考、现有脚本测试与根 AGENTS form 章节。
+- 退出码: 0。
+- 证据与判断: 现有 form 已要求根 AGENTS 特化，但缺少确定性同步器、冲突保留规则和提交前大文件闸门。
+
+### S2 - 实现确定性同步与大小检查
+- 目标: 让每次 form 执行可幂等补充根规则，并阻止超限暂存文件。
+- 操作: 新增 `form-agents-sync.sh` 与 `form-large-files-check.sh`，扩展 `form-scripts.test.sh`；同步器优先 `AGENTS.md`，其次 `AGENT.md`，只更新 `form-skill` 标记块。
+- 退出码: 0。
+- 证据与判断: 合成仓库覆盖幂等更新、块外规则保留、`AGENT.md` 兼容、标记异常和大小边界。
+
+### S3 - 更新技能流程与当前仓库规则
+- 目标: 将行为写入 form 权威流程并让 configure 仓库立即生效。
+- 操作: 更新根 `AGENTS.md`、`skills/AGENTS.md`、`skills/form/AGENTS.md`、`form/SKILL.md` 和 Git 交付参考。
+- 退出码: 0。
+- 证据与判断: configure 根规则已包含受控标记块和 `10,000,000` 字节闸门，块外原规则保留。
+
+### S4 - 全量验证
+- 目标: 以本次会话输出确认脚本、结构、快照、根规则和 Git 边界。
+- 操作: 运行脚本自测、Shell 语法检查、结构审计、快照校验、根规则检查、大文件检查、空白与冲突标记检查。
+- 退出码: 均为 0。
+- 证据与判断: 所有检查通过，未发现本次改动引入的格式或行为回归。
+
+## 验证与证据
+- `bash scripts/form-scripts.test.sh`: `form script tests: PASS`。
+- `bash -n` 覆盖 form 目录 5 个 shell 脚本: PASS。
+- `form-audit.sh --root . --strict --quiet`: exit 0。
+- `form-snapshot-verify.sh --quiet`: PASS。
+- `form-agents-sync.sh --root . --check`: `状态: 已是最新`。
+- `form-large-files-check.sh --root .`: 通过，已检查 0 个暂存文件，限制 10,000,000 字节。
+- `git diff --check`: PASS；修改文件无行尾空白或行首冲突标记。
+
+## 变更与产物
+- 新增: `skills/form/scripts/form-agents-sync.sh`。
+- 新增: `skills/form/scripts/form-large-files-check.sh`。
+- 更新: `skills/form/scripts/form-scripts.test.sh`。
+- 更新: `skills/form/SKILL.md`。
+- 更新: `skills/form/references/git-artifacts-and-workflow.md`。
+- 更新: `skills/form/AGENTS.md`。
+- 更新: `skills/AGENTS.md`。
+- 更新: `AGENTS.md`。
+- 未改动范围: 未暂存、提交、推送或打标；未删除用户文件。
+
+## 风险、限制与下一步
+- 风险: 根规则块内若手工写入本地例外，下次同步会按托管块更新；本地例外应放在块外，或纳入下一次待同步内容。
+- 解释: 5 分钟静默只授权继续不依赖超限文件的工作，不授权覆盖大文件限制；这与“除非用户明确要求，严格禁止”保持一致。
+- 阻塞: 无。
+- 下一步: 如需交付，需用户明确授权暂存、提交、推送与 `dev` 标签。
+
+## 用户输入指令
+增加功能:在git库中运行本skill后,将本skill中的与此git库相关的约定明确补充到此git库的根目录下的AGENT.md,使此git库日后严格遵守本skill的约定(例如,除非用户明确要求,严格禁止往git提交大于10MB的文件,如果发现此行为立即阻止并提醒用户,如用户5分钟没有回复则默认同意,继续推进任务),但如果原本此git库有与本skill冲突的约定,以此git库的原始约定为准
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- 新增 `form-agents-sync.sh`：在 Git 根目录优先同步已有 `AGENTS.md`，其次已有 `AGENT.md`，两者都没有时创建 `AGENTS.md`；仅替换 `form-skill` 标记块，块外原约定保留。
+- 新增 `form-large-files-check.sh`：提交前检查暂存的新增、修改、复制和重命名文件，默认阻止单个索引 blob 超过 `10,000,000` 字节。
+- 更新 `form` 主流程、Git 交付参考、技能目录说明和仓库技能表，使同步与阻断成为固定门禁。
+- 已把受控 `form` 标记块和大文件规则同步到当前仓库根 `AGENTS.md`。
+
+**推理依据**
+- 目标库原有明确约定优先于 form 通用规则；同步器因此只维护标记块，块外内容不改写，冲突项由 form 审计流程保留并登记。
+- “5 分钟未回复默认同意”与“除明确要求外严格禁止”存在语义冲突。实现采用安全解释：静默只允许继续推进不依赖超限文件的工作，不视为授权提交超限文件；覆盖阈值必须由用户明确要求。
+
+**验证结果**
+- `form-scripts.test.sh`: PASS。
+- form 目录全部 Shell 脚本 `bash -n`: PASS。
+- `form-audit.sh --strict --quiet`: exit 0。
+- `form-snapshot-verify.sh --quiet`: PASS。
+- 根规则同步 `--check`: 已是最新。
+- 当前暂存区大文件闸门: 通过，检查 0 个文件。
+- `git diff --check`、行尾空白和冲突标记检查: PASS。
+
+**后续步骤**
+当前未获授权，改动未暂存、提交、推送或打标。后续如需交付，可明确授权按 form 流程提交、推送并创建 `dev` 标签。
+--- report end ---
