@@ -1,0 +1,94 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 01:16:37 +0800
+批次: configure-form-closeout-20261020
+主任务: 执行 configure 仓库本轮 form 收尾并归档验证证据
+触发原因: 任务完成
+摘要: 结构审计保持 0 finding；Shell 语法、form 脚本测试、严格审计、快照校验和 Git 空白检查均通过，未提交或推送
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 - 读取约束与锁定边界
+- 目标: 完整读取 `skills/form/SKILL.md`、`skills/log/SKILL.md` 和根 `AGENTS.md`，确认 configure 的 form/log 收尾要求。
+- 命令/操作: 读取三份规则文件，检查 Git 根目录、分支、工作树、目标文档和日志脚本可用性。
+- 关键输出: Git 根目录为 `/root/configure`，分支为 `main`；初始工作树干净；`docs/form_configure_20261020.md` 不存在；日志写入器可执行。
+- 退出码: 0。
+- 证据与判断: 任务范围仅限验证、任务文档、final 日志和 Git 状态检查，无需修改功能文件。
+
+### S2 - 复跑指定验证
+- 目标: 确认 Shell 语法、form 脚本行为、严格结构审计和固定快照完整性。
+- 命令/操作: 逐项执行 `bash -n` 覆盖 `bin/*.sh` 的 77 个路径，并运行 `form-scripts.test.sh`、`form-audit.sh --strict --quiet`、`form-snapshot-verify.sh --quiet`。
+- 关键输出: `bash_n_bin_exit=0 paths=77`；`form script tests: PASS`；严格审计 exit 0 且无 finding；快照校验 exit 0。
+- 退出码: 均为 0。
+- 证据与判断: 指定验证全部通过，结构审计结论保持 0 finding。
+
+### S3 - 写入任务文档
+- 目标: 归档目标、审计结论、验证证据、例外和恢复方式。
+- 命令/操作: 新增 `docs/form_configure_20261020.md`，记录本轮 form 收尾事实，不修改源码或无关文档。
+- 关键输出: 文档包含四项验证命令与退出码，以及上游边界例外和恢复路径。
+- 退出码: 0。
+- 证据与判断: 文档符合 `docs/` Markdown 边界，并明确本轮没有新增审计例外。
+
+### S4 - final 日志与 Git 收尾
+- 目标: 按 `log` 技能 final 模式归档全阶段记录，并完成最终 Git 检查。
+- 命令/操作: 通过 `skills/log/scripts/write-log.sh` 写入 final 日志和 `logs/AGENT.md` 索引；写入后执行最终 `git diff --check` 与 `git status`。
+- 关键输出: final 日志写入成功后会由脚本返回实际路径、大小和索引；最终 Git 检查记录在 Agent 全文报告中。
+- 退出码: 日志写入和最终检查结果以实际执行为准。
+- 证据与判断: 不暂存、不提交、不推送、不打标，也不修改系统配置。
+
+## 验证与证据
+
+- `bash -n` 逐项覆盖 `bin/*.sh` 的 77 个路径: exit 0。
+- `skills/form/scripts/form-scripts.test.sh`: `form script tests: PASS`，exit 0。
+- `skills/form/scripts/form-audit.sh --root . --strict --quiet`: exit 0，结构审计 0 finding。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`: exit 0。
+- 日志写入前的 `git diff --check`: exit 0。
+- 首次命令包装因 zsh 只读变量 `status` 返回包装器错误；底层命令已执行，随后改用非保留变量名完整重跑，并以上述重跑退出码为准。
+- 未验证项: 无任务要求内未执行项。
+
+## 变更与产物
+
+- 新增: `docs/form_configure_20261020.md`。
+- 新增: `logs/` 下本轮 final 日志。
+- 更新: `logs/AGENT.md` 批次索引。
+- 未改动范围: 未修改功能源码、系统配置、远程仓库、Git 标签或提交。
+
+## 风险、限制与下一步
+
+- 风险: 无已知功能风险；本轮仅增加文档与日志。
+- 限制: 按任务要求未暂存、提交、推送或打标。
+- 阻塞: 无。
+- 下一步: 如需交付，由用户明确授权后逐个暂存本任务文件并执行仓库提交门禁。
+
+## 用户输入指令
+你是 configure agent 系列的子 agent。只处理下面给出的任务，不扩大范围；先理解再行动，采用最小可靠改动，执行可用的验证，最终简洁返回结果、证据与阻塞。除非任务明确要求，不要继续派发子 agent；确需派发但失败时，复用启动本 agent 的同一 provider/model/auth/settings 链重试，仍失败则自行串行完成。
+
+【派发任务】
+以 {代码} 身份执行 configure 仓库的本轮 ~form 收尾工作。先完整读取 /root/configure/skills/form/SKILL.md、/root/configure/skills/log/SKILL.md 和 /root/configure/AGENTS.md 中与 form/log、验证相关的内容。审计已确认结构为 0 finding；不要重构无关文件。请：1) 复跑并记录 bash -n、skills/form/scripts/form-scripts.test.sh、form-audit --strict、snapshot-verify；2) 在 docs/ 创建 form_configure_20261020.md，记录目标、审计结论、验证证据、例外和恢复方式；3) 按 log 技能 final 模式写完整任务日志，报告应明确 finished/blocked/failed 终态；4) 执行 git diff --check 和 git status。严禁提交、推送、打标签、修改系统配置、访问仓库外除全局 configure 技能目录以外的内容。完成后返回 JSON 结果和改动文件清单。
+
+## Agent 全文报告
+--- report begin ---
+status: finished
+
+**结果**
+- configure 本轮 `~form` 收尾已完成，结构审计保持 0 finding。
+- 已新增 `docs/form_configure_20261020.md`，记录目标、审计结论、验证证据、例外和恢复方式。
+- 已按 `log` 技能 final 模式写入完整任务日志并更新 `logs/AGENT.md` 索引。
+
+**验证证据**
+- `bash -n` 逐项覆盖 `bin/*.sh` 的 77 个路径：exit 0。
+- `skills/form/scripts/form-scripts.test.sh`：`form script tests: PASS`，exit 0。
+- `skills/form/scripts/form-audit.sh --root . --strict --quiet`：exit 0，0 finding。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`：exit 0。
+- 日志写入前 `git diff --check`：exit 0；日志写入后将再次执行最终 Git 检查。
+
+**改动文件**
+- `docs/form_configure_20261020.md`
+- `logs/AGENT.md`
+- `logs/` 下本轮 final 日志
+
+**边界与阻塞**
+- 未提交、未推送、未打标签、未修改系统配置。
+- 阻塞：无。
+--- report end ---
