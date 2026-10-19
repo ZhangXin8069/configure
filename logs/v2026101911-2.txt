@@ -1,0 +1,89 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-19 11:38:08 +0800
+批次: dev30-local-tag
+主任务: 创建 dev30 本地开发标签并修复 ss 测试契约
+触发原因: 任务完成
+摘要: dev30 annotated tag 指向 cd0b028，修复 ss.test.sh 迁移断言，历史链与仓库门禁通过，未推送
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 基线、差异与历史链检查
+- 目标: 确认 `dev30` 的类型、编号、基线、变更范围和标签历史状态。
+- 命令/操作: 检查分支与工作树，读取 `dev29..HEAD` 提交和完整差异，执行 `tag-chain.sh --check --remote origin`。
+- 关键输出: 起始 `HEAD` 与 `origin/main` 均为 `ec0d885`；`dev29..HEAD` 有 7 个文件、`+253/-6`；121 个受管标签的 follow 链、提交祖先和远端对象全部一致；无历史修正项。
+- 退出码: 0
+- 证据与判断: 下一个独立 `dev` 主版本为 `dev30`；基线是 `dev29`。
+
+### S2 — init 幂等检查与测试失败定位
+- 目标: 确认初始化状态，并在打标前执行本次变更的相关回归。
+- 命令/操作: 只读检查仓库根和 `bin/` 的 agent init 文件，运行 `bash bin/ss.test.sh`、shell 语法、form 审计和快照校验。
+- 关键输出: 无待归档 init 文件；`ss.test.sh` 首轮以退出码 1 失败，报告 `ss.bat` 未提供纯数字回退用户映射；其余门禁通过。
+- 退出码: `ss.test.sh=1`，其他检查为 0。
+- 证据与判断: 根因是测试仍读取旧 `ss.bat` 内联实现，且使用旧变量 `$ip`；实际映射已迁移至 `ss.ps1` 并使用 `$ipSuffix`。
+
+### S3 — 测试契约修复与红绿回归
+- 目标: 让静态断言跟随当前 Windows 包装器架构，并覆盖原始故障模式。
+- 命令/操作: 修改 `bin/ss.test.sh`，将映射断言指向 `ss.ps1`；新增 `-File "%_PATH%ss.ps1"` 调用检查与禁止标签/`goto` 检查；仅暂存并提交该文件。
+- 关键输出: 修复前测试退出码 1；修复后 `bash bin/ss.test.sh` 退出码 0；提交为 `cd0b028 fix(ss): align Windows launcher tests with ss.ps1`。
+- 退出码: 0
+- 证据与判断: 红绿闭环成立，测试现在覆盖包装器拆分、无 `goto` 和 PowerShell 映射三个关键不变量。
+
+### S4 — 创建并验证 dev30
+- 目标: 在当前通过门禁的 `HEAD` 创建本地开发快照标签。
+- 命令/操作: 执行 `git tag -a dev30 -m '<follow dev29 消息>'`，检查 annotated 类型、peeled commit、标签消息，并重跑全历史链。
+- 关键输出: `dev30` 为 annotated tag；peeled commit 与 `HEAD` 均为 `cd0b0281c271c65bc8ff956d0e032008724e6806`；受管标签增至 122 个。
+- 退出码: 0
+- 证据与判断: follow 链、提交祖先关系和标签消息格式全部正确；未执行分支或标签推送。
+
+## 验证与证据
+- `bash bin/ss.test.sh`: 修复前失败，修复后通过。
+- `bash skills/tag/tag-chain.sh --check --remote origin`: 打标前通过，121 个受管标签。
+- `bash skills/tag/tag-chain.sh --check`: 打标后通过，122 个受管标签。
+- `bin/*.sh` 逐文件 `bash -n`: 通过。
+- `skills/form/scripts/form-audit.sh --root /root/configure --strict --quiet`: 通过。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`: 通过。
+- `git diff --check`、`git diff --cached --check`: 通过。
+- `dev30^{}` 与 `HEAD`: 均为 `cd0b0281c271c65bc8ff956d0e032008724e6806`。
+- 未验证项: Windows 实机 `.\ss.bat 20` 仍未在当前 Linux 环境执行；分支与标签未推送。
+
+## 变更与产物
+- 文件: `bin/ss.test.sh` 修正静态契约断言并增加包装器回归检查。
+- 提交: `cd0b028 fix(ss): align Windows launcher tests with ss.ps1`。
+- 产物: annotated tag `dev30`，目标 `cd0b028`。
+- 基线统计: `dev29..HEAD` 为 8 个文件、`+263/-10`。
+- 未改动范围: 未改写既有标签，未推送 `main` 或 `dev30`。
+
+## 风险、限制与下一步
+- 风险: `main` 比 `origin/main` 领先 1 个本地提交，`dev30` 仅存在本地；其他机器当前不可见。
+- 阻塞: 无。
+- 下一步: 如需远程同步，明确授权后依次推送 `main` 与 `dev30`。
+
+## 用户输入指令
+~tag:dev
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+改动内容:
+- 创建 annotated tag `dev30`，目标提交为 `cd0b0281c271c65bc8ff956d0e032008724e6806`。
+- 标签消息：`follow dev29, 1. 修复 Windows ss.bat 因 LF 行尾、标签跳转和长内联 PowerShell 命令导致的解析错位，拆分 ASCII+CRLF 包装器与独立 ss.ps1 实现; 2. 固定 ss.bat CRLF 检出属性并同步 Windows SSH 入口文档，保持 ss 20 等路由与退出码语义; 3. 将 Windows 静态契约断言迁移到 ss.ps1，并补充 -File 调用与无 goto 回归检查; [codex].`
+- 修复 `bin/ss.test.sh` 的遗留静态断言，使其检查 `ss.ps1` 的实际实现，并新增 `-File` 与无 `goto` 回归检查；本地提交 `cd0b028`。
+
+推理依据:
+- 最近 dev 标签为 `dev29`，下一独立主版本为 `dev30`。
+- 打标门禁发现 `ss.test.sh` 仍假设 Windows 逻辑位于 `ss.bat`，与上一轮拆分实现不一致；根因是测试文件和实现迁移不同步，而非产品逻辑回归。
+- `dev29..HEAD` 包含 8 个文件、263 行新增、10 行删除，核心是 Windows SSH 包装器拆分、CRLF 策略、文档、测试和任务日志。
+
+验证结果:
+- `ss.test.sh` 完成失败到通过的红绿回归。
+- 打标前 `tag-chain.sh --check --remote origin` 通过；打标后 `tag-chain.sh --check` 通过，受管标签 122 个。
+- `bash -n`、`form-audit --strict`、快照校验、`git diff --check` 全部通过。
+- `dev30^{}` 与 `HEAD` 均为 `cd0b0281c271c65bc8ff956d0e032008724e6806`。
+- 分支和标签均未推送；`main` 当前比 `origin/main` 领先 1 个本地提交。
+
+后续步骤:
+- 如需同步远程，需要明确授权后依次推送 `main` 与 `dev30`。Windows 实机仍建议执行一次 `.\ss.bat 20` 验证交互式 SSH。
+--- report end ---
