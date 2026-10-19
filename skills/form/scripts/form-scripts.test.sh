@@ -4,6 +4,8 @@ LC_ALL=C
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 AUDIT="$SCRIPT_DIR/form-audit.sh"
+AGENTS_SYNC="$SCRIPT_DIR/form-agents-sync.sh"
+LARGE_FILES="$SCRIPT_DIR/form-large-files-check.sh"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/form-audit-test.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
@@ -103,6 +105,104 @@ git -C "$simple" add -f .
 simple_output=$("$AUDIT" --root "$simple" --strict 2>/dev/null)
 [[ -z "$simple_output" ]] || fail "simple fixture should pass audit"
 
+sync_repo="$TMP_ROOT/sync-repo"
+make_repo "$sync_repo"
+printf '# Existing rules\n\n- local rule wins\n' >"$sync_repo/AGENTS.md"
+sync_section="$TMP_ROOT/form-section.md"
+printf '## form sync\n\n- protect local rules\n' >"$sync_section"
+"$AGENTS_SYNC" --root "$sync_repo" --content "$sync_section" --quiet
+grep -Fq -- '- local rule wins' "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync removed existing rules"
+grep -Fq -- '<!-- form-skill:start -->' "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync did not add the start marker"
+grep -Fq -- '<!-- form-skill:end -->' "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync did not add the end marker"
+"$AGENTS_SYNC" --root "$sync_repo" --content "$sync_section" --check --quiet ||
+  fail "AGENTS sync check should pass after synchronization"
+cp "$sync_repo/AGENTS.md" "$TMP_ROOT/agents-before-second-sync.md"
+"$AGENTS_SYNC" --root "$sync_repo" --content "$sync_section" --quiet
+cmp -s "$TMP_ROOT/agents-before-second-sync.md" "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync should be idempotent"
+printf '## form sync\n\n- updated managed rule\n' >"$sync_section"
+set +e
+"$AGENTS_SYNC" --root "$sync_repo" --content "$sync_section" --check --quiet
+sync_check_status=$?
+set -e
+[[ "$sync_check_status" -eq 1 ]] ||
+  fail "AGENTS sync check should report an update when content differs"
+cmp -s "$TMP_ROOT/agents-before-second-sync.md" "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync check should not modify the target"
+"$AGENTS_SYNC" --root "$sync_repo" --content "$sync_section" --quiet
+grep -Fq -- '- local rule wins' "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync update removed local rules"
+grep -Fq -- '- updated managed rule' "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync did not update its managed section"
+! grep -Fq -- '- protect local rules' "$sync_repo/AGENTS.md" ||
+  fail "AGENTS sync retained the superseded managed section"
+
+agent_md_repo="$TMP_ROOT/agent-md-repo"
+make_repo "$agent_md_repo"
+printf '# Singular agent file\n' >"$agent_md_repo/AGENT.md"
+"$AGENTS_SYNC" --root "$agent_md_repo" --content "$sync_section" --quiet
+[[ -f "$agent_md_repo/AGENT.md" && ! -e "$agent_md_repo/AGENTS.md" ]] ||
+  fail "AGENTS sync should prefer an existing AGENT.md"
+
+new_agents_repo="$TMP_ROOT/new-agents-repo"
+make_repo "$new_agents_repo"
+"$AGENTS_SYNC" --root "$new_agents_repo" --content "$sync_section" --quiet
+[[ -s "$new_agents_repo/AGENTS.md" ]] ||
+  fail "AGENTS sync should create AGENTS.md when neither file exists"
+
+mkdir -p "$new_agents_repo/subdir"
+set +e
+"$AGENTS_SYNC" --root "$new_agents_repo/subdir" --content "$sync_section" \
+  >/dev/null 2>&1
+subdir_sync_status=$?
+set -e
+[[ "$subdir_sync_status" -eq 2 ]] ||
+  fail "AGENTS sync should reject a non-root --root directory"
+
+broken_agents_repo="$TMP_ROOT/broken-agents-repo"
+make_repo "$broken_agents_repo"
+printf '%s\n' '<!-- form-skill:start -->' >"$broken_agents_repo/AGENTS.md"
+set +e
+"$AGENTS_SYNC" --root "$broken_agents_repo" --content "$sync_section" \
+  >/dev/null 2>&1
+broken_agents_status=$?
+set -e
+[[ "$broken_agents_status" -eq 2 ]] ||
+  fail "AGENTS sync should reject incomplete markers"
+
+out_of_order_agents_repo="$TMP_ROOT/out-of-order-agents-repo"
+make_repo "$out_of_order_agents_repo"
+{
+  printf '%s\n' '<!-- form-skill:end -->'
+  printf '%s\n' '<!-- form-skill:start -->'
+} >"$out_of_order_agents_repo/AGENTS.md"
+set +e
+"$AGENTS_SYNC" --root "$out_of_order_agents_repo" --content "$sync_section" \
+  >/dev/null 2>&1
+out_of_order_agents_status=$?
+set -e
+[[ "$out_of_order_agents_status" -eq 2 ]] ||
+  fail "AGENTS sync should reject out-of-order markers"
+
+large_repo="$TMP_ROOT/large-files-repo"
+make_repo "$large_repo"
+printf '1234567\n' >"$large_repo/small.txt"
+git -C "$large_repo" add small.txt
+"$LARGE_FILES" --root "$large_repo" --max-bytes 8 --quiet ||
+  fail "large-file check should accept a file at the size limit"
+printf '123456789\n' >"$large_repo/large.txt"
+git -C "$large_repo" add large.txt
+set +e
+large_output=$("$LARGE_FILES" --root "$large_repo" --max-bytes 8 2>/dev/null)
+large_status=$?
+set -e
+[[ "$large_status" -eq 1 ]] || fail "large-file check should reject an oversized staged file"
+grep -q $'LARGE_STAGED_FILE\tlarge.txt\t' <<<"$large_output" ||
+  fail "large-file check should identify the oversized staged file"
+
 mkdir -p "$TMP_ROOT/not-a-repo"
 set +e
 "$AUDIT" --root "$TMP_ROOT/not-a-repo" >/dev/null 2>&1
@@ -111,6 +211,8 @@ set -e
 [[ "$not_git_status" -eq 2 ]] || fail "non-Git root should return exit 2"
 
 "$AUDIT" --help >/dev/null
+"$AGENTS_SYNC" --help >/dev/null
+"$LARGE_FILES" --help >/dev/null
 
 mkdir -p "$TMP_ROOT/empty-snapshots"
 set +e

@@ -42,7 +42,11 @@
 - `env.sh` 用 `@SECTION@`（单@，激活块）/ `@@SECTION@@`（双@，注释块）标记分节
 - 安装命令首次运行后保留为注释，只留生效的 export，保证可复现
 
+<!-- form-skill:start -->
 ## form 格式约定
+
+> 本节由 form 技能同步维护；本文件其他原有约定与本节冲突时，以其他原有约定为准，
+> 用户明确指令优先于两者。
 
 - 库类型：simple；主导语言：bash，辅助语言为 python/json/other。
 - 文件名：代码文件全小写；多词命令用 `-` 连接，内部函数脚本用 `_`，测试用
@@ -62,12 +66,17 @@
   `skills/form/scripts/form-snapshot-verify.sh --quiet`。
 - Git 收尾：普通改动执行 `git diff --check`，未获明确授权不暂存、提交、推送或打标；
   完整 `~form` 交付流程可按其 Step 8 执行提交、推送和 `dev` 标签。
+- Git 大文件：除用户明确要求外，禁止提交单个大于 `10,000,000` 字节的文件；每批暂存后
+  运行 `skills/form/scripts/form-large-files-check.sh --root .`，命中时立即停止该批提交
+  与推送并提醒用户。5 分钟无回复时只继续推进不依赖超限文件的工作，静默不授权覆盖限制。
 - 例外：`refer/**`、`skills/form/references/source-snapshots/**`、vendored/generated
   文件保留上游名称；本库自身新增文件不得据此随意申请例外。
 - 标签名只用于版本定位，可在更新说明、提交说明、注释和日志中作为版本引用，但不得进入
   文件、目录、对象、函数、变量等名称；发现违规时由 form 整批纠正全部受影响引用。
+<!-- form-skill:end -->
 
 ## 命令
 
 - 无构建/lint/测试框架（纯 shell 脚本），校验脚本语法用 `bash -n <script>`
-- 提交前无强制检查；仓库内 `.agent.*.log` 为 opencode/Codex 运行日志，不入库
+- 仓库未安装自动 Git hook；任何 agent 提交前都必须执行上述大文件闸门；
+  `.agent.*.log` 为 opencode/Codex 运行日志，不入库
