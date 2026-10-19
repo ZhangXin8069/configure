@@ -1,0 +1,84 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 02:51:53 +0800
+批次: tag-dev-multirepo-20261020
+主任务: 为 PyQCU、MyQCD、PyQCD 创建本地 dev 标签
+触发原因: 任务完成
+摘要: 创建 PyQCU dev98、MyQCD dev4、PyQCD dev19；三标签均指向各自 HEAD，MyQCD/PyQCD 链自检通过，PyQCU 保留既有历史链阻断项，未推送
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 - 标签前检查
+- 目标: 为 /root/PyQCU、/root/MyQCD、/root/PyQCD 创建 dev 类型标签。
+- 操作: 读取 tag/log/diff/init 规范；检查三仓库工作树、HEAD、远程对齐、既有 dev 标签和候选编号。
+- 关键输出: 工作树均干净；候选标签为 PyQCU dev98、MyQCD dev4、PyQCD dev19；前驱分别为 dev97、dev3、dev18。
+- 退出码: 0
+- 证据与判断: 三个候选名称在本地和远程均不存在，前驱标签均为当前 HEAD 的祖先。
+
+### S2 - 差异与初始化审计
+- 操作: 执行基线 diff 概览和 init 范围检查。
+- 关键输出: 当前 HEAD 均为 AGENTS.md 单复数迁移及本地 form 规则同步提交；非 refer 范围未发现待归档 CLAUDE.md/CODEX.md/GEMINI.md/.cursorrules 等文件。
+- 退出码: 0
+- 证据与判断: PyQCD 的 refer/sush/_distillation/CLAUDE.md 属于只读外部参考，不纳入本库初始化改写；tag 前工作树无需新增同步改动。
+
+### S3 - 历史链自检
+- 操作: 对三仓库执行 tag-chain.sh --check，PyQCU 另执行 --repair --dry-run --remote origin。
+- 关键输出: MyQCD 与 PyQCD 全链 PASS；PyQCU 发现 dev37/dev38、dev72/bug30 两个提交祖先断裂阻断项，以及 dev38、bug30 两个可安全消息候选。
+- 退出码: MyQCD/PyQCD 0；PyQCU 1。
+- 证据与判断: 用户未授权改写既有标签；祖先断裂不能只改消息，因此未执行历史修复。仅创建当前 HEAD 新标签。
+
+### S4 - 创建与验证标签
+- 操作: 分别创建带注释的 dev98、dev4、dev19，并验证对象类型、peeled commit、消息、follow 前驱和远程缺失状态。
+- 关键输出: PyQCU dev98 指向 27acdb49；MyQCD dev4 指向 8a71578；PyQCD dev19 指向 cfb3b1d。三者本地 tag object 类型均为 tag。
+- 退出码: 0
+- 证据与判断: 新标签均与当前 HEAD 一致；MyQCD 和 PyQCD 含新标签后的本地全链复检 PASS；PyQCU 仍仅报告原有历史问题。
+
+## 验证与证据
+- 检查: 三仓库工作树和 HEAD。
+- 结果: 均干净，PyQCU/MyQCD/PyQCD HEAD 分别与 origin/main 对齐。
+- 检查: 标签对象类型与 peeled commit。
+- 结果: dev98、dev4、dev19 均为 annotated tag，peeled commit 等于各自 HEAD。
+- 检查: 标签消息。
+- 结果: 均以正确前驱 follow 开头，变更项以分号结尾，并以 [codex]. 结束。
+- 检查: 本地 follow 链。
+- 结果: MyQCD 13 个标签 PASS；PyQCD 90 个标签 PASS；PyQCU 278 个标签仍有 6 个既有问题。
+- 检查: 远程状态。
+- 结果: dev98、dev4、dev19 在 origin 均不存在；未推送分支或标签。
+- 未验证项: 未执行 PyQCU 既有历史标签修复，未做远程标签同步。
+
+## 变更与产物
+- PyQCU: 创建本地 annotated tag dev98，指向 27acdb49eeb1af022fa54748ba38ca1e9adacbc5。
+- MyQCD: 创建本地 annotated tag dev4，指向 8a7157814a3d33cbba896fc52025da199a706309。
+- PyQCD: 创建本地 annotated tag dev19，指向 cfb3b1dda5d7086ec01431c22782db4c74dc14f2。
+- 未改动范围: 未修改三个仓库文件，未暂存、提交、推送或改写既有标签。
+
+## 风险、限制与下一步
+- 风险: PyQCU 的 dev37/dev38、dev72/bug30 历史提交祖先关系异常仍然存在，无法通过消息修复。
+- 风险: 新标签仅存在本地，其他机器需在明确授权后通过 git push origin <tag> 同步。
+- 阻塞: 无。
+- 下一步: 如需同步远程，明确授权推送 dev98、dev4、dev19；如需处理 PyQCU 历史链，再单独授权评估标签改写。
+
+## 用户输入指令
+~tag:dev [~/PyQCU,~/MyQCD,~/PyQCD]
+
+## Agent 全文报告
+--- report begin ---
+### 改动内容
+- 在 PyQCU 创建本地注释标签 dev98。
+- 在 MyQCD 创建本地注释标签 dev4。
+- 在 PyQCD 创建本地注释标签 dev19。
+
+### 推理依据
+三个仓库工作树干净，HEAD 已与远程分支对齐，dev 类型下一主版本号分别为 98、4、19。标签以各自实际末标签 dev97、dev3、dev18 为前驱，仅保存在本地。
+
+### 验证结果
+- 三个标签均为 annotated tag，peeled commit 与 HEAD 完全一致。
+- MyQCD 和 PyQCD 的本地 follow 链全量通过。
+- PyQCU 新标签正确，但既有历史链仍存在 dev37/dev38、dev72/bug30 两个祖先断裂和两个消息候选，未擅自改写。
+- 三个标签在 origin 均不存在，未推送。
+- init 范围未发现需要归档的本库 agent 初始化文件。
+
+### 后续步骤
+当前命令已完成本地打标。若需要远程同步，下一步是明确授权后推送三个标签；PyQCU 历史链问题应由用户单独决定是否修复。
+--- report end ---
+
