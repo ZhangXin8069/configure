@@ -16,7 +16,9 @@ _finish() {
 }
 
 main() {
-    local short alias ip_text ip user default_ip rc
+    local short alias ip_text ip user default_ip numeric_fallback_user rc
+
+    numeric_fallback_user="zhangxin"
 
     if (( $# > 1 )); then
         echo "ss: 只接受一个缩写、数字或组合参数" >&2
@@ -64,13 +66,14 @@ main() {
     if [[ -z "${alias}" ]]; then
         case "${ip}" in
             19) user="kfutfd" ;;
+            20) user="kfutfd" ;;
             3) user="zhang" ;;
             2) user="zhangxin" ;;
             4) user="xin" ;;
             11) user="yang" ;;
             12) user="haotian" ;;
             13) user="yanghaotian" ;;
-            *) user="zhangxin" ;;
+            *) user="${numeric_fallback_user}" ;;
         esac
     fi
 
