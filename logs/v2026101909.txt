@@ -1,0 +1,63 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-19 09:21:10 +0800
+批次: ss-20-default-user
+主任务: 修改 ss 20 的默认 SSH 用户为 kfutfd
+触发原因: 任务完成
+摘要: Unix/Windows ss 均将纯数字 20 映射到 kfutfd@192.168.188.20，文档同步，Unix 参数与回归测试通过
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 定位现有映射
+- 目标: 确认 `ss 20` 当前实际路由及 Unix/Windows 差异。
+- 命令/操作: 定向读取 `bin/ss.sh`、`bin/ss.bat`、`bin/AGENTS.md`、`lib/_ssh/setup.md`，并检查 Git 状态。
+- 关键输出: `ss 20` 走纯数字分支；20 未命中内置映射时回退 `zhangxin`。
+- 退出码: 0
+- 证据与判断: 最小修复应在 Unix/Windows 的纯数字映射中显式加入 `20 -> kfutfd`，不改其他数字回退行为。
+
+### S2 — 实施与文档同步
+- 目标: 使 `ss 20` 调用 `ssh 192.168.188.20 -l kfutfd`。
+- 命令/操作: 修改 `bin/ss.sh` 与 `bin/ss.bat` 的纯数字映射，并同步 `bin/AGENTS.md`、`lib/_ssh/setup.md`。
+- 关键输出: 四处改动完成，文件权限未变。
+- 退出码: 0
+- 证据与判断: 仅修改指定行为，`ss 42` 仍保持 `zhangxin` 回退语义。
+
+## 验证与证据
+- 测试/检查: `bash -n ss.sh`；用导出 `ssh` 函数捕获实际参数；`form-audit.sh --root . --strict --quiet`；`form-snapshot-verify.sh --quiet`；`git diff --check`。
+- 结果: 全部通过。参数测试确认 `ss 20`、`ss k20` 为 `192.168.188.20 -l kfutfd`；`ss 42` 为 `zhangxin`；`ss zx20` 为 `zhangxin`；无参数仍为 `192.168.188.19 -l kfutfd`。
+- 未验证项: 本机无 `powershell.exe`/`pwsh`，Windows `ss.bat` 仅完成静态映射校验，未执行端到端调用。
+
+## 变更与产物
+- 文件: `bin/ss.sh`、`bin/ss.bat`、`bin/AGENTS.md`、`lib/_ssh/setup.md`。
+- 产物: 无构建产物。
+- 未改动范围: 其他 SSH 快捷脚本、其他纯数字目标的用户回退规则。
+
+## 风险、限制与下一步
+- 风险: Windows 批处理包装的 PowerShell 命令尚未在 Windows 主机实跑。
+- 阻塞: 无；本机缺少 PowerShell 只影响该平台验证覆盖。
+- 下一步: 如需 Windows 端确认，可在 Windows 环境执行 `ss 20` 并核对 SSH 连接目标；未获授权不提交。
+
+## 用户输入指令
+修改ss系列:“ss 20”默认为“ssh 192.168.188.20 -l kfutfd”
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+改动内容：
+- `bin/ss.sh`：纯数字 `20` 显式映射到 `kfutfd`。
+- `bin/ss.bat`：Windows 对应映射同步为 `20 -> kfutfd`。
+- `bin/AGENTS.md`、`lib/_ssh/setup.md`：补充 `ss 20` 的行为说明与示例。
+
+推理依据：
+- 采用最小范围修改，只改变用户明确指定的 `ss 20`，不扩大为所有未映射数字都使用 `kfutfd`，因此 `ss 42` 等既有行为保持不变。
+
+验证结果：
+- `ss 20`：实际调用目标为 `192.168.188.20 -l kfutfd`。
+- 回归测试通过：`ss 42`、`ss k20`、`ss zx20`、无参数场景均符合预期。
+- `bash -n ss.sh`、form 严格审计、快照检查、`git diff --check` 全部通过。
+- 本机没有 PowerShell，`ss.bat` 未执行 Windows 端到端测试，仅完成静态校验。
+
+后续步骤：
+- 当前改动未暂存、未提交、未推送。如需要平台实机确认，可在 Windows 环境执行 `ss 20`。
+--- report end ---

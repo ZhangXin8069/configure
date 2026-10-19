@@ -1,0 +1,65 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-19 10:50:50 +0800
+批次: ss-numeric-fallback
+主任务: 固化 ss 其余数字最低优先级回退到 zhangxin 的规则
+触发原因: 任务完成
+摘要: Unix/Windows ss 显式定义未登记纯数字回退 zhangxin，新增 9 组参数与 Windows 静态契约测试，文档同步
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 核对现有纯数字解析
+- 目标: 确认 `ss 20` 等已登记映射与其余数字默认用户的实际优先级。
+- 命令/操作: 定向读取 `bin/ss.sh`、`bin/ss.bat`、`bin/AGENTS.md`、`lib/_ssh/setup.md` 并检查 Git 状态。
+- 关键输出: Unix 已存在 `*) user="zhangxin"` 的最低优先级回退；Windows 已通过 `'numeric' = @('zhangxin', $null)` 和已登记数字覆盖实现同等语义。
+- 退出码: 0
+- 证据与判断: 目标行为已经存在，但缺少显式命名、自动化回归测试和完整优先级说明；不应制造额外行为变化。
+
+### S2 — 固化契约与回归覆盖
+- 目标: 明确“已登记数字映射 > 最低优先级默认用户 zhangxin”，并覆盖 Windows 对应逻辑。
+- 命令/操作: 在 Unix/Windows 实现中将 `zhangxin` 提取为显式 fallback 变量；新增 `bin/ss.test.sh`；同步 `bin/AGENTS.md` 与 `lib/_ssh/setup.md`。
+- 关键输出: 新增 9 组 Unix 参数测试，覆盖未登记数字、已登记数字、用户缩写覆盖和默认目标；Windows 批处理增加两项静态契约断言。
+- 退出码: 0
+- 证据与判断: 未登记数字保持 `zhangxin`，显式数字映射和用户缩写保持更高优先级。
+
+## 验证与证据
+- 测试/检查: `bash -n ss.sh`、`bash -n ss.test.sh`、`./ss.test.sh`、`form-audit.sh --root . --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check`。
+- 结果: 全部通过。`ss 42`、`ss 1`、`ss 254` 均调用 `zhangxin`；`ss 20`、`ss 19`、`ss 3` 保持已登记用户；`ss k42`、`ss y42` 证明用户缩写优先；无参数行为保持不变。
+- 未验证项: 当前环境无 `powershell.exe`/`pwsh`，`ss.bat` 仅完成静态契约验证，未执行 Windows 端到端连接。
+
+## 变更与产物
+- 文件: `bin/ss.sh`、`bin/ss.bat`、`bin/ss.test.sh`、`bin/AGENTS.md`、`lib/_ssh/setup.md`。
+- 产物: `bin/ss.test.sh`，权限 `0755`。
+- 未改动范围: SSH 目标网段、其他 SSH 快捷脚本、其他参数解析规则。
+
+## 风险、限制与下一步
+- 风险: Windows PowerShell 包装层尚未在 Windows 主机实跑。
+- 阻塞: 无。
+- 下一步: 如需补足 Windows 实机证据，可执行 `ss.test.sh` 或在 Windows 环境运行 `ss 42`；未获授权不提交。
+
+## 用户输入指令
+修改ss系列:“ss 其余数字”默认为“ssh 192.168.188.{其余数字} -l zhangxin”,其中「其余数字」是指未指定默认「user」的,本默认设置优先级最低
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+改动内容：
+- `bin/ss.sh`：将 `zhangxin` 定义为显式的纯数字最低优先级回退用户。
+- `bin/ss.bat`：同步使用独立的 `$numericFallbackUser`，已登记数字映射仍优先覆盖。
+- `bin/ss.test.sh`：新增回归测试，覆盖 `1`、`42`、`254` 等未登记数字，`19`、`20`、`3` 等已登记数字，以及 `k42`、`y42` 等用户缩写场景。
+- `bin/AGENTS.md`、`lib/_ssh/setup.md`：明确“已登记数字映射 > 最低优先级默认用户”的规则。
+
+推理依据：
+- 现有实现原本已经对未登记纯数字回退到 `zhangxin`。本次不改变既有行为，而是将该规则显式化、补充测试并同步文档，避免后续修改破坏优先级。
+- 用户缩写仍优先于数字默认用户，已登记数字映射仍优先于通用回退。
+
+验证结果：
+- `ss 42`、`ss 1`、`ss 254` 均解析为 `192.168.188.<数字> -l zhangxin`。
+- `ss 20`、`ss 19`、`ss 3` 保持各自已登记用户；`ss k42`、`ss y42` 保持用户缩写优先。
+- Shell 语法检查、`ss.test.sh`、form 严格审计、快照检查及 `git diff --check` 全部通过。
+- 当前环境没有 PowerShell，`ss.bat` 已完成静态契约验证，但未执行 Windows 端到端测试。
+
+后续步骤：
+- 当前改动未暂存、未提交、未推送。若需要 Windows 实机证据，可在 Windows 环境运行 `ss 42`。
+--- report end ---

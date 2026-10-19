@@ -27,3 +27,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## ss-20-default-user - final - 2026-10-19 09:21:10 +0800
+- 主任务: 修改 ss 20 的默认 SSH 用户为 kfutfd
+- 日志文件: logs/v2026101909.txt
+- 文件大小: 3359 bytes
+- 触发原因: 任务完成
+- 关键内容: Unix/Windows ss 均将纯数字 20 映射到 kfutfd@192.168.188.20，文档同步，Unix 参数与回归测试通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## ss-numeric-fallback - final - 2026-10-19 10:50:50 +0800
+- 主任务: 固化 ss 其余数字最低优先级回退到 zhangxin 的规则
+- 日志文件: logs/v2026101910.txt
+- 文件大小: 4339 bytes
+- 触发原因: 任务完成
+- 关键内容: Unix/Windows ss 显式定义未登记纯数字回退 zhangxin，新增 9 组参数与 Windows 静态契约测试，文档同步
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
