@@ -1,0 +1,95 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 02:41:27 +0800
+批次: agents-md-form-sync-20261020
+主任务: 将 AGENTS.md 唯一命名与双文件合并规则写入 form 并同步三个仓库
+触发原因: 任务完成
+摘要: form 固化 AGENTS.md 唯一规则并新增审计；PyQCU、MyQCD、PyQCD 完成合并、重命名、现行引用与本地规则同步，全部审计通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 - 固化 form 规则
+- 目标: 将 AGENTS.md 唯一命名和双文件语义合并规则写入 form 技能。
+- 操作: 更新 SKILL.md、命名与交付参考、form 技能说明、根 form 托管块、skills 索引；在 form-audit.sh 新增 AGENT_FILE_SINGULAR 检查并补充回归用例。
+- 关键输出: 所有目录只允许 AGENTS.md；AGENT.md 被定义为历史输入错误；双文件必须以 AGENTS.md 为主文件合并、去重、确认无内容丢失后删除单数文件。
+- 退出码: 0
+- 证据与判断: form 脚本测试、严格审计、根标记块检查和快照校验均通过。
+
+### S2 - 并行整改三个仓库
+- 目标: 对 /root/PyQCU、/root/MyQCD、/root/PyQCD 执行同一规则。
+- 操作: 通过 /root/configure/bin/agent-dispatch.sh 并行派发三个独立仓库任务，并在返回后逐仓库独立复核。
+- 关键输出: PyQCU 与 PyQCD 子任务正常返回；MyQCD 子任务完成文件修改后未结束会话，已终止冗余进程，由主 agent 串行完成审计和验证。
+- 退出码: PyQCU 和 PyQCD 派发 exit 0；MyQCD 派发终止 exit 143，串行复核 exit 0。
+- 证据与判断: MyQCD 工作树修改已完整落盘，独立严格审计通过，无待写入内容被中断。
+
+### S3 - 文件合并与重命名
+- 操作: PyQCU 合并 logs/AGENT.md 的四条索引到 logs/AGENTS.md，并保留原日志生命周期与目录职责；将 pyqcu/testing/simple/AGENT.md 重命名为 AGENTS.md。PyQCD 合并 logs/AGENT.md 的三条索引到 logs/AGENTS.md。MyQCD 将 logs/AGENT.md 直接重命名为 logs/AGENTS.md。
+- 关键输出: 三个仓库物理 AGENT.md 数量均为 0。
+- 退出码: 0
+- 证据与判断: PyQCU 简单示例除标题外正文逐行一致；四条日志索引均存在；PyQCD 三条日志索引均存在；MyQCD 迁移前缀逐字节一致。
+
+### S4 - 本地规则同步
+- 操作: 更新三个仓库根部 AGENTS.md 的 form 托管块和本地 form 技能说明；PyQCU 同时移除 skills/AGENTS.md 中将 AGENT.md 作为预读候选的现行规则。
+- 关键输出: 三仓库均明确 AGENTS.md 为唯一名称，双文件必须合并去重后删除单数文件，并同步现行引用。
+- 退出码: 0
+- 证据与判断: 三个仓库的根 form 标记块均通过 form-agents-sync.sh --check。
+
+## 验证与证据
+- 检查: /root/configure 的 form 脚本测试与 write-log 测试。
+- 结果: form script tests: PASS；write-log tests: PASS。
+- 检查: /root/configure 严格结构审计与快照完整性。
+- 结果: exit 0。
+- 检查: /root/configure 根 form 标记块。
+- 结果: form-agents-sync.sh --check exit 0。
+- 检查: /root/PyQCU 本地 form 审计。
+- 结果: PASS，32 个技能目录与索引一致，豁免 1043 个既有资产 finding。
+- 检查: /root/MyQCD 全局 form 严格审计。
+- 结果: exit 0。
+- 检查: /root/PyQCD 本地 form 审计。
+- 结果: PASS，registered exceptions=1147，unexpected=0。
+- 检查: 四仓库 git diff --check。
+- 结果: 全部 exit 0。
+- 检查: 四仓库暂存状态。
+- 结果: 均无暂存内容。
+- 未验证项: 未执行提交、推送、标签或功能级 Python 回归，因为本次只修改 agent 规则与日志索引，未修改生产代码。
+
+## 变更与产物
+- /root/configure: form 技能规则、审计器、测试、根规则与技能索引同步更新。
+- /root/PyQCU: 合并 logs/AGENTS.md，重命名 testing/simple 规则文件，更新根部与本地 form 规则。
+- /root/MyQCD: logs/AGENTS.md 重命名，更新根部与本地 form 规则。
+- /root/PyQCD: 合并 logs/AGENTS.md，更新根部与本地 form 规则。
+- 未改动范围: 历史日志正文保留旧路径作为既往证据；未修改生产代码，未暂存、提交或推送。
+
+## 风险、限制与下一步
+- 风险: MyQCD 子代理在完成修改后挂起，已终止并串行验证；其最终自述缺失，但工作树和审计证据完整。
+- 风险: 当前所有改动仍在各仓库工作树中，尚未进入版本历史。
+- 阻塞: 无。
+- 下一步: 如需要，由用户明确授权后分别在四个仓库执行暂存、提交和推送。
+
+## 用户输入指令
+将此写入form-skill,并对~/PyQCU,~/MyQCD,~/PyQCD进行同步修改
+
+## Agent 全文报告
+--- report begin ---
+### 改动内容
+- form 技能已固化 AGENTS.md 唯一命名规则：AGENT.md 是历史输入错误；双文件必须以 AGENTS.md 为主文件语义合并、去重，确认无内容丢失后删除单数文件。
+- `form-audit.sh` 新增 AGENT_FILE_SINGULAR 检查，并增加对应回归用例。
+- PyQCU 合并 logs 双文件，重命名 pyqcu/testing/simple/AGENT.md。
+- MyQCD 将 logs/AGENT.md 重命名为 logs/AGENTS.md。
+- PyQCD 合并 logs 双文件。
+- 三个仓库的根 form 托管块和本地 form 技能说明均已同步。
+
+### 推理依据
+AGENTS.md 是 agent 规则文件的唯一标准名称。直接删除单数文件会丢失规则或日志索引，因此双文件场景必须先比较并合并有效内容。历史日志保留旧路径是事实证据，现行脚本、配置和文档则必须全部改用复数名。
+
+### 验证结果
+- 三个目标仓库物理 AGENT.md 数量均为 0。
+- PyQCU、MyQCD、PyQCD 的 form 审计全部通过。
+- 双文件条目完整性与单文件重命名内容完整性检查通过。
+- configure 的 form/log 回归、严格审计、根标记块和快照校验通过。
+- 四仓库 git diff --check 通过，均无暂存内容。
+
+### 后续步骤
+改动尚未提交或推送。如需版本化，可分别在 `/root/configure`、`~/PyQCU`、`~/MyQCD`、`~/PyQCD` 按仓库边界执行 Git 交付。
+--- report end ---
+

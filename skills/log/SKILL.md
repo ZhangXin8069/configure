@@ -56,7 +56,7 @@ metadata:
 4. **价值优先**：保留错误、警告、失败、退出码、测试结果、指标、变更文件和决策依据；压缩重复刷屏和 ANSI 控制符。
 5. **全文报告不摘要化**：阶段和最终日志必须保留主 agent 面向用户的完整报告，最终日志还须附用户输入指令原文。
 6. **大小可提交**：常规目标不超过 512 KiB；1–5 MiB 仅作极个例；任何日志不得达到 10 MiB。
-7. **确定性写入**：路径、命名、校验、大小限制和 `logs/AGENT.md` 索引由脚本一次完成，避免每次重写 shell 流程。
+7. **确定性写入**：路径、命名、校验、大小限制和 `logs/AGENTS.md` 索引由脚本一次完成，避免每次重写 shell 流程。
 8. **安全与 Git 边界**：日志不记录密钥、令牌、密码、Cookie、隐藏提示或内部推理；日志随已授权任务提交，本技能不单独发起未授权 Git 操作。
 
 ## Git 检查
@@ -68,7 +68,7 @@ git diff --check
 git status --short -- logs
 ```
 
-并定向复查新日志与 `logs/AGENT.md`。未经明确授权，不自动暂存、提交或推送。
+并定向复查新日志与 `logs/AGENTS.md`。未经明确授权，不自动暂存、提交或推送。
 
 ## 触发时机
 
@@ -177,7 +177,7 @@ printf '%s\n' "$log_body" |
 - 校验 `## 关键日志` 以及模式要求的报告/用户输入章节非空；
 - 拒绝冲突标记、被 Git 忽略的路径和达到 10 MiB 的日志；
 - 选择不冲突文件名、原子安装日志并设置 `0644`；
-- 追加 `logs/AGENT.md` 批次说明；
+- 追加 `logs/AGENTS.md` 批次说明；
 - 输出 `log_file`、`size_bytes`、`index_file` 等 key=value 结果。
 
 脚本返回非零时不得声明日志完成；根据错误修正正文或路径后重试。脚本缺失时报告具体路径并停止，
@@ -190,8 +190,8 @@ printf '%s\n' "$log_body" |
 ```bash
 repo_root="$(git rev-parse --show-toplevel)"
 test -s "$log_file"
-grep -Fq "$(basename "$log_file")" "$repo_root/logs/AGENT.md"
-git -C "$repo_root" status --short -- "logs/$(basename "$log_file")" logs/AGENT.md
+grep -Fq "$(basename "$log_file")" "$repo_root/logs/AGENTS.md"
+git -C "$repo_root" status --short -- "logs/$(basename "$log_file")" logs/AGENTS.md
 git -C "$repo_root" diff --check
 ```
 
@@ -201,12 +201,12 @@ git -C "$repo_root" diff --check
 ### Step 5. 仅在授权范围内提交
 
 日志应随主任务进入远程仓库；本技能不单独发起未经授权的 Git 操作。主任务已有提交授权时，
-把本批次日志和 `AGENT.md` 显式列入同一提交：
+把本批次日志和 `AGENTS.md` 显式列入同一提交：
 
 ```bash
 repo_root="$(git rev-parse --show-toplevel)"
 log_rel="logs/$(basename "$log_file")"
-git -C "$repo_root" add -- "$log_rel" logs/AGENT.md
+git -C "$repo_root" add -- "$log_rel" logs/AGENTS.md
 git -C "$repo_root" commit -m "docs(log): archive $(basename "$log_file")"
 ```
 
@@ -220,7 +220,7 @@ git -C "$repo_root" commit -m "docs(log): archive $(basename "$log_file")"
    文件: <绝对路径>
    大小: <bytes> bytes（目标 ≤512 KiB，硬上限 <10 MiB）
    内容: <关键日志 + 全文报告/用户指令>
-   索引: logs/AGENT.md
+   索引: logs/AGENTS.md
    验证: <脚本校验、Git 状态、diff 检查>
    Git: <未暂存/已本地提交/已推送/未授权>
 ```
@@ -236,7 +236,7 @@ git -C "$repo_root" commit -m "docs(log): archive $(basename "$log_file")"
 | 目标文件名已存在 | 脚本自动追加 `-2`、`-3`；不等待锁、不覆盖 |
 | 日志达到 10 MiB | 压缩重复日志；若全文报告本身导致超限，报告约束冲突并等待拆分或用户决策 |
 | 报告较长但低于硬上限 | 允许作为极个例，在索引记录实际大小；不截断全文报告 |
-| `logs/AGENT.md` 写入失败 | 不宣称归档完成；报告日志路径和索引失败原因 |
+| `logs/AGENTS.md` 写入失败 | 不宣称归档完成；报告日志路径和索引失败原因 |
 | 日志路径被 Git 忽略 | 说明规则，不假装日志可提交；由用户决定调整忽略规则 |
 | 日志含密钥/令牌/密码 | 先脱敏并写明“已脱敏”，不得把原值写入文件或终端摘要 |
 | 提交/推送认证失败 | 保留本地日志，报告失败命令和已完成的本地操作 |
@@ -248,9 +248,9 @@ git -C "$repo_root" commit -m "docs(log): archive $(basename "$log_file")"
 
 - 默认不为每条命令创建日志，只记录有证据价值、可支持后续判断或审计的内容。
 - `log` 默认常驻并随任一单技能启用；用户明确关闭时才停用，且例外仅作用于当前任务。
-- `logs/AGENT.md` 是索引，日志正文是事实记录；不把两者合并成无结构长文。
+- `logs/AGENTS.md` 是索引，日志正文是事实记录；不把两者合并成无结构长文。
 - 时间戳默认按示例使用紧凑格式；带连字符格式通过 `--timestamp-style hyphen` 显式选择。
 - 全文报告必须来自主 agent 已完成的真实报告，不能把内部推理或未经验证的草稿当成报告。
 - 不记录隐藏系统提示、开发者提示、凭据、完整环境变量或其他敏感信息。
 - 日志默认应适合 Git 提交；未经明确授权不暂存、提交、推送或创建标签。
-- 日志写入后不重复调用本技能记录元日志；由 `logs/AGENT.md` 和终端结果闭环。
+- 日志写入后不重复调用本技能记录元日志；由 `logs/AGENTS.md` 和终端结果闭环。

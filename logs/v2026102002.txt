@@ -1,0 +1,82 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 02:28:07 +0800
+批次: agent-md-to-agents-md-20261020
+主任务: 将仓库内 AGENT.md 统一为 AGENTS.md
+触发原因: 任务完成
+摘要: 单数日志索引迁移为 logs/AGENTS.md，活动引用同步，脚本测试、严格审计和快照校验通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 - 全库盘点与冲突检查
+- 目标: 将所有 `AGENT.md` 统一为 `AGENTS.md`；同目录双文件存在时合并。
+- 命令/操作: 使用 `rg --files --no-ignore --hidden`、`git grep` 和 `git status` 盘点单数文件、复数文件、文字引用及工作树状态。
+- 关键输出: 物理单数文件仅发现 `logs/AGENT.md`；未发现任何同目录 `AGENT.md` 与 `AGENTS.md` 并存；初始工作树干净。
+- 退出码: 0
+- 证据与判断: 实际需要迁移的文件为 `logs/AGENT.md`，本次没有需要执行内容合并的双文件目录。
+
+### S2 - 文件迁移与引用同步
+- 命令/操作: 将 `logs/AGENT.md` 移动为 `logs/AGENTS.md`；更新日志写入器、form 审计器、form 规则同步器、回归测试、根规则、技能说明、参考文档和任务文档中的现行路径。
+- 关键输出: 活动代码和文档统一引用 `logs/AGENTS.md`；`form-agents-sync.sh` 仅接受 `AGENTS.md`；单数目标名由负向测试确保被拒绝。
+- 退出码: 0
+- 证据与判断: `logs/AGENT.md` 已不存在，`logs/AGENTS.md` 内容与迁移前一致。
+
+### S3 - 验证
+- 命令/操作: 执行 Shell 语法检查、`write-log.test.sh`、`form-scripts.test.sh`、临时目标索引上的严格结构审计、快照完整性检查及 `git diff --check`。
+- 关键输出: `write-log tests: PASS`；`form script tests: PASS`；严格审计 exit 0；快照校验 exit 0；`git diff --check` exit 0。
+- 退出码: 0
+- 证据与判断: 迁移后的文件布局和脚本引用闭环，未发现语法、结构或空白错误。真实暂存区未修改，严格审计使用独立临时索引验证目标树。
+
+## 验证与证据
+- 测试/检查: `bash -n` 覆盖所有本次修改的 Shell 脚本。
+- 结果: exit 0。
+- 测试/检查: `skills/log/scripts/write-log.test.sh`。
+- 结果: `write-log tests: PASS`，exit 0。
+- 测试/检查: `skills/form/scripts/form-scripts.test.sh`。
+- 结果: `form script tests: PASS`，exit 0。
+- 测试/检查: 临时 Git 索引上的 `skills/form/scripts/form-audit.sh --root . --strict --quiet`。
+- 结果: exit 0，0 finding。
+- 测试/检查: `skills/form/scripts/form-snapshot-verify.sh --quiet`。
+- 结果: exit 0。
+- 测试/检查: `git diff --check`。
+- 结果: exit 0。
+- 未验证项: 未执行提交、推送或标签操作，因为用户未授权这些 Git 交付动作。
+
+## 变更与产物
+- 文件: `logs/AGENTS.md`、根 `AGENTS.md`、`skills/AGENTS.md`、`skills/form/AGENTS.md`、form 与 log 技能文档及脚本、相关参考文档、`skills/make/SKILL.md`、`docs/form_configure_20261020.md`。
+- 产物: 仓库现行日志索引统一为 `logs/AGENTS.md`。
+- 未改动范围: 历史日志正文保留原样，未改写既往执行事实；未暂存、提交、推送或打标签。
+
+## 风险、限制与下一步
+- 风险: 历史日志仍可能含有旧的单数文件名字面量，这是历史证据而非现行路径引用。
+- 阻塞: 无。
+- 下一步: 如需纳入版本历史，由用户明确授权后暂存、提交和推送。
+
+## 用户输入指令
+将所有的AGENT.md修改为AGENTS.md,如果两者都存在则合并,之前的'AGENT.md'为用户输入错误
+
+## Agent 全文报告
+--- report begin ---
+### 改动内容
+- 将 `logs/AGENT.md` 移动为 `logs/AGENTS.md`。
+- 更新现行脚本、测试、根规则和技能文档中的索引路径。
+- `form-agents-sync.sh` 现在只接受并创建 `AGENTS.md`，不再回退到单数名称。
+- form 审计器现在只识别 `logs/AGENTS.md`。
+
+### 推理依据
+- 全库扫描只发现一个单数文件，且不存在同目录双文件，因此本次无需内容合并。
+- 同步更新引用是为避免文件改名后日志写入、审计、规则同步和测试出现断链。
+- 历史日志正文保留，避免把既往执行记录改写成当时并不存在的新路径。
+
+### 验证结果
+- 修改脚本全部通过 `bash -n`。
+- `write-log tests: PASS`。
+- `form script tests: PASS`。
+- 严格结构审计在临时目标索引上通过，0 finding。
+- 离线快照完整性校验通过。
+- `git diff --check` 通过。
+
+### 后续步骤
+当前改动未暂存、未提交、未推送。如需要版本化，可在明确授权后执行 Git 交付流程。
+--- report end ---
+

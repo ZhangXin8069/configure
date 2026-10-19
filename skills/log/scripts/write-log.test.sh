@@ -45,7 +45,7 @@ grep -q '^log_file=.*/logs/v202610191234\.txt$' <<<"$stage_output" ||
 test -s logs/v202610191234.txt || fail "stage log was not written"
 grep -q '^## Agent 全文报告$' logs/v202610191234.txt ||
   fail "stage report section missing"
-grep -q '日志文件: logs/v202610191234.txt' logs/AGENT.md ||
+grep -q '日志文件: logs/v202610191234.txt' logs/AGENTS.md ||
   fail "stage index entry missing"
 
 collision_output=$(stage_body | "$WRITE_LOG" \
@@ -117,7 +117,7 @@ final_output=$(final_body | "$WRITE_LOG" \
   --timestamp 2026101913)
 grep -q '^log_file=.*/logs/v2026101913\.txt$' <<<"$final_output" ||
   fail "final log filename mismatch"
-grep -q '批次状态: complete' logs/AGENT.md ||
+grep -q '批次状态: complete' logs/AGENTS.md ||
   fail "final index status missing"
 
 if cat <<'EOF' | "$WRITE_LOG" --mode stage --task '缺阶段报告' --timestamp 202610191259 >/dev/null 2>&1

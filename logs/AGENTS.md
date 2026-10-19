@@ -108,3 +108,20 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-md-to-agents-md-20261020 - final - 2026-10-20 02:28:07 +0800
+- 主任务: 将仓库内 AGENT.md 统一为 AGENTS.md
+- 日志文件: logs/v2026102002.txt
+- 文件大小: 4647 bytes
+- 触发原因: 任务完成
+- 关键内容: 单数日志索引迁移为 logs/AGENTS.md，活动引用同步，脚本测试、严格审计和快照校验通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+## agents-md-form-sync-20261020 - final - 2026-10-20 02:41:27 +0800
+- 主任务: 将 AGENTS.md 唯一命名与双文件合并规则写入 form 并同步三个仓库
+- 日志文件: logs/v2026102002-2.txt
+- 文件大小: 6100 bytes
+- 触发原因: 任务完成
+- 关键内容: form 固化 AGENTS.md 唯一规则并新增审计；PyQCU、MyQCD、PyQCD 完成合并、重命名、现行引用与本地规则同步，全部审计通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

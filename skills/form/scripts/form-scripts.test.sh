@@ -28,6 +28,7 @@ mkdir -p "$complex/pyqcu" "$complex/docs" "$complex/logs" "$complex/Misc"
 printf '' >"$complex/pyqcu/GoodName.py"
 printf '' >"$complex/pyqcu/dev26_1_solver.py"
 printf '' >"$complex/pyqcu/test_bad.py"
+printf '' >"$complex/pyqcu/AGENT.md"
 printf '' >"$complex/pyqcu/notes.log"
 printf '' >"$complex/docs/guide.txt"
 printf '' >"$complex/logs/run.log"
@@ -48,6 +49,8 @@ grep -q $'^WARNING\tFILE_UPPERCASE\tpyqcu/GoodName.py\t' <<<"$complex_output" ||
   fail "missing FILE_UPPERCASE finding"
 grep -q $'^WARNING\tTAG_NAME_IN_PATH\tpyqcu/dev26_1_solver.py\t' <<<"$complex_output" ||
   fail "missing TAG_NAME_IN_PATH finding"
+grep -q $'^ERROR\tAGENT_FILE_SINGULAR\tpyqcu/AGENT.md\t' <<<"$complex_output" ||
+  fail "missing AGENT_FILE_SINGULAR finding"
 grep -q $'^WARNING\tDOC_EXTENSION\tdocs/guide.txt\t' <<<"$complex_output" ||
   fail "missing DOC_EXTENSION finding"
 grep -q $'^WARNING\tLOG_OUTSIDE_LOGS\tpyqcu/notes.log\t' <<<"$complex_output" ||
@@ -85,7 +88,7 @@ printf '' >"$simple/data/AGENTS.md"
 printf '' >"$simple/data/README.md"
 printf '' >"$simple/docs/task.md"
 printf '' >"$simple/logs/run.log"
-printf '' >"$simple/logs/AGENT.md"
+printf '' >"$simple/logs/AGENTS.md"
 printf '' >"$simple/logs/v20261016.txt"
 printf '' >"$simple/logs/v2026101617.txt"
 printf '' >"$simple/logs/v202610161725.txt"
@@ -140,12 +143,17 @@ grep -Fq -- '- updated managed rule' "$sync_repo/AGENTS.md" ||
 ! grep -Fq -- '- protect local rules' "$sync_repo/AGENTS.md" ||
   fail "AGENTS sync retained the superseded managed section"
 
-agent_md_repo="$TMP_ROOT/agent-md-repo"
-make_repo "$agent_md_repo"
-printf '# Singular agent file\n' >"$agent_md_repo/AGENT.md"
-"$AGENTS_SYNC" --root "$agent_md_repo" --content "$sync_section" --quiet
-[[ -f "$agent_md_repo/AGENT.md" && ! -e "$agent_md_repo/AGENTS.md" ]] ||
-  fail "AGENTS sync should prefer an existing AGENT.md"
+singular_target_repo="$TMP_ROOT/singular-target-repo"
+make_repo "$singular_target_repo"
+set +e
+"$AGENTS_SYNC" --root "$singular_target_repo" --target AGENT.md \
+  --content "$sync_section" >/dev/null 2>&1
+singular_target_status=$?
+set -e
+[[ "$singular_target_status" -eq 2 ]] ||
+  fail "AGENTS sync should reject the singular target name"
+[[ ! -e "$singular_target_repo/AGENT.md" && ! -e "$singular_target_repo/AGENTS.md" ]] ||
+  fail "AGENTS sync should not create files for an invalid target"
 
 new_agents_repo="$TMP_ROOT/new-agents-repo"
 make_repo "$new_agents_repo"

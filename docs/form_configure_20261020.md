@@ -38,8 +38,8 @@
 
 ## 恢复方式
 
-- 本轮新增内容仅为任务文档、final 日志及 `logs/AGENT.md` 索引记录，没有源码
+- 本轮新增内容仅为任务文档、final 日志及 `logs/AGENTS.md` 索引记录，没有源码
   行为改动，无需功能回退。
-- 提交前如需撤销，可恢复 `logs/AGENT.md`，并删除本轮新增的
+- 提交前如需撤销，可恢复 `logs/AGENTS.md`，并删除本轮新增的
   `docs/form_configure_20261020.md` 与 final 日志文件。
 - 如后续已提交，使用 `git revert <commit>` 保留可追踪历史，不重写已有提交。
