@@ -1,0 +1,67 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-19 11:10:29 +0800
+批次: bin-ss-windows
+主任务: 修复 Windows ss.bat 参数解析与 LF/goto 导致的命令拆散
+触发原因: 任务完成
+摘要: ss.bat 改为 ASCII+CRLF 包装器，ss.ps1 承载映射并通过 -File 调用
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 故障证据与根因收敛
+- 目标: 定位 `.\ss.bat 20` 出现 `is`、`o`、`ershell.exe` 被当作命令，以及收尾标记中 `_PATH`/`_NAME` 为空的根因。
+- 命令/操作: 检查 `ss.bat`、裸字节、Git 历史、其他 Windows 启动器和映射语义。
+- 关键输出: 原文件为 UTF-8/LF，第 20 行是包含中文和大量括号、分号、`&` 的 1449 字符内联 PowerShell 命令；`git log -p` 显示故障版本仅在映射表新增 `20 = 'k'`，不是映射逻辑回归。
+- 退出码: 用户粘贴内容未提供退出码。
+- 证据与判断: 故障片段来自 `powershell.exe` 命令本身；`cmd.exe` 对 LF-only 批处理中的标签跳转不可靠，且长 UTF-8 内联命令增加解析风险。仓库已有 `agent.bat -> agent-runtime.ps1` 的短包装器模式可直接复用。
+
+### S2 — 最小修复
+- 目标: 保持所有参数语义和退出码，消除 `cmd.exe` 对长内联 PowerShell 与 LF 标签跳转的依赖。
+- 命令/操作: 将 `ss.bat` 重写为纯 ASCII、CRLF、无标签/无 `goto` 的包装器；新增 ASCII `ss.ps1` 承载缩写、数字、组合参数、IPv4 边界、默认用户和 `ssh.exe` 调用；新增 Git 属性固定 `bin/ss.bat` 的 CRLF 检出。
+- 关键输出: `ss 20` 仍解析为 `192.168.188.20 -l kfutfd`；无参数仍为 `192.168.188.19 -l kfutfd`；未知数字仍回退用户 `zhangxin`。
+- 退出码: 参数错误 `64`、缺少 PowerShell 脚本 `127`、缺少 `ssh.exe` `127`，SSH 退出码继续透传。
+- 证据与判断: `ss.bat` 不再包含非 ASCII 字符、长命令或 `goto`；`ss.ps1` 使用 `powershell.exe -File` 独立执行。
+
+## 验证与证据
+- 文件检查: `ss.bat` 为 ASCII + CRLF，`ss.ps1` 为 ASCII；`git check-attr` 返回 `ss.bat: eol=crlf`。
+- 语法检查: 当前 `bin/` 下全部 `*.sh` 逐文件执行 `bash -n`，退出码 0。
+- 结构检查: `skills/form/scripts/form-audit.sh --root /root/configure --strict --quiet`，退出码 0。
+- 快照检查: `skills/form/scripts/form-snapshot-verify.sh --quiet`，退出码 0。
+- 差异检查: `git diff --check` 以及两个未跟踪新文件的 `git diff --no-index --check` 均无空白错误。
+- 未验证项: 当前执行环境为 Linux，无法实际启动 Windows `cmd.exe`/`powershell.exe` 或建立交互式 SSH；最终 Windows 回归需运行 `.\ss.bat 20`。
+
+## 变更与产物
+- `/root/configure/bin/ss.bat`: ASCII+CRLF 包装器，移除长内联命令、标签和 `goto`。
+- `/root/configure/bin/ss.ps1`: PowerShell 参数解析、映射和 SSH 执行实现。
+- `/root/configure/.gitattributes`: 固定 `bin/ss.bat` 以 CRLF 检出。
+- `/root/configure/bin/AGENTS.md`: 同步 Windows SSH 入口说明。
+- 未改动: Unix `ss.sh`、连接映射和 SSH 认证配置。
+
+## 风险、限制与下一步
+- 风险: Windows 当前工作副本若仍是旧文件，必须先同步本仓库改动；否则继续运行旧版会复现原错误。
+- 阻塞: 无代码阻塞。
+- 下一步: 在 Windows 同步后执行 `.\ss.bat 20`，确认进入 `kfutfd@192.168.188.20` 的 SSH 会话。
+
+## 用户输入指令
+PS C:\Users\zhang> .\ss.bat 20
+'is' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+'o' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+'ershell.exe' 不是内部或外部命令，也不是可运行的程序
+或批处理文件。
+### in  is done......:2026/10/19 周一 11:04:52.75###
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+修复内容: `ss.bat` 已改成纯 ASCII、CRLF、无标签跳转的短包装器，新增 `ss.ps1` 承载原有参数解析、用户映射和 SSH 调用；`ss 20` 仍映射到 `192.168.188.20 -l kfutfd`。
+
+推理依据: 原 `.bat` 使用 UTF-8/LF 和超长内联 PowerShell 命令，`cmd.exe` 将 `powershell.exe` 拆成 `is`、`o`、`ershell.exe` 等片段，并使批处理变量在收尾时丢失；LF-only 批处理的标签跳转也不可靠。拆分为短包装器和独立 PowerShell 文件与仓库现有 Windows 启动器模式一致。
+
+验证结果: 全仓 shell `bash -n`、`form-audit --strict`、快照校验、`git diff --check` 全部通过；`ss.bat` 已确认 ASCII+CRLF，`ss.ps1` 已确认 ASCII。当前 Linux 环境无法实际运行 Windows 的 `cmd.exe`、`powershell.exe` 和交互式 SSH，因此 Windows 端仍需做一次真实回归。
+
+后续步骤: 在 Windows 同步最新文件后执行 `.\ss.bat 20`，预期直接启动到 `kfutfd@192.168.188.20`，不再出现命令片段错误。
+--- report end ---

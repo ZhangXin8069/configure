@@ -54,3 +54,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## bin-ss-windows - final - 2026-10-19 11:10:29 +0800
+- 主任务: 修复 Windows ss.bat 参数解析与 LF/goto 导致的命令拆散
+- 日志文件: logs/v2026101911.txt
+- 文件大小: 4890 bytes
+- 触发原因: 任务完成
+- 关键内容: ss.bat 改为 ASCII+CRLF 包装器，ss.ps1 承载映射并通过 -File 调用
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
