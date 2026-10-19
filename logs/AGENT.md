@@ -45,3 +45,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## dev29-local-tag - final - 2026-10-19 10:54:00 +0800
+- 主任务: 创建 dev29 本地开发标签
+- 日志文件: logs/v2026101910-2.txt
+- 文件大小: 4217 bytes
+- 触发原因: 任务完成
+- 关键内容: 基于 dev28..HEAD 的 9 个文件变更创建 annotated tag dev29，历史链、目标提交与 ss 回归验证通过，未推送远程
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

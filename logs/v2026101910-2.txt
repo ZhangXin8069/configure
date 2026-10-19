@@ -1,0 +1,73 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-19 10:54:00 +0800
+批次: dev29-local-tag
+主任务: 创建 dev29 本地开发标签
+触发原因: 任务完成
+摘要: 基于 dev28..HEAD 的 9 个文件变更创建 annotated tag dev29，历史链、目标提交与 ss 回归验证通过，未推送远程
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 打标前置检查
+- 目标: 确认 `dev` 类型、下一编号、基线、工作树和标签历史状态。
+- 命令/操作: 检查工作树、分支、远端同步状态，读取 `dev28..HEAD` 提交与差异，并执行 `tag-chain.sh --check --remote origin`。
+- 关键输出: 工作树干净；`main` 与 `origin/main` 均为 `b2ec947`；`dev28` 后有两个提交；历史链与远端对象检查通过，Managed tags 为 120。
+- 退出码: 0
+- 证据与判断: 最近前驱按实际时间为 `dev28`，下一 `dev` 主版本为 `dev29`；当前提交已包含全部 `ss` 变更，无需额外提交。
+
+### S2 — 初始化范围与回归验证
+- 目标: 确认打标前文档和初始化状态无遗漏。
+- 命令/操作: 定向核对根目录、`bin/`、`lib/_ssh/` 的初始化文件与文档，并运行 `./bin/ss.test.sh`。
+- 关键输出: 本次相关范围无待归档 init 文件，AGENTS 与 SSH 文档一致；`ss.test.sh` 通过。
+- 退出码: 0
+- 证据与判断: 无新的初始化改动，工作树保持干净。
+
+### S3 — 创建与验证标签
+- 目标: 在当前 `HEAD` 创建本地开发快照标签。
+- 命令/操作: 执行 `git tag -a dev29 -m '<follow dev28 消息>'`，随后检查对象类型、peeled commit、标签消息和全历史链。
+- 关键输出: `dev29` 为 annotated tag；peeled commit 与 `HEAD` 均为 `b2ec94733375110a4f83df04010de8566ed5d86c`；Managed tags 增至 121，follow 链和提交祖先关系正常。
+- 退出码: 0
+- 证据与判断: 标签内容、目标与历史顺序均正确，未执行远程推送。
+
+## 验证与证据
+- 测试/检查: `tag-chain.sh --check --remote origin`、`ss.test.sh`、`tag-chain.sh --check`、`git cat-file -t dev29`、peeled commit 比对、`git diff --check`。
+- 结果: 全部通过。
+- 未验证项: `dev29` 未推送，因此未执行创建后的远端标签一致性检查；这符合用户仅请求本地打标的授权范围。
+
+## 变更与产物
+- 文件: 本次标签任务未修改业务文件。
+- 产物: annotated tag `dev29`，目标提交 `b2ec947`；日志写入后产生新的日志与索引改动。
+- 未改动范围: 未改写既有标签，未提交、未推送当前分支或 `dev29`。
+
+## 风险、限制与下一步
+- 风险: `dev29` 仅存在本地，其他机器与协作者不可见。
+- 阻塞: 无。
+- 下一步: 如需同步远程，需明确授权后推送 `main` 与 `dev29`。
+
+## 用户输入指令
+~tag:dev
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+改动内容：
+- 创建 annotated tag `dev29`，目标提交为 `b2ec94733375110a4f83df04010de8566ed5d86c`。
+- 标签消息：`follow dev28, 1. 完善跨平台 ss 纯数字路由，显式支持 ss 20 使用 kfutfd 并为其余未登记数字提供最低优先级 zhangxin 回退; 2. 新增 ss 参数矩阵与 Windows 静态契约回归测试; 3. 同步 SSH 快捷入口文档与 Agent 说明; [codex].`
+
+推理依据：
+- 最近的实际前驱标签为 `dev28`，下一个独立 `dev` 主版本为 `dev29`。
+- `dev28..HEAD` 包含 9 个文件、336 行新增和 5 行删除，核心是 `ss` 数字路由、跨平台同步、回归测试与文档。
+- 当前 `HEAD` 已包含全部业务改动且工作树干净，因此标签直接指向 `HEAD`，无需额外提交。
+
+验证结果：
+- `tag-chain.sh --check --remote origin`：打标前历史链与远端对象检查通过。
+- `./bin/ss.test.sh`：通过。
+- `git cat-file -t dev29`：`tag`。
+- `dev29^{}` 与 `HEAD` 均为 `b2ec94733375110a4f83df04010de8566ed5d86c`。
+- `tag-chain.sh --check`：121 个受管标签，follow 链与提交祖先关系正常。
+- `main` 与 `origin/main` 无分叉；标签和分支均未推送。
+
+后续步骤：
+- `dev29` 当前仅存在本地。如需远程同步，需要明确授权后推送 `main` 与 `dev29`。
+--- report end ---
