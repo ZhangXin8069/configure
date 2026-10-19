@@ -36,6 +36,7 @@ _assert_target() {
 
 main() {
     local bat_file="${_PATH}/ss.bat"
+    local ps1_file="${_PATH}/ss.ps1"
 
     _assert_target 42 "192.168.188.42 -l zhangxin"
     _assert_target 1 "192.168.188.1 -l zhangxin"
@@ -47,10 +48,15 @@ main() {
     _assert_target y42 "192.168.188.42 -l yang"
     _assert_target __NO_ARG__ "192.168.188.19 -l kfutfd"
 
-    rg -Fq "'numeric' = @(\$numericFallbackUser, \$null)" "${bat_file}" ||
-        _fail "ss.bat 未将 zhangxin 作为纯数字最低优先级默认用户"
-    rg -Fq 'if ($numericAliases.ContainsKey($ip))' "${bat_file}" ||
-        _fail "ss.bat 缺少已登记数字映射优先于默认用户的逻辑"
+    rg -Fq 'powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%_PATH%ss.ps1"' "${bat_file}" ||
+        _fail "ss.bat 未通过 -File 调用独立的 ss.ps1 实现"
+    if rg -q '^:|\bgoto\b' "${bat_file}"; then
+        _fail "ss.bat 仍包含 LF 批处理下不可靠的标签或 goto"
+    fi
+    rg -Fq "'numeric' = @(\$numericFallbackUser, \$null)" "${ps1_file}" ||
+        _fail "ss.ps1 未将 zhangxin 作为纯数字最低优先级默认用户"
+    rg -Fq 'if ($numericAliases.ContainsKey($ipSuffix))' "${ps1_file}" ||
+        _fail "ss.ps1 缺少已登记数字映射优先于默认用户的逻辑"
 }
 
 main "$@"
