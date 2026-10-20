@@ -215,3 +215,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## Zg1042 - final - 2026-10-20 22:24:56 +0800
+- 主任务: 修复 HPC Git 拉取脚本兼容性与 detached HEAD 失败传播
+- 日志文件: logs/v2026102022-2.txt
+- 文件大小: 5879 bytes
+- 触发原因: 任务完成
+- 关键内容: 修正旧版 Git 不支持 stash push、detached HEAD 误拉取及批量脚本吞错误问题
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

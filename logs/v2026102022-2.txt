@@ -1,0 +1,98 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 22:24:56 +0800
+批次: Zg1042
+主任务: 修复 HPC Git 拉取脚本兼容性与 detached HEAD 失败传播
+触发原因: 任务完成
+摘要: 修正旧版 Git 不支持 stash push、detached HEAD 误拉取及批量脚本吞错误问题
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位根因
+- 目标: 解释 `zg-all-pull.sh` 输出中的 stash usage 与 `Branch: HEAD`。
+- 命令/操作: 定向读取 `bin/gpull.sh`、`bin/zg-*-pull.sh`、`bin/AGENTS.md` 与 Git 文档；检查当前仓库分支和状态。
+- 关键输出: `git stash push` 在旧版 Git 中不识别并打印兼容 `git stash save` 的 usage；`git symbolic-ref` 可判定 detached HEAD。
+- 退出码: 0（只读定位）。
+- 证据与判断: HPC 会话的 `Branch: HEAD` 表明当前不处于本地分支，`pull --rebase origin HEAD` 不能可靠执行。
+
+### S2 — 实施修复
+- 目标: 兼容旧版 Git、保留 tracked 工作区改动并正确返回失败状态。
+- 命令/操作: 修改 `bin/gpull.sh` 与 5 个跨仓库拉取入口；新增 `bin/gpull.test.sh`；同步 `bin/AGENTS.md`、`lib/_git/setup.md`、`lib/_commands/setup.md`。
+- 关键输出: 优先使用 `git pull --rebase --autostash`；缺少该选项时回退到 `stash push`/`stash save` 并在成功后恢复；detached HEAD、fetch 失败和 pull 失败均返回非零。
+- 退出码: 0（编辑成功）。
+- 证据与判断: 集中处理自动暂存可移除各包装脚本中不兼容且不恢复的裸 `git stash push`。
+
+## 验证与证据
+- 测试/检查: `bash -n` 覆盖 `gpull.sh`、5 个批量拉取脚本和新增测试。
+- 结果: 全部通过。
+- 测试/检查: `bash bin/gpull.test.sh`。
+- 结果: 通过；覆盖正常拉取保留 tracked 改动、模拟旧版 Git 无 `--autostash` 且 `stash push` 失败的回退、detached HEAD 拒绝、包装脚本失败传播、fetch 失败传播。
+- 测试/检查: `bash skills/form/scripts/form-audit.sh --root . --strict --quiet`。
+- 结果: 通过，无输出。
+- 测试/检查: `bash skills/form/scripts/form-snapshot-verify.sh --quiet`。
+- 结果: 通过，无输出。
+- 测试/检查: `git diff --check`。
+- 结果: 通过，无输出。
+- 未验证项: 未直接在用户 HPC 登录节点执行，避免访问工作目录外环境；旧版 Git 行为通过本地模拟覆盖。
+
+## 变更与产物
+- 文件: `bin/gpull.sh`、`bin/zg-all-pull.sh`、`bin/zg-configure-pull.sh`、`bin/zg-pyqcd-pull.sh`、`bin/zg-pyqcu-pull.sh`、`bin/zg-myqcd-pull.sh`、`bin/gpull.test.sh`、`bin/AGENTS.md`、`lib/_git/setup.md`、`lib/_commands/setup.md`。
+- 产物: 可兼容旧版 Git 的拉取流程及离线回归测试。
+- 未改动范围: 未修改系统配置、其他仓库、远程仓库或 Git 历史。
+
+## 风险、限制与下一步
+- 风险: 本地改动与远端改动冲突时，自动恢复可能产生 stash 冲突并返回非零；脚本会保留 stash 供人工处理。
+- 阻塞: 无。
+- 下一步: HPC 端先执行 `git checkout main`，确认工作区状态后手动同步；本地改动尚未提交或推送。
+
+## 用户输入指令
+(.venv) sunpeng_1@login07:~$ zg-all-pull.sh
+###zg-all-pull.sh in /public/home/sunpeng_1/configure/bin is running...:2026-10-20-22-16-41###
+###zg-configure-pull.sh in /public/home/sunpeng_1/configure/bin is running...:2026-10-20-22-16-41###
+~/configure ~
+usage: git stash list [<options>]
+   or: git stash show [<stash>]
+   or: git stash drop [-q|--quiet] [<stash>]
+   or: git stash ( pop | apply ) [--index] [-q|--quiet] [<stash>]
+   or: git stash branch <branchname> [<stash>]
+   or: git stash [save [--patch] [-k|--[no-]keep-index] [-q|--quiet]
+                       [-u|--include-untracked] [-a|--all] [<message>]]
+   or: git stash clear
+###gpull.sh is running...:2026-10-20-22-16-42###
+Repo:    /public/home/sunpeng_1/configure
+Branch:  HEAD
+Fetching origin
+remote: Enumerating objects: 37, done.
+remote: Counting objects: 37/37, done.
+remote: Compressing objects: 10/10, done.
+remote: Total 37 (delta 10), reused 0 (delta 0), pack-reused 0 (from 0)
+Unpacking objects: 37/37, done.
+From https://gitee.com/zhangxin8069/configure
+   07278a0..b45f7e7  main       -> origin/main
+ * [new tag]         dev35      -> dev35
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- `gpull.sh` 改用 `git pull --rebase --autostash`；旧版 Git 缺少该选项时，自动回退到 `stash push`/`stash save`，拉取成功后恢复 tracked 改动。
+- 检测到 detached HEAD 时立即报错，提示先 `git checkout <branch>`，不再用 `origin HEAD` 执行无效拉取。
+- fetch、pull、stash 恢复失败均返回非零；5 个跨仓库入口保留并传播该状态，`zg-all-pull.sh` 不再吞掉子仓库失败。
+- 新增本地裸仓库回归测试，并同步 `bin/AGENTS.md` 和 Git 命令文档。
+
+**推理依据**
+- 输出中的 stash usage 形态说明 HPC Git 不支持 `git stash push`，旧版兼容入口是 `git stash save`。
+- `Branch: HEAD` 说明仓库处于 detached HEAD，因此不能直接拉取名为 `HEAD` 的远程分支。
+- 原包装脚本在 stash 和 pull 失败后仍继续执行并最终返回成功，导致故障被掩盖。
+
+**验证结果**
+- 所有相关脚本 `bash -n` 通过。
+- `bash bin/gpull.test.sh` 通过，覆盖正常拉取、旧版 Git 回退、detached HEAD、包装脚本失败传播和 fetch 失败传播。
+- `form-audit.sh --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check` 均通过。
+- 未直接在 HPC 环境执行；边界通过本地模拟覆盖。
+
+**后续步骤**
+1. HPC 端执行 `cd ~/configure && git checkout main && git status --short --branch`，确认分支和本地改动。
+2. 当前修复尚未提交或推送；本机审查后可提交并同步，HPC 更新后再运行 `zg-all-pull.sh`。
+--- report end ---
