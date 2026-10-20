@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# gback — 以远程库为唯一基准，放弃本地全部差异，保持与远程完全一致
-#   · 多余的就删：本地未跟踪/忽略文件、本地独有提交、远程已不存在的本地分支与标签
-#   · 缺失的就补：远程有而本地缺失或被修改的跟踪文件，从远程恢复
+# gback — 先 stash 本地全部分叉，再将当前分支强制对齐最新 upstream
+#   · 当前分支提交、索引、工作区和 ignored 文件全部进入 stash
+#   · stash 成功后清空工作区，不自动 pop，不影响对齐后的当前分支
+#   · 其他本地分支与标签保持不变
 
 _SRC=${BASH_SOURCE[0]:-${0}}
 case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
@@ -18,107 +19,173 @@ REPO_ROOT=$(git rev-parse --show-toplevel) || {
 echo "Repo:    ${REPO_ROOT}"
 cd "${REPO_ROOT}"
 
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
-if [[ "${BRANCH}" == "HEAD" ]]; then
+BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+if [[ -z "${BRANCH}" || "${BRANCH}" == "HEAD" ]]; then
     echo "ERROR: HEAD 处于游离状态，请先检出分支。"
     exit 1
 fi
 echo "Branch:  ${BRANCH}"
 
-# --force：本地 tag 与远程同名但指向不同提交时，强制覆盖为远程值（否则 fetch 报 would clobber existing tag 而失败）
-git fetch --all --prune --prune-tags --force || {
+if [[ -e "$(git rev-parse --git-path MERGE_HEAD)" ]] \
+    || [[ -d "$(git rev-parse --git-path rebase-merge)" ]] \
+    || [[ -d "$(git rev-parse --git-path rebase-apply)" ]] \
+    || [[ -e "$(git rev-parse --git-path CHERRY_PICK_HEAD)" ]] \
+    || [[ -e "$(git rev-parse --git-path REVERT_HEAD)" ]]; then
+    echo "ERROR: 当前仓库存在未完成的 merge/rebase/cherry-pick/revert，gback 已中止。"
+    exit 1
+fi
+
+ORIGINAL_HEAD=$(git rev-parse HEAD) || {
+    echo "ERROR: 无法解析当前 HEAD。"
+    exit 1
+}
+
+# 只更新远程跟踪引用，不改写本地标签或其他分支。
+git fetch --all --prune --no-tags || {
     echo "ERROR: git fetch 失败。"
     exit 1
 }
 
-UPSTREAM=$(git rev-parse --abbrev-ref "${BRANCH}@{upstream}" 2>/dev/null) || {
+UPSTREAM=$(git rev-parse --abbrev-ref --symbolic-full-name "${BRANCH}@{upstream}" 2>/dev/null) || {
     echo "ERROR: 分支 ${BRANCH} 无上游，无法以远程为基准。"
     exit 1
 }
-echo "Upstream: ${UPSTREAM}"
+UPSTREAM_COMMIT=$(git rev-parse --verify "${UPSTREAM}^{commit}") || {
+    echo "ERROR: 无法解析上游 ${UPSTREAM} 的最新提交。"
+    exit 1
+}
+echo "Upstream: ${UPSTREAM} ($(git rev-parse --short "${UPSTREAM_COMMIT}"))"
 
-# 0. stash 提示：stash 不属于远程基准，不自动删除（破坏性），仅提示
+_run_with_backup_identity() {
+    local name
+    local email
+
+    name=$(git config --get user.name 2>/dev/null || true)
+    email=$(git config --get user.email 2>/dev/null || true)
+    if [[ -z "${name}" || -z "${email}" ]]; then
+        name=$(git show -s --format=%an "${ORIGINAL_HEAD}" 2>/dev/null || true)
+        email=$(git show -s --format=%ae "${ORIGINAL_HEAD}" 2>/dev/null || true)
+    fi
+    [[ -n "${name}" ]] || name=gback
+    [[ -n "${email}" ]] || email=gback@localhost
+
+    GIT_AUTHOR_NAME="${name}" GIT_AUTHOR_EMAIL="${email}" \
+        GIT_COMMITTER_NAME="${name}" GIT_COMMITTER_EMAIL="${email}" "$@"
+}
+
+_worktree_has_state() {
+    ! git diff --quiet \
+        || ! git diff --cached --quiet \
+        || [[ -n "$(git ls-files --others --exclude-standard)" ]] \
+        || [[ -n "$(git ls-files --others --ignored --exclude-standard)" ]]
+}
+
+_stash_worktree() {
+    local message=$1
+
+    if _run_with_backup_identity git stash push --all --message "${message}" >/dev/null 2>&1; then
+        return 0
+    fi
+    # Git < 2.13 uses the legacy stash save syntax.
+    _run_with_backup_identity git stash save --quiet --all "${message}"
+}
+
+_create_head_anchor_stash() {
+    local message=$1
+    local tree
+    local index_anchor
+    local anchor
+
+    tree=$(git rev-parse "${ORIGINAL_HEAD}^{tree}") || return 1
+    index_anchor=$(printf '%s\n' "${message} index" | _run_with_backup_identity \
+        git commit-tree "${tree}" -p "${ORIGINAL_HEAD}") || return 1
+    anchor=$(printf '%s\n' "${message}" | _run_with_backup_identity \
+        git commit-tree "${tree}" -p "${ORIGINAL_HEAD}" -p "${index_anchor}") || return 1
+    if ! git stash store --message "${message}" "${anchor}"; then
+        git update-ref -m "${message}" refs/stash "${anchor}" || return 1
+    fi
+}
+
 N_STASH=$(git stash list 2>/dev/null | wc -l)
 if (( N_STASH > 0 )); then
-    echo "提示: 存在 ${N_STASH} 个 stash（保留未删除，如需清除请手动执行 git stash clear）"
+    echo "提示: 已存在 ${N_STASH} 个 stash，将保留并在其前新增本次备份。"
 fi
 
-# 1. 本地独有提交 —— 放弃
-UNPUSHED=$(git log --oneline --reverse "${UPSTREAM}..${BRANCH}" 2>/dev/null || true)
-if [[ -n "${UNPUSHED}" ]]; then
-    echo "放弃本地独有提交："
-    echo "${UNPUSHED}"
+OLD_STASH=$(git rev-parse --quiet --verify refs/stash 2>/dev/null || true)
+
+LOCAL_HAS_EXTRA_COMMITS=0
+if ! git merge-base --is-ancestor "${ORIGINAL_HEAD}" "${UPSTREAM_COMMIT}"; then
+    LOCAL_HAS_EXTRA_COMMITS=1
+fi
+
+if (( LOCAL_HAS_EXTRA_COMMITS )); then
+    echo "将 stash 的本地独有提交："
+    git log --oneline --reverse "${UPSTREAM_COMMIT}..${ORIGINAL_HEAD}" | head -20 || true
 else
-    echo "无本地独有提交"
+    echo "本地提交均已包含于 ${UPSTREAM}。"
 fi
 
-# 2. 与远程不同的跟踪文件 —— 缺失就补、修改就还原（重置前预览）
-CHANGED=$(git diff --name-status HEAD "${UPSTREAM}" 2>/dev/null || true)
-if [[ -n "${CHANGED}" ]]; then
-    echo "以下文件与远程不同，将从远程恢复（覆盖本地）："
-    echo "${CHANGED}" | head -20 || true
+if _worktree_has_state; then
+    echo "将 stash 的工作区状态（含 staged/untracked/ignored）："
+    git status --short --untracked-files=all --ignored | head -20 || true
 else
-    echo "无缺失/被修改的跟踪文件"
+    echo "工作区无本地改动。"
 fi
 
-# 3. 多余文件 —— 删除（未跟踪/忽略）
-TO_CLEAN=$(git clean -ndx | wc -l)
-if (( TO_CLEAN > 0 )); then
-    echo "删除 ${TO_CLEAN} 个多余文件（未跟踪/忽略）："
-    git clean -ndx | sed 's/^Would remove /  /' | head -20 || true
-else
-    echo "无多余文件"
+STASH_MESSAGE="gback backup $(date "+%Y-%m-%d-%H-%M-%S") ${BRANCH} before ${UPSTREAM}"
+STASH_CREATED=0
+if _worktree_has_state; then
+    if ! _stash_worktree "${STASH_MESSAGE}"; then
+        echo "ERROR: 无法 stash 本地工作区，gback 已中止，未执行 reset。" >&2
+        exit 1
+    fi
+    STASH_CREATED=1
 fi
 
-# 执行：重置为远程基准（补缺失、还原差异），再删除多余文件
-git reset --hard "${UPSTREAM}"
+if (( LOCAL_HAS_EXTRA_COMMITS )) && (( STASH_CREATED == 0 )); then
+    if ! _create_head_anchor_stash "${STASH_MESSAGE}"; then
+        echo "ERROR: 无法为本地分叉提交创建 stash，gback 已中止，未执行 reset。" >&2
+        exit 1
+    fi
+    STASH_CREATED=1
+fi
+
+NEW_STASH=$(git rev-parse --quiet --verify refs/stash 2>/dev/null || true)
+if (( STASH_CREATED )) && [[ "${NEW_STASH}" == "${OLD_STASH}" ]]; then
+    echo "ERROR: 未能创建新的 stash，gback 已中止，未执行 reset。" >&2
+    exit 1
+fi
+
+STILL_DIRTY=$(git status --porcelain --ignored)
+if [[ -n "${STILL_DIRTY}" ]]; then
+    echo "ERROR: stash 后工作区仍不干净，gback 已中止，未执行 reset：" >&2
+    echo "${STILL_DIRTY}" | head -20 >&2
+    exit 1
+fi
+
+# stash 已确认成功，强制当前分支与最新 upstream 完全一致。
+git reset --hard "${UPSTREAM_COMMIT}"
 git clean -fdx
-git checkout -B "${BRANCH}" "${UPSTREAM}"
 
-# 4. 本地多余分支（远程已不存在）—— 删除，保持引用一致
-REMOTE_BRANCHES=$(git for-each-ref --format='%(refname:short)' refs/remotes | sed 's|^[^/]*/||' | sort -u)
-declare -A _remote_map
-while IFS= read -r _rb; do [[ -n "${_rb}" ]] && _remote_map["${_rb}"]=1; done <<<"${REMOTE_BRANCHES}"
-EXTRA_LOCAL=""
-while IFS= read -r b; do
-    [[ "${b}" == "${BRANCH}" ]] && continue
-    [[ -n "${_remote_map[${b}]+x}" ]] || EXTRA_LOCAL+="${b}"$'\n'
-done < <(git for-each-ref --format='%(refname:short)' refs/heads)
-if [[ -n "${EXTRA_LOCAL}" ]]; then
-    echo "删除本地多余分支（远程已不存在）："
-    echo "${EXTRA_LOCAL}" | sed 's/^/  /'
-    while IFS= read -r b; do
-        if [[ -n "${b}" ]]; then
-            git branch -D "${b}" >/dev/null 2>&1 || echo "  [warn] 删除分支 ${b} 失败"
-        fi
-    done <<< "${EXTRA_LOCAL}"
-else
-    echo "无本地多余分支"
+if (( STASH_CREATED )); then
+    echo "Stash:   stash@{0} (${STASH_MESSAGE})"
+    echo "恢复查看: git stash list"
+    echo "恢复分支: git stash branch <new-branch> stash@{0}"
 fi
 
-# 校验：完全一致
-STILL_DIRTY=$(git status --porcelain)
+STILL_DIRTY=$(git status --porcelain --ignored)
 if [[ -z "${STILL_DIRTY}" ]]; then
-    echo "OK: 工作区干净（无多余/缺失/被修改文件）"
+    echo "OK: 工作区干净，包含 ignored 文件在内均与 ${UPSTREAM} 一致"
 else
-    echo "WARNING: 工作区仍有差异："
-    echo "${STILL_DIRTY}"
+    echo "ERROR: reset 后工作区仍有差异：" >&2
+    echo "${STILL_DIRTY}" >&2
+    exit 1
 fi
-if [[ "$(git rev-parse HEAD)" == "$(git rev-parse "${UPSTREAM}")" ]]; then
-    echo "OK: 本地 HEAD 与 ${UPSTREAM} 一致"
+if [[ "$(git rev-parse HEAD)" == "${UPSTREAM_COMMIT}" ]]; then
+    echo "OK: 本地 ${BRANCH} 与 ${UPSTREAM} 完全一致"
 else
-    echo "WARNING: 本地 HEAD 与 ${UPSTREAM} 不一致"
-fi
-EXTRA_REMAIN=""
-while IFS= read -r b; do
-    [[ "${b}" == "${BRANCH}" ]] && continue
-    [[ -n "${_remote_map[${b}]+x}" ]] || EXTRA_REMAIN+="${b}"$'\n'
-done < <(git for-each-ref --format='%(refname:short)' refs/heads)
-if [[ -z "${EXTRA_REMAIN}" ]]; then
-    echo "OK: 无本地多余分支"
-else
-    echo "WARNING: 仍有本地多余分支："
-    echo "${EXTRA_REMAIN}" | sed 's/^/  /'
+    echo "ERROR: 本地 ${BRANCH} 未能对齐 ${UPSTREAM}" >&2
+    exit 1
 fi
 echo "HEAD:    $(git log --oneline -1)"
 
