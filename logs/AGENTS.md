@@ -134,3 +134,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 2026102011 - final - 2026-10-20 11:43:21 +0800
+- 主任务: 修复 Codex goal 1-token 预算、cl go TUI 认证与本地协议桥 401
+- 日志文件: logs/v2026102011.txt
+- 文件大小: 8129 bytes
+- 触发原因: 任务完成
+- 关键内容: goal 预算恢复工具、cl apiKeyHelper 与桥认证头回退，含回归验证
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

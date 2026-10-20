@@ -499,6 +499,12 @@ sl_cmd=$(printf '%s' "$settings_line" | python3 -c 'import json,sys; print(json.
 [[ "$sl_cmd" == "\"$script_dir/agent-statusline.sh\"" ]] || fail "settings statusLine command 不正确：$sl_cmd"
 printf '%s' "$settings_line" | python3 -c 'import json,sys; json.load(sys.stdin)' \
     || fail "claude --settings 不是合法 JSON：$settings_line"
+printf '%s' "$settings_line" | python3 -c '
+import json,sys
+settings=json.load(sys.stdin)
+helper=settings.get("apiKeyHelper", "")
+assert "OPENCODE_GO_API_KEY" in helper, helper
+' || fail "claude --settings 缺少 apiKeyHelper：$settings_line"
 settings_path=$(sed -n 's/^claude-settings-path: //p' "$call_log" | head -1)
 [[ -n "$settings_path" ]] || fail '未记录 claude --settings 临时文件路径'
 [[ ! -e "$settings_path" ]] || fail "claude --settings 临时文件退出后未清理：$settings_path"

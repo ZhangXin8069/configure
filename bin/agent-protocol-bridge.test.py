@@ -19,6 +19,18 @@ class UpstreamHandler(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length") or "0")
         body = json.loads(self.rfile.read(length).decode("utf-8"))
         self.server.requests.append({"body": body, "headers": dict(self.headers.items())})
+        if getattr(self.server, "fail_bearer", False) and str(
+            self.headers.get("Authorization") or ""
+        ).startswith("Bearer "):
+            data = json.dumps(
+                {"error": {"type": "server_error", "message": "Invalid credential"}}
+            ).encode("utf-8")
+            self.send_response(401)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+            return
         response = self.server.responses.get(timeout=5)
         data = json.dumps(response, ensure_ascii=False).encode("utf-8")
         self.send_response(200)
@@ -171,6 +183,33 @@ class BridgeTest(unittest.TestCase):
         self.assertEqual(upstream["body"]["messages"][0]["role"], "system")
         self.assertEqual(upstream["headers"]["Session-Id"], "native-session")
         self.assertEqual(upstream["headers"]["X-Opencode-Session"], "native-session")
+
+    def test_upstream_401_retries_with_alternate_auth_header(self):
+        self.upstream.fail_bearer = True
+        try:
+            self.upstream.responses.put(self.chat_response(content="auth-fallback-ok"))
+            output = post_json(
+                self.base_url + "/v1/responses",
+                {
+                    "model": "glm-5.3-flash",
+                    "input": [
+                        {"type": "message", "role": "user", "content": "hello"}
+                    ],
+                    "stream": True,
+                },
+                {"session-id": "auth-fallback-session"},
+            )
+        finally:
+            self.upstream.fail_bearer = False
+        self.assertIn("auth-fallback-ok", output)
+        attempts = self.upstream.requests[-2:]
+        self.assertTrue(
+            attempts[0]["headers"].get("Authorization", "").startswith("Bearer ")
+        )
+        self.assertEqual(attempts[1]["headers"].get("X-Api-Key"), "test-key")
+        self.assertEqual(
+            attempts[1]["headers"].get("X-Opencode-Session"), "auth-fallback-session"
+        )
 
     def test_responses_tool_call(self):
         self.upstream.responses.put(

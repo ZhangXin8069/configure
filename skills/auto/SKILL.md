@@ -17,7 +17,11 @@ metadata:
 
 在 Codex 中使用 auto 时，自动启用当前运行器提供的原生 goal 能力以落实用户要求的 `/goal` 模式：
 先调用 `get_goal`；已有活动目标则继承，无活动目标时调用 `create_goal`，objective 使用完整任务定义。
-只有用户明确指定 Token 预算时才传 `token_budget`。不把 `/goal` 当作 shell 命令，也不假定存在 CLI 开关。
+只有用户明确指定 Token 预算时才传 `token_budget`；禁止为试探、复现或测试传入 `0`/`1` 等有限预算。
+不把 `/goal` 当作 shell 命令，也不假定存在 CLI 开关。
+若活动 goal 已是 `budget_limited` 且预算明显错误（如 1 token），不要继续实质工作，也不要谎报
+`update_goal(status="complete")`；先用 `agent-goal.sh clear --latest --yes`（或
+`--thread <thread_id> --yes`）清除或提高预算。需要复现预算缺陷时使用临时 `CODEX_HOME` 隔离数据库。
 这是一条技能执行规则，不会修改 Codex 系统配置；只有工具返回成功后才报告已启用。
 
 收到 fast_context.active=true 时，fast 是外层修饰。对 auto 的可覆盖默认字段，使用 fast_context 中的
@@ -215,6 +219,7 @@ task   = 前缀后的完整任务描述
 | 用户取消预授权 | 结束会话，不执行任务 |
 | goal API 不可用或拒绝调用 | 明确报告原生 goal 未启用，使用现有任务跟踪继续已授权工作；不伪造 slash/CLI 命令，不修改系统配置 |
 | 已存在活动 goal | 读取并继承，不新建重复目标；新要求作为当前任务的修正或子任务处理，不擅自结束无关目标 |
+| 活动 goal 为 budget_limited/1 token | 用 `agent-goal.sh clear --latest --yes`（或 `--thread <id> --yes`）解除；无法执行则报告 blocked，不伪造完成 |
 | 目标技能强制要求交互（如 brainstorm HARD-GATE） | 预授权模式跳过批准闸门，决策在终端摘要中说明；用户可在 Step 1 配置为"仍要求该步骤交互" |
 | 停滞且方向穷尽 | 输出停滞报告（证据：各方向改动与收益）；stop_on_stall=true 停止，false 继续换方向 |
 | 中断信号 | 立即停止循环，产出中断报告（进度/改动/遗留/恢复方式） |
