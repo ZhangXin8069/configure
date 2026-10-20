@@ -1,0 +1,92 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 23:39:33 +0800
+批次: 20261020-tag-dev37
+主任务: 为 configure 创建并同步 dev37 开发快照标签
+触发原因: 任务完成
+摘要: 创建注释标签 dev37，完成回归、标签链与远端同步校验
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 范围与前置检查
+- 目标: 为当前 configure 仓库创建并同步 `dev37` 开发快照标签。
+- 命令/操作: 读取 `tag`、`rule`、`log`、`diff`、`init`、`form` 规范；检查工作区、远程、标签链与 `dev36..HEAD` 差异。
+- 关键输出: 工作区干净，`main` 与 `origin/main` 均为 `4b3f2e8`；实际最近标签为 `dev36`；标签链 128 个标签校验通过。
+- 退出码: 0
+- 证据与判断: `dev36..HEAD` 共 5 个提交、22 个文件、+1309/-112 行，满足开发中快照语义；下一主版本号为 `dev37`。
+
+### S2 — 验证
+- 命令/操作: 执行语法检查、针对 `gback`/`gpull`/`zg-all-pull` 的回归测试、`form-audit.sh --strict --quiet`、快照校验和 `git diff --check`。
+- 关键输出: 全部通过，无错误输出。
+- 退出码: 全部为 0
+- 证据与判断: 标签目标提交具备可接受的语法、回归、目录格式与快照完整性证据。
+
+### S3 — 创建与推送标签
+- 命令/操作: 先推送 `main`，创建注释标签 `dev37`，再推送标签并回读远端引用。
+- 关键输出: `dev37` 标签对象为 `e368ad7a492edff66e210352d93ff60d7fa35ec6`，指向提交 `4b3f2e8c2f49c11fe71bb8c9137d59138fe2405b`；远端分支、标签对象与 peeled target 均一致。
+- 退出码: 0
+- 证据与判断: 标签消息以 `follow dev36` 开头，分类、编号、前驱和目标提交均正确。
+
+### S4 — 后置复检
+- 命令/操作: 打标后再次执行 `tag-chain.sh --check --remote origin`。
+- 关键输出: 129 个受管标签通过 follow 链、提交祖先关系与远端对象一致性检查。
+- 退出码: 0
+- 证据与判断: 新标签未破坏历史标签链，远端同步闭环成立。
+
+## 验证与证据
+- `bash -n bin/gback.sh bin/gpull.sh bin/zg-all-pull.sh bin/git_init.sh bin/sh_init.sh`: 通过。
+- `bash bin/gback.test.sh`: 通过。
+- `bash bin/gpull.test.sh`: 通过。
+- `bash bin/zg-all-pull.test.sh`: 通过。
+- `bash skills/form/scripts/form-audit.sh --root . --strict --quiet`: 通过。
+- `bash skills/form/scripts/form-snapshot-verify.sh --quiet`: 通过。
+- `git diff --check dev36..HEAD` 与 `git diff --check`: 通过。
+- `bash skills/tag/tag-chain.sh --check --remote origin`: 打标前后均通过。
+
+## 变更与产物
+- 文件: 本日志及 `logs/AGENTS.md` 索引。
+- 产物: 本地与远端注释标签 `dev37`，follow `dev36`。
+- 未改动范围: 本次标签任务未修改业务代码；标签指向已在 `origin/main` 的验收提交 `4b3f2e8`。
+
+## 风险、限制与下一步
+- 风险: 无已知失败或远端漂移。
+- 阻塞: 无。
+- 下一步: 将本日志与索引提交并按 `rule` 条件式交付推送，保持分支和标签状态可回读。
+
+## 用户输入指令
+~tag:dev
+
+## Agent 全文报告
+--- report begin ---
+✓ tag 完成
+
+身份: {代码}
+技能: tag → rule → log，按 tag 默认流程使用 diff、init、form 门控。
+
+结果:
+- 标签: `dev37`
+- 标签对象: `e368ad7a492edff66e210352d93ff60d7fa35ec6`
+- 目标提交: `4b3f2e8c2f49c11fe71bb8c9137d59138fe2405b`
+- 前驱: `dev36`
+- 远端: 已推送并回读一致
+- 分支: `main` 与 `origin/main` 均为 `4b3f2e8`
+
+变更依据:
+- 基线为实际最近标签 `dev36`，范围为 5 个提交、22 个文件、+1309/-112 行。
+- 标签消息覆盖五组变更: gback 全量 stash 备份后对齐 upstream；gpull 的 HTTPS/SSH、detached HEAD 与仅快进安全拉取；zg-all-pull 的协议、错误传播与回归测试；DCU 20261020 环境脚本；rule 标签交付后的远端推送闭环。
+
+验证:
+- `bash -n` 通过。
+- `gback.test.sh`、`gpull.test.sh`、`zg-all-pull.test.sh` 通过。
+- `form-audit.sh --strict --quiet` 通过。
+- `form-snapshot-verify.sh --quiet` 通过。
+- `git diff --check` 通过。
+- 打标前后 `tag-chain.sh --check --remote origin` 均通过。
+
+初始化门控:
+- 未发现散落的 `CLAUDE.md`、`CODEX.md` 或同类待归档文件。
+- `lib/_deepseek/.codex` 是已跟踪、文档明确的配置模板，保留不归档。
+
+下一步:
+- 归档本日志并完成条件式 Git 提交、推送与远端回读。
+--- report end ---
