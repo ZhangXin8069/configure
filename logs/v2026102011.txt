@@ -1,0 +1,88 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 11:43:21 +0800
+批次: 2026102011
+主任务: 修复 Codex goal 1-token 预算、cl go TUI 认证与本地协议桥 401
+触发原因: 任务完成
+摘要: goal 预算恢复工具、cl apiKeyHelper 与桥认证头回退，含回归验证
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+
+### S1 — 复现与根因定位
+- 目标: 在不再次污染活动 goal 的前提下定位 goal 预算、cl go 启动和桥 401 三个问题。
+- 操作: 读取 `bin/agent.sh`、`bin/agent-protocol-bridge.py`、`bin/agent-config.json`；查询 `~/.codex/goals_1.sqlite`、`~/.codex/logs_2.sqlite` 与 Claude 配置；用临时 `CODEX_HOME` 验证 `--disable token_budget` 行为。
+- 关键输出: goal 表存在 4 个 `budget_limited` 行，均 `token_budget=1`；Claude 的 `customApiKeyResponses` 将当前 OpenCode key 记为 rejected，登录 Keychain 返回 `User interaction is not allowed`；OpenCode Go `/chat/completions` 用 x-api-key 返回 401，Bearer 返回 200。
+- 退出码: 诊断命令均为 0；临时 Codex goal 测试 rc=0，确认 `--disable token_budget` 仍写入 1-token 预算。
+- 证据与判断: 三个问题分别源于 goal 工具缺少预算修改接口、Claude TUI 的 key 审批/Keychain 回退、以及桥的认证头/密钥传递链路。
+
+### S2 — goal 预算修复工具与状态恢复
+- 目标: 提供可重复、可回滚的 goal 预算查看/清除/提高工具。
+- 操作: 新增 `bin/agent-goal.sh` 与 `bin/agent-goal.test.sh`；执行 `clear --all-budget-limited --yes`。
+- 关键输出: 写入前生成 `~/.codex/goals_1.sqlite.bak.20261020114112.95532`；4 个原 `budget_limited` goal 变为 `active` 且 `token_budget=NULL`；3 个 `complete` goal 未修改。
+- 退出码: 0。
+- 证据与判断: `list` 复核显示预算为空、状态 active；测试覆盖 `--yes` 门控、`--latest`、`--thread`、`--all-budget-limited`、`--budget N`、`--dry-run`、complete 保护与备份。
+
+### S3 — cl TUI 认证修复
+- 目标: 让 `cl go` 在 key 未获 Claude 批准且 Keychain 锁定时仍能启动 TUI。
+- 操作: 在 `bin/agent.sh` 的私有 `--settings` 中为 `api_key` 途径注入 `apiKeyHelper`（`printenv <ENV_KEY>`），并在桥启动前导出原始 key 变量。
+- 关键输出: 修复前 `cl go` TUI 显示 `Not logged in · Run /login` 与 `security unlock-keychain`；修复后进入 TUI 并正常显示模型与响应，无 Not logged in。
+- 退出码: TUI 冒烟被主动终止（143）；`cl go --once` rc=0。
+- 证据与判断: `apiKeyHelper` 绕过 `customApiKeyResponses` 审批与 Keychain 读取；settings 文件仅保存环境变量名，不重复保存密钥。
+
+### S4 — 协议桥 401 防护
+- 目标: 消除认证头配置错误导致的 401，并让缺失 key 的报错可诊断。
+- 操作: 修改 `bin/agent-protocol-bridge.py`，记录 upstream/auth/key 状态，key 缺失返回 503，401 时换用另一认证头重试一次；新增回归测试。
+- 关键输出: `CODEX_BRIDGE_AUTH=api_key co go --once` 的 `bridge.log` 显示 `upstream 401 with auth_mode=api_key; retrying with bearer`，随后 `POST /v1/responses 200`。
+- 退出码: 0。
+- 证据与判断: OpenCode Go 的 `/chat/completions` 认证要求为 Bearer；重试只在 401 且 key 存在时发生，不会泄露或打印密钥。
+
+## 验证与证据
+- 测试/检查: `bash bin/agent.test.sh`；`python3 bin/agent-protocol-bridge.test.py`；`bash bin/agent-goal.test.sh`；`bash -n`；`python3 -m py_compile`；`form-audit --strict`；`form-snapshot-verify`；`git diff --check`。
+- 结果: agent 全套 PASS（rc=0）；bridge 8 tests OK；goal 测试 PASS；语法/编译/格式/快照/差异检查全部通过。
+- 未验证项: Windows `agent-runtime.ps1` 未同步 `apiKeyHelper`；未验证真实过期 key 的轮换流程。
+
+## 变更与产物
+- 文件: `bin/agent-goal.sh`（新增）、`bin/agent-goal.test.sh`（新增）、`bin/agent.sh`、`bin/agent-protocol-bridge.py`、`bin/agent-protocol-bridge.test.py`、`bin/agent.test.sh`、`skills/auto/SKILL.md`、`bin/AGENTS.md`、`AGENTS.md`。
+- 产物: `~/.codex/goals_1.sqlite.bak.20261020114112.95532`；本次测试运行目录位于 `data/runs/`。
+- 未改动范围: 未修改任何 API key 值、未暂存/提交/推送、未改写 Git 标签。
+
+## 风险、限制与下一步
+- 风险: 若上游 key 本身失效，401 仍会出现；需更新对应环境变量。
+- 阻塞: 无。
+- 下一步: 如需 Windows TUI 同等认证行为，单独补齐 `agent-runtime.ps1` 并做静态检查。
+
+## 用户输入指令
+修复"活动 goal 仍处于 budgetLimited，预算被错误固定为 1 token，现有工具无法增加或清除该预算。"与"cl go启动失败"以及"■ unexpected status 401 Unauthorized: {"error":
+  {"type":"server_error","message":"Upstream request failed: Invalid credential"}}, url: http://127.0.0.1:33487/v1/responses "
+
+## Agent 全文报告
+--- report begin ---
+**改动内容**
+- 新增 `bin/agent-goal.sh` 与 `bin/agent-goal.test.sh`：只读 `list`，以及带 SQLite `.backup`、`--yes`、`--dry-run`、`--latest`/`--thread`/`--all-budget-limited`/`--budget N` 的 `clear`；`complete` 目标永不修改。已用它把现有 4 个 1-token `budget_limited` goal 恢复为 `active` 且 `token_budget=NULL`，备份为 `~/.codex/goals_1.sqlite.bak.20261020114112.95532`。
+- `bin/agent.sh`：`api_key` 途径的 Claude 私有 `--settings` 注入 `apiKeyHelper`（`printenv <ENV_KEY>`），并导出原始 key 变量；修复 Claude Code TUI 因 key 未获批准/Keychain 锁定而回退 OAuth、显示 “Not logged in” 的 `cl go` 启动失败。
+- `bin/agent-protocol-bridge.py`：桥启动日志记录 upstream/auth/key 状态；key 缺失返回 503 明确错误；上游 401 且 key 已设置时自动换用另一认证头重试一次（日志不含密钥）。
+- `skills/auto/SKILL.md`、`bin/AGENTS.md`、根 `AGENTS.md`：补充 goal 预算恢复规则、禁止为复现创建 0/1 token 预算，以及新脚本和认证修复说明。
+
+**推理依据**
+- OpenCode Go 的 `/chat/completions` 只接受 `Authorization: Bearer`，用 `x-api-key` 实测返回 401 `Upstream request failed: ...`；`/v1/messages` 则只接受 `x-api-key`。用户报错的 URL 是本地桥 `/v1/responses`，因此 401 属于 Codex 桥的认证头/密钥传递链路，而不是 Claude Messages 路由。
+- Claude Code TUI 在 `ANTHROPIC_API_KEY` 未列入 `customApiKeyResponses.approved` 时会回退 OAuth/keychain；当前 key 被记为 rejected，且登录 Keychain 处于锁定状态，故 `cl go` TUI 失败，而 `claude -p` 仍可用。`apiKeyHelper` 不受审批状态约束，只保存环境变量名，不复制密钥。
+- Codex goal 工具允许可选 `token_budget`，传入 1 会立即进入 `budget_limited`，而 `update_goal` 没有修改预算的接口；实测 `--disable token_budget` 也不能阻止该写入。因此恢复必须直接修复 `thread_goals`，且应先备份。
+
+**验证结果**
+- `bash bin/agent.test.sh`：rc=0，全部 PASS。
+- `python3 bin/agent-protocol-bridge.test.py`：8 tests OK（含 401 换头重试）。
+- `bash bin/agent-goal.test.sh`：PASS（list/clear/budget/latest/dry-run/complete 保护/备份）。
+- `bash -n`、`python3 -m py_compile`：OK。
+- 实际回归：`cl go` TUI 不再出现 “Not logged in”；`cl go --once` rc=0；`co go --once` rc=0；`CODEX_BRIDGE_AUTH=api_key co go --once` rc=0，`bridge.log` 显示先 401 后改用 bearer 成功。
+- `form-audit --strict`、`form-snapshot-verify`、`git diff --check`：全部通过。
+- goal 数据库复核：4 个原 `budget_limited` 行均为 `active`、预算为空；3 个 `complete` 行未变。
+
+**后续步骤**
+- 若 key 本身已过期/失效，代码只能消除认证头不匹配与缺失 key 的误导性 401，仍需更新对应环境变量。
+- Windows `agent-runtime.ps1` 未同步 `apiKeyHelper`（本次为 macOS/Unix 修复）；如需 Windows TUI 同等行为，可另开任务补齐并做静态检查。
+- 未提交、未推送、未打标签。
+
+finished
+
+--- report end ---
