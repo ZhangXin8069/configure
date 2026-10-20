@@ -22,7 +22,7 @@
 | `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用；统一启动器 `agent.sh`（软链接 cl/op/co/ops/cos 分发，Windows 版 `agent.bat` 按 `%~nx0` 分发）支持 cl（Claude Code）/op（OpenCode）/co（Codex）三系无人值守驱动模式，供应商快捷词包含 `pay/go/zen/gpt`，模型途径与各供应商/各 agent 默认模型/强度见 `bin/agent-config.json` 与 `bin/agent-custom.json.refer`（用户 `bin/agent-custom.json` 优先）；`bin/agent-dispatch.sh` 提供默认继承父 agent 设置的一次任务 JSON 派发接口；模型目录自动刷新、模糊匹配与强度顺延由 `bin/agent-model-catalog.py` 及 Windows runtime 对应实现，Chat-only 模型的 Responses/Messages 协议转换由 Unix `bin/agent-protocol-bridge.py` 提供，Codex 原生 goal 的预算查看与修复由 `bin/agent-goal.sh` 提供，详见 `bin/AGENTS.md` |
 | `lib/` | 版本化环境配置与基础模板；`lib/requirements/` 保存 APT/PIP 功能依赖清单 |
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
-| `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm、form、log），`{~skill-name}` 触发；具体索引与公共契约见 `skills/AGENTS.md` |
+| `skills/` | agent 技能（init、tag、debug、optim、diff、auto、all、analy、make、plan、review、skill-creator、tdd、test、up、brainstorm、form、log、rule），`{~skill-name}` 触发；具体索引与公共契约见 `skills/AGENTS.md` |
 | `docs/` | 参考文档、分析资料、图片素材；功能输入不放此目录 |
 | `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENTS.md` 批次索引 |
 | `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
@@ -41,6 +41,19 @@
 - 更新配置时**新建**带当天日期的目录，不改旧目录（旧版保留作历史参考）
 - `env.sh` 用 `@SECTION@`（单@，激活块）/ `@@SECTION@@`（双@，注释块）标记分节
 - 安装命令首次运行后保留为注释，只留生效的 export，保证可复现
+
+## Agent 进程、资源与条件式交付规则
+
+- `rule` 与 `log` 都是常驻辅助技能；用户未明确关闭时，随任一技能在对应门控点执行。`rule` 管进程时限、
+  长任务进度、共享/调度资源与阶段交付，`log` 管阶段/最终日志归档。
+- agent 发起的命令、后台任务、子 agent 和调度作业必须有有限超时；预计运行超过 10 分钟时必须有真实进度、
+  周期心跳和停滞判据，异常进程先取证再中断并进入 debug/optim。
+- 共享登录节点和工作站使用最小充分资源；不明确时按共享环境处理。Slurm 等作业必须显式声明 queue/partition、
+  time、nodes、CPU、内存、GPU、输出与清理边界；真实大任务按证据分配足量资源，不以降规模或降质量省成本。
+- 阶段验收全部通过、改动范围清楚、日志已归档、无敏感信息或超限文件且远程可 fast-forward 时，`rule` 的
+  条件式授权允许自动本地提交、正常 push 和创建非破坏性标签，无需再次请求确认。
+- force push、删除/改写已推送标签、破坏性清理、系统配置、凭据操作、仓库外写入和用户明确禁止的动作不在
+  自动授权范围内。
 
 <!-- form-skill:start -->
 ## form 格式约定
@@ -80,5 +93,6 @@
 ## 命令
 
 - 无构建/lint/测试框架（纯 shell 脚本），校验脚本语法用 `bash -n <script>`
+- 修改 `skills/rule/scripts/` 后运行 `bash skills/rule/scripts/run-guarded.test.sh`
 - 仓库未安装自动 Git hook；任何 agent 提交前都必须执行上述大文件闸门；
   `.agent.*.log` 为 opencode/Codex 运行日志，不入库

@@ -1,0 +1,58 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-10-20 22:06:04 +0800
+批次: rule-skill-20261020
+主任务: 新增常驻 rule 技能：进程时限、资源治理与条件式交付
+触发原因: 阶段成果
+摘要: rule 技能、进程守卫、29 技能规则映射与仓库索引完成，结构/快照/行为回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 需求与边界
+- 目标: 新增与 log 同级的常驻 rule 技能，统一 agent 进程时限、长任务进度、共享环境限流、调度资源约束和条件式 Git 交付。
+- 依据: 用户明确要求所有进程有合理时限、预期 >10 分钟必须可观测、共享环境最小占用、Slurm 等作业显式限额、真实大任务不降质量、阶段验收后可自动提交/推送/打标。
+- 边界: 不授权 force push、改写或删除已推送标签、系统配置、凭据操作、仓库外写入或用户明确禁止的动作。
+
+### S2 — 实现文件
+- 新增 `skills/rule/SKILL.md`：常驻门控、环境分类、进程预算、共享/调度策略、自动交付闸门和错误处理。
+- 新增 `skills/rule/references/process-and-resources.md`：进程预算、心跳协议、共享环境、Slurm 模板、终止与资源充足性例外。
+- 新增 `skills/rule/references/conditional-delivery.md`：逐文件暂存、测试/日志/密钥/大文件/远程 fast-forward 闸门。
+- 新增 `skills/rule/references/extracted-rules.md`：抽取并映射本目录其他 29 个技能的通用治理规则。
+- 新增 `skills/rule/scripts/run-guarded.sh`：硬超时、心跳、输出/事件日志、进度文件新鲜度、TERM/KILL 和进程组清理。
+- 新增 `skills/rule/scripts/run-guarded.test.sh`：自然退出、硬超时、长任务进度门、日志捕获和停滞判定回归。
+- 更新 `skills/AGENTS.md`：登记 rule、30/30 技能计数、常驻身份、条件式 Git 例外、技能表和互鉴表。
+- 更新根 `AGENTS.md`：登记 rule 技能及进程/资源/条件式交付总规则。
+
+### S3 — 关键缺陷与修正
+- 首次停滞测试返回 143 而非 124：后台监控子进程无法回传 `STOPPED_BY`；改用跨进程停因标记后恢复 124。
+- 自审发现监控器心跳 sleep 与停滞宽限期可能提前退出：增加监控器信号清理，并在停滞时等待完整 TERM/KILL 流程结束。
+
+## 验证与证据
+- `bash -n skills/rule/scripts/run-guarded.sh skills/rule/scripts/run-guarded.test.sh`: 退出码 0。
+- `bash skills/rule/scripts/run-guarded.test.sh`: `run-guarded tests: PASS`。
+- `skills/form/scripts/form-audit.sh --root . --strict --quiet`: 退出码 0，无输出。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`: 退出码 0，无输出。
+- `git diff --check`: 退出码 0。
+- 技能目录/frontmatter 名称检查: 30 个技能全部匹配。
+- 互鉴表/技能表计数: strengths=30, skills=30。
+- 远程门控: `origin/main` 与 `HEAD` 均为 `83716b2`，`merge-base --is-ancestor` 通过。
+- `shellcheck`、`shfmt`: 当前环境不可用，未执行；已用 `bash -n` 与行为回归替代。
+
+## 变更与产物
+- 文件: `skills/rule/**`、`skills/AGENTS.md`、根 `AGENTS.md`。
+- 产物: 常驻技能规范、三份按需参考、确定性进程守卫脚本及测试。
+- 未改动范围: 未修改其他技能正文，未修改系统配置，未执行破坏性 Git 操作。
+
+## 风险、限制与下一步
+- 风险: 调度器模板覆盖 Slurm 常见资源字段，但不同集群的 partition/GPU/配额语义仍需提交前按站点规则校准。
+- 风险: 平台无 GNU `timeout`/`gtimeout` 时守卫脚本会失败关闭，需改用平台等价硬超时。
+- 下一步: 完成阶段日志随代码提交、推送、最终归档与开发快照标签。
+
+## Agent 全文报告
+--- report begin ---
+已新增常驻 `rule` 技能，覆盖五类门控：所有进程的有界超时；预计超过 10 分钟任务的心跳、真实进度与停滞终止；共享工作站/登录节点的最小充分资源；Slurm 等调度作业的 queue/time/node/CPU/内存/GPU/输出限制及完整大任务资源保障；阶段验收后的条件式本地/远程提交和非破坏性标签。
+
+新增 `run-guarded.sh` 作为确定性执行工具，强制长任务提供输出或进度文件，并支持心跳、资源采样、进度新鲜度检测、TERM/KILL 与事件日志。测试已修复停滞退出码和监控器残余进程两个边界问题，当前自然退出、超时、日志捕获和停滞终止全部通过。
+
+同时完成 29 个既有技能的规则抽取映射、30/30 技能表与互鉴表、根仓库常驻/交付总规则同步。结构审计、快照校验、frontmatter、diff 检查和远程 fast-forward 门控均通过。
+--- report end ---
