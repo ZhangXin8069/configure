@@ -47,7 +47,7 @@ cat << 'USAGE2'
   │  常用 git alias (由 env.sh 提供):                            │
   │    gpush.sh   推送到 origin/main                             │
   │    gpull.sh   从 origin 拉取                                 │
-  │    gback.sh   创建备份分支                                   │
+  │    gback.sh   stash 分叉并强制对齐远程                       │
   │    gls.sh     列出所有 git 仓库                              │
   │    gsize      查看仓库大小                                   │
   │                                                              │

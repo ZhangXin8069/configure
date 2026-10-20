@@ -70,7 +70,7 @@ cat << 'USAGE'
   │                                                              │
   │  常用命令 (bin/ 直调)                                        │
   │    gpush.sh / gpull.sh   Git 推送/拉取                       │
-  │    gback.sh              Git 分支备份                        │
+  │    gback.sh              stash 分叉并对齐远程                 │
   │    gls.sh                Git 仓库列表                        │
   │    gz-all-push.sh        推送所有 repo                       │
   │    ssub.sh / ssqueue.sh  Slurm 作业管理                      │
