@@ -148,15 +148,14 @@ gz-pyqcu-push.sh
 
 这些脚本会进入相邻仓库并调用 `gpull.sh` 或 `gpush.sh`，因此继承自动提交、推送标签和清理工作区等行为。运行前逐个检查目标仓库状态。
 
-`zg-*-pull.sh` 会先执行 `git stash push`，然后调用 `gpull.sh`，当前实现不会自动执行 `git stash pop`。拉取后必须检查并恢复：
+`zg-*-pull.sh` 会进入目标仓库调用 `gpull.sh`。当前实现使用 `git pull --rebase --autostash` 保留 tracked 工作区改动；旧版 Git 缺少 `--autostash` 时回退到 stash 并在拉取成功后恢复。若拉取或恢复冲突，脚本返回非零并保留 stash，可检查：
 
 ```bash
 git stash list
 git stash show -p stash@{0}
-git stash pop
 ```
 
-未跟踪文件默认不在 `git stash push` 范围内，可能继续留在工作区。脚本失败时尤其要先确认 stash、分支和冲突状态。
+未跟踪文件不在自动暂存范围内，可能继续留在工作区。detached HEAD 会被拒绝；先切换到目标分支，再重新执行拉取。脚本失败时检查 stash、分支和冲突状态。
 
 ## 其他系统与配置命令
 
