@@ -80,6 +80,10 @@ CHECKED=0
 VIOLATIONS=0
 
 while IFS= read -r -d '' path; do
+  mode=$(git -C "$ROOT" ls-files -s -- "$path" | awk 'NR == 1 { print $1 }')
+  if [[ "$mode" == 160000 ]]; then
+    continue
+  fi
   CHECKED=$((CHECKED + 1))
   size=$(git -C "$ROOT" cat-file -s ":$path" 2>/dev/null) ||
     die "无法读取暂存 blob 大小: $path"
