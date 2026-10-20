@@ -73,11 +73,11 @@ git check-ignore -v <路径>
 |---|---|---|
 | `gpull.sh` | 自动识别 `origin` 为 HTTPS、SSH 或本地路径；fetch 后仅允许 fast-forward，旧版 Git 回退到兼容 stash 流程；分叉历史在 stash/rebase 前停止；detached HEAD 仅在提交已包含于唯一可判定的远端默认分支时恢复为跟踪分支 | 可用于日常同步并保留 tracked 工作区改动；建议先检查 `git status --short --branch` |
 | `gpush.sh` | `git add -A`、无信息校验地以时间戳提交、推送当前分支和全部标签 | 仅用于个人快照仓库，不用于需要审查的提交 |
-| `gback.sh` | fetch 时使用 `--prune-tags --force`，随后硬重置到 upstream、执行 `git clean -fdx`，并删除远程已不存在的本地分支 | 破坏性操作；会删除本地独有标签并覆盖同名冲突标签，执行前自行备份 |
+| `gback.sh` | fetch 最新 upstream；先把当前分支的本地独有提交、staged/tracked/untracked/ignored 状态全部 stash，确认 stash 成功且工作区干净后才 `reset --hard` 并 `clean -fdx`；其他本地分支与标签保持不变 | 强制对齐但保留 stash 备份；不会自动 pop，恢复前先查看 `git stash list` |
 | `gpristine` 别名 | `git reset --hard && git clean -force -dfx` | 会删除未跟踪和忽略文件 |
 | `gwipe` 别名 | `git reset --hard && git clean -force -df` | 会删除未跟踪文件，但保留忽略文件 |
 
-`gback.sh` 删除的未跟踪文件通常无法通过 Git 恢复。`git reflog` 只能帮助恢复已提交对象，不能恢复被 `clean` 删除的文件。
+`gback.sh` 会把当前分支的本地分叉和全部工作区状态放入新的 `stash@{0}`，然后才清理工作区。若 stash 失败或 stash 后仍有残留文件，脚本会中止 reset。恢复时可查看 `git stash show --include-untracked -p stash@{0}`，或用 `git stash branch <new-branch> stash@{0}` 重建原分支。其他本地分支和标签不会被删除。
 
 ## 推荐日常流程
 
@@ -107,6 +107,8 @@ bash -n bin/gadd-ignore.sh
 bash -n bin/gpush.sh
 bash -n bin/gpull.sh
 bash -n bin/gback.sh
+bash -n bin/gback.test.sh
+bash bin/gback.test.sh
 bash -n lib/_git_aliases.sh
 git config --global --get user.name
 git config --global --get user.email

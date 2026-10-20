@@ -1,0 +1,84 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 23:33:08 +0800
+批次: Git1045
+主任务: 优化 gback 为 stash 备份后强制对齐远程
+触发原因: 任务完成
+摘要: 当前分支分叉、工作区与 ignored 状态先进入 stash，stash 校验通过后才 force reset；其他分支标签保持不变
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 现网行为与目标约束
+- 目标: 让 `gback.sh` 在强制当前分支与最新 upstream 一致前，完整保留本地分叉。
+- 命令/操作: 读取 `bin/gback.sh`、`bin/zg-all-back.sh`、Git 文档与现有测试约定。
+- 关键输出: 旧实现直接 `reset --hard`、`clean -fdx`，并删除远程不存在的本地分支；本地提交、untracked/ignored 文件没有统一 stash 备份。
+- 退出码: 只读分析为 0。
+- 证据与判断: 需要先形成可恢复 stash，且 stash 失败时必须阻止 reset。
+
+### S2 — stash-first 对齐实现
+- 目标: 完整备份当前分支分叉与工作区状态，再强制对齐 latest upstream。
+- 命令/操作: 重写 `bin/gback.sh`，新增 `bin/gback.test.sh`，同步初始化提示与 Git 命令文档。
+- 关键输出: tracked/staged/untracked/ignored 使用 `git stash push --all`；旧 Git 回退 `git stash save --all`；干净但含本地独有提交时创建标准双父 stash anchor；stash 后工作区必须干净才执行 reset。
+- 退出码: 实现成功。
+- 证据与判断: `git stash branch` 可恢复干净分叉和带工作区修改的两类 stash；其他本地分支和标签不变。
+
+### S3 — 安全失败与恢复验证
+- 目标: 验证 stash 失败、旧 Git、detached HEAD 和恢复路径。
+- 命令/操作: 在临时 bare remote/worktree 中执行 `bash bin/gback.test.sh`。
+- 关键输出: 覆盖干净分叉、tracked/staged/untracked/ignored、stash 失败中止、旧版 stash fallback、detached HEAD 拒绝。
+- 退出码: 0。
+- 证据与判断: stash 失败时 HEAD 与文件均保持原位；成功时 HEAD 与 latest origin/main 完全一致且工作区干净。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gback.sh bin/gback.test.sh bin/git_init.sh bin/sh_init.sh`（逐个执行）。
+- 结果: 通过。
+- 测试/检查: `bash bin/gback.test.sh`。
+- 结果: 通过，5 类场景全部覆盖。
+- 测试/检查: `form-audit.sh --root . --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check`。
+- 结果: 全部通过，无输出。
+- 未验证项: shellcheck 未安装；未在当前真实仓库执行 gback，避免修改工作区。
+
+## 变更与产物
+- 文件: `bin/gback.sh`、`bin/gback.test.sh`、`bin/AGENTS.md`、`bin/git_init.sh`、`bin/sh_init.sh`、`lib/_git/setup.md`、`lib/_commands/setup.md`。
+- 产物: stash-first 强制恢复流程、旧 Git 兼容、标准 stash anchor 与安全失败回归。
+- 未改动范围: 未修改当前仓库工作区、当前分支、其他分支、标签、stash、远端或系统配置；未暂存、提交、推送。
+
+## 风险、限制与下一步
+- 风险: `stash --all` 会包含 ignored 文件，备份可能较大；需要确保磁盘空间。
+- 限制: 当前实现只强制当前检出分支与工作区，其他本地分支和标签按需求保持不变；不会递归处理 submodule 工作区。
+- 阻塞: 无。
+- 下一步: 在目标仓库执行 `gback.sh` 后，用 `git stash list` 确认备份；需要恢复时执行 `git stash branch <new-branch> stash@{0}`。
+
+## 用户输入指令
+优化gback.sh使之能够强制使本地与最新的远程保持完全一致,分叉部分直接stash,不影响主分支
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- `gback.sh` 现在先把当前分支的本地独有提交、staged/tracked/untracked/ignored 状态全部放入 stash，再强制当前分支对齐 latest upstream。
+- 干净但存在本地独有提交时，会生成标准双父 stash anchor，确保 `git stash branch` 可用。
+- 旧版 Git 自动回退到 `git stash save --all`。
+- stash 失败、stash 后仍有残留文件、存在未完成 merge/rebase 或 detached HEAD 时都会在 reset 前中止。
+- 其他本地分支和标签保持不变，stash 不会自动 pop 到对齐后的当前分支。
+- 新增 `bin/gback.test.sh` 并同步相关文档。
+
+**推理依据**
+- 普通工作区差异可以直接由 `git stash push --all` 保存。
+- 干净的分叉提交不属于工作区差异，必须构造带原 HEAD 父提交的标准 stash，才能通过 `git stash branch` 完整恢复。
+- 只有确认 stash 新引用已写入且工作区完全干净，执行 force reset 才是安全且可恢复的。
+
+**验证结果**
+- 相关脚本 `bash -n` 通过。
+- `bash bin/gback.test.sh` 通过，覆盖干净分叉、完整工作区状态、stash 失败中止、旧 Git fallback 和 detached HEAD 拒绝。
+- 验证 `git stash branch` 能恢复原提交、tracked 修改、untracked 和 ignored 文件。
+- `form-audit --strict --quiet`、`form-snapshot-verify --quiet`、`git diff --check` 均通过。
+- 当前真实仓库未执行 gback；shellcheck 未安装。
+
+**后续步骤**
+1. 在目标仓库执行 `gback.sh`。
+2. 执行 `git stash list` 确认新增的 `gback backup ...` 条目。
+3. 需要恢复时执行 `git stash branch <new-branch> stash@{0}`，不要先 pop 到已对齐的分支。
+4. 当前改动尚未提交或推送。
+--- report end ---

@@ -10,7 +10,7 @@
 | 环境恢复 | `lib/set-env.sh` | 见 `../_env/setup.md`，必须 source |
 | Vim 部署 | `vim_init.sh` | 见 `../_vim/setup.md` |
 | Git 初始化 | `git_init.sh` | 见 `../_git/setup.md` 与 `../_ssh/setup.md` |
-| Git 同步 | `gpull.sh`、`gpush.sh`、`gback.sh` | 见 `../_git/setup.md`，其中 `gback.sh` 为破坏性操作 |
+| Git 同步 | `gpull.sh`、`gpush.sh`、`gback.sh` | 见 `../_git/setup.md`；`gback.sh` 会先 stash 当前分支全部分叉，再强制对齐最新 upstream |
 | SSH | `ss.sh`、`ssnsc.sh`、`ssjtu.sh`、`xx99.sh` | 见 `../_ssh/setup.md` |
 | Slurm | `ssub.sh`、`ssrun.sh`、`ssqueue.sh`、`zsqueue.sh`、`sstop.sh` | 见 `../_slurm/setup.md` |
 | Docker | `ddocker.sh`、`ddocker.bat` | 见 `../_docker/setup.md` |
