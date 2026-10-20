@@ -23,7 +23,7 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 | 类别 | 脚本 |
 |---|---|
 | Git | `gpush.sh`（add -A + 时间戳提交 + push 分支与标签）、`gpull.sh`、`gback.sh`、`dgtag.sh`、`gls.sh`、`git_init.sh` |
-| 跨仓库批量 | pull 系列 `zg-<repo>-pull.sh`（进目标仓库调用 `gpull.sh`，自动暂存并恢复 tracked 工作区改动；detached HEAD 仅在其提交已包含于远端默认分支时安全恢复）与 push 系列 `gz-<repo>-push.sh`（进目标仓库 `gpush.sh`），`<repo>`∈`configure/pyqcd/pyqcu/myqcd`，路径相对脚本自身 `../../<repo-name>`；`zg-all-pull.sh` 聚合 pull：先逐仓探测，缺失则自动从 gitee `zhangxin8069/<Repo>` clone（ssh 失败回退 https），仅对已存在仓库条件调用各 pull，任一子仓库失败时最终返回非零；`gz-all-push.sh` 聚合 push：顺序链接各仓 push |
+| 跨仓库批量 | pull 系列 `zg-<repo>-pull.sh`（进目标仓库调用 `gpull.sh`，兼容 HTTPS/SSH `origin`，只自动 fast-forward，自动暂存并恢复 tracked 工作区改动；分叉时停下，detached HEAD 仅在其提交已包含于远端默认分支时安全恢复）与 push 系列 `gz-<repo>-push.sh`（进目标仓库 `gpush.sh`），`<repo>`∈`configure/pyqcd/pyqcu/myqcd`，路径相对脚本自身 `../../<repo-name>`；`zg-all-pull.sh` 聚合 pull：先逐仓探测，缺失时按 `ZG_GIT_PROTOCOL=auto|ssh|https` clone（默认 ssh 失败回退 https），仅对已存在仓库条件调用各 pull，任一子仓库失败时最终返回非零；`gz-all-push.sh` 聚合 push：顺序链接各仓 push |
 | HPC/Slurm | `ssub.sh`（内嵌模板：gpu-debug 分区、2 GPU）、`ssqueue.sh`、`zsqueue.sh`、`ssrun.sh`、`sstop.sh`、`ssnake.sh`、`ssnsc.sh`、`ssjtu.sh` |
 | SSH | `ss.sh`（Unix 内网 SSH 快捷入口，兼容无后缀 `ss`）与 `ss.bat`/`ss.ps1`（Windows ASCII+CRLF 包装器与 PowerShell 实现）：支持用户缩写、IPv4 末位及两者组合，无参数时连接 `192.168.188.19 -l kfutfd`；纯数字先匹配已登记用户，未登记数字以 `zhangxin` 为最低优先级默认用户（如 `ss 42` → `ssh 192.168.188.42 -l zhangxin`） |
 | 系统 | `cpupower.sh`（按 `$_NAME` 分发，`conservative/ondemand/performance/powersave.sh` 为符号链接）、`swap.sh`（64GB /var/swapfile）、`apt_install.sh`（读取 `lib/requirements/apt.txt`）、`pip_install.sh`（读取 `lib/requirements/pip.txt`）、`poweroff.sh`、`reboot.sh` |

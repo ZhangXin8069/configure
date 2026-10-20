@@ -1,0 +1,94 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 23:15:20 +0800
+批次: Git1044
+主任务: 适配 HTTPS Git 拉取并处理分叉分支安全停止
+触发原因: 任务完成
+摘要: 增加 HTTPS/SSH 协议自适应、强制 HTTPS clone、fast-forward-only 与分叉早停回归
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位 HTTPS 拉取失败链路
+- 目标: 判断 PyQCU 在 HTTPS origin 下拉取失败的真实原因。
+- 命令/操作: 定向读取 `bin/gpull.sh`、`bin/zg-all-pull.sh`、Git 测试与配置文档，并检查当前仓库状态。
+- 关键输出: `git fetch` 已通过 HTTPS 成功；本地 main 与 origin/main 分别有 1322/1352 个分叉提交；`pull --rebase` 开始后因缺少 user.name/user.email 失败。
+- 退出码: 用户侧 pull 为 1。
+- 证据与判断: HTTPS 传输不是根因；根因是脚本对分叉历史自动 rebase，且 HPC 未配置提交身份。
+
+### S2 — 传输与分叉安全适配
+- 目标: 支持 HTTPS/SSH origin，避免分叉仓库隐式 rebase。
+- 命令/操作: 更新 `bin/gpull.sh`、`bin/zg-all-pull.sh`，新增 `bin/zg-all-pull.test.sh`，扩展 `bin/gpull.test.sh` 与相关文档。
+- 关键输出: `gpull.sh` 输出 origin 协议类型，只执行 fast-forward；分叉在 stash/rebase 前停止。`ZG_GIT_PROTOCOL=https|ssh|auto` 控制缺失仓库 clone，默认 auto 保持 SSH→HTTPS 回退。
+- 退出码: 实现与测试均为 0。
+- 证据与判断: 新测试覆盖无 Git 身份的分叉仓库、强制 HTTPS、auto 回退及既有旧版 Git stash 路径。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gpull.sh bin/gpull.test.sh bin/zg-all-pull.sh bin/zg-all-pull.test.sh`（逐个执行）。
+- 结果: 通过。
+- 测试/检查: `bash bin/gpull.test.sh`。
+- 结果: 通过，覆盖 fast-forward、旧 Git stash fallback、detached 安全恢复、分叉拒绝 rebase、包装脚本错误传播与 fetch 失败。
+- 测试/检查: `bash bin/zg-all-pull.test.sh`。
+- 结果: 通过，覆盖强制 HTTPS clone 与 auto SSH→HTTPS 回退。
+- 测试/检查: `form-audit.sh --root . --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check`。
+- 结果: 全部通过，无输出。
+- 未验证项: 未访问或直接在 HPC 节点执行；shellcheck 未安装。
+
+## 变更与产物
+- 文件: `bin/gpull.sh`、`bin/gpull.test.sh`、`bin/zg-all-pull.sh`、`bin/zg-all-pull.test.sh`、`bin/AGENTS.md`、`lib/_commands/setup.md`、`lib/_git/setup.md`。
+- 产物: 协议自适应、fast-forward-only 拉取、分叉早停和 clone 协议选择。
+- 未改动范围: 未修改 HPC 仓库、现有 origin URL、全局 Git 身份、系统配置、远程仓库或 Git 历史；未暂存、提交、推送。
+
+## 风险、限制与下一步
+- 风险: PyQCU 本地与远端已严重分叉，需要人工判断哪一侧为准；脚本不会自动 merge、rebase 或 reset。
+- 阻塞: 无。
+- 下一步: HPC 先检查 `git status --short --branch` 与 `git log --oneline --left-right --graph HEAD...origin/main`；确认远端权威后再备份本地分支并处理分叉。缺失仓库可执行 `ZG_GIT_PROTOCOL=https zg-all-pull.sh`。
+
+## 用户输入指令
+sunpeng_1@login10:~/PyQCU$ gpull.sh
+###gpull.sh is running...:2026-10-20-23-07-52###
+Repo:    /public/home/sunpeng_1/PyQCU
+Branch:  (detached HEAD)
+Fetching origin
+NOTICE: Restoring tracking branch main from origin/main.
+Checking out files: 100% (1102/1102), done.
+Previous HEAD position was 1a3e31c... fix(kupl): move block MPI regression into testing tree
+Switched to branch 'main'
+Your branch and 'origin/main' have diverged,
+and have 1322 and 1352 different commits each, respectively.
+Notice: Git lacks pull --autostash; using the manual stash fallback.
+From https://gitee.com/zhangxin8069/PyQCU
+ * branch            main       -> FETCH_HEAD
+First, rewinding head to replay your work on top of it...
+*** Please tell me who you are.
+fatal: unable to auto-detect email address (got 'sunpeng_1@login10.(none)')
+ERROR: git pull failed with status 1.
+适配使用https协议clone的git库
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- `gpull.sh` 现在识别 origin 为 HTTPS、SSH 或本地路径；fetch 后只允许 fast-forward。
+- 本地分支与 origin 分叉时，在 stash/rebase 前停止，并输出检查两侧历史的命令，不再触发缺失 Git 身份的大规模 rebase。
+- `zg-all-pull.sh` 新增 `ZG_GIT_PROTOCOL=auto|ssh|https`，强制 HTTPS 时不会先尝试 SSH；默认 auto 仍为 SSH 失败后回退 HTTPS。
+- 新增/扩展回归测试，并同步 Git 与命令文档。
+
+**推理依据**
+- 日志中的 `From https://gitee.com/...` 和成功 fetch 证明 HTTPS 传输正常。
+- 失败发生在分叉后的 rebase；`user.name`/`user.email` 缺失只是进入 rebase 后暴露的第二层问题。
+- 分叉的 1322/1352 个提交规模不适合隐式处理，自动 rebase 既可能冲突也可能耗时，因此采用 fail-safe。
+
+**验证结果**
+- 相关 shell 脚本 `bash -n` 通过。
+- `bash bin/gpull.test.sh` 通过，覆盖无 Git 身份的分叉仓库不进入 rebase。
+- `bash bin/zg-all-pull.test.sh` 通过，覆盖强制 HTTPS 和 auto 回退。
+- `form-audit`、`form-snapshot-verify`、`git diff --check` 通过。
+- 未直接在 HPC 执行；shellcheck 未安装。
+
+**后续步骤**
+1. HPC 上先只读检查：`git status --short --branch`、`git log --oneline --left-right --graph HEAD...origin/main`。
+2. 若远端 main 权威，先创建本地备份分支，再人工选择 merge/rebase/reset；不要盲目执行 reset。
+3. 缺失仓库需要绕过 SSH 时使用 `ZG_GIT_PROTOCOL=https zg-all-pull.sh`；已有 origin 不会被改写。
+4. 当前改动尚未提交或推送；HPC 需在本仓库审查并同步后才能使用新逻辑。
+--- report end ---

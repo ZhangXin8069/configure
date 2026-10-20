@@ -169,19 +169,85 @@ _test_detached_head_recovery() {
         || _fail "缺少独立 detached 提交的失败原因"
 }
 
+_test_diverged_branch_refuses_rebase() {
+    local remote="${TEST_DIR}/diverged-remote.git"
+    local seed="${TEST_DIR}/diverged-seed"
+    local work="${TEST_DIR}/diverged-work"
+    local other="${TEST_DIR}/diverged-other"
+    local no_identity_home="${TEST_DIR}/no-identity-home"
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+
+    git init -q "${seed}"
+    _configure_identity "${seed}"
+    git -C "${seed}" checkout -q -b main
+    printf 'base\n' > "${seed}/file.txt"
+    git -C "${seed}" add file.txt
+    git -C "${seed}" commit -q -m initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+
+    git clone -q "${remote}" "${work}"
+    _configure_identity "${work}"
+    git clone -q "${remote}" "${other}"
+    _configure_identity "${other}"
+
+    printf 'local side\n' > "${work}/local.txt"
+    git -C "${work}" add local.txt
+    git -C "${work}" commit -q -m local-side
+    printf 'remote side\n' > "${other}/remote.txt"
+    git -C "${other}" add remote.txt
+    git -C "${other}" commit -q -m remote-side
+    git -C "${other}" push -q
+
+    git -C "${work}" config --unset-all user.name || true
+    git -C "${work}" config --unset-all user.email || true
+    mkdir -p "${no_identity_home}"
+    local previous_head
+    previous_head=$(git -C "${work}" rev-parse HEAD)
+
+    set +e
+    (
+        cd "${work}"
+        HOME="${no_identity_home}" GIT_CONFIG_NOSYSTEM=1 bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/diverged.log" 2>&1
+    local diverged_status=$?
+    set -e
+
+    ((diverged_status != 0)) || _fail "分叉分支应在自动 rebase 前返回非零"
+    grep -Fq 'have diverged; refusing automatic rebase' "${TEST_DIR}/diverged.log" \
+        || _fail "缺少分叉分支拒绝自动 rebase 的提示"
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${previous_head}" ]] \
+        || _fail "拒绝分叉 rebase 时不应改变 HEAD"
+    [[ ! -d "$(git -C "${work}" rev-parse --git-path rebase-merge)" ]] \
+        || _fail "拒绝分叉 rebase 后不应遗留 rebase-merge 状态"
+    [[ ! -d "$(git -C "${work}" rev-parse --git-path rebase-apply)" ]] \
+        || _fail "拒绝分叉 rebase 后不应遗留 rebase-apply 状态"
+}
+
 _test_wrapper_propagates_failure() {
     local wrapper_root="${TEST_DIR}/wrapper"
     local wrapper_bin="${wrapper_root}/bin"
+    local wrapper_remote="${TEST_DIR}/wrapper-remote.git"
 
     mkdir -p "${wrapper_bin}"
     cp "${_PATH}/zg-configure-pull.sh" "${wrapper_bin}/"
     cp "${_PATH}/gpull.sh" "${wrapper_bin}/"
+    git init -q --bare "${wrapper_remote}"
+    git -C "${wrapper_remote}" symbolic-ref HEAD refs/heads/main
     git init -q "${wrapper_root}"
     _configure_identity "${wrapper_root}"
+    git -C "${wrapper_root}" checkout -q -b main
     printf 'base\n' > "${wrapper_root}/file.txt"
     git -C "${wrapper_root}" add file.txt
     git -C "${wrapper_root}" commit -q -m initial
+    git -C "${wrapper_root}" remote add origin "${wrapper_remote}"
+    git -C "${wrapper_root}" push -q -u origin main
     git -C "${wrapper_root}" checkout -q --detach HEAD
+    printf 'detached local commit\n' > "${wrapper_root}/detached.txt"
+    git -C "${wrapper_root}" add detached.txt
+    git -C "${wrapper_root}" commit -q -m detached-local
 
     set +e
     bash "${wrapper_bin}/zg-configure-pull.sh" > "${TEST_DIR}/wrapper.log" 2>&1
@@ -215,6 +281,7 @@ _test_fetch_failure_propagates() {
 main() {
     _test_pull_preserves_changes
     _test_detached_head_recovery
+    _test_diverged_branch_refuses_rebase
     _test_wrapper_propagates_failure
     _test_fetch_failure_propagates
 }
