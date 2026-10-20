@@ -71,7 +71,7 @@ git check-ignore -v <路径>
 
 | 命令 | 行为 | 建议 |
 |---|---|---|
-| `gpull.sh` | fetch 后对当前分支执行 `pull --rebase origin <branch>` | 可用于日常同步；工作区不干净时先手工处理 |
+| `gpull.sh` | fetch 后对当前分支执行 `pull --rebase --autostash origin <branch>`；旧版 Git 回退到兼容 stash 流程；detached HEAD 明确失败 | 可用于日常同步并保留 tracked 工作区改动；建议先检查 `git status --short --branch` |
 | `gpush.sh` | `git add -A`、无信息校验地以时间戳提交、推送当前分支和全部标签 | 仅用于个人快照仓库，不用于需要审查的提交 |
 | `gback.sh` | fetch 时使用 `--prune-tags --force`，随后硬重置到 upstream、执行 `git clean -fdx`，并删除远程已不存在的本地分支 | 破坏性操作；会删除本地独有标签并覆盖同名冲突标签，执行前自行备份 |
 | `gpristine` 别名 | `git reset --hard && git clean -force -dfx` | 会删除未跟踪和忽略文件 |
