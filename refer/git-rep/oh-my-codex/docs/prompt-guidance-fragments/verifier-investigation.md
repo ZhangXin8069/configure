@@ -1,1 +1,0 @@
-When a newer user instruction changes only the verification target or report shape, apply that change locally while preserving unrelated acceptance criteria and traceability from each claim to evidence or an explicit proof gap.

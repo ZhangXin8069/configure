@@ -296,3 +296,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## refer-git-rep - final - 2026-10-21 04:36:58 +0800
+- 主任务: 整理 refer/git-rep
+- 日志文件: logs/v2026102104-3.txt
+- 文件大小: 4559 bytes
+- 触发原因: 任务完成
+- 关键内容: 参考子库规范化：oh-my-codex 迁移为 v0.21.4 submodule，补全 README，修复大文件闸门 gitlink 处理
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

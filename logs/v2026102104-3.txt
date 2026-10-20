@@ -1,0 +1,77 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 04:36:58 +0800
+批次: refer-git-rep
+主任务: 整理 refer/git-rep
+触发原因: 任务完成
+摘要: 参考子库规范化：oh-my-codex 迁移为 v0.21.4 submodule，补全 README，修复大文件闸门 gitlink 处理
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 只读审计
+- 目标: 确认 refer/git-rep 当前布局与 form 规范差距
+- 命令/操作: git status; git ls-files -s -- refer/git-rep; git submodule status; form-audit.sh --strict --quiet
+- 关键输出: oh-my-codex 为普通文件（非 160000）；其余 3 个为 submodule；README 仅 3 行；audit 报告 academic/scientific 来源缺失
+- 退出码: 0
+- 证据与判断: 需迁移 oh-my-codex 并补 README
+
+### S2 — 版本核验与迁移
+- 目标: 用上游 v0.21.4 固定版本替换 vendored 拷贝
+- 命令/操作: clone --depth 1 --branch v0.21.4; diff -qr; git rm -r; submodule add 本地缓存; set-url; checkout 304fb3b; git add
+- 关键输出: 上游 tag 304fb3b...；共有文件无内容差异，上游多 27 项；首次 GitHub clone TLS 失败，使用已成功克隆的本地缓存重试成功
+- 退出码: 0
+- 证据与判断: gitlink=304fb3b，origin=GitHub URL
+
+### S3 — README 与大文件闸门
+- 目标: 补全四个参考库来源/用途/致谢；让闸门支持 gitlink
+- 命令/操作: 写入 README；form-large-files-check 首次 rc=2（cat-file 无法读 gitlink）；修改脚本跳过 mode 160000；新增测试用例
+- 关键输出: README URL 与 .gitmodules 全部匹配；测试 PASS；闸门通过
+- 退出码: 0
+- 证据与判断: 脚本修复有回归覆盖
+
+## 验证与证据
+- 测试/检查: git submodule status; git ls-files -s; form-audit.sh --strict --quiet; form-scripts.test.sh; form-large-files-check.sh; git diff --check; git diff --cached --check
+- 结果: 4 个参考目录均为 160000；audit rc=0；脚本测试 PASS；闸门通过（已检查=4，限制 10,000,000）；diff 检查通过
+- 未验证项: 未提交、未推送、未运行上游 oh-my-codex 测试（只读参考库，不属于本库验证范围）
+
+## 变更与产物
+- 文件: .gitmodules; refer/git-rep/README.md; refer/git-rep/oh-my-codex (gitlink); skills/form/scripts/form-large-files-check.sh; skills/form/scripts/form-scripts.test.sh
+- 产物: /tmp/opencode/oh-my-codex-backup-20261021（迁移前备份）
+- 未改动范围: 其余 3 个 submodule 的 gitlink 和上游工作树
+
+## 风险、限制与下一步
+- 风险: 新 submodule 为上游 v0.21.4 完整树，比旧拷贝多 .github/package.json 等 27 项；旧拷贝缺失这些文件，不是内容差异
+- 阻塞: 无
+- 下一步: 用户确认后提交；确认无误后可删除 /tmp 备份；升级参考库时显式更新 submodule 并同步 README
+
+## 用户输入指令
+整理refer/git-rep
+继续
+[选择] 迁移并补全 README（推荐）
+
+## Agent 全文报告
+--- report begin ---
+改动内容
+- 将 refer/git-rep/oh-my-codex 从普通拷贝（25 MB、1351 个跟踪文件）迁移为 Git submodule，固定到上游 v0.21.4 (304fb3b)。
+- 重写 refer/git-rep/README.md，逐项登记 4 个参考库的 path、来源 URL、用途、固定版本、许可与致谢。
+- 修复 skills/form/scripts/form-large-files-check.sh 对 gitlink 的处理，并新增回归用例。
+
+推理依据
+- form 规范要求 refer/git-rep/<name> 的索引模式为 160000，README 必须记录来源/致谢。
+- 本地拷贝与上游 v0.21.4 的共有文件无内容差异；27 项差异均为上游有而旧拷贝缺失，因此按 v0.21.4 固定。
+- GitHub 直连 clone 首次 TLS 失败；改用已成功克隆的本地 v0.21.4 缓存完成 submodule 添加，再将 origin 设回上游 URL。
+
+验证结果
+- git submodule status：4 个参考库均匹配 gitlink，无 +/- 前缀；oh-my-codex 为 v0.21.4。
+- git ls-files -s：4 个参考目录均为 160000。
+- form-audit.sh --strict --quiet：rc=0。
+- form-scripts.test.sh：PASS。
+- form-large-files-check.sh：通过，已检查=4，限制 10,000,000 字节。
+- git diff --check 与 git diff --cached --check：通过。
+- 删除的 1351 个文件全部位于 refer/git-rep/oh-my-codex，无越界删除；README 中的 URL 与 .gitmodules 全部一致。
+
+后续步骤
+- 本次改动已暂存但未提交、未推送；需要提交时请明确授权。
+- 迁移前备份保留在 /tmp/opencode/oh-my-codex-backup-20261021，确认后可按需清理。
+- 如需升级参考库，显式更新 submodule 并同步 README 的固定版本。
+--- report end ---
