@@ -1,0 +1,81 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 22:08:31 +0800
+批次: rule-skill-20261020
+主任务: 新增常驻 rule 技能：进程时限、资源治理与条件式交付
+触发原因: 任务完成
+摘要: rule 常驻技能、进程守卫、29 技能规则映射、自动交付门控完成并推送；全部结构/行为验证通过
+Git 根目录: /root/configure
+
+## 用户输入指令
+参考log-skill,编写rule-skill:
+1. agent提交的所有进程都应设置合理的时间限制,耗时预期大于10分钟的进程应添加进度日志输出功能,以便在监听此任务的agent能够判断此进程是否正常,避免存在bug或性能不佳的进程影响整体任务进度,对于这些不良进程要及时排查并中断,然后进行充分的debug或优化;
+2. 当处于存在其他用户的共享环境(例如服务器的登陆节点以及共享工作站)时,应严格限制agent及其提交的进程对环境资源的占用,避免影响其他用户的正常使用;
+3. 当agent提交的进程需要通过调度工具(例如slurm)再提交到其他节点(例如计算节点),应设置合理的排队与运行时间限制,且明确在其他节点的资源占用限制,避免占用过多资源与时间,节约用户资源消耗(例如机时费用与硬盘费用)并不影响其他用户的正常使用,但如果本任务实际必须消耗较大量的资源,那么也将不打折扣地执行,避免任务不完整或质量不过关;
+4. 当agent完成了阶段性任务且明确了提交此阶段性改动到本地和远程git不会损坏原有功能,也不会对原有进度产生负面效果,则可以自动提交,必要时可以使用tag-skill,无需用户同意,注意保留明确的日志;
+5. 提取本目录下其他skill中蕴含的'rule',丰富本skill的内容;
+6. 本skill同log-skill是常驻辅助技能;
+
+## 关键日志
+### S1 — 技能实现
+- 新增常驻 `rule` 技能及三份参考：进程/资源、条件式交付、29 个既有技能规则映射。
+- 新增 `run-guarded.sh`：硬超时、心跳、资源采样、进度文件新鲜度、事件日志、TERM/KILL 与进程组清理。
+- 新增行为测试：自然退出、硬超时、601 秒任务必须提供进度信号、输出捕获、停滞终止。
+- 更新技能表、互鉴表、30/30 计数和根仓库常驻/交付规则。
+
+### S2 — 缺陷修正
+- 停滞状态最初因后台监控变量无法回传而返回 143；增加跨进程停因标记后稳定返回 124。
+- 监控器原先可能在 TERM/KILL 宽限期结束前退出；增加监控器信号清理和停滞时的完整等待。
+- 并行验证时出现的临时测试目录在测试结束后自动清理，最终工作树无残留。
+
+### S3 — 自动交付
+- 阶段工作树仅包含本任务文件；敏感信息模式扫描、二进制检查、大文件闸门和逐文件暂存检查通过。
+- 首个实现提交：`1c10c53 feat(rule): add resident process and delivery governance`。
+- `origin/main` 已从 `83716b2` fast-forward 到 `1c10c53`，无 force push。
+- 最终日志提交与 `dev35` 标签作为本次收尾交付执行。
+
+## 验证与证据
+- `bash -n skills/rule/scripts/run-guarded.sh skills/rule/scripts/run-guarded.test.sh`: 退出码 0。
+- `bash skills/rule/scripts/run-guarded.test.sh`: `run-guarded tests: PASS`。
+- `skills/form/scripts/form-audit.sh --root . --strict --quiet`: PASS。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`: PASS。
+- `skills/form/scripts/form-large-files-check.sh --root .`: 11 个阶段文件全部低于 10,000,000 字节。
+- `git diff --check` 与 `git diff --cached --check`: PASS。
+- 技能目录/frontmatter 名称检查：30 个技能全部一致。
+- 互鉴表与技能表：均登记 30 项。
+- `tag-chain.sh --check --remote origin`: 126 个托管标签的 follow 链、提交祖先和远程对象一致，PASS。
+- `shellcheck`、`shfmt`：环境不可用，未执行；已以 `bash -n` 和行为测试替代。
+
+## 变更与产物
+- `skills/rule/SKILL.md`
+- `skills/rule/references/process-and-resources.md`
+- `skills/rule/references/conditional-delivery.md`
+- `skills/rule/references/extracted-rules.md`
+- `skills/rule/scripts/run-guarded.sh`
+- `skills/rule/scripts/run-guarded.test.sh`
+- `skills/rule/AGENTS.md`
+- `skills/AGENTS.md`
+- `AGENTS.md`
+- `logs/AGENTS.md`
+- `logs/v202610202206.txt`
+
+## 风险、限制与下一步
+- 不同 Slurm 站点的 partition、GPU、配额和排队策略不同；技能要求提交前按站点命令校准，未硬编码单一集群默认值。
+- 无 GNU `timeout`/`gtimeout` 的平台会由守卫脚本失败关闭，需要改用平台等价硬超时。
+- 最终日志提交、远程同步和 `dev35` 标签完成后，本次交付闭环结束。
+
+## Agent 全文报告
+--- report begin ---
+已完成常驻 `rule` 技能及其执行工具。
+
+核心规则：
+- 所有 agent 进程必须设置有限超时；预计超过 10 分钟时必须有真实进度、周期心跳、结束状态和停滞判据。
+- 异常进程先保存日志、PID、资源与检查点证据，再按 TERM→宽限→KILL 处理，随后进入 debug/optim。
+- 共享登录节点/工作站默认最小线程、低优先级、低并发；重计算转调度器。
+- Slurm 等作业显式声明 queue/partition、time、nodes、CPU、内存、GPU、输出和清理边界，并通过试跑或历史数据校准资源规格。
+- 实测需要大资源时完整分配，不通过截断规模、降低精度或省略验证来节省机时。
+- 阶段验收、范围、测试、日志、安全、大文件和远程 fast-forward 全部通过时，可自动本地提交、正常 push 和创建非破坏性标签。
+- force push、标签改写/删除、系统配置、凭据操作、仓库外写入和用户明确禁止的动作仍不在授权范围。
+
+验证结果：守卫行为测试、Shell 语法、form 严格审计、快照校验、大文件闸门、frontmatter、技能表/互鉴表计数、Git diff 和标签链检查均通过。首个实现提交 `1c10c53` 已成功推送到 `origin/main`。最终日志提交与 `dev35` 标签为最后收尾动作。
+--- report end ---
