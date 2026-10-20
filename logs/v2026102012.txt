@@ -1,0 +1,68 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 12:10:02 +0800
+批次: 20261020
+主任务: 修复 agent-goal 无 sqlite3 环境无法清除错误预算
+触发原因: 任务完成
+摘要: 增加 Python sqlite3 后备后端并覆盖无 CLI 回归测试
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与定位
+- 目标: 修复无 sqlite3 CLI 环境下 agent-goal.sh 无法清除错误 1 token 预算的问题。
+- 命令/操作: `./agent-goal.sh --db /tmp/agent-goal-repro-missing.sqlite list --json`；检查 Python 标准库 sqlite3。
+- 关键输出: 原脚本退出码 69，提示“未找到 sqlite3”；`/usr/bin/python3` 可用，SQLite 模块版本 3.37.2。
+- 退出码: 69。
+- 证据与判断: 脚本在读取数据库前硬依赖 sqlite3 CLI，阻止 list/clear；运行时因此一直保留错误的 budget_limited 状态。
+
+### S2 — 修复
+- 目标: 增加无 CLI 时的可用数据库后端，同时保持原有 CLI 路径、备份和事务语义。
+- 命令/操作: 修改 `bin/agent-goal.sh`；无 sqlite3 CLI 时调用 Python 标准库 sqlite3，覆盖 JSON、表格、备份、事务及零行结果。修改 `bin/agent-goal.test.sh`，测试改用 Python 创建和检查数据库，并隔离 PATH 强制覆盖无 CLI 场景。
+- 关键输出: 1 token 的 budget_limited 目标可清除为 `active|NULL|120`；备份照常生成；complete 目标无写入且不生成备份。
+- 退出码: 0。
+- 证据与判断: 根因位于数据库访问层，业务选择与状态转换逻辑无需改变。
+
+### S3 — 验证
+- 命令/操作: `bash -n agent-goal.sh`、`bash -n agent-goal.test.sh`、`bash agent-goal.test.sh`、`git diff --check`。
+- 关键输出: 测试输出 `PASS: agent-goal.sh 无 sqlite3 CLI 时 list/clear/budget/latest/dry-run/complete 保护与备份`；差异检查无错误。
+- 退出码: 均为 0。
+- 证据与判断: 原复现路径已转为通过；无 sqlite3 环境、dry-run、latest、all-budget-limited、complete 保护、备份和 1 token 边界均有回归覆盖。当前环境未安装 shellcheck。
+
+## 变更与产物
+- 文件: `bin/agent-goal.sh`, `bin/agent-goal.test.sh`
+- 产物: 无 sqlite3 CLI 时可用的 Python sqlite3 后备后端及回归测试。
+- 未改动范围: 未修改真实 Codex goal 数据库，未暂存、提交或推送。
+
+## 风险、限制与下一步
+- 风险: Python 后端未在安装 sqlite3 CLI 的宿主机上替代原路径，因此原 CLI 路径保持不变。
+- 阻塞: 无。
+- 下一步: 用户确认后运行 `agent-goal.sh clear --latest --yes` 清除真实环境中的错误目标。
+
+## 用户输入指令
+debug" 清除脚本本身无法运行：环境缺少 sqlite3，所以错误的 1 token 目标仍由运行时标记为 budget_limited。"
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+根因：`agent-goal.sh` 在读取 goal 数据库前强制要求 `sqlite3` CLI，而当前环境仅提供 Python 标准库 `sqlite3`，因此 `list` 和 `clear` 都以退出码 69 失败，错误预算无法解除。
+
+改动：
+- `bin/agent-goal.sh:126`：仍优先使用现有 `sqlite3` CLI；缺失时自动切换到 Python `sqlite3` 后端。
+- 兼容原有 JSON、表格、`.backup` 备份和事务调用，且不改变 goal 选择及状态转换规则。
+- `bin/agent-goal.test.sh`：数据库操作改用 Python，并隔离 PATH 强制验证“没有 sqlite3 CLI”的场景。
+- 增加零行结果和 `complete` 无操作不生成备份的保护断言。
+
+验证：
+- `bash -n agent-goal.sh`：通过
+- `bash -n agent-goal.test.sh`：通过
+- `bash agent-goal.test.sh`：通过
+- `git diff --check`：通过
+- 当前环境无 `shellcheck`，未执行该项
+
+真实 `~/.codex/goals_1.sqlite` 未被访问或修改。修复后可在确认目标后运行：
+
+```bash
+agent-goal.sh clear --latest --yes
+```
+--- report end ---
