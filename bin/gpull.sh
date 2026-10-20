@@ -16,17 +16,79 @@ echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
 
-if ! BRANCH=$(git symbolic-ref --quiet --short HEAD); then
-    echo "ERROR: Detached HEAD; checkout a branch before pulling." >&2
-    echo "Hint:  git checkout <branch>  (or git switch <branch>)" >&2
-    exit 1
+BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+if [[ -n "${BRANCH}" ]]; then
+    echo "Branch:  ${BRANCH}"
+else
+    echo "Branch:  (detached HEAD)"
 fi
-echo "Branch:  ${BRANCH}"
 
 # Fetch all remotes
 if ! git fetch --all --prune; then
     echo "ERROR: git fetch failed; pull aborted." >&2
     exit 1
+fi
+
+_find_origin_default_ref() {
+    local remote_ref
+    local candidate
+    local candidates
+
+    remote_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
+    if [[ "${remote_ref}" == origin/* ]] \
+        && git show-ref --verify --quiet "refs/remotes/${remote_ref}"; then
+        printf '%s\n' "${remote_ref}"
+        return 0
+    fi
+
+    # Some old clones do not create origin/HEAD. Accept a remote branch only
+    # when exactly one branch contains the detached commit.
+    candidates=$(
+        git for-each-ref --format='%(refname:short)' --contains HEAD refs/remotes/origin 2>/dev/null \
+            | while IFS= read -r candidate; do
+                [[ "${candidate}" == "origin/HEAD" ]] || printf '%s\n' "${candidate}"
+            done
+    )
+    if [[ -n "${candidates}" && "${candidates}" != *$'\n'* ]]; then
+        printf '%s\n' "${candidates}"
+        return 0
+    fi
+
+    return 1
+}
+
+_restore_detached_branch() {
+    local remote_ref
+    local branch
+
+    if ! remote_ref=$(_find_origin_default_ref); then
+        echo "ERROR: Detached HEAD; no unique origin branch can be selected safely." >&2
+        echo "Hint:  inspect and create a branch before pulling:" >&2
+        echo "       git branch <backup-branch> && git checkout <target-branch>" >&2
+        return 1
+    fi
+
+    branch=${remote_ref#origin/}
+    if ! git merge-base --is-ancestor HEAD "${remote_ref}"; then
+        echo "ERROR: Detached HEAD is not contained in ${remote_ref}; refusing to switch branches." >&2
+        echo "Hint:  preserve local commits first:" >&2
+        echo "       git branch <backup-branch> && git checkout <target-branch>" >&2
+        return 1
+    fi
+
+    echo "NOTICE: Restoring tracking branch ${branch} from ${remote_ref}."
+    if git show-ref --verify --quiet "refs/heads/${branch}"; then
+        git checkout "${branch}" || return 1
+    else
+        git checkout -b "${branch}" --track "${remote_ref}" || return 1
+    fi
+
+    BRANCH=${branch}
+    echo "Branch:  ${BRANCH}"
+}
+
+if [[ -z "${BRANCH}" ]]; then
+    _restore_detached_branch || exit 1
 fi
 
 _has_local_changes() {
