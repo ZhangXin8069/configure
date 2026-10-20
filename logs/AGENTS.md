@@ -152,3 +152,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 20261020 - final - 2026-10-20 12:10:02 +0800
+- 主任务: 修复 agent-goal 无 sqlite3 环境无法清除错误预算
+- 日志文件: logs/v2026102012.txt
+- 文件大小: 3856 bytes
+- 触发原因: 任务完成
+- 关键内容: 增加 Python sqlite3 后备后端并覆盖无 CLI 回归测试
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

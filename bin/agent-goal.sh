@@ -123,8 +123,12 @@ if [[ "${_command}" == "clear" ]] && (( ${#_threads[@]} > 0 )) && (( _all_budget
     exit 2
 fi
 
-if ! command -v sqlite3 >/dev/null 2>&1; then
-    printf '%s：未找到 sqlite3，无法读取 Codex goal 状态\n' "${_NAME}" >&2
+if command -v sqlite3 >/dev/null 2>&1; then
+    _sqlite_backend="cli"
+elif command -v python3 >/dev/null 2>&1 && python3 -c 'import sqlite3' >/dev/null 2>&1; then
+    _sqlite_backend="python"
+else
+    printf '%s：未找到 sqlite3 CLI，也未找到带 sqlite3 模块的 python3\n' "${_NAME}" >&2
     exit 69
 fi
 if [[ ! -f "${_db}" ]]; then
@@ -137,7 +141,119 @@ if [[ ! -r "${_db}" ]]; then
 fi
 
 _sqlite() {
-    sqlite3 -cmd '.timeout 5000' "$@"
+    if [[ "${_sqlite_backend}" == "cli" ]]; then
+        sqlite3 -cmd '.timeout 5000' "$@"
+        return
+    fi
+
+    python3 - "$@" <<'PY'
+import json
+import shlex
+import sqlite3
+import sys
+import unicodedata
+
+
+def cell_text(value):
+    return "" if value is None else str(value)
+
+
+def display_width(value):
+    width = 0
+    for character in value:
+        width += 2 if unicodedata.east_asian_width(character) in ("F", "W") else 1
+    return width
+
+
+def pad(value, width):
+    return value + " " * (width - display_width(value))
+
+
+def print_table(columns, rows, show_header):
+    if not rows:
+        return
+
+    cells = [[cell_text(value) for value in row] for row in rows]
+    widths = [display_width(column) for column in columns]
+    for row in cells:
+        for index, value in enumerate(row):
+            widths[index] = max(widths[index], display_width(value))
+
+    def print_row(row):
+        print("  ".join(pad(value, widths[index]) for index, value in enumerate(row)).rstrip())
+
+    if show_header:
+        print_row(columns)
+        print("  ".join("-" * width for width in widths))
+    for row in cells:
+        print_row(row)
+
+
+def main():
+    arguments = sys.argv[1:]
+    json_mode = False
+    show_header = False
+    column_mode = False
+
+    while arguments and arguments[0].startswith("-"):
+        option = arguments.pop(0)
+        if option == "-json":
+            json_mode = True
+        elif option == "-header":
+            show_header = True
+        elif option == "-column":
+            column_mode = True
+        else:
+            print(f"sqlite3: unsupported option: {option}", file=sys.stderr)
+            return 2
+
+    if len(arguments) != 2:
+        print("sqlite3: expected database path and SQL", file=sys.stderr)
+        return 2
+
+    database_path, sql = arguments
+    connection = sqlite3.connect(database_path, timeout=5.0)
+    try:
+        statement = sql.lstrip()
+        if statement.startswith(".backup"):
+            backup_arguments = shlex.split(statement)
+            if len(backup_arguments) != 2:
+                print("sqlite3: invalid .backup command", file=sys.stderr)
+                return 2
+            destination = sqlite3.connect(backup_arguments[1], timeout=5.0)
+            try:
+                connection.backup(destination)
+            finally:
+                destination.close()
+            return 0
+
+        if json_mode or show_header or column_mode:
+            cursor = connection.execute(sql)
+            columns = [description[0] for description in cursor.description]
+            rows = cursor.fetchall()
+            if json_mode:
+                print(json.dumps(
+                    [dict(zip(columns, row)) for row in rows],
+                    ensure_ascii=False,
+                    separators=(",", ":"),
+                ))
+            else:
+                print_table(columns, rows, show_header)
+            return 0
+
+        connection.executescript(sql)
+        connection.commit()
+        return 0
+    finally:
+        connection.close()
+
+
+try:
+    sys.exit(main())
+except (OSError, sqlite3.Error, ValueError) as error:
+    print(f"sqlite3: {error}", file=sys.stderr)
+    sys.exit(1)
+PY
 }
 
 _list_query='SELECT thread_id, goal_id, status, token_budget, tokens_used, time_used_seconds, created_at_ms, updated_at_ms, objective FROM thread_goals ORDER BY updated_at_ms DESC;'
