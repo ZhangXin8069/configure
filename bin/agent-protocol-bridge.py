@@ -744,6 +744,34 @@ class UpstreamError(Exception):
         self.message = message
 
 
+def set_auth_header(headers, auth_mode, api_key):
+    headers.pop("Authorization", None)
+    headers.pop("x-api-key", None)
+    if not api_key:
+        return
+    if auth_mode == "api_key":
+        headers["x-api-key"] = api_key
+    else:
+        headers["Authorization"] = "Bearer " + api_key
+
+
+def post_chat(url, body, headers, timeout):
+    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            raw = response.read()
+    except urllib.error.HTTPError as exc:
+        raw = exc.read()
+        message = raw.decode("utf-8", "replace") or str(exc)
+        raise UpstreamError(exc.code, message)
+    except Exception as exc:
+        raise UpstreamError(502, str(exc))
+    try:
+        return json.loads(raw.decode("utf-8"))
+    except Exception as exc:
+        raise UpstreamError(502, "upstream returned invalid JSON: %s" % exc)
+
+
 def fetch_chat(args, payload, incoming_headers, converter):
     url = args.upstream_base.rstrip("/") + "/chat/completions"
     chat_payload = converter(payload)
@@ -766,12 +794,12 @@ def fetch_chat(args, payload, incoming_headers, converter):
         value = incoming_headers.get(name)
         if value:
             headers[name] = value
-    api_key = os.environ.get(args.api_key_env, "")
-    if api_key:
-        if args.auth_mode == "api_key":
-            headers["x-api-key"] = api_key
-        else:
-            headers["Authorization"] = "Bearer " + api_key
+    api_key = os.environ.get(args.api_key_env, "") if args.api_key_env else ""
+    if args.api_key_env and not api_key:
+        raise UpstreamError(
+            503,
+            "bridge: %s is not set; export it before launching the agent" % args.api_key_env,
+        )
     session_id = (
         incoming_headers.get("session-id")
         or incoming_headers.get("x-opencode-session")
@@ -779,20 +807,29 @@ def fetch_chat(args, payload, incoming_headers, converter):
     )
     if session_id:
         headers["x-opencode-session"] = session_id
-    request = urllib.request.Request(url, data=body, headers=headers, method="POST")
-    try:
-        with urllib.request.urlopen(request, timeout=args.timeout) as response:
-            raw = response.read()
-    except urllib.error.HTTPError as exc:
-        raw = exc.read()
-        message = raw.decode("utf-8", "replace") or str(exc)
-        raise UpstreamError(exc.code, message)
-    except Exception as exc:
-        raise UpstreamError(502, str(exc))
-    try:
-        return json.loads(raw.decode("utf-8"))
-    except Exception as exc:
-        raise UpstreamError(502, "upstream returned invalid JSON: %s" % exc)
+
+    # OpenCode Go/Zen 的 /chat/completions 只接受 Bearer，部分 OpenAI 兼容端点只接受
+    # x-api-key。按配置头尝试一次；仅在 401 且 key 已设置时用另一认证头重试一次。
+    auth_modes = [args.auth_mode]
+    if api_key:
+        auth_modes.append("api_key" if args.auth_mode == "bearer" else "bearer")
+    last_error = None
+    for index, auth_mode in enumerate(auth_modes):
+        attempt_headers = dict(headers)
+        set_auth_header(attempt_headers, auth_mode, api_key)
+        try:
+            return post_chat(url, body, attempt_headers, args.timeout)
+        except UpstreamError as exc:
+            last_error = exc
+            if exc.status != 401 or not api_key or index + 1 >= len(auth_modes):
+                raise
+            print(
+                "bridge: upstream 401 with auth_mode=%s; retrying with %s"
+                % (auth_mode, auth_modes[index + 1]),
+                file=sys.stderr,
+                flush=True,
+            )
+    raise last_error
 
 
 def write_ready_file(path, port):
@@ -881,6 +918,22 @@ def main():
     server = ThreadingHTTPServer((args.listen_host, args.port), BridgeHandler)
     server.daemon_threads = True
     server.bridge_args = args
+    key_state = "none"
+    if args.api_key_env:
+        key_state = "set" if os.environ.get(args.api_key_env) else "missing"
+    print(
+        "bridge: listening on %s:%s upstream=%s auth_mode=%s key_env=%s key=%s"
+        % (
+            args.listen_host,
+            server.server_address[1],
+            args.upstream_base,
+            args.auth_mode,
+            args.api_key_env or "<empty>",
+            key_state,
+        ),
+        file=sys.stderr,
+        flush=True,
+    )
     write_ready_file(args.ready_file, server.server_address[1])
     try:
         server.serve_forever()

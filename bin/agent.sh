@@ -1074,6 +1074,10 @@ run_claude() {
         _cl_auth_other="ANTHROPIC_API_KEY"
     fi
     [[ -n "${_cl_key_name}" ]] && _cl_key="${!_cl_key_name:-}"
+    # apiKeyHelper 在独立子进程中执行，必须确保原始 key 变量已导出（父 shell 可能只定义未 export）。
+    if [[ -n "${_cl_key}" && -n "${_cl_key_name}" && "${_cl_key_name}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        export "${_cl_key_name}"
+    fi
     if [[ -n "${_cl_key}" ]]; then
         printf -v "${_cl_auth_var}" '%s' "${_cl_key}"
         export "${_cl_auth_var}"
@@ -1097,6 +1101,16 @@ run_claude() {
     else
         _claude_token_fragment=",\"ANTHROPIC_AUTH_TOKEN\":\"$(_json_escape "${ANTHROPIC_AUTH_TOKEN:-}")\",\"ANTHROPIC_API_KEY\":\"\""
     fi
+    # Claude Code TUI 只在 ANTHROPIC_API_KEY 已获用户批准时使用它，否则回退 OAuth/keychain；
+    # keychain 锁定时表现为 “Not logged in”。apiKeyHelper 不受该审批状态约束，且 settings 中
+    # 只保存环境变量名，不重复保存密钥。
+    local _claude_helper_fragment="" _printenv_bin=""
+    if [[ "${_cl_auth_var}" == "ANTHROPIC_API_KEY" && -n "${_cl_key_name}" && -n "${_cl_key}" &&
+          "${_cl_key_name}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        _printenv_bin="$(command -v printenv 2>/dev/null || true)"
+        _printenv_bin="${_printenv_bin:-printenv}"
+        _claude_helper_fragment=",\"apiKeyHelper\":\"$(_json_escape "${_printenv_bin} ${_cl_key_name}")\""
+    fi
     # env 块由 _cl_env_keys 动态生成（未配置的键省略，含 DISABLE_AUTOUPDATER 等）
     local _claude_env_fragment="" _cl_frag_key _cl_frag_value
     for _cl_frag_key in "${_cl_env_keys[@]}"; do
@@ -1108,12 +1122,14 @@ run_claude() {
     # statusLine 命令路径加引号（路径含空格可用；Windows 经 Git Bash 执行时须用正斜杠）
     _claude_statusline_cmd="\"$(_json_escape "${_PATH}/agent-statusline.sh")\""
     {
-        printf '{"env":{"ANTHROPIC_BASE_URL":"%s"%s%s},"statusLine":{"type":"command","command":"%s"}}\n' \
+        printf '{"env":{"ANTHROPIC_BASE_URL":"%s"%s%s}%s,"statusLine":{"type":"command","command":"%s"}}\n' \
             "$(_json_escape "${ANTHROPIC_BASE_URL}")" \
             "${_claude_env_fragment}" "${_claude_token_fragment}" \
+            "${_claude_helper_fragment}" \
             "$(_json_escape "${_claude_statusline_cmd}")"
     } > "${_CLAUDE_SETTINGS_TMP}"
-    unset _claude_token_fragment _claude_env_fragment _claude_statusline_cmd _cl_auth_var _cl_auth_other
+    unset _claude_token_fragment _claude_env_fragment _claude_helper_fragment _claude_statusline_cmd \
+        _printenv_bin _cl_auth_var _cl_auth_other
 
     local _runtime_mode=tui
     (( DRIVE_MODE )) && _runtime_mode=drive
@@ -2029,6 +2045,18 @@ _start_protocol_bridge() {
     fi
     _BRIDGE_READY_FILE="${_bridge_dir}/.bridge-ready.$$"
     : > "${_bridge_log}" 2>/dev/null || true
+    local _bridge_key_state="unset"
+    if [[ -n "${_key_env}" && "${_key_env}" =~ ^[A-Za-z_][A-Za-z0-9_]*$ ]]; then
+        if [[ -n "${!_key_env:-}" ]]; then
+            # 变量可能在当前 shell 已定义但未导出；桥是独立进程，必须 export 后才能继承。
+            export "${_key_env}"
+            _bridge_key_state="set"
+        else
+            _bridge_key_state="missing"
+        fi
+    fi
+    printf '###bridge: upstream=%s auth=%s key_env=%s key=%s###\n' \
+        "${_upstream}" "${_auth_mode}" "${_key_env:-<empty>}" "${_bridge_key_state}" >> "${_bridge_log}"
     "${_AGENT_PYTHON}" "${_bridge_script}" \
         --upstream-base "${_upstream}" \
         --api-key-env "${_key_env}" \
