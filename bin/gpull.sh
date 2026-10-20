@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gpull — Pull latest changes from anywhere inside a repo
+# gpull — Safely fast-forward a repository from either HTTPS or SSH origin
 
 set -o pipefail
 
@@ -15,6 +15,19 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
 echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
+
+_REMOTE_URL=$(git config --get remote.origin.url 2>/dev/null || true)
+if [[ -z "${_REMOTE_URL}" ]]; then
+    echo "ERROR: Remote 'origin' is not configured; pull aborted." >&2
+    exit 1
+fi
+case "${_REMOTE_URL}" in
+    https://*|http://*) _REMOTE_KIND=https ;;
+    ssh://*|git@*|*@*:*) _REMOTE_KIND=ssh ;;
+    file://*|/*|./*|../*) _REMOTE_KIND=local ;;
+    *) _REMOTE_KIND=other ;;
+esac
+echo "Remote:  origin (${_REMOTE_KIND})"
 
 BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
 if [[ -n "${BRANCH}" ]]; then
@@ -97,6 +110,7 @@ _has_local_changes() {
 
 _pull_with_manual_stash() {
     local branch=$1
+    shift
     local message="gpull auto-stash $(date "+%Y-%m-%d-%H-%M-%S")"
     local stash_created=0
     local pull_status=0
@@ -113,7 +127,7 @@ _pull_with_manual_stash() {
         fi
     fi
 
-    git pull --rebase origin "$branch" || pull_status=$?
+    git pull "$@" origin "$branch" || pull_status=$?
     if ((pull_status != 0)); then
         if ((stash_created)); then
             echo "WARN: Pull failed; local changes remain in git stash." >&2
@@ -130,14 +144,66 @@ _pull_with_manual_stash() {
     return 0
 }
 
-# Pull current branch with a linear history; preserve tracked worktree changes.
+_determine_branch_relation() {
+    local upstream_ref="refs/remotes/origin/${BRANCH}"
+    local head_commit
+    local upstream_commit
+
+    if ! git show-ref --verify --quiet "${upstream_ref}"; then
+        _BRANCH_RELATION=missing
+        return 0
+    fi
+
+    head_commit=$(git rev-parse HEAD) || return 1
+    upstream_commit=$(git rev-parse --verify "${upstream_ref}") || return 1
+    if [[ "${head_commit}" == "${upstream_commit}" ]]; then
+        _BRANCH_RELATION=equal
+    elif git merge-base --is-ancestor HEAD "${upstream_ref}"; then
+        _BRANCH_RELATION=behind
+    elif git merge-base --is-ancestor "${upstream_ref}" HEAD; then
+        _BRANCH_RELATION=ahead
+    else
+        _BRANCH_RELATION=diverged
+    fi
+}
+
+_determine_branch_relation || {
+    echo "ERROR: Unable to compare ${BRANCH} with origin/${BRANCH}." >&2
+    exit 1
+}
+case "${_BRANCH_RELATION}" in
+    missing)
+        echo "ERROR: Remote branch origin/${BRANCH} does not exist; pull aborted." >&2
+        exit 1
+        ;;
+    equal)
+        echo "Already up to date."
+        echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+        exit 0
+        ;;
+    ahead)
+        echo "Local ${BRANCH} is ahead of origin/${BRANCH}; nothing to pull."
+        echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+        exit 0
+        ;;
+    diverged)
+        echo "ERROR: Local ${BRANCH} and origin/${BRANCH} have diverged; refusing automatic rebase." >&2
+        echo "Hint:  inspect both sides:" >&2
+        echo "       git log --oneline --left-right --graph HEAD...origin/${BRANCH}" >&2
+        echo "Hint:  integrate deliberately (configure user.name/user.email first):" >&2
+        echo "       git rebase origin/${BRANCH}   # or merge/reset after review" >&2
+        exit 1
+        ;;
+esac
+
+# Only fast-forward pulls are automatic; divergent histories require a manual decision.
 _PULL_STATUS=0
 _PULL_HELP=$(git pull -h 2>&1 || true)
 if [[ "${_PULL_HELP}" == *"--autostash"* ]]; then
-    git pull --rebase --autostash origin "$BRANCH" || _PULL_STATUS=$?
+    git pull --ff-only --no-rebase --autostash origin "$BRANCH" || _PULL_STATUS=$?
 else
     echo "Notice: Git lacks pull --autostash; using the manual stash fallback."
-    _pull_with_manual_stash "$BRANCH" || _PULL_STATUS=$?
+    _pull_with_manual_stash "$BRANCH" --ff-only --no-rebase || _PULL_STATUS=$?
 fi
 
 if ((_PULL_STATUS != 0)); then

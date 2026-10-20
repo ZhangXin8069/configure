@@ -71,7 +71,7 @@ git check-ignore -v <路径>
 
 | 命令 | 行为 | 建议 |
 |---|---|---|
-| `gpull.sh` | fetch 后对当前分支执行 `pull --rebase --autostash origin <branch>`；旧版 Git 回退到兼容 stash 流程；detached HEAD 仅在提交已包含于唯一可判定的远端默认分支时恢复为跟踪分支，否则明确失败 | 可用于日常同步并保留 tracked 工作区改动；建议先检查 `git status --short --branch` |
+| `gpull.sh` | 自动识别 `origin` 为 HTTPS、SSH 或本地路径；fetch 后仅允许 fast-forward，旧版 Git 回退到兼容 stash 流程；分叉历史在 stash/rebase 前停止；detached HEAD 仅在提交已包含于唯一可判定的远端默认分支时恢复为跟踪分支 | 可用于日常同步并保留 tracked 工作区改动；建议先检查 `git status --short --branch` |
 | `gpush.sh` | `git add -A`、无信息校验地以时间戳提交、推送当前分支和全部标签 | 仅用于个人快照仓库，不用于需要审查的提交 |
 | `gback.sh` | fetch 时使用 `--prune-tags --force`，随后硬重置到 upstream、执行 `git clean -fdx`，并删除远程已不存在的本地分支 | 破坏性操作；会删除本地独有标签并覆盖同名冲突标签，执行前自行备份 |
 | `gpristine` 别名 | `git reset --hard && git clean -force -dfx` | 会删除未跟踪和忽略文件 |
@@ -91,12 +91,13 @@ git commit
 git push
 ```
 
-需要同步远端时优先显式执行：
+需要同步远端时优先执行：
 
 ```bash
-git fetch --all --prune
-git pull --rebase
+gpull.sh
 ```
+
+`gpull.sh` 不自动 rebase 或 merge 分叉历史。若提示本地分支与 `origin/<branch>` 分叉，先检查两侧提交；确定要 rebase 时再配置 `user.name`/`user.email` 并手动执行。
 
 ## 验证
 
