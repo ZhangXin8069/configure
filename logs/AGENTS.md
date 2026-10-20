@@ -188,3 +188,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## env-alias - final - 2026-10-20 20:54:22 +0800
+- 主任务: gcat-tag-order
+- 日志文件: logs/v2026102020.txt
+- 文件大小: 3642 bytes
+- 触发原因: 任务完成
+- 关键内容: 调整 gcat-tag 输出顺序，在保留最近十条的前提下让最新标签位于最后
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
