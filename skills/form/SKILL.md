@@ -3,9 +3,9 @@ name: form
 description: |
   当用户要求审计、整改或初始化 Git 库的命名、目录结构、代码框架、文档/日志/数据/测试
   布局、仓库清洁度与交付格式，检查命名/目录重构是否合规、Git 标签名是否被误用为路径或标识符，
-  要求把 form 约定固化到当前 Git 库根规则文件、阻止超限文件进入 Git，或说 form / 格式治理 /
-  命名规范 / 目录规范 / 结构治理 / 仓库规范化 / 格式审计 / dry-run form 时使用；
-  不用于单点语法错误或性能优化。
+  规整 `refer/git-rep` 参考 Git 子库及其 README/分析文档布局，要求把 form 约定固化到当前
+  Git 库根规则文件、阻止超限文件进入 Git，或说 form / 格式治理 / 命名规范 / 目录规范 /
+  结构治理 / 仓库规范化 / 格式审计 / dry-run form 时使用；不用于单点语法错误或性能优化。
 metadata:
   openclaw:
     emoji: 📐
@@ -23,6 +23,10 @@ metadata:
 
 明确文字规则的优先级高于范例链接；范例只用于确认风格，不覆盖本 skill 的规则。
 
+参考 Git 库统一作为 submodule 放在 `refer/git-rep/<name>`；本库对这些子库的分析文档集中到
+`refer/git-rep/docs/`，来源与致谢写入 `refer/git-rep/README.md`。子库工作树是只读外部内容，
+不把上游代码或上游文档混入本库源码和 `docs/`。
+
 ## configure 特化
 
 - 当前仓库为 simple 库，主导语言为 bash；框架参照
@@ -30,6 +34,10 @@ metadata:
 - 代码文件全小写；批量 Git 命令使用 `gz-<repo>-push.sh` 和 `zg-<repo>-pull.sh`，
   聚合入口为 `gz-all-push.sh`、`zg-all-pull.sh`。
 - 顶层目录白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`。
+- 参考 Git 库统一放在 `refer/git-rep/<name>`，新增时使用
+  `git submodule add <url> refer/git-rep/<name>`；本库对参考库的分析文档放
+  `refer/git-rep/docs/`，来源与致谢写入 `refer/git-rep/README.md`。存量普通拷贝按
+  Step 5 的参考子库流程迁移。
 - 包依赖清单位于 `lib/requirements/{apt,pip}.txt`，由 `bin/{apt,pip}_install.sh` 消费。
 - `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 允许 `AGENTS.md` 索引以及
   `log/json/tsv/csv/txt`，agent 日志按 `log` 技能的三态时间戳命名。
@@ -65,10 +73,14 @@ metadata:
     `AGENT.md` 是历史输入错误，不是兼容别名。只存在单数文件时直接重命名为复数；同目录
     两者并存时，以 `AGENTS.md` 为主文件，先合并并去重 `AGENT.md` 中的有效规则，确认
     无内容丢失后再移除单数文件，并同步全部现行引用。历史日志可保留旧路径作为既往证据。
+11. **参考库与自有内容分离**：参考 Git 库以 submodule 引入，路径为 `refer/git-rep/<name>`；
+    本库对参考库的分析文档统一放 `refer/git-rep/docs/`，来源、用途和致谢写入
+    `refer/git-rep/README.md`。不得把参考库整树拷贝进主库，也不得把本库文档写进子库工作树。
 
 ## Git 检查
 
-有 Git 且本次产生文件改动时，执行 `git diff --check` 和定向复查。只读审计不提交；
+有 Git 且本次产生文件改动时，执行 `git diff --check` 和定向复查。参考子库变更时同时检查
+`.gitmodules`、gitlink 和 `refer/git-rep/README.md`，不暂存子库工作树内容。只读审计不提交；
 完整 `~form` 流程按 Step 8 使用较高权限完成提交、推送和最终标签。任何提交前都运行
 `scripts/form-large-files-check.sh`；命中超限暂存文件时该闸门优先于 `~form` 的常规较高权限。
 无 Git 或无本次改动时立即跳过。
@@ -83,19 +95,25 @@ metadata:
 - 用户要求清理上一任务遗留的文档、日志、测试代码和非功能性文件，但必须保留 Git 回溯能力。
 - 用户要求把通用格式约定特化到当前库，并在根 `AGENTS.md` 写明本地规则。
 - 用户要求统一 `AGENT.md`/`AGENTS.md`，或修复 agent 规则文件的单复数命名冲突。
+- 用户要求添加、更新或移除 `refer/git-rep` 参考 Git 库，或整理参考库的 README 来源/致谢与
+  分析文档目录。
+- `refer/git-rep/<name>` 是普通拷贝而不是 submodule，或本库分析文档散落在子库 `docs/` 内。
 - 与其他技能配合：先读改动用 `diff`；多步骤方案用 `plan`；报错用 `debug`；
   功能回归用 `test`；最终同步用 `init`；完成后用 `tag(dev)`；
   日志命名与索引一致性用 `log`；技能自身的描述或结构问题用 `skill-creator`；
-  多库只读审计可并行调用 `dispatch`。
+  多库只读审计可并行调用 `dispatch`；参考库分析文档由 `analy`/`pure`/`report` 产生时，
+  按本 skill 的 `refer/git-rep/docs/` 位置归档。
 
 ## 参考文件
 
 - `references/naming-and-layout.md`：名称质量、Git 标签边界、语言/构件命名矩阵、
-  `logs/` 日志命名、文件夹白名单、简单库与复杂库规则。
+  `logs/` 日志命名、文件夹白名单、参考 Git 子库布局、简单库与复杂库规则。
 - `references/observed-conventions.md`：从固定明文快照归纳的 C++/Python/Bash/静态前端规则。
 - `references/source-snapshots/README.md`：四个参考 URL 的提交、文件清单、排除项和校验方式。
-- `references/git-artifacts-and-workflow.md`：目录职责、清理边界、提交消息、验收和本地特化模板。
-- `scripts/form-audit.sh`：只读检查已跟踪路径的顶层目录、代码文件名、docs/logs/data 和测试位置。
+- `references/git-artifacts-and-workflow.md`：目录职责、参考子库交付、清理边界、提交消息、
+  验收和本地特化模板。
+- `scripts/form-audit.sh`：只读检查已跟踪路径的顶层目录、代码文件名、docs/logs/data、测试位置
+  和 `refer/git-rep` 子库/README/docs 基线。
 - `scripts/form-agents-sync.sh`：把与目标库相关的 form 规则写入根 `AGENTS.md`
   的标记块；只更新标记块，保留块外全部本地约定。
 - `scripts/form-large-files-check.sh`：只读检查暂存的新增、修改、复制或重命名文件，
@@ -162,7 +180,23 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 5. 审计 agent 规则文件命名。所有 `AGENT.md` 都是待整改对象：同目录没有
    `AGENTS.md` 时登记为重命名；同目录两者并存时登记为语义合并并删除单数文件。
    `form-audit.sh` 的 `AGENT_FILE_SINGULAR` 是确定性基线信号，合并内容仍须人工核对。
-6. 检查名称质量和 Git 标签名边界。标签文法为
+6. 审计参考 Git 子库布局。存在 `refer/git-rep/` 时：
+
+```bash
+git ls-files -s -- refer/git-rep
+git submodule status -- refer/git-rep 2>/dev/null || true
+test -f refer/git-rep/README.md && sed -n '1,160p' refer/git-rep/README.md
+```
+
+   - `refer/git-rep/<name>` 的索引模式必须是 `160000`；普通文件模式表示 vendored 拷贝，
+     登记为待迁移。`.gitmodules` 必须有对应的 `path` 和 `url`。
+   - `refer/git-rep/README.md` 必须存在，至少逐项写出子库来源 URL 和致谢；可参考 PyQCD
+     仓库的 `refer/git-rep/README.md` 清单写法。缺项登记为待补。
+   - 本库分析文档必须位于 `refer/git-rep/docs/`；若出现在非 gitlink 的
+     `refer/git-rep/<name>/docs/`，先用 `git log --diff-filter=A` 和上游树确认归属，
+     登记为待迁移，不直接改动子库工作树。
+   - 子库工作树内的上游文件不属于本库整改范围，不读取、不修改、不纳入冲突表。
+7. 检查名称质量和 Git 标签名边界。标签文法为
    `^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$`；路径命中由审计脚本报告，符号命中需人工判定：
 
 ```bash
@@ -172,14 +206,14 @@ git grep -n -E '\b(stab|dev|bug|test)[0-9]+(_[0-9]+)*\b' -- \
 
 更新说明、提交说明、注释和日志中的标签引用是允许的版本证据；若标签出现在文件名、
 目录名、对象、函数、变量、类型、字段、测试标识或配置键中，登记为违规并要求整批纠正。
-7. 使用本地快照前校验完整性；任一失败都停止引用该快照，不使用损坏副本推断规则：
+8. 使用本地快照前校验完整性；任一失败都停止引用该快照，不使用损坏副本推断规则：
 
 ```bash
 FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 "$FORM_SKILL_DIR/scripts/form-snapshot-verify.sh" --quiet
 ```
 
-8. 运行 `~diff` 查看上一基线以来的改动；若尚未有基线，记录 `git status` 与当前提交作为基线。
+9. 运行 `~diff` 查看上一基线以来的改动；若尚未有基线，记录 `git status` 与当前提交作为基线。
 
 ### Step 3. 生成整改方案
 
@@ -229,6 +263,45 @@ rg -n --hidden --glob '!.git/**' '旧名称|OldName|old_name'
 5. 测试入口应具备完整默认值，优先无参数即可运行；参数只用于覆盖默认行为。
 6. 所有删除先展示候选、Git 保护状态和恢复命令；计划已列明且调用为 `~form` 时按较高权限
    执行，计划外候选不删除。
+7. 参考 Git 子库按“先迁移本库分析文档、再移除旧拷贝、最后重建 submodule”的顺序规整。
+   普通拷贝不是最终状态。示例：
+
+```bash
+# 1) 迁移本库添加的分析文档；上游自带文档留在子库内
+mkdir -p refer/git-rep/docs
+git mv refer/git-rep/<name>/docs/<file> refer/git-rep/docs/
+# 2) 移除旧的 vendored 副本；先确认 Git 可回溯，残留项逐项确认
+git rm -r -- refer/git-rep/<name>
+# 3) 以 submodule 重新引入，保留上游仓库名
+git submodule add <url> refer/git-rep/<name>
+git submodule update --init --recursive -- refer/git-rep/<name>
+```
+
+   具体示例：
+
+```bash
+git submodule add https://gitee.com/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
+git submodule add https://github.com/IHEP-LQCD/EasyDistillation.git \
+  refer/git-rep/EasyDistillation
+```
+
+   文档已跟踪时用 `git mv`；未跟踪时先登记来源，再用普通 `mv`，随后统一暂存。
+   `git rm -r` 只删除已跟踪内容；若旧目录还含 `.git` 或未跟踪残留，先列出并确认来源，
+   再按计划清理，不能为了 `git submodule add` 成功而静默 `rm -rf`。旧目录未被跟踪时，
+   先按清理边界确认，再删除工作树副本。禁止用 `git add -A` 或 `git add .` 把整树加入主库。
+   已经正确配置的 submodule 只更新 README 或执行 `git submodule update`，不要无谓删除重建；
+   URL 变更用 `git submodule set-url <path> <url>` 并同步 README。
+8. 更新 `refer/git-rep/README.md`：至少逐项写出子库 `path`、来源 URL、用途和致谢；
+   参考 PyQCD 的清单式写法时也要补齐缺失项，不能只留链接列表。README 与 `.gitmodules`、
+   gitlink 在同一批次提交。
+9. 验证参考子库布局：
+
+```bash
+git ls-files -s -- refer/git-rep/<name>   # 期望 160000
+git config -f .gitmodules --get-regexp '^submodule\..*\.(path|url)$'
+git submodule status -- refer/git-rep
+test -d refer/git-rep/docs && find refer/git-rep/docs -maxdepth 1 -type f | sort
+```
 
 ### Step 6. 全面功能复现
 
@@ -247,7 +320,22 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 
 4. 自动检查不覆盖函数、变量、对象、公开接口和既有兼容例外；这些项目逐条回填审计表，
    每条给出 `文件:行号` 和修正或保留理由。
-5. 若测试失败，转 `~debug` 定位根因，不以修改期望值或删除测试绕过；修复后重跑完整验证。
+5. 参考子库变更时额外验证：
+
+```bash
+git submodule status -- refer/git-rep
+git ls-files -s -- refer/git-rep | awk '$1=="160000"'
+git config -f .gitmodules --get-regexp '^submodule\..*\.(path|url)$'
+test -f refer/git-rep/README.md
+test -d refer/git-rep/docs && find refer/git-rep/docs -maxdepth 2 -type f | sort
+```
+
+   确认每个参考目录是 gitlink、README 有来源/致谢、本库分析文档只在 `refer/git-rep/docs/`；
+   上游文件仍在子库工作树内。`form-audit.sh` 的 `REFERENCE_DOC_MISPLACED`、
+   `REFERENCE_README_MISSING`、`REFERENCE_SUBMODULE_METADATA` 和
+   `REFERENCE_README_SOURCE_MISSING` 是确定性基线信号，最终以索引模式和
+   `git submodule status` 判定。
+6. 若测试失败，转 `~debug` 定位根因，不以修改期望值或删除测试绕过；修复后重跑完整验证。
 
 ### Step 7. 生成当前库特化版本
 
@@ -258,6 +346,8 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
    - 文件、函数、变量、对象和目录命名规则；
    - 允许的顶层目录及各目录职责；
    - 测试入口和功能复现命令；
+   - 参考 Git 子库布局：`refer/git-rep/<name>` 必须是 submodule，README 记录来源/致谢，
+     本库分析文档放 `refer/git-rep/docs/`，子库工作树只读；
    - Git 交付、标签、清理边界与 `10,000,000` 字节大文件闸门；
    - 根规则文件中的优先级：目标库原有明确约定 > 本 skill 通用规则；
    - 仅限本库的已批准例外。
@@ -290,6 +380,7 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 `~form` 默认较高权限覆盖以下常规交付；出现 force push、改写已推送标签或仓库外写入时停止：
 
 1. 调用 `~diff` 审计全部本次改动；不得使用 `git add -A` 或 `git add .`，只逐个暂存本任务文件。
+   参考子库变更同时暂存 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`，不暂存子库工作树内容。
 2. 每批暂存后、提交前运行大文件闸门：
 
 ```bash
@@ -302,10 +393,12 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 超限路径与字节数并提醒用户。等待 5 分钟后仍无回复时，只继续推进不依赖超限文件的工作；
 静默不构成提交超限文件的授权，覆盖阈值必须由用户明确要求。
 3. 每个独立整改批次生成详实提交消息，结构见
-   `references/git-artifacts-and-workflow.md`；提交后推送当前分支，禁止 force push。
+   `references/git-artifacts-and-workflow.md`；参考子库批次在消息中写明新增/迁移/重建
+   submodule 及 README/docs 变化。提交后推送当前分支，禁止 force push。
 4. 调用 `~init` 同步 AGENTS.md 和 agent 配置归档；随后调用 `~tag(dev)` 保存开发快照。
 5. 在 `docs/` 写入该技术任务的 Markdown 文档，记录目标、冲突表摘要、改动、验证证据、
-   未决项和恢复方法；文档纳入最终提交与推送。
+   未决项和恢复方法；参考子库的分析文档写入 `refer/git-rep/docs/`，不要混入顶层
+   `docs/`。文档纳入最终提交与推送。
 6. 最终确认本地分支、远程分支和 `dev` 标签指向同一验收提交，并确认标签已推送；
    有漂移时停止并报告，不猜测远程状态。
 
@@ -320,6 +413,7 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 | 名称质量与标签边界 | 路径审计、`git grep`、冲突表、旧引用搜索 | 名称简短且语义完整；标签名只作版本引用，不进入路径或标识符 |
 | Agent 规则文件名 | `form-audit.sh` 的 `AGENT_FILE_SINGULAR`、双文件 diff、合并后旧文件检查 | 全库无 `AGENT.md`；双文件内容已合并去重，现行引用全部指向 `AGENTS.md` |
 | 交付目录 | docs/logs/data/testing 清单、`AGENTS.md` 索引、`v*` 日志命名审计 | 内容类型、日志命名、索引位置和职责符合边界 |
+| 参考子库 | `git ls-files -s`、`.gitmodules`、`git submodule status`、README、`refer/git-rep/docs` | 每个参考目录为 `160000` gitlink；README 有来源/致谢；本库分析文档只在 `refer/git-rep/docs/`；无普通拷贝残留 |
 | 根规则同步 | `form-agents-sync.sh --check`、根规则文件 diff | 标记块存在且为当前版本；块外本地约定逐字保留；冲突项以本地原约定为准 |
 | 功能复现 | 构建、测试、主入口冒烟命令与退出码 | 整改前后同一验证集通过；缺口明确写出 |
 | 大文件闸门 | `form-large-files-check.sh` 输出与退出码 | 暂存新增、修改、复制或重命名文件均不超过 `10,000,000` 字节；命中时本批次未提交 |
@@ -338,6 +432,11 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 | 通用规则与根文件原约定冲突 | 保留原约定，不复制冲突的通用规则；把冲突和本地例外写入审计表 |
 | 根规则标记缺失、重复或未闭合 | 停止同步并修复标记；不得覆盖整份根规则文件或绕过检查 |
 | 暂存文件超过大小闸门 | 立即停止该批次提交与推送，报告路径和字节数；5 分钟无回复只继续无依赖工作，静默不授权覆盖 |
+| 参考库是普通拷贝而非 submodule | 先迁移本库 docs 并确认归属，再移除旧拷贝，使用 `git submodule add <url> <path>` 重建；不直接暂存整树 |
+| 本库分析文档写在子库 `docs/` 内 | 迁移到 `refer/git-rep/docs/`，更新 README 和引用；子库工作树保持上游状态 |
+| `refer/git-rep/README.md` 缺来源/致谢 | 补齐每个子库的 path、URL、用途和致谢；与 `.gitmodules`、gitlink 同批提交 |
+| `git submodule add` 失败 | 检查 URL、网络/凭据和目录残留；保留已迁移文档，不静默删除或伪装成功；重试仍失败则报告阻塞 |
+| 子库工作树有本地修改 | 先取证并区分本库与上游内容；不覆盖、不提交子库内容；计划外停止 |
 | 参考链接不可访问 | 使用本 skill 和 references 的明文规则继续，不把网络失败当作整改失败 |
 | 清理候选可能被引用 | 运行仓库级引用搜索；计划未列明或仍有歧义时不删除 |
 | 没有测试入口 | 至少执行语法检查和主入口冒烟；在特化 skill 与最终报告写明覆盖缺口 |
@@ -359,6 +458,11 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 - 根规则同步只更新标记块；本库特有规则和例外写在块外或纳入下一次待同步内容，不能依赖
   人工覆盖整份 `AGENTS.md`。
 - 大文件闸门只报告并阻止提交，不自动删除、移动或取消暂存用户文件；处理方式由用户决定。
+- `refer/git-rep/` 下的子库是外部内容，只读使用；本库分析文档写入 `refer/git-rep/docs/`，
+  不写进子库的 `docs/`。
+- 参考库来源以 `.gitmodules` 的 URL 和 `refer/git-rep/README.md` 双重记录；README 至少要有
+  可定位的来源 URL 和致谢。
+- `git submodule add` 的 `<name>` 保留上游仓库名大小写，属于 `refer/**` 名称例外，不强制小写。
 - 修改任一步脚本后运行 `scripts/form-scripts.test.sh`；修改快照后立即运行
   `scripts/form-snapshot-verify.sh`，以测试和哈希输出作为脚本可用性的证据。
 - 本 skill 负责格式治理，不替代 `debug`、`test`、`optim` 或 `tag` 的专业实现。

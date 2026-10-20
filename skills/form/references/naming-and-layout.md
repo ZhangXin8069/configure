@@ -133,7 +133,7 @@ form 负责路径、命名和索引位置审计。
 | `cpp` | 复杂库 | 编译型语言根 |
 | `data` | 所有库 | 历史任务数据 |
 | `docs` | 所有库 | 当前任务文档与附件图片 |
-| `refer` | 所有库 | 外部参考、书籍、论文、Git 参考库 |
+| `refer` | 所有库 | 外部参考、书籍、论文、Git 参考库；Git 参考库以 submodule 放在 `refer/git-rep/` |
 | `skills` | 所有库 | 本库 agent 技能 |
 | `logs` | 所有库 | 当前任务日志、agent 三态日志、`AGENTS.md` 索引和用户自定义历史日志 |
 | `bin` | 简单库 | 可直接调用的工具脚本 |
@@ -156,6 +156,28 @@ form 负责路径、命名和索引位置审计。
 
 子目录命名必须与其父级语言约定一致；正式参考库可以保留上游目录名，但必须在 `refer/` 下
 明确标注为外部内容。
+
+### 5.3 参考 Git 子库 (`refer/git-rep/`)
+
+| 对象 | 规则 |
+|---|---|
+| `refer/git-rep/<name>/` | 必须是 Git submodule（索引模式 `160000`）；`<name>` 保留上游仓库名大小写。新增使用 `git submodule add <url> refer/git-rep/<name>`，禁止整树拷贝或普通 `git clone` 后直接提交。 |
+| `.gitmodules` | 每个子库必须有对应的 `path` 和 `url`；URL 是来源凭据，path 必须与 gitlink 一致。 |
+| `refer/git-rep/README.md` | 必须存在；逐项记录子库 `path`、来源 URL、用途和致谢。可参考 PyQCD 仓库的清单式写法，但不能缺项或只留仓库名。 |
+| `refer/git-rep/docs/` | 本库对参考子库的分析文档，允许 Markdown、TeX、PDF 和图片；上游自带文档留在子库内，不迁移到此处。 |
+| 子库工作树 | 只读外部内容；不修改、不提交、不复制上游文件到主库源码或顶层 `docs/`。 |
+
+示例：
+
+```bash
+git submodule add https://gitee.com/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
+git submodule add https://github.com/IHEP-LQCD/EasyDistillation.git \
+  refer/git-rep/EasyDistillation
+```
+
+如果 `refer/git-rep/<name>/docs/` 中有本库添加的分析文档，先把文档迁移到
+`refer/git-rep/docs/`，再删除旧的普通拷贝并用 submodule 重建。已经正确配置的 submodule
+只更新 README 或执行 `git submodule update --init --recursive`，不要无谓删除重建。
 
 ## 6. 框架参照
 
@@ -183,6 +205,9 @@ form 负责路径、命名和索引位置审计。
 | Python | `https://gitee.com/zhangxin8069/PyQCD/tree/dev15/pyqcd` | `source-snapshots/pyqcd-dev15/pyqcd/` | `811900c76c5b9fb3632ee855a9c2ae97e6df76b6` |
 | Bash | `https://gitee.com/zhangxin8069/configure/tree/main/bin` | `source-snapshots/configure-main/bin/` | `ad8623b6355eddd932abe4d1e8be3170321731bc` |
 | 其他/静态资源 | `https://gitee.com/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static` | `source-snapshots/lattice-qcd-at-imp.top-stab4/static/` | `5ee896da0be245ce3477fa13428fe5c96b1ca760` |
+
+`source-snapshots/` 是固定提交的离线明文证据，不等同于 `refer/git-rep/` 下的可运行参考
+子库；前者用于规则核验，后者用于完整参考实现。两者都不替代本库源码。
 
 ## 7. 测试命名与归集
 
