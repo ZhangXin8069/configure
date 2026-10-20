@@ -1,0 +1,98 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 04:00:56 +0800
+批次: up-get-paper-absorb-20261021-corrected
+主任务: 新建并优化 get-paper 与 absorb 技能（含最终审计更正）
+触发原因: 任务完成
+摘要: 本任务实现与测试通过；全仓 form audit 仅因并发外来子模块 README 来源缺失而告警，定向排除后通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 本任务交付
+- 目标: 新建并优化 `get-paper` 与 `absorb`，完成多源论文获取、Git 外来内容全量分析和安全吸收流程。
+- 命令/操作: 完成 up 来源刷新、两项技能、脚本、references、技能表/互鉴表/计数、根 AGENTS、up/make/all 编排联动。
+- 关键输出: skills=32；get-paper 19/19；absorb 12/12；真实 arXiv 源码下载与缓存复用成功；真实多源检索目标论文排名第 1。
+- 退出码: 0。
+- 证据与判断: 外部参考与候选审计记录在两项技能的 `references/sources.md`，没有复制不满足许可或成熟度条件的候选代码。
+
+### S2 — 最终结构检查与并发状态
+- 命令/操作: 运行 configure-check、form audit、snapshot verify、git diff check，并在日志归档后复跑。
+- 关键输出: configure-check `skills=32, errors=0, warnings=1`（既有插件索引 warning）；snapshot verify=0；git diff check=0。
+- 退出码: configure-check=0；snapshot=0；diff=0。
+- 证据与判断: 全仓 `form-audit --strict` 因非本任务并发出现的 `refer/git-rep/academic-research-skills` 子模块 README 未记录来源而 exit=1；排除 `^refer/git-rep/` 后严格审计 exit=0。
+- 处置: 不修改、不暂存、不删除该外来子模块或其它并发改动；在最终报告中保留全仓残余告警。
+
+## 验证与证据
+- `python3 skills/get-paper/scripts/test_get_paper.py`：19/19，通过。
+- `python3 -W error::ResourceWarning skills/absorb/scripts/test_absorb_inventory.py`：12/12，通过。
+- `tools/configure-check.sh --root /root/configure`：errors=0，warning=1（既有 plugin manifest 状态）。
+- `form-audit --strict --exclude '^refer/git-rep/'`：exit=0。
+- `form-snapshot-verify --quiet`：exit=0。
+- `git diff --check`：exit=0。
+- 真实冒烟：`2601.01205` 主 TeX=`pk32.tex`，tree SHA-256=`2a978c2b6c8eadabfae8777e1ba65ee8ac94d7d93873a61872c5a4dfeadbd85c`，许可=`CC BY 4.0`；缓存复用与任务相关性重算通过。
+- 未验证项：Semantic Scholar 当前 HTTP 429，只验证了单源降级。
+- 全仓残余告警：`refer/git-rep/academic-research-skills` 子模块 README 缺少来源记录，非本任务改动。
+
+## 变更与产物
+- `skills/get-paper/`：SKILL、AGENTS、sources reference、CLI、19 项回归测试。
+- `skills/absorb/`：SKILL、AGENTS、sources reference、CLI、12 项回归测试。
+- 联动文件：根 `AGENTS.md`、`skills/AGENTS.md`、`skills/up/SKILL.md`、`skills/make/SKILL.md`、`skills/all/SKILL.md`。
+- 数据产物只在已忽略的 `data/runs/`，不会进入普通提交。
+- 本任务未暂存、未提交、未推送、未打标。
+
+## 风险、限制与下一步
+- 论文相关性仍需人工学术判断；未知许可禁止再分发。
+- absorb 默认不扫描 Git ignored 内容，需显式 `--include-ignored`；`scan_truncated=true` 必须继续人工或分块检查。
+- 全仓 form audit 的残余告警需由该外来子模块的引入者补齐 README 来源；本任务不越界修改。
+- 下一步由用户决定是否提交；提交前应只选择本任务文件并运行大文件闸门。
+
+## 用户输入指令
+<用户>
+~up:1.新建并优化get-paper skill:在各个平台获取与主任务高度相关的论文,例如{https://arxiv.org/src/2601.01205},优先latex源码;2.新建并优化absorb skill:自动查询工作目录的git库中新加入的外来内容,对其全面分析并寻找错误与不足点,同时提取对本库有价值的内容,对此有益内容优化后并入本库,再对改动后的本库进行测试和进一步的优化,最后确定完美吸收外来内容的正向部分;
+</用户>
+<用户>
+继续
+</用户>
+
+## Agent 全文报告
+--- report begin ---
+✓ up 升级完成
+   目标: 新建并优化 `get-paper`、`absorb`，完成来源调研、实现、审查修复、联动与真实验证。
+   参考源: 9 条核验完成，0 条待复核；GitHub/Gitee/GitLab/Codeberg、Agent Skills、Anthropic、obra/superpowers、awesome-opencode、用户指定 Gitee 源均 200。
+   来源: 采用 arXiv/OpenAlex/Crossref/Semantic Scholar API 与 SPDX/OpenSSF/GitHub dependency review 原则；拒绝无许可或开发中候选代码。
+   热榜: 论文工具查询 GitHub 8、GitLab 1、Gitee/Codeberg 0；vendored audit 查询仅 GitHub 2 且相关性弱，未硬套候选。
+   差距: 两项技能与全部内部联动已完成；Semantic Scholar 429 作为单源降级保留。
+   新增: `skills/get-paper/`、`skills/absorb/` 及 references、CLI、测试。
+   优化: get-paper 增加相关性归一化、查询降级、HTTPS/私网边界、事务解包、许可与 tree hash；absorb 增加 Git 版本分离、gitlink OID、type-change、ignored 开关和秘密脱敏/截断可见性。
+   debug: 两路独立审查发现的 Critical/Important/Minor 均修复并纳入回归。
+   验证: get-paper 19/19；absorb 12/12；configure-check errors=0；snapshot/diff=0；真实源码与缓存冒烟通过。
+   收敛: 本任务范围通过；全仓 form audit 仅被并发外来子模块 README 来源缺失阻塞，排除该无关路径后 exit=0。
+   遗留: Semantic Scholar 当前限流；ignored 外来树需显式开启；全仓外来子模块来源告警不属于本任务改动。
+
+**改动内容**
+- `get-paper`：跨 arXiv、OpenAlex、Crossref、Semantic Scholar 检索，按主任务相关性排序，优先安全获取 arXiv LaTeX 源码，记录许可、archive/tree SHA-256、主 TeX 与缓存。
+- `absorb`：按 commits/staged/untracked/worktree-diff 分版本盘点 Git 新增外来内容，识别 gitlink、类型变化、符号链接、秘密与执行风险，并用 keep/adapt/reference-only/reject 矩阵吸收。
+- 更新根 `AGENTS.md`、`skills/AGENTS.md`、`up` 来源与调用链、`make`/`all` 编排，技能数从 30 更新为 32。
+
+**推理依据**
+- 论文获取必须以主任务、来源许可、版本和可验证哈希为证据，不能只按平台排名或引用量判断。
+- 外来内容审计必须区分 Git blob/index/worktree 版本；一个工作树版本不能覆盖提交或暂存证据。
+- 候选项目只有在来源、许可、成熟度和测试充分时才可复制；本轮不符合条件的内容只吸收方法论。
+
+**验证结果**
+- `python3 skills/get-paper/scripts/test_get_paper.py`：19/19，OK。
+- `python3 -W error::ResourceWarning skills/absorb/scripts/test_absorb_inventory.py`：12/12，OK。
+- `tools/configure-check.sh --root /root/configure`：skills=32，errors=0，既有 plugin warning=1。
+- `form-audit --strict --exclude '^refer/git-rep/'`：exit=0。
+- `form-snapshot-verify --quiet`、`git diff --check`：exit=0。
+- 真实多源检索：arXiv/OpenAlex/Crossref 成功，目标 `S-wave pi-K scattering length from lattice QCD` 排名第 1；Semantic Scholar 429 被隔离。
+- 示例源码：主 TeX=`pk32.tex`，许可=`CC BY 4.0`，archive SHA-256=`79cbd8d5…1fab`，tree SHA-256=`2a978c2b…b85c`。
+
+**后续步骤**
+- 当前改动未暂存、未提交、未推送、未打标；如提交，仅选择本任务文件并运行大文件闸门。
+- 全仓 form audit 的 `refer/git-rep/academic-research-skills` README 来源告警由该外来内容引入者补齐。
+- ignored 外来目录需使用 `--include-ignored`；所有 `scan_truncated=true` 候选必须继续检查。
+
+状态: finished
+--- report end ---

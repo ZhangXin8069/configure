@@ -269,3 +269,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 20261021-form-ref-submodule - final - 2026-10-21 03:50:56 +0800
+- 主任务: 为 form skill 增加 refer/git-rep 参考子库与 README/docs 布局规则
+- 日志文件: logs/v2026102103.txt
+- 文件大小: 7382 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增参考子库 submodule、README 来源/致谢、refer/git-rep/docs 分析文档规则，扩展只读审计与回归测试；configure 审计通过，PyQCD 只读审计识别 25 条待迁移文档
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## up-get-paper-absorb-20261021 - final - 2026-10-21 04:00:02 +0800
+- 主任务: 新建并优化 get-paper 与 absorb 技能
+- 日志文件: logs/v2026102104.txt
+- 文件大小: 10956 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 up 来源刷新、get-paper/absorb 技能、脚本测试、双路审查修复、真实检索下载与全仓结构验证
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## up-get-paper-absorb-20261021-corrected - final - 2026-10-21 04:00:56 +0800
+- 主任务: 新建并优化 get-paper 与 absorb 技能（含最终审计更正）
+- 日志文件: logs/v2026102104-2.txt
+- 文件大小: 7806 bytes
+- 触发原因: 任务完成
+- 关键内容: 本任务实现与测试通过；全仓 form audit 仅因并发外来子模块 README 来源缺失而告警，定向排除后通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

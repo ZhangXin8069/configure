@@ -1,0 +1,87 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 03:50:56 +0800
+批次: 20261021-form-ref-submodule
+主任务: 为 form skill 增加 refer/git-rep 参考子库与 README/docs 布局规则
+触发原因: 任务完成
+摘要: 新增参考子库 submodule、README 来源/致谢、refer/git-rep/docs 分析文档规则，扩展只读审计与回归测试；configure 审计通过，PyQCD 只读审计识别 25 条待迁移文档
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 任务界定与规则定位
+- 目标: 为 form skill 增加 `refer/git-rep` 参考子库、README 致谢/来源和 `refer/git-rep/docs` 分析文档布局规则，并支持把普通拷贝迁移为 submodule。
+- 读取: `skills/form/SKILL.md`、`AGENTS.md`、`references/{naming-and-layout,git-artifacts-and-workflow,source-snapshots/README}.md`、`scripts/form-audit.sh`、`form-scripts.test.sh`；用户指定的 `/root/PyQCD/refer/git-rep` 布局。
+- 判断: 该规则同时属于目录职责、Git 子模块交付和审计基线，需要同步 SKILL.md、两个 references、form/AGENTS.md、skills/AGENTS.md 表格和只读审计脚本。
+
+### S2 — 文档与工作流更新
+- SKILL.md: 新增“参考库与自有内容分离”原则；Step 2 增加 `refer/git-rep` 审计；Step 5 增加“迁移 docs → 移除普通拷贝 → `git submodule add` 重建”的流程及 PyQCU/EasyDistillation 示例；Step 6/7/8、验收矩阵、错误处理和注意事项同步。
+- naming-and-layout.md: 新增 5.3 参考 Git 子库布局，明确 `160000`、`.gitmodules`、README、`docs/` 和子库只读边界；补充 `source-snapshots` 与 `refer/git-rep` 的区别。
+- git-artifacts-and-workflow.md: 新增 1.1 参考子库交付、子库批次暂存/提交/验证规则，并更新根 AGENTS 模板。
+- source-snapshots/README.md、form/AGENTS.md、skills/AGENTS.md: 同步规则和技能表。
+
+### S3 — 审计脚本与回归测试
+- `form-audit.sh`: 新增 `REFERENCE_README_MISSING`、`REFERENCE_README_EMPTY`、`REFERENCE_DOC_MISPLACED`、`REFERENCE_SUBMODULE_METADATA`、`REFERENCE_README_SOURCE_MISSING`；保持只读并让 `--exclude` 对新发现同样生效。
+- `form-scripts.test.sh`: 新增参考子库 fixture，覆盖 docs 误放、README 缺失/空/无来源、`.gitmodules` 缺 URL、`--exclude` 和合规布局通过。
+- `refer/git-rep/README.md`: 补记 `https://github.com/mattpocock/skills.git`，修复本库新审计发现的来源缺项。
+
+## 验证与证据
+- `bash -n skills/form/scripts/*.sh` → PASS
+- `bash skills/form/scripts/form-scripts.test.sh` → `form script tests: PASS`
+- `bash skills/form/scripts/form-audit.sh --root . --strict --quiet` → exit 0
+- `bash skills/form/scripts/form-snapshot-verify.sh --quiet` → exit 0
+- `git diff --check` → exit 0
+- `form-audit.sh --root /root/PyQCD` → 25 条 `REFERENCE_DOC_MISPLACED`（EasyDistillation/LQCD_Master/PyQUDA/lamet-agent 的本地分析文档），证明新检查能识别用户示例场景；未修改 `/root/PyQCD`。
+- 未验证: 未实际执行 PyQCD 的迁移/重建（需要删除与网络拉取，属于目标库操作，未获明确执行授权）。
+
+## 变更与产物
+- `skills/form/SKILL.md`
+- `skills/form/AGENTS.md`
+- `skills/form/references/naming-and-layout.md`
+- `skills/form/references/git-artifacts-and-workflow.md`
+- `skills/form/references/source-snapshots/README.md`
+- `skills/form/scripts/form-audit.sh`
+- `skills/form/scripts/form-scripts.test.sh`
+- `skills/AGENTS.md`（仅 form 两行；文件含此前未提交改动）
+- `refer/git-rep/README.md`（补来源）
+- 未改动: `/root/PyQCD`；未提交、未推送、未打标。
+
+## 风险、限制与下一步
+- 风险: 新审计把 `refer/git-rep/*/docs` 下的 TeX/PDF 作为“本库分析文档”信号；若 vendored 上游目录本身含 TeX/PDF，需人工确认归属后再迁移。
+- 限制: configure 的 `refer/git-rep/oh-my-codex` 仍是 vendored 副本；新审计未对其报错（无 TeX/PDF 文档信号），完整整改需在 `~form` 计划中另行批准。
+- 下一步: 在目标库运行 `~form`，按 Step 5 迁移 docs、清除普通拷贝、`git submodule add` 重建、补齐 README，然后执行 Step 6 验证和 Step 8 交付。
+
+## 用户输入指令
+为form skill增添内容:1.应使用"git submodule add https://gitee.com/zhangxin8069/PyQCU.git refer/git-rep/PyQCU"给工作目录中的git库添加参考子库,并在{refer/git-rep/README.md}中写明致谢与库来源(可参考{/PyQCD/refer/git-rep/README.md}),相关的对参考子库的分析文档应存放在{/PyQCD/refer/git-rep/docs}中;2.如果当前工作库不符合上述要求,则本skill将对此工作库做出整理,例如[迁移{PyQCD/refer/git-rep/EasyDistillation/docs/*}(此docs文件夹为本库添加,不是参考子库自带的)到{PyQCD/refer/git-rep/docs},删除{~/PyQCD/refer/git-rep/EasyDistillation},通过"git submodule add  https://github.com/IHEP-LQCD/EasyDistillation.git refer/git-rep/EasyDistillation"重新添加参考子库,对{~/PyQCD/refer/git-rep/README.md}进行查缺补漏]
+
+## Agent 全文报告
+--- report begin ---
+已完成 form skill 的参考子库规则扩展。
+
+改动内容
+- SKILL.md：新增“参考库与自有内容分离”原则；Step 2 增加 refer/git-rep 审计；Step 5 增加迁移 docs → 移除普通拷贝 → git submodule add 的流程，含 PyQCU 与 EasyDistillation 示例；同步 Step 6/7/8、验收矩阵、错误处理和注意事项。
+- references：naming-and-layout.md 新增 5.3 参考 Git 子库布局；git-artifacts-and-workflow.md 新增 1.1 参考子库交付和根 AGENTS 模板；source-snapshots/README.md 说明它与 refer/git-rep 的区别。
+- 审计：form-audit.sh 新增 README 缺失/空、来源缺失、.gitmodules 元数据、非 submodule 目录中的 TeX/PDF 分析文档检查；form-scripts.test.sh 增加对应 fixture 和回归。
+- 文档表：form/AGENTS.md 与 skills/AGENTS.md 的 form 行同步新规则。
+- 当前库：refer/git-rep/README.md 补记 skills 子库来源 https://github.com/mattpocock/skills.git，使新审计通过。
+
+推理依据
+- 参考库是外部内容，必须与主库源码分离；submodule 保留 gitlink 和 .gitmodules 可追溯性，README 记录来源/致谢，分析文档集中 docs/ 避免污染子库工作树。
+- 新审计以保守信号为主：只有非 submodule 目录中的 TeX/PDF 分析文档才报 REFERENCE_DOC_MISPLACED，避免把上游 Markdown 文档误判；--exclude 与现有语义保持一致。
+- 用户示例的 PyQCD 场景已用只读审计复现：报告 25 条 misplaced docs，未删除或修改 PyQCD。
+
+验证结果
+- bash -n 全部 form 脚本通过
+- form-scripts.test.sh: PASS
+- form-audit.sh --root . --strict --quiet: exit 0
+- form-snapshot-verify.sh --quiet: exit 0
+- git diff --check: exit 0
+- PyQCD 只读审计: 25 条 REFERENCE_DOC_MISPLACED（未整改）
+
+后续步骤
+- 在 PyQCD 等目标库运行 ~form，按 Step 5 迁移 EasyDistillation/LQCD_Master/PyQUDA/lamet-agent 的本地 docs 到 refer/git-rep/docs，git rm -r 旧拷贝，git submodule add 重建，补齐 README，再执行 Step 6/8。
+- configure 的 refer/git-rep/oh-my-codex 仍是历史 vendored 副本，新审计未报错；完整整改需在 ~form 计划中单独批准。
+- 未提交、未推送、未打标。
+
+状态：finished
+--- report end ---

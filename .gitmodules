@@ -1,0 +1,9 @@
+[submodule "refer/git-rep/skills"]
+	path = refer/git-rep/skills
+	url = https://github.com/mattpocock/skills.git
+[submodule "refer/git-rep/academic-research-skills"]
+	path = refer/git-rep/academic-research-skills
+	url = https://github.com/Imbad0202/academic-research-skills.git
+[submodule "refer/git-rep/scientific-agent-skills"]
+	path = refer/git-rep/scientific-agent-skills
+	url = https://github.com/K-Dense-AI/scientific-agent-skills.git

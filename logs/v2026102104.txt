@@ -1,0 +1,113 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 04:00:02 +0800
+批次: up-get-paper-absorb-20261021
+主任务: 新建并优化 get-paper 与 absorb 技能
+触发原因: 任务完成
+摘要: 完成 up 来源刷新、get-paper/absorb 技能、脚本测试、双路审查修复、真实检索下载与全仓结构验证
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — up 参考源刷新与本地四树基线
+- 目标: 按 `up` 强制首步核验 GitHub、Gitee、GitLab、Codeberg、Agent Skills、Anthropic、obra/superpowers、awesome-opencode 与用户指定实践源。
+- 命令/操作: 并行执行 REST/raw/网页 GET；随后只读检查 skills/tools/hooks/plugins、技能表和脚本入口。
+- 关键输出: 全部来源返回 200；Gitee `agent skills` 为空结果；GitHub total=144895、top=`obra/superpowers` stars=302520；本地基线 skills=30、四树 `0 errors / 1 warning`。
+- 退出码: 0。
+- 证据与判断: 参考源条目已更新到 `skills/up/SKILL.md` 的 3.1 表；插件 warning 为既有“推荐索引无原生 manifest”状态。
+
+### S2 — get-paper 设计、实现与审查修复
+- 目标: 围绕主任务跨 arXiv、OpenAlex、Crossref、Semantic Scholar 检索高相关论文，优先获取 arXiv LaTeX 源码。
+- 命令/操作: 实现标准库 CLI、arXiv 短语/布尔查询降级、abs/API 双元数据路径、相关性排序、OA 边界、HTTPS/私网阻断、安全事务解包、主 TeX 识别、许可/SHA-256/源码树哈希与离线缓存。
+- 关键输出: 离线测试 19/19；真实多源检索 arXiv/OpenAlex/Crossref 均成功，Semantic Scholar 429 被隔离；目标 `S-wave pi-K scattering length from lattice QCD` 排名第 1。
+- 退出码: 0（Semantic Scholar 单源失败被记录，不阻断整体）。
+- 证据与判断: 示例 `https://arxiv.org/src/2601.01205` 返回 gzip tar，7 个文件，主 TeX=`pk32.tex`，archive SHA-256=`79cbd8d5813df6e0b77437b38dc35e47c3e1f7c3d5dfc440cf05f3b6589a1fab`，tree SHA-256=`2a978c2b6c8eadabfae8777e1ba65ee8ac94d7d93873a61872c5a4dfeadbd85c`，许可=`CC BY 4.0`。
+- 审查修复: 独立只读审查发现 DOI 误判、PDF 目录、OA/SSRF、事务解包、缓存树哈希、适配器隔离、同名去重和邮箱泄漏等问题，均修复并增加回归。
+
+### S3 — absorb 设计、实现与审查修复
+- 目标: 自动盘点 Git 新加入的外来内容，完整分析缺陷和正向价值，建立吸收矩阵并以测试闭环合并。
+- 命令/操作: 实现提交/index/worktree 分版本候选、AT 类型变化、ignored 显式开关、gitlink OID、符号链接目标脱敏、未加引号秘密模式、完整扫描字节/截断标记、许可证命名与吸收矩阵流程。
+- 关键输出: 离线测试 12/12，启用 `ResourceWarning` 为错误仍通过；真实仓库盘点 candidate_count=13，能识别 staged `.gitmodules`、gitlink、未跟踪技能文件及风险信号。
+- 退出码: 0。
+- 证据与判断: 暂存后修改工作树会形成 index 与 worktree 两个候选；单根提交、type-change、gitlink、ignored、符号链接泄漏均有合成仓库回归。
+
+### S4 — 内部联动与验证
+- 命令/操作: 更新 `skills/AGENTS.md` 计数与两张表、根 `AGENTS.md`、`up` 参考源/调用链、`make`/`all` 编排矩阵；运行 Python 编译/测试、configure-check、form audit、snapshot verify、diff 检查。
+- 关键输出: skills=32；技能表 2 列、互鉴表 3 列；`tools/configure-check.sh` errors=0；`form-audit --strict --quiet`=0；snapshot verify=0；`git diff --check`=0。
+- 退出码: 0。
+- 证据与判断: `.opencode/skills` 镜像不存在，按 up 规则不凭空创建；插件 warning 未扩大为本任务缺陷。
+
+## 验证与证据
+- 测试/检查: `python3 skills/get-paper/scripts/test_get_paper.py`，19/19，通过。
+- 测试/检查: `python3 -W error::ResourceWarning skills/absorb/scripts/test_absorb_inventory.py`，12/12，通过。
+- 测试/检查: `tools/configure-check.sh --root /root/configure`，skills=32，errors=0，既有 warning=1。
+- 测试/检查: `bash skills/form/scripts/form-audit.sh --root /root/configure --strict --quiet`，exit=0。
+- 测试/检查: `bash skills/form/scripts/form-snapshot-verify.sh --quiet`，exit=0。
+- 测试/检查: `git diff --check`，exit=0。
+- 真实冒烟: 示例 arXiv 源码安全获取、主 TeX/许可/哈希校验、缓存复用通过；多源检索 top 与目标主题一致。
+- 未验证项: Semantic Scholar 当前 HTTP 429，仅验证了降级路径，未取得其结构化结果。
+
+## 变更与产物
+- 文件: `skills/get-paper/{SKILL.md,AGENTS.md,references/sources.md,scripts/get-paper.py,scripts/test_get_paper.py}`。
+- 文件: `skills/absorb/{SKILL.md,AGENTS.md,references/sources.md,scripts/absorb_inventory.py,scripts/test_absorb_inventory.py}`。
+- 文件: `skills/AGENTS.md`、`AGENTS.md`、`skills/up/SKILL.md`、`skills/make/SKILL.md`、`skills/all/SKILL.md` 的技能表、互鉴表、计数、来源新鲜度与编排联动。
+- 产物: 真实论文源码仅写入已忽略的 `data/runs/get-paper-final-fetch/`；absorb 清单仅写入已忽略的 `data/runs/absorb/`。
+- 未改动范围: 未修改 `.gitmodules`、主工作树中既有的 form/refer 改动、已有日志或用户暂存内容；未暂存、未提交、未推送、未打标。
+
+## 风险、限制与下一步
+- 风险: 论文相关性分数是召回辅助，最终学术相关性仍需人工核验；来源许可未知时禁止再分发。
+- 风险: Semantic Scholar 有独立限流；其他来源失败会逐源记录，不会伪造统一成功。
+- 风险: absorb 默认排除 Git ignored 内容；需要审计 ignored 外来树时必须显式 `--include-ignored`，并对 `scan_truncated` 候选继续分块检查。
+- 阻塞: 无。
+- 下一步: 由用户决定是否提交本轮改动；若提交，需按仓库大文件闸门和范围审核逐文件暂存。
+
+## 用户输入指令
+<用户>
+~up:1.新建并优化get-paper skill:在各个平台获取与主任务高度相关的论文,例如{https://arxiv.org/src/2601.01205},优先latex源码;2.新建并优化absorb skill:自动查询工作目录的git库中新加入的外来内容,对其全面分析并寻找错误与不足点,同时提取对本库有价值的内容,对此有益内容优化后并入本库,再对改动后的本库进行测试和进一步的优化,最后确定完美吸收外来内容的正向部分;
+</用户>
+<用户>
+继续
+</用户>
+
+## Agent 全文报告
+--- report begin ---
+✓ up 升级完成
+   目标:   新建并优化 `get-paper`、`absorb`，完成技能实现、外部参考吸收、内部联动、真实检索/下载与回归验证；未启用 up 自修改。
+   参考源: 9 条已核验，9 条刷新“最近验证”，0 条待复核；GitHub/Gitee/GitLab/Codeberg、Agent Skills、Anthropic、obra/superpowers、awesome-opencode、用户指定 Gitee 源均返回 200。
+   来源:   arXiv API、OpenAlex、Crossref、Semantic Scholar、SPDX、OpenSSF Scorecard、GitHub dependency review。候选 `arxiv2latex`（固定提交 5ab5449，无许可证）和 `arxiv-src-crawler`（固定提交 e044595，MIT 但开发中/notebook 入口）均拒绝复制，只采纳经过官方文档或规范验证的设计原则。
+   热榜:   查询 `arxiv latex source download`：GitHub 8、GitLab 1、Gitee 0、Codeberg 0；查询 `vendored code audit dependencies`：GitHub 2、Gitee/GitLab/Codeberg 0。星数仅用于发现，未作为质量结论。
+   差距:   两项技能缺口已新增并完成联动；内部调用链、技能表、互鉴表、计数、make/all 编排均已同步。
+   优化:   `get-paper` 增加短语→子短语→布尔查询降级、希腊字母/分数归一化、OA/HTTPS 边界、事务解包和缓存树哈希。
+   补充:   `absorb` 增加提交/index/worktree 分版本、gitlink OID、类型变化、ignored 开关、秘密截断可见性和来源/许可证据。
+   新增:   `skills/get-paper/`、`skills/absorb/` 及各自 references、CLI 和离线回归。
+   debug:  独立审查共发现并修复 get-paper 2 Critical/7 Important/3 Minor、absorb 4 Critical/6 Important/1 Minor。
+   自进化: 本轮未修改 up 自身；仅执行强制的来源新鲜度维护。
+   验证:   get-paper 19/19；absorb 12/12；configure-check skills=32、errors=0；form audit/snapshot/diff check 全部 exit=0。真实 arXiv 源码获取与缓存复用通过。
+   收敛:   差距表清零，真实测试通过，Semantic Scholar 429 已明确标为单源降级。
+   遗留:   Semantic Scholar 当前限流；论文相关性仍需人工做最终学术判断；ignored 外来内容需显式开启；`.opencode/skills` 镜像不存在。
+
+**改动内容**
+- 新增 `get-paper`：跨 arXiv/OpenAlex/Crossref/Semantic Scholar 检索，主任务相关性排序，arXiv LaTeX 安全获取，优先源码、其次合法 OA PDF，记录许可、archive/tree SHA-256 和主 TeX。
+- 新增 `absorb`：按 Git 版本全量盘点外来内容，分离提交、index、worktree，识别 gitlink、type-change、符号链接、secret/执行/网络风险，并以 `keep/adapt/reference-only/reject` 矩阵完成安全吸收。
+- 更新 `skills/AGENTS.md` 至 32 个技能，补技能表/互鉴表/调用链；接入 `up`、`make`、`all`；更新根 `AGENTS.md` 和 up 来源新鲜度。
+
+**推理依据**
+- 论文任务必须先固定主任务、来源、许可和版本，否则“找到链接”不能构成可复用证据。
+- 外来内容审计必须按 Git blob/index/worktree 分别取证，不能用一个工作树版本冒充暂存或提交内容。
+- 外部候选仅在固定来源、许可和测试证据充分时才采用；本轮拒绝复制不满足条件的候选，改为自行实现并保留来源决策。
+
+**验证结果**
+- `python3 skills/get-paper/scripts/test_get_paper.py`: 19/19，OK。
+- `python3 -W error::ResourceWarning skills/absorb/scripts/test_absorb_inventory.py`: 12/12，OK。
+- `tools/configure-check.sh --root /root/configure`: skills=32，errors=0，1 个既有 plugin warning。
+- `form-audit --strict --quiet`、`form-snapshot-verify --quiet`、`git diff --check`: 全部 exit=0。
+- 示例 `2601.01205`：主 TeX=`pk32.tex`，许可=`CC BY 4.0`，archive SHA-256=`79cbd8d5…1fab`，tree SHA-256=`2a978c2b…b85c`；缓存复用通过。
+- 多源真实检索：arXiv/OpenAlex/Crossref 成功，目标论文排名第 1；Semantic Scholar 429 被隔离并如实记录。
+
+**后续步骤**
+- 当前改动未暂存、未提交、未推送、未打标；如需要交付，再按仓库规则逐文件审核并运行大文件闸门。
+- Semantic Scholar 结构化结果需在其限流解除后复核；论文是否符合同行评审、实验复现和学术引用要求仍需人工判断。
+- 审计 Git ignored 的外来目录时使用 `--include-ignored`，并继续检查所有 `scan_truncated=true` 候选。
+
+状态: finished
+--- report end ---

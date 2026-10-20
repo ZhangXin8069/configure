@@ -42,6 +42,13 @@ tag object 哈希：
 更新本文件中的 tag object、提交哈希、文件数、字节数和观察规则。若远端已移动或删除，
 保留旧快照并在新记录中显式标注，不覆盖历史证据。
 
+## 与 `refer/git-rep` 的关系
+
+`source-snapshots/` 是固定提交的离线明文证据，用于命名与框架规则核验；它不是目标库的
+可运行参考子库。目标库需要完整参考库时，按 form 规则以
+`git submodule add <url> refer/git-rep/<name>` 引入，并把本库分析文档放在
+`refer/git-rep/docs/`。
+
 ## 完整性检查
 
 ```bash

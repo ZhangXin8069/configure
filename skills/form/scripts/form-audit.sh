@@ -8,6 +8,8 @@ Usage: form-audit.sh [--root DIR] [--strict] [--exclude REGEX] [--quiet]
 
 Read-only baseline audit for form naming and repository layout rules.
 Tracked paths are checked; semantic function/variable names still require review.
+Reference Git submodules under refer/git-rep are checked for .gitmodules metadata,
+README sources, and analysis-document placement.
 
 Options:
   --root DIR       Git repository root (default: current repository)
@@ -105,6 +107,9 @@ sanitize() {
 
 report() {
   local severity=$1 rule=$2 path=$3 message=$4
+  if is_user_excluded "$path"; then
+    return 0
+  fi
   FINDINGS=$((FINDINGS + 1))
   case "$severity" in
     ERROR) ERRORS=$((ERRORS + 1)) ;;
@@ -133,6 +138,18 @@ is_excluded() {
       return 0
       ;;
   esac
+  if ((${#USER_EXCLUDES[@]} > 0)); then
+    for pattern in "${USER_EXCLUDES[@]}"; do
+      if [[ "$path" =~ $pattern ]]; then
+        return 0
+      fi
+    done
+  fi
+  return 1
+}
+
+is_user_excluded() {
+  local path=$1 pattern
   if ((${#USER_EXCLUDES[@]} > 0)); then
     for pattern in "${USER_EXCLUDES[@]}"; do
       if [[ "$path" =~ $pattern ]]; then
@@ -316,6 +333,126 @@ while IFS= read -r -d '' path; do
       ;;
   esac
 done < <(git -C "$ROOT" ls-files -z -- data)
+
+REF_ROOT_REL=refer/git-rep
+REF_README_REL=$REF_ROOT_REL/README.md
+REF_HAS_ENTRY=0
+REF_HAS_DOCS=0
+REF_README_EXISTS=0
+REF_GITLINKS=$'\n'
+REF_MISPLACED_DOCS=$'\n'
+
+while IFS= read -r -d '' entry; do
+  meta=${entry%%$'\t'*}
+  path=${entry#*$'\t'}
+  mode=${meta%% *}
+  case "$path" in
+    "$REF_README_REL")
+      REF_README_EXISTS=1
+      ;;
+    "$REF_ROOT_REL/docs"|"$REF_ROOT_REL/docs/"*)
+      REF_HAS_DOCS=1
+      ;;
+    "$REF_ROOT_REL/"*)
+      rel=${path#"$REF_ROOT_REL/"}
+      child=${rel%%/*}
+      [[ -n "$child" ]] || continue
+      REF_HAS_ENTRY=1
+      if [[ "$path" == "$REF_ROOT_REL/$child" && "$mode" == 160000 ]]; then
+        case "$REF_GITLINKS" in
+          *$'\n'"$child"$'\n'*) ;;
+          *) REF_GITLINKS="${REF_GITLINKS}${child}"$'\n' ;;
+        esac
+      elif [[ "$path" == "$REF_ROOT_REL/$child/"* ]]; then
+        case "$path" in
+          "$REF_ROOT_REL/$child/docs/"*)
+            ext=${path##*.}
+            case "$ext" in
+              tex|pdf)
+                REF_MISPLACED_DOCS="${REF_MISPLACED_DOCS}${path}"$'\n'
+                ;;
+            esac
+            ;;
+        esac
+      fi
+      ;;
+  esac
+done < <(git -C "$ROOT" ls-files -s -z -- "$REF_ROOT_REL")
+
+if ((REF_README_EXISTS == 0)) && ((REF_HAS_ENTRY == 1 || REF_HAS_DOCS == 1)); then
+  report WARNING REFERENCE_README_MISSING "$REF_README_REL" \
+    "refer/git-rep requires a tracked README.md with submodule sources and acknowledgments"
+fi
+
+if ((REF_README_EXISTS == 1)) && [[ ! -s "$ROOT/$REF_README_REL" ]]; then
+  report WARNING REFERENCE_README_EMPTY "$REF_README_REL" \
+    "README.md is empty; record submodule sources and acknowledgments"
+fi
+
+while IFS= read -r path; do
+  [[ -n "$path" ]] || continue
+  report WARNING REFERENCE_DOC_MISPLACED "$path" \
+    "TeX/PDF in a non-submodule reference directory: if authored by this repository, move it to refer/git-rep/docs/ and rebuild the reference as a submodule"
+done <<<"$REF_MISPLACED_DOCS"
+
+if [[ -f "$ROOT/.gitmodules" ]] &&
+   ! git -C "$ROOT" ls-files --error-unmatch .gitmodules >/dev/null 2>&1; then
+  report WARNING REFERENCE_SUBMODULE_METADATA ".gitmodules" \
+    "submodule metadata must be tracked in Git"
+fi
+
+while IFS= read -r child; do
+  [[ -n "$child" ]] || continue
+  child_path=$REF_ROOT_REL/$child
+  url=
+  if [[ -f "$ROOT/.gitmodules" ]]; then
+    while read -r key value; do
+      case "$key" in
+        submodule.*.path)
+          if [[ "$value" == "$child_path" ]]; then
+            sub_name=${key#submodule.}
+            sub_name=${sub_name%.path}
+            url=$(git -C "$ROOT" config -f .gitmodules --get \
+              "submodule.$sub_name.url" 2>/dev/null || true)
+            break
+          fi
+          ;;
+      esac
+    done < <(git -C "$ROOT" config -f .gitmodules \
+      --get-regexp '^submodule\..*\.path$' 2>/dev/null || true)
+  fi
+  if [[ -z "$url" ]]; then
+    report ERROR REFERENCE_SUBMODULE_METADATA "$child_path" \
+      "submodule must have matching path and url entries in .gitmodules"
+    continue
+  fi
+  if ((REF_README_EXISTS == 1)); then
+    slug=$url
+    case "$slug" in
+      *://*)
+        slug=${slug#*://}
+        slug=${slug#*/}
+        ;;
+      *@*:*)
+        slug=${slug#*:}
+        ;;
+      */*)
+        slug=${slug##*/}
+        ;;
+    esac
+    slug=${slug%/}
+    slug=${slug%.git}
+    if grep -Fq -- "$url" "$ROOT/$REF_README_REL" 2>/dev/null; then
+      :
+    elif [[ -n "$slug" ]] &&
+         grep -Fq -- "$slug" "$ROOT/$REF_README_REL" 2>/dev/null; then
+      :
+    else
+      report WARNING REFERENCE_README_SOURCE_MISSING "$REF_README_REL" \
+        "README does not record the source of submodule $child ($url)"
+    fi
+  fi
+done <<<"$REF_GITLINKS"
 
 if ((QUIET == 0)); then
   printf '# form-audit root=%s class=%s findings=%d errors=%d warnings=%d\n' \
