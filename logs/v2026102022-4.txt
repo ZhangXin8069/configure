@@ -1,0 +1,84 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 22:57:49 +0800
+批次: Git1043
+主任务: 修复 HPC gpull detached HEAD 安全恢复与文档同步
+触发原因: 任务完成
+摘要: 增加 detached HEAD 祖先安全恢复、独立提交保护及完整回归验证
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位 HPC detached HEAD 失败
+- 目标: 解释 `zg-all-pull.sh` 中 configure 拉取失败与 PyQCD 兼容回退。
+- 命令/操作: 读取 `bin/gpull.sh`、批量 pull 包装脚本、`bin/gpull.test.sh`、相关 Git 文档与同日日志。
+- 关键输出: configure 处于 detached HEAD；PyQCD 输出 `Git lacks pull --autostash` 后进入 manual stash fallback。
+- 退出码: 只读定位为 0。
+- 证据与判断: 当前实现主动拒绝 detached HEAD；旧版 Git fallback 是预期兼容路径，不是并列故障。
+
+### S2 — 安全恢复实现与回归
+- 目标: 对可安全判定的 detached HEAD 自动恢复，对含独立提交的状态继续拒绝。
+- 命令/操作: 更新 `bin/gpull.sh` 与 `bin/gpull.test.sh`，同步 `bin/AGENTS.md`、`lib/_git/setup.md`、`lib/_commands/setup.md`。
+- 关键输出: fetch 后解析 `origin/HEAD` 或无歧义唯一候选；仅当 detached HEAD 是远端分支祖先时 checkout 跟踪分支；否则保持原位并返回非零。
+- 退出码: 测试与静态检查均为 0。
+- 证据与判断: 祖先关系保证切换不会遗漏 detached 提交；测试覆盖安全恢复、独立提交拒绝、旧 Git fallback、包装脚本错误传播和 fetch 失败。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gpull.sh bin/gpull.test.sh bin/zg-all-pull.sh bin/zg-configure-pull.sh bin/zg-pyqcd-pull.sh`（逐个执行）。
+- 结果: 通过。
+- 测试/检查: `bash bin/gpull.test.sh`。
+- 结果: 通过；2 秒内完成。
+- 测试/检查: `form-audit.sh --root . --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check`。
+- 结果: 全部通过，无输出。
+- 未验证项: 未访问或直接在用户 HPC 登录节点执行；shellcheck 未安装。
+
+## 变更与产物
+- 文件: `bin/gpull.sh`、`bin/gpull.test.sh`、`bin/AGENTS.md`、`lib/_git/setup.md`、`lib/_commands/setup.md`。
+- 产物: detached HEAD 安全恢复逻辑及回归测试。
+- 未改动范围: 未修改 HPC 仓库、系统配置、远程仓库或 Git 历史；未暂存、提交、推送。
+
+## 风险、限制与下一步
+- 风险: detached HEAD 含独立提交或远端候选不唯一时仍会失败，这是避免提交脱离引用而丢失的保护行为。
+- 阻塞: 无。
+- 下一步: HPC 端先为 detached HEAD 建备份分支并切回 main，再同步本仓库改动后重跑 `zg-all-pull.sh`。
+
+## 用户输入指令
+(.venv) sunpeng_1@login09:~$ zg-all-pull.sh
+###zg-all-pull.sh in /public/home/sunpeng_1/configure/bin is running...:2026-10-20-22-51-19###
+###zg-configure-pull.sh in /public/home/sunpeng_1/configure/bin is running...:2026-10-20-22-51-19###
+###gpull.sh is running...:2026-10-20-22-51-19###
+Repo:    /public/home/sunpeng_1/configure
+ERROR: Detached HEAD; checkout a branch before pulling.
+Hint:  git checkout <branch>  (or git switch <branch>)
+###zg-configure-pull.sh in /public/home/sunpeng_1/configure/bin is done......:2026-10-20-22-51-20###
+###zg-pyqcd-pull.sh in /public/home/sunpeng_1/configure/bin is running...:2026-10-20-22-51-20###
+###gpull.sh is running...:2026-10-20-22-51-20###
+Repo:    /public/home/sunpeng_1/PyQCD
+Branch:  main
+Fetching origin
+Notice: Git lacks pull --autostash; using the manual stash fallback."
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- `bin/gpull.sh` 在 fetch 后处理 detached HEAD：从 `origin/HEAD` 或唯一无歧义远端分支确定目标；仅当当前提交是该远端分支祖先时才恢复跟踪分支并继续拉取。
+- 含独立 detached 提交、候选分支不唯一或无法安全判定时，脚本不切换、不改写提交，返回非零并提示先建备份分支。
+- `bin/gpull.test.sh` 新增安全恢复与独立提交拒绝用例；相关 AGENTS/命令文档同步行为说明。
+
+**推理依据**
+- configure 的失败根因是 detached HEAD；PyQCD 的 manual stash fallback 是旧版 Git 的预期兼容路径。
+- 先 fetch 再解析远端状态，避免使用过期 `origin/HEAD`。
+- 用祖先关系作为切换前提，可保证切换分支后原 detached 提交仍可从远端分支到达，不会产生仅靠 reflog 才能恢复的提交。
+
+**验证结果**
+- 相关脚本 `bash -n` 通过。
+- `bash bin/gpull.test.sh` 通过，覆盖旧 Git fallback、安全 detached 恢复、独立 detached 提交拒绝、包装脚本错误传播和 fetch 失败。
+- `form-audit --strict --quiet`、`form-snapshot-verify --quiet`、`git diff --check` 均通过。
+- 未直接在 HPC 环境执行；本机未安装 shellcheck。
+
+**后续步骤**
+1. HPC 端先执行 `cd ~/configure && git branch "backup/detached-$(date +%Y%m%d%H%M%S)" HEAD` 保留当前 detached 提交。
+2. 再执行 `git checkout main || git checkout -b main --track origin/main`，然后运行 `gpull.sh`。
+3. 本仓库改动当前未提交、未推送；审查并获授权同步后，再在 HPC 更新脚本并重跑 `zg-all-pull.sh`。
+--- report end ---
