@@ -5,4 +5,5 @@
 `references/` 分别保存进程与资源、条件式交付、其他技能规则抽取映射；`scripts/run-guarded.sh`
 提供硬超时、心跳和进度新鲜度检查，修改后必须运行 `bash scripts/run-guarded.test.sh`。
 有 Git 且本次产生文件改动时执行 `git diff --check` 与定向复查；条件式提交、推送和标签必须完整通过
-`SKILL.md` 的交付闸门，破坏性 Git 操作始终需要用户明确确认。
+`SKILL.md` 的交付闸门。闸门通过后的本地提交和本次新标签必须继续完成 push 闭环，只有用户明确要求仅本地时
+例外；破坏性 Git 操作始终需要用户明确确认。
