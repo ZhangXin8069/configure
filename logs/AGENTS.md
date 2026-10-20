@@ -170,3 +170,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## env-alias - final - 2026-10-20 19:24:42 +0800
+- 主任务: env.sh 添加 gcat-tag 别名
+- 日志文件: logs/v2026102019.txt
+- 文件大小: 3841 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 gcat-tag：按 creatordate 倒序展示最近十条标签的完整标签与提交元数据
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## env-alias - final - 2026-10-20 19:29:50 +0800
+- 主任务: 修复 gcat-tag 只显示一条标签
+- 日志文件: logs/v2026102019-2.txt
+- 文件大小: 3980 bytes
+- 触发原因: 任务完成
+- 关键内容: 将 gcat-tag 改为单次 git for-each-ref 输出最近十条完整标签记录，消除循环与分页器差异
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
