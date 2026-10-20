@@ -7,6 +7,7 @@
 | `docs/` | 本次任务 TeX、PDF、Markdown、图片附件 | 不保留旧任务临时文档；历史需要时用 Git 回溯 |
 | `logs/` | `AGENTS.md` 索引、任务需求单、agent 三态时间戳日志、`log/json/tsv/csv/txt` 工具/历史日志 | 检查 `vYYYYMMDD[HH[MM[SS]]].txt` 命名；清理候选先查引用，保留用户历史日志 |
 | `data/` | 历史任务 `h5/hdf5/pt/npy/npz/lime` 等数据 | `.gitignore` 排除内容，只跟踪说明和忽略文件 |
+| `refer/git-rep/` | Git 参考子库（submodule）、`README.md` 来源/致谢、`docs/` 本库分析文档 | 子库工作树保持上游状态；普通拷贝先迁移 docs 再重建为 submodule |
 | `<lowercase-repo>/testing/` | 复杂库测试代码与调用脚本 | 按功能组织；通用测试合并后保留默认可运行入口 |
 | 简单库功能目录 | `*.test.sh` 与简单 smoke 测试 | 清理失败实验与重复脚本，保留可复用回归 |
 
@@ -18,6 +19,43 @@
 !AGENTS.md
 !README.md
 ```
+
+### 1.1 参考子库交付
+
+参考 Git 库统一以 submodule 放在 `refer/git-rep/<name>`，来源和致谢写入
+`refer/git-rep/README.md`，本库分析文档写入 `refer/git-rep/docs/`。普通拷贝不是最终状态。
+
+迁移顺序：
+
+```bash
+# 1) 先迁移本库添加的分析文档；已跟踪文件用 git mv
+mkdir -p refer/git-rep/docs
+git mv refer/git-rep/<name>/docs/<file> refer/git-rep/docs/
+# 2) 移除旧拷贝；先确认 Git 可回溯，残留项逐项确认
+git rm -r -- refer/git-rep/<name>
+# 3) 以 submodule 重建，保留上游仓库名
+git submodule add <url> refer/git-rep/<name>
+git submodule update --init --recursive -- refer/git-rep/<name>
+```
+
+示例：
+
+```bash
+git submodule add https://gitee.com/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
+git submodule add https://github.com/IHEP-LQCD/EasyDistillation.git \
+  refer/git-rep/EasyDistillation
+```
+
+- 文档已跟踪时用 `git mv`；未跟踪时先确认来源，再用普通 `mv`，随后统一暂存。
+- `git rm -r` 不删除未跟踪残留或 `.git` 目录；残留项须逐项确认后清理，不能为了
+  `git submodule add` 成功而静默 `rm -rf`。
+- 已经正确配置的 submodule 只更新 README 或执行 `git submodule update`，不删除重建；
+  URL 变更用 `git submodule set-url <path> <url>` 并同步 README。
+- 提交时同时暂存 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`；不暂存子库工作树内容，
+  不使用 `git add -A` 或 `git add .`。
+- 验证：`git ls-files -s -- refer/git-rep/<name>` 为 `160000`；
+  `git config -f .gitmodules --get-regexp '^submodule\..*\.(path|url)$'` 有对应项；
+  `git submodule status -- refer/git-rep` 正常。
 
 ## 2. 大任务开始检查
 
@@ -33,7 +71,9 @@ git tag --list --sort=-creatordate | head -n 10
 3. 将上一任务留下的候选文件分为：必需功能、可恢复文档、日志、测试、数据、临时产物。
 4. 使用引用搜索和 `git log --diff-filter=A --` 判断文件来源；不能确认用途时列入计划等待
    默认较高权限覆盖，仍无法判定内容归属的保留。
-5. 清理清单必须在整改计划中逐项展示。删除前记录：
+5. 存在 `refer/git-rep/` 时，检查每个参考目录是 gitlink 而非普通拷贝，README 有来源/致谢，
+   本库分析文档在 `refer/git-rep/docs/`；不符合项列入整改计划。
+6. 清理清单必须在整改计划中逐项展示。删除前记录：
 
 ```bash
 git rev-parse HEAD
@@ -62,7 +102,8 @@ git show HEAD:<path> >/dev/null
 
 `type` 可采用 `refactor`、`docs`、`test`、`fix`、`chore`；`scope` 使用真实模块名。
 例如 `follow dev26, 修复解析器边界条件` 允许使用 `dev26` 作为版本背景，但真正的提交目的
-仍必须由“修复解析器边界条件”表达。
+仍必须由“修复解析器边界条件”表达。参考子库批次在 `scope` 中写明 `refer/git-rep`，说明
+新增、迁移或重建的 submodule 以及 README/docs 变化。
 
 ## 4. 分批交付
 
@@ -76,13 +117,15 @@ git show HEAD:<path> >/dev/null
 5. 每个批次保持可构建、可回退；大范围重命名不能拆成“先全部移动、后全部修引用”。
 6. 推送前检查远端漂移；普通快进失败先取回并分析，禁止 force push。
 7. 最终功能复现通过后才创建或推送最终标签。
+8. 参考子库批次同时暂存 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`；子库工作树
+   内容不进入主库索引。
 
 ## 5. 结束流程
 
 完整交付顺序：
 
 ```text
-form 审计与整改
+form 审计与整改（含 refer/git-rep 参考子库）
 → 功能复现
 → ~diff
 → ~init
@@ -123,6 +166,7 @@ form 审计与整改
 - 测试入口: `<可直接执行的命令>`。
 - 功能复现: `<构建、测试、主入口冒烟命令>`。
 - 文档/日志/数据: `<docs/>` 职责；`logs/AGENTS.md` 索引与 `vYYYYMMDD[HH[MM[SS]]].txt` 日志命名；`data/` 忽略与保留规则。
+- 参考 Git 库: 统一以 submodule 放在 `refer/git-rep/<name>`；`refer/git-rep/README.md` 记录来源与致谢；本库分析文档放 `refer/git-rep/docs/`，子库工作树只读。
 - Git 交付: <提交、推送、标签流程；禁止强推>。
 - Git 大文件: 除用户明确要求外，禁止提交单个大于 `10,000,000` 字节的文件；每批暂存后运行 `scripts/form-large-files-check.sh`，命中时停止提交并提醒。
 - 本地例外: <每一项的可观察条件、示例和理由；无则写“无”>。
@@ -148,7 +192,8 @@ metadata:
 
 遵循本库根 `AGENTS.md` 的 form 章节；本库为 <simple|complex>，主导语言为 <语言>。
 通用决策读取全局 form 的 references，本地框架、例外、验证命令和目录白名单以本库
-根 AGENTS.md 为准。若两者冲突，根 AGENTS.md 的已批准本地规则优先。
+根 AGENTS.md 为准。参考子库统一放在 `refer/git-rep/<name>`，来源/致谢和分析文档位置
+以根 AGENTS.md 为准。若两者冲突，根 AGENTS.md 的已批准本地规则优先。
 ```
 
 特化文件仍须满足本目录的技能公共契约、触发时机、工作流程、错误处理和注意事项结构。

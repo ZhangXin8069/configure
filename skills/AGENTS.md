@@ -60,7 +60,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - 按需调用，不强制：任务确实需要时才调用（打标前看改动 → diff、报错 → debug、
   优化后验证 → test），避免无意义的技能链；
 - 被调用技能按其 SKILL.md 规范执行（TODO 任务清单、前置上下文和 Git 检查约定一并生效）；
-- 新增/修改技能时须维护「与其他技能配合」条目，保持范式完整（30/30）。
+- 新增/修改技能时须维护「与其他技能配合」条目，保持范式完整（32/32）。
 - 常驻治理与归档：`rule` 和 `log` 默认与当前任务选中的任一技能共同启用，包括单独调用其他技能；只有用户对当前任务明确说明关闭时才停用。`rule` 在进程/资源/交付门控点执行，`log` 在阶段成果、一般记录或任务完成门控点归档；常驻不意味着逐命令记录。
   `log` 只负责关键日志与全文报告归档，不替代 `report`、`research-notes` 或 `follow-up`。
 - **并行优先**：任务含 2+ 个独立子任务（无共享状态/无顺序依赖/互不改同文件）时，
@@ -80,7 +80,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - 本约定由 up/skill-creator/make/all 等流程执行时落实，任意技能会话发现脱节时
   可顺手修正（先读后写、最小改动）。
 
-## 技能范式总览（30 个技能的统一范式）
+## 技能范式总览（32 个技能的统一范式）
 
 所有技能遵循同一文档结构与执行范式，新增/修改技能时必须对齐：
 
@@ -97,7 +97,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | 错误处理 | 表格：场景 → 处理 |
 | 注意事项 | 边界、安全、临时产物清理 |
 
-**执行范式**（30 个技能共通的行为准则）：
+**执行范式**（32 个技能共通的行为准则）：
 
 1. **先问对问题（一次问全）**：需求缺项时，所有问题在第一次交互一次性全部提出，用户一次回答，不逐次追问；
 2. **证据驱动 / 诚实**：结论与统计以实测为准（命令输出、退出码、数值），不虚报通过、失败与收益；
@@ -120,6 +120,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `diff` | 先定范围后执行；先概览（--stat）后详情；边界校验清单（冲突标记/调试残留/未跟踪/二进制/重命名） | 提交前自查、版本对比、任何改动审查的前置步骤 |
 | `analy` | 整体参考层：全库饱和覆盖、主体结构/关系/项目思路三视角、入口与依赖链、证据索引和后续 agent 交接字段；结论附 `文件:行号`，代码片段 `\lstinputlisting` 直引；密集证据附视觉类型、占用/拆分预算、TikZ 包围盒风险 | 为后续 agent 建立仓库整体导航与可复用分析参考；需要理解全局再进入实现/调试/深挖或展示排版的场景 |
 | `pure` | 细节参考层：消费 analy 的整体接口，核心候选三态闭环，逐算法/物理对象/代码符号深挖，保留公式、复杂度、极限、量纲和双向映射证据；以 `content_payload` 交付可展示对象的宽高、拆分与 TikZ 标签/节点风险 | 为后续 agent 建立核心算法、物理推导与代码—对象对应的可追溯细节参考，并减少展示层重新堆叠 |
+| `get-paper` | 主任务相关多源论文检索、OpenAlex/Crossref/arXiv/abs 元数据降级、arXiv LaTeX 安全获取、相关性排序、来源/许可/SHA-256 与主 TeX 可追溯 | 文献调研、论文复现准备、为 analy/pure/report/test 提供可核查论文证据 |
 | `report` | 学者展示层：消费 analy/pure/test 证据，结论—证据—含义—下一步闭合叙事；用 `frame_manifest`、列宽/页高预算、语义拆页、TikZ 独立包围盒、全页渲染和 `occlusion_pairs/clipped_objects/outside_safe_area` 指标完成 16:9 Beamer/PDF 验收 | 为学者、导师或同行制作可直接汇报、可独立阅读且证据可追溯的科研展示 |
 | `research-notes` | 过程优先、证据索引、三态结论和接续摘要 | 过程记录、调试笔记和临时结论归档 |
 | `log` | 默认常驻并随任一单技能启用（用户明确关闭除外）；三态日志门（阶段成果/一般记录/任务完成）、`write-log.sh` 确定性写入、关键证据压缩、全文报告与最终用户指令归档、KB 级目标和 10 MiB 硬上限、冲突无锁回退、`logs/AGENTS.md` 批次索引 | 主任务阶段报告归档、执行日志补写、最终报告落盘和可提交日志管理 |
@@ -139,8 +140,9 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `follow-up` | 先压缩再分发，行动项可执行、状态与动作分离、跨会话可续 | 周报、交接、复盘、行动项清单 |
 | `dispatch` | 优先 `agent-dispatch.sh --task --json`，默认继承父 launcher/provider/model/strength；并行派发纪律（2+ 独立任务拆域、同消息派发=并行）；代理指令四要素；整合验证不豁免；派发失败复用当前启动链重试，最终串行降级 | 多独立任务的并行提速；派发子代理时的指令构造与整合纪律 |
 | `team` | 状态机 + worker 隔离 + 能力匹配 + 单文件单写者/只读审查者 + 健康检查 + 失败重派；优先 `agent-dispatch.sh` 且默认继承父设置，派发链失败复用当前 agent 启动方式并最终串行 | 长流程、多 worker 协作、模型/工具能力选择、重派和收敛收尾场景 |
-| `form` | 规则先于范例；参考 URL 固化为可校验明文快照；简单库/复杂库分类；语言×构件命名矩阵；名称简短且语义完整；`AGENTS.md` 为唯一 agent 规则文件名且双文件须语义合并；Git 标签名仅作版本引用、禁止进入路径或标识符；目录白名单；`logs/AGENTS.md` 与三态时间戳日志命名审计；只读冲突表→较高权限整改→功能复现；docs/logs/data/testing 分域；自动布局审计与人工语义命名双闸门；每次运行以标记块同步根 `AGENTS.md` 且目标库原约定优先；提交前阻断超过 `10,000,000` 字节的暂存文件；生成目标库特化 skill；最终执行 diff/init/dev tag | Git 库命名、结构、框架、清洁度和交付格式治理；根规则特化；跨目录大范围重整 |
+| `form` | 规则先于范例；参考 URL 固化为可校验明文快照；参考 Git 库以 submodule 放入 `refer/git-rep` 且 README 记录来源/致谢、分析文档集中 `refer/git-rep/docs`；简单库/复杂库分类；语言×构件命名矩阵；名称简短且语义完整；`AGENTS.md` 为唯一 agent 规则文件名且双文件须语义合并；Git 标签名仅作版本引用、禁止进入路径或标识符；目录白名单；`logs/AGENTS.md` 与三态时间戳日志命名审计；只读冲突表→较高权限整改→功能复现；docs/logs/data/testing 分域；自动布局审计与人工语义命名双闸门；每次运行以标记块同步根 `AGENTS.md` 且目标库原约定优先；提交前阻断超过 `10,000,000` 字节的暂存文件；生成目标库特化 skill；最终执行 diff/init/dev tag | Git 库命名、结构、框架、清洁度和交付格式治理；参考子库布局治理；根规则特化；跨目录大范围重整 |
 | `up` | 强制首步刷新网络参考源（canonical URL、排序参数、回退入口、最近验证、待复核）；四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜 + awesome-opencode 生态清单；API→网页重试降级；候选固定 ref/许可证/哈希/测试/决策留痕；差距分析；插件推荐与一键安装器（按 harness 分支 Codex/opencode，manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
+| `absorb` | Git 新增外来内容全量清单（提交/暂存/未跟踪/gitlink/符号链接）；provenance/license 硬门槛；缺陷与正向价值双栏分析；keep/adapt/reference-only/reject 吸收矩阵；隔离测试、适配回归与证据化优化 | vendored/third-party 导入、外部 skill 或算法吸收、安全合并与拒收闭环 |
 
 ## 技能
 
@@ -155,6 +157,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `diff` | 查看/分析代码改动：先定范围后执行、只读不改、先概览后详情、证据驱动、边界校验（工作区/暂存区/版本间对比，含冲突标记、调试残留、未跟踪/二进制/重命名检查）|
 | `analy` | 整体分析参考：只读分析当前 git 库全部文档与代码，建立全库覆盖、三视角、入口/依赖链和证据索引，解析 `{$用户输入}` 主题；具体主题按 15 步代码/物理框架，算法、公式推导、编程思路等工作流统一用 `table[htbp]` 单列格式，结论附 `文件:行号`；交接密集对象的视觉类型、宽高/拆分预算、TikZ 包围盒风险，并以临时构建、全页渲染和遮挡指标验收 LaTeX PDF，供后续 agent 接续使用|
 | `pure` | 细节解析参考：优先消费 analy 的整体参考，只读穷尽核心部分（纯代码向→独特算法、纯物理向→物理图像与公式推导、交叉向→代码—物理一一对应），以三态清单、逐符号/逐公式证据、极限/量纲校验和双向映射形成可复用细节底稿；算法、公式推导、编程思路等工作流统一用 `table[htbp]` 单列格式；交接 `content_payload` 的视觉占用、拆分边界、TikZ 节点/标签风险，并以临时构建、全页渲染和遮挡指标验收 LaTeX PDF|
+| `get-paper` | 主任务相关论文获取：固定任务与筛选标准→arXiv/OpenAlex/Crossref/Semantic Scholar 多源检索与去重→相关性/新近度/引用排序→arXiv abs 元数据与 API 双路径→优先安全获取 LaTeX 源码、其次合法 OA PDF、否则仅元数据→记录许可、SHA-256、主 TeX 和来源状态；拒绝付费墙绕过与不可信归档执行 |
 | `report` | 学者科研展示：消费 analy 的整体结构、pure 的核心细节和 test 的实测证据，组织结论—证据—含义—下一步主线；16:9 Beamer/PDF 横板；用 `frame_manifest` 管理主张、视觉、列宽/页高和拆页预算，直接放置 `tabular/tabularx`，把 TikZ 节点/标签按独立包围盒检查，全页渲染并以 Overfull/Float/遮挡/截断/安全区双重验收确保可直接汇报 |
 | `research-notes` | 过程优先、证据索引、三态结论和接续摘要；适用于过程记录、调试笔记和临时结论归档 |
 | `log` | 常驻主任务日志归档：用户未明确关闭时默认随任一单技能启用；阶段成果、一般记录、任务完成三态分别写入 Git 根目录 `logs/`；`write-log.sh` 统一处理路径、命名、模式完整性、大小、冲突和索引，测试脚本覆盖关键边界；默认不自动提交 |
@@ -162,10 +165,11 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `test` | 系统化测试：默认测试对象为上次 agent 生成的工作（参考 `.agent.*.list` 格式），可指定项目；中间变量自行计算并保存，中间/最终结果与图表落盘 `test_out/`，失败按 debug 循环修复、通过按 optim 循环优化，支持设备切换（GPU 优先/CPU/NPU）与多精度切换（默认 fp32），数据读写间精度转换显式管理|
 | `make` | 项目生成：生成对象为用户指定的项目，按需编排本目录全部相关技能并明确核心链（init/diff/analy/plan→最小改动实现→test→debug/optim→diff→init/tag/log），其余技能按任务接入，细节要求为所有相关技能的汇总|
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范|
-| `form` | Git 库格式治理：固定并校验参考 URL 的离线明文快照，用 `form-audit.sh` 检查目录/文件布局、`AGENT.md` 单数名、`logs/AGENTS.md`、agent 三态时间戳日志和标签形路径，人工判定函数/变量/对象语义命名及标签名边界；执行只读冲突表与较高权限整改，将双文件有效规则合并到 `AGENTS.md` 后删除单数文件，维护 docs/logs/data/testing 和框架入口，复现功能，用 `form-agents-sync.sh` 幂等同步根 `AGENTS.md` 规则且原约定优先，生成目标库特化 skill；提交前用 `form-large-files-check.sh` 阻断超过 10,000,000 字节的暂存文件，最后执行 diff/init/dev tag |
+| `form` | Git 库格式治理：固定并校验参考 URL 的离线明文快照，`refer/git-rep` 参考子库以 submodule 引入、README 记录来源/致谢、分析文档集中 `docs/`，普通拷贝先迁移后重建；用 `form-audit.sh` 检查目录/文件布局、参考子库元数据与文档位置、`AGENT.md` 单数名、`logs/AGENTS.md`、agent 三态时间戳日志和标签形路径，人工判定函数/变量/对象语义命名及标签名边界；执行只读冲突表与较高权限整改，将双文件有效规则合并到 `AGENTS.md` 后删除单数文件，维护 docs/logs/data/testing 和框架入口，复现功能，用 `form-agents-sync.sh` 幂等同步根 `AGENTS.md` 规则且原约定优先，生成目标库特化 skill；提交前用 `form-large-files-check.sh` 阻断超过 10,000,000 字节的暂存文件，最后执行 diff/init/dev tag |
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，派发失败时回到本会话内联执行；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/pure/report/log/rule/test/plan/make/skill-creator/form/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；dispatch 失败按启动链重试后串行；收尾默认执行常驻 rule 门控与 log 归档；生成类任务首轮复用 make，单步任务转对应技能|
 | `up` | agent 配置升级：每次先刷新网络参考源条目（URL/排序/回退/最近验证，避免落后与缺失）→扫描 Git 根目录 `skills/tools/hooks/plugins` 四树并优先复用 `tools/configure-check.sh` 基线→GitHub/Gitee/GitLab/Codeberg 多源最佳实践与 star 热榜（API→网页重试降级）+ awesome-opencode 生态清单（`up/references/awesome-opencode.md`）→差距表→优化/补充/新增/debug→检查器 `FAIL` 先归因为规则误判或文件缺陷并以回归测试修正→插件推荐与一键安装器（按 harness 分支：Codex marketplace / opencode `opencode plugin`+plugin 数组；profile、dry-run、安全复用/fail-closed）→up 自身单轮证据约束进化（继承用户时间/资源上限）→内部三查（调用链/互鉴/技能表）与 `.opencode/skills` 双目录同步→验证闭环（含技能表/互鉴表列数一致性）→收敛；外部借鉴记录网站、仓库/技能名、固定 ref、许可证、哈希、测试、采纳决策与 URL |
+| `absorb` | 外来内容吸收：自动盘点 Git 新增的提交/暂存/未跟踪内容和 gitlink/链接，识别 provenance/license/秘密/动态执行风险；固定来源与许可后隔离全量分析，建立 keep/adapt/reference-only/reject 覆盖矩阵；按本库规范最小适配，先针对性测试再全量回归，最后以实测主导项优化并明确“完美吸收”的操作判据 |
 | `md-tex-sync` | `{除非用户明确要求，否则不启用}`。仅在用户显式要求 Markdown/LaTeX/PDF 同源维护、双格式同步交付或全文全集与全附件归档时启用；以 Markdown 为唯一内容源，确定性转换生成独立 TeX，XeLaTeX 两遍编译 PDF，并按 SHA256 校验源哈希、幂等重建、零 Overfull/缺字/错误和全页栅格化 |
 | `brainstorm` | 需求澄清与设计探索：spike/bounded/architectural 三路径分类→一次一问澄清→方案权衡→分节设计→HARD-GATE 批准闸门（实现前必须获批）；吸收 superpowers brainstorming 方法论|
 | `review` | 代码审查：早审查常审查、优先 agent-dispatch.sh 审查+精确上下文裁剪、问题分级（Critical 立即修/Important 继续前修/Minor 记录后修）、反馈可反驳；子代理失败按启动链重试后串行；接收审查"先验证后实现"（不表演性同意、技术性反驳附证据）；吸收 superpowers requesting/receiving-code-review|

@@ -52,6 +52,7 @@ metadata:
   生成完成后验证 → test；多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；
   生成或整改仓库命名/目录/交付格式 → form；
   需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；skill 库升级 → up；
+  论文/文献证据获取 → get-paper；外部新内容吸收 → absorb；
   多独立子任务（多文件调查/多用例测试）→ dispatch 并行派发
 
 ## 技能编排矩阵（自行调用本目录其他技能）
@@ -64,6 +65,7 @@ metadata:
 | 修复 | debug | 先复现→证据→二分→不变量→最小修复→回归，循环至成功 |
 | 优化 | optim | 先测量基线→主导项→最小改动→回归全部测试，不虚报收益 |
 | 分析报告 | analy | 结论附 `文件:行号`；`\lstinputlisting` 直引原文件；编译 PDF 到 `docs/` |
+| 文献与外来内容 | get-paper / absorb | 论文证据固定任务相关性、来源、许可和哈希；外部内容先全量盘点与隔离分析，再决定 keep/adapt/reference-only/reject |
 | 复查 | diff | 只读概览（--stat）→详情；边界校验（冲突标记/调试残留/未跟踪/二进制/重命名） |
 | 归档 | init | agent 生成内容 → 完整 skill 归集到本库根 `.opencode/skills/`；AGENTS.md 维护 |
 | 日志归档 | log | 默认常驻；阶段成果或最终报告写入 Git 根目录 `logs/` 并维护 `logs/AGENTS.md` |

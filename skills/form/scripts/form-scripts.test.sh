@@ -108,6 +108,100 @@ git -C "$simple" add -f .
 simple_output=$("$AUDIT" --root "$simple" --strict 2>/dev/null)
 [[ -z "$simple_output" ]] || fail "simple fixture should pass audit"
 
+reference_repo="$TMP_ROOT/reference-repo"
+make_repo "$reference_repo"
+mkdir -p "$reference_repo/refer/git-rep/Vendored/docs"
+printf '# Sources\n\n- https://example.invalid/team/FakeSub.git\n' \
+  >"$reference_repo/refer/git-rep/README.md"
+printf '' >"$reference_repo/refer/git-rep/Vendored/docs/analy.tex"
+printf '' >"$reference_repo/refer/git-rep/Vendored/docs/pure.pdf"
+printf 'anchor\n' >"$reference_repo/anchor.txt"
+git -C "$reference_repo" add anchor.txt
+git -C "$reference_repo" commit -qm init
+anchor_sha=$(git -C "$reference_repo" rev-parse HEAD)
+cat >"$reference_repo/.gitmodules" <<'EOF'
+[submodule "refer/git-rep/FakeSub"]
+	path = refer/git-rep/FakeSub
+	url = https://example.invalid/team/FakeSub.git
+EOF
+git -C "$reference_repo" update-index --add \
+  --cacheinfo "160000,$anchor_sha,refer/git-rep/FakeSub"
+git -C "$reference_repo" add -f \
+  .gitmodules refer/git-rep/README.md \
+  refer/git-rep/Vendored/docs/analy.tex refer/git-rep/Vendored/docs/pure.pdf
+
+set +e
+reference_output=$("$AUDIT" --root "$reference_repo" --strict 2>/dev/null)
+reference_status=$?
+set -e
+[[ "$reference_status" -eq 1 ]] || fail "reference fixture should fail strict audit"
+grep -q $'^WARNING\tREFERENCE_DOC_MISPLACED\trefer/git-rep/Vendored/docs/analy.tex\t' <<<"$reference_output" ||
+  fail "missing REFERENCE_DOC_MISPLACED for TeX analysis document"
+grep -q $'^WARNING\tREFERENCE_DOC_MISPLACED\trefer/git-rep/Vendored/docs/pure.pdf\t' <<<"$reference_output" ||
+  fail "missing REFERENCE_DOC_MISPLACED for PDF analysis document"
+! grep -q $'^WARNING\tREFERENCE_README_MISSING\t' <<<"$reference_output" ||
+  fail "unexpected REFERENCE_README_MISSING finding"
+! grep -q $'^ERROR\tREFERENCE_SUBMODULE_METADATA\t' <<<"$reference_output" ||
+  fail "unexpected REFERENCE_SUBMODULE_METADATA finding"
+! grep -q $'^WARNING\tREFERENCE_README_SOURCE_MISSING\t' <<<"$reference_output" ||
+  fail "unexpected REFERENCE_README_SOURCE_MISSING finding"
+
+reference_excluded=$("$AUDIT" --root "$reference_repo" \
+  --exclude '^refer/git-rep/Vendored/' 2>/dev/null)
+! grep -q $'REFERENCE_DOC_MISPLACED' <<<"$reference_excluded" ||
+  fail "--exclude did not suppress reference findings"
+
+git -C "$reference_repo" rm -q --cached refer/git-rep/README.md
+set +e
+reference_no_readme=$("$AUDIT" --root "$reference_repo" 2>/dev/null)
+set -e
+grep -q $'^WARNING\tREFERENCE_README_MISSING\trefer/git-rep/README.md\t' <<<"$reference_no_readme" ||
+  fail "missing REFERENCE_README_MISSING finding"
+git -C "$reference_repo" add -- refer/git-rep/README.md
+
+printf '# Sources\n\n- no source recorded\n' >"$reference_repo/refer/git-rep/README.md"
+git -C "$reference_repo" add -- refer/git-rep/README.md
+set +e
+reference_no_source=$("$AUDIT" --root "$reference_repo" 2>/dev/null)
+set -e
+grep -q $'^WARNING\tREFERENCE_README_SOURCE_MISSING\trefer/git-rep/README.md\t' <<<"$reference_no_source" ||
+  fail "missing REFERENCE_README_SOURCE_MISSING finding"
+
+: >"$reference_repo/refer/git-rep/README.md"
+git -C "$reference_repo" add -- refer/git-rep/README.md
+set +e
+reference_empty=$("$AUDIT" --root "$reference_repo" 2>/dev/null)
+set -e
+grep -q $'^WARNING\tREFERENCE_README_EMPTY\trefer/git-rep/README.md\t' <<<"$reference_empty" ||
+  fail "missing REFERENCE_README_EMPTY finding"
+
+printf '# Sources\n\n- https://example.invalid/team/FakeSub.git\n' \
+  >"$reference_repo/refer/git-rep/README.md"
+printf '[submodule "refer/git-rep/FakeSub"]\n\tpath = refer/git-rep/FakeSub\n' \
+  >"$reference_repo/.gitmodules"
+git -C "$reference_repo" add -- .gitmodules refer/git-rep/README.md
+set +e
+reference_no_url=$("$AUDIT" --root "$reference_repo" 2>/dev/null)
+set -e
+grep -q $'^ERROR\tREFERENCE_SUBMODULE_METADATA\trefer/git-rep/FakeSub\t' <<<"$reference_no_url" ||
+  fail "missing REFERENCE_SUBMODULE_METADATA finding"
+
+printf '[submodule "refer/git-rep/FakeSub"]\n\tpath = refer/git-rep/FakeSub\n\turl = https://example.invalid/team/FakeSub.git\n' \
+  >"$reference_repo/.gitmodules"
+git -C "$reference_repo" rm -r -q --cached refer/git-rep/Vendored
+rm -rf "$reference_repo/refer/git-rep/Vendored"
+mkdir -p "$reference_repo/refer/git-rep/docs"
+printf '' >"$reference_repo/refer/git-rep/docs/analy.tex"
+git -C "$reference_repo" add -f -- .gitmodules refer/git-rep/docs/analy.tex
+set +e
+reference_clean_output=$("$AUDIT" --root "$reference_repo" --strict 2>/dev/null)
+reference_clean_status=$?
+set -e
+[[ "$reference_clean_status" -eq 0 ]] ||
+  fail "compliant reference fixture should pass strict audit"
+[[ -z "$reference_clean_output" ]] ||
+  fail "compliant reference fixture should have no findings"
+
 sync_repo="$TMP_ROOT/sync-repo"
 make_repo "$sync_repo"
 printf '# Existing rules\n\n- local rule wins\n' >"$sync_repo/AGENTS.md"
