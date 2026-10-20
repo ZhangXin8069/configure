@@ -197,3 +197,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## rule-skill-20261020 - stage - 2026-10-20 22:06:04 +0800
+- 主任务: 新增常驻 rule 技能：进程时限、资源治理与条件式交付
+- 日志文件: logs/v202610202206.txt
+- 文件大小: 4765 bytes
+- 触发原因: 阶段成果
+- 关键内容: rule 技能、进程守卫、29 技能规则映射与仓库索引完成，结构/快照/行为回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
