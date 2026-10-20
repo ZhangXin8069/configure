@@ -1,0 +1,65 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 19:24:42 +0800
+批次: env-alias
+主任务: env.sh 添加 gcat-tag 别名
+触发原因: 任务完成
+摘要: 新增 gcat-tag：按 creatordate 倒序展示最近十条标签的完整标签与提交元数据
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位与实现
+- 目标: 在 `env.sh` 增加 `gcat-tag`，显示最近十条 Git 标签的完整标签及提交元数据。
+- 命令/操作: 检查 `env.sh` 现有 Git 别名分组及工作树状态；在 `gsize` 与 `gback-tag` 之间加入别名。
+- 关键输出: `env.sh:90` 新增 `alias gcat-tag='git for-each-ref --sort=-creatordate --count=10 --format="%(refname:short)" refs/tags | while IFS= read -r tag; do git show --no-patch --format=fuller "$tag"; done'`。
+- 退出码: 0
+- 证据与判断: 使用 `creatordate` 兼容 annotated/lightweight tag 的新旧排序；`--no-patch` 保留标签与提交元数据、说明，但不展开十个提交的 diff；`while read` 避免依赖 GNU 专属 `xargs -r`。
+
+### S2 — 验证
+- 目标: 验证 bash/zsh 均可 source 并正确展开别名，且结果顺序与 Git 查询一致。
+- 命令/操作: 执行 `bash -n env.sh`、`git diff --check`、form 严格审计、快照校验，并分别在 bash/zsh 中 source `env.sh` 后执行别名。
+- 关键输出: `bash_tag_count=10`；`zsh_tag_count=10`；`tag_order_match=yes`；form 审计和快照校验退出码均为 0。
+- 退出码: 0
+- 证据与判断: bash 首次非交互测试因默认关闭 `expand_aliases` 返回 command not found；开启 `shopt -s expand_aliases` 后通过，确认是测试环境差异而非实现问题。
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh`、`git diff --check`、`skills/form/scripts/form-audit.sh --root . --strict --quiet`、`skills/form/scripts/form-snapshot-verify.sh --quiet`、bash/zsh 实际展开与顺序比对。
+- 结果: 全部通过；`gcat-tag` 输出最近十条标签且顺序与 `git for-each-ref --sort=-creatordate` 完全一致。
+- 未验证项: 未在无标签仓库中单独构造回归仓库；实现中的 `while read` 在输入为空时自然不执行。
+
+## 变更与产物
+- 文件: `env.sh`
+- 产物: 新增 `gcat-tag` 通用 shell 别名。
+- 未改动范围: 未修改其他别名、Git 配置、系统配置，未暂存、提交、推送或创建标签。
+
+## 风险、限制与下一步
+- 风险: “所有信息”按标签对象、提交元数据和说明理解；为避免输出失控，未包含提交 diff。
+- 阻塞: 无。
+- 下一步: 由用户重新 source `env.sh` 或新开 shell 后使用 `gcat-tag`。
+
+## 用户输入指令
+在env.sh中添加gcat-tag别名:显示最近十条git-tag的所有信息
+
+## Agent 全文报告
+--- report begin ---
+**改动内容**
+- 在 `env.sh` 的 Git 别名分组中新增 `gcat-tag`。
+- 别名按 `creatordate` 倒序选取最近 10 个标签，并通过 `git show --no-patch --format=fuller` 展示标签对象、提交作者/时间及标签说明。
+- 未输出提交 diff，避免十条标签对应的补丁内容造成大量刷屏。
+
+**推理依据**
+- `creatordate` 同时适用于 annotated tag 和 lightweight tag。
+- `for-each-ref --count=10` 在 Git 层直接限制数量，避免 `head` 引发的无谓处理或管道退出问题。
+- 使用 `while IFS= read -r tag` 而非 `xargs -r`，兼容 bash/zsh，并正确处理无标签仓库。
+
+**验证结果**
+- `bash -n env.sh`：通过。
+- `git diff --check`：通过。
+- form 严格结构审计：通过。
+- form 快照一致性校验：通过。
+- bash 与 zsh 实际 source 后展开：均输出 10 条标签。
+- 标签顺序与 `git for-each-ref --sort=-creatordate --count=10` 完全一致。
+
+**后续步骤**
+- 重新 source `env.sh` 或新开 shell 后即可运行 `gcat-tag`。
+--- report end ---
