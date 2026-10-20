@@ -1,0 +1,83 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 22:39:14 +0800
+批次: RulePushClosure
+主任务: 明确 rule 在本地提交和标签形成后必须完成自动推送闭环
+触发原因: 任务完成
+摘要: 将 ~tag 后本地提交/标签未推送的状态定义为继续自动同步条件，并完成 main 与 dev36 推送
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 识别规则缺口
+- 目标: 修正 `rule` 允许条件式推送但未强制完成 push 闭环的问题。
+- 命令/操作: 定向检索 `skills/rule` 中提交、推送、标签和未推送相关规则；复核 `dev36` 与远程状态。
+- 关键输出: 本地 `main` 比 `origin/main` 领先 1，`dev36` 指向 `f285fee`，远程尚无该标签。
+- 退出码: 0。
+- 证据与判断: 测试与交付闸门已通过，但旧措辞允许以“未推送，如需同步请执行”结束，不符合用户明确授予的条件式自动推送策略。
+
+### S2 — 修订 rule 技能
+- 目标: 将满足闸门后的本地提交和本次新标签自动推送定义为必须执行的同步闭环。
+- 命令/操作: 修改 `skills/rule/SKILL.md`、`skills/rule/references/conditional-delivery.md`、`skills/rule/references/extracted-rules.md` 和 `skills/rule/AGENTS.md`。
+- 关键输出: `~tag:<type>` 默认包含条件式远程同步授权；推送失败、无远程、用户明确仅本地或闸门不满足时才允许报告未推送；推送后必须用 `git ls-remote` 回读分支和标签对象。
+- 退出码: 0。
+- 证据与判断: 新规则消除了 `rule` 自动交付授权与保守交接措辞之间的冲突。
+
+### S3 — 提交与远程同步
+- 目标: 完成规则修订及既有修复的远程闭环。
+- 命令/操作: 提交 `7b3c293`；执行 `git push origin main`、`git push origin dev36`；运行远端标签链校验。
+- 关键输出: `b45f7e7..7b3c293 main -> main`；`dev36` 新建到远程；远端分支对象 `7b3c2933135f4bfca1b4ef5a4a4c036489c09703`，标签对象 `bf334631ae7095c4541b2fd529c0ebc68c3f6dfc`，peeled commit `f285fee756df7a8a87226f0c2d824320ffa08e39`。
+- 退出码: 0。
+- 证据与判断: 远端接收成功；`tag-chain.sh --check --remote origin` 检查 128 个受管标签并 PASS。
+
+## 验证与证据
+- 测试/检查: `quick_validate.py skills/rule`。
+- 结果: `Skill is valid!`
+- 测试/检查: `bash skills/rule/scripts/run-guarded.test.sh`。
+- 结果: `run-guarded tests: PASS`
+- 测试/检查: `form-audit.sh --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check`。
+- 结果: 全部通过，无输出。
+- 测试/检查: `form-large-files-check.sh --root .`。
+- 结果: 4 个暂存文件全部低于 10,000,000 字节。
+- 测试/检查: `git ls-remote origin refs/heads/main refs/tags/dev36 refs/tags/dev36^{}`。
+- 结果: 分支、标签对象和 peeled commit 均与本地一致。
+- 未验证项: 无。
+
+## 变更与产物
+- 文件: `skills/rule/SKILL.md`、`skills/rule/references/conditional-delivery.md`、`skills/rule/references/extracted-rules.md`、`skills/rule/AGENTS.md`。
+- 产物: 提交 `7b3c293`，已推送；标签 `dev36`，已推送。
+- 未改动范围: 未移动、删除或改写任何既有标签；未修改系统配置或仓库外文件。
+
+## 风险、限制与下一步
+- 风险: 仅用户明确要求“仅本地”或闸门失败时允许停止在未推送状态。
+- 阻塞: 无。
+- 下一步: 无；最终日志将随独立 `docs(log)` 提交推送。
+
+## 用户输入指令
+在skills/rule中明确:" 当前提交和 dev36 均未推送。如需同步远程，执行："此时满足自动提交(推送)条件
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- 在 `rule` 中明确：满足全部交付闸门后，本地提交和本次新标签的“未推送”不是终态，必须自动推送当前分支和标签。
+- `~tag:<type>` 默认包含条件式远程同步授权；只有推送失败、无远程、用户明确仅本地或闸门不满足时才停止。
+- 推送后必须用 `git ls-remote` 回读分支、标签对象和 peeled commit。
+- 已推送 `main` 到规则修订提交 `7b3c293`，并推送 `dev36` 到远程；`dev36` 保持指向 `f285fee`，未移动或改写。
+- 最终日志随后以独立 `docs(log)` 提交推送。
+
+**推理依据**
+- 原 `rule` 已授予条件式自动推送权限，但没有明确禁止把“未推送，如需同步请执行”作为条件满足时的终态，导致实际交付少了一步。
+- `dev36` 是在规则修订前创建的开发快照，因此规则文档提交后不应移动标签，只推进 `main`。
+
+**验证结果**
+- `quick_validate.py skills/rule`: 通过。
+- `run-guarded.test.sh`: 通过。
+- `form-audit.sh --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check`: 全部通过。
+- 大文件闸门: 4 个文件通过。
+- 远端分支、标签对象和 peeled commit 回读一致。
+- `tag-chain.sh --check --remote origin`: 128 个受管标签全部通过。
+
+**后续步骤**
+无。当前 `main` 已与远程同步，`dev36` 已推送。
+--- report end ---

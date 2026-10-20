@@ -224,3 +224,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## RulePushClosure - final - 2026-10-20 22:39:14 +0800
+- 主任务: 明确 rule 在本地提交和标签形成后必须完成自动推送闭环
+- 日志文件: logs/v2026102022-3.txt
+- 文件大小: 5098 bytes
+- 触发原因: 任务完成
+- 关键内容: 将 ~tag 后本地提交/标签未推送的状态定义为继续自动同步条件，并完成 main 与 dev36 推送
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
