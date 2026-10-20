@@ -295,6 +295,10 @@ printf '1234567\n' >"$large_repo/small.txt"
 git -C "$large_repo" add small.txt
 "$LARGE_FILES" --root "$large_repo" --max-bytes 8 --quiet ||
   fail "large-file check should accept a file at the size limit"
+git -C "$large_repo" update-index --add --cacheinfo \
+  160000 1111111111111111111111111111111111111111 fake-sub
+"$LARGE_FILES" --root "$large_repo" --max-bytes 8 --quiet ||
+  fail "large-file check should ignore gitlink entries"
 printf '123456789\n' >"$large_repo/large.txt"
 git -C "$large_repo" add large.txt
 set +e

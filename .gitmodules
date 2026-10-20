@@ -7,3 +7,6 @@
 [submodule "refer/git-rep/scientific-agent-skills"]
 	path = refer/git-rep/scientific-agent-skills
 	url = https://github.com/K-Dense-AI/scientific-agent-skills.git
+[submodule "refer/git-rep/oh-my-codex"]
+	path = refer/git-rep/oh-my-codex
+	url = https://github.com/Yeachan-Heo/oh-my-codex.git
