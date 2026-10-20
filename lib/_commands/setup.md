@@ -148,7 +148,7 @@ gz-pyqcu-push.sh
 
 这些脚本会进入相邻仓库并调用 `gpull.sh` 或 `gpush.sh`，因此继承自动提交、推送标签和清理工作区等行为。运行前逐个检查目标仓库状态。
 
-`zg-*-pull.sh` 会进入目标仓库调用 `gpull.sh`。当前实现使用 `git pull --rebase --autostash` 保留 tracked 工作区改动；旧版 Git 缺少 `--autostash` 时回退到 stash 并在拉取成功后恢复。若拉取或恢复冲突，脚本返回非零并保留 stash，可检查：
+`zg-*-pull.sh` 会进入目标仓库调用 `gpull.sh`。脚本兼容 HTTPS、SSH 和本地 `origin`，只自动执行 fast-forward，并保留 tracked 工作区改动；旧版 Git 缺少 `--autostash` 时回退到 stash 并在拉取成功后恢复。本地分支与远端分叉时会在 stash/rebase 前停止，不会因缺少 Git 身份而启动大规模 rebase。若拉取或恢复冲突，脚本返回非零并保留 stash，可检查：
 
 ```bash
 git stash list
@@ -156,6 +156,15 @@ git stash show -p stash@{0}
 ```
 
 未跟踪文件不在自动暂存范围内，可能继续留在工作区。detached HEAD 只有在其提交已包含于唯一可判定的 `origin` 默认分支时，才会自动恢复为该分支的跟踪分支；存在独立提交或候选分支不唯一时会拒绝切换并返回非零。脚本失败时检查 stash、分支和冲突状态。
+
+缺失仓库默认按 SSH 后 HTTPS 回退克隆。需要强制指定协议时使用：
+
+```bash
+ZG_GIT_PROTOCOL=https zg-all-pull.sh
+ZG_GIT_PROTOCOL=ssh zg-all-pull.sh
+```
+
+`ZG_GIT_PROTOCOL` 只影响缺失仓库的 clone，不会改写已有仓库的 `origin` URL。
 
 ## 其他系统与配置命令
 
