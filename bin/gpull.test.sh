@@ -95,16 +95,78 @@ _test_pull_preserves_changes() {
     grep -Fqx 'local update 2' "${work}/local.txt" || _fail "旧版 Git 回退未恢复本地改动"
     [[ -z "$(git -C "${work}" stash list)" ]] || _fail "旧版 Git 回退后仍有未恢复的 stash"
 
+}
+
+_test_detached_head_recovery() {
+    local remote="${TEST_DIR}/detached-remote.git"
+    local seed="${TEST_DIR}/detached-seed"
+    local work="${TEST_DIR}/detached-work"
+    local other="${TEST_DIR}/detached-other"
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+
+    git init -q "${seed}"
+    _configure_identity "${seed}"
+    git -C "${seed}" checkout -q -b main
+    printf 'base\n' > "${seed}/file.txt"
+    git -C "${seed}" add file.txt
+    git -C "${seed}" commit -q -m initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+
+    git clone -q "${remote}" "${work}"
+    _configure_identity "${work}"
+    git clone -q "${remote}" "${other}"
+    _configure_identity "${other}"
+
     git -C "${work}" checkout -q --detach HEAD
+    printf 'remote update\n' > "${other}/file.txt"
+    git -C "${other}" add file.txt
+    git -C "${other}" commit -q -m remote-update
+    git -C "${other}" push -q
+
     set +e
     (
         cd "${work}"
         bash "${_PATH}/gpull.sh"
-    ) > "${TEST_DIR}/detached.log" 2>&1
+    ) > "${TEST_DIR}/detached-recovery.log" 2>&1
+    local recovery_status=$?
+    set -e
+
+    if ((recovery_status != 0)); then
+        cat "${TEST_DIR}/detached-recovery.log" >&2
+        _fail "安全 detached HEAD 恢复失败"
+    fi
+
+    [[ "$(git -C "${work}" symbolic-ref --quiet --short HEAD)" == main ]] \
+        || _fail "安全 detached HEAD 未恢复到 main"
+    grep -Fqx 'remote update' "${work}/file.txt" || _fail "安全 detached HEAD 恢复后未拉取远端更新"
+    grep -Fq 'Restoring tracking branch main' "${TEST_DIR}/detached-recovery.log" \
+        || _fail "缺少 detached HEAD 安全恢复提示"
+
+    git -C "${work}" checkout -q --detach HEAD
+    printf 'detached local commit\n' > "${work}/detached.txt"
+    git -C "${work}" add detached.txt
+    git -C "${work}" commit -q -m detached-local
+    local detached_commit
+    detached_commit=$(git -C "${work}" rev-parse HEAD)
+
+    set +e
+    (
+        cd "${work}"
+        bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/detached-local.log" 2>&1
     local detached_status=$?
     set -e
-    ((detached_status != 0)) || _fail "detached HEAD 应返回非零"
-    grep -Fq 'Detached HEAD' "${TEST_DIR}/detached.log" || _fail "缺少 detached HEAD 错误提示"
+
+    ((detached_status != 0)) || _fail "含独立提交的 detached HEAD 应返回非零"
+    [[ -z "$(git -C "${work}" symbolic-ref --quiet --short HEAD || true)" ]] \
+        || _fail "含独立提交的 detached HEAD 不应自动切换分支"
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${detached_commit}" ]] \
+        || _fail "拒绝恢复时不应改变 detached HEAD"
+    grep -Fq 'not contained in origin/main' "${TEST_DIR}/detached-local.log" \
+        || _fail "缺少独立 detached 提交的失败原因"
 }
 
 _test_wrapper_propagates_failure() {
@@ -152,6 +214,7 @@ _test_fetch_failure_propagates() {
 
 main() {
     _test_pull_preserves_changes
+    _test_detached_head_recovery
     _test_wrapper_propagates_failure
     _test_fetch_failure_propagates
 }
