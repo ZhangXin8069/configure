@@ -1,0 +1,93 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-20 11:54:41 +0800
+批次: tag-dev33
+主任务: ~tag:dev — 为 configure 仓库创建 dev 类注释标签 dev33
+触发原因: 任务完成
+摘要: 创建 dev33 注释标签（基线 dev32，29 文件/1042+ 改动），全历史 follow 链复核通过；本地标签，未推送远程
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+
+### S1 — 身份判定与侦察
+- 目标: 执行 `~tag:dev`，为 configure 仓库创建 dev 类注释标签
+- 命令/操作: 读取 skills/tag/SKILL.md、skills/log/SKILL.md；git rev-parse/git remote/git status；git tag 列表与计数；git for-each-ref --sort=-taggerdate
+- 关键输出: 分支 main；远程 origin git@gitee.com:zhangxin8069/configure.git；工作区干净；标签计数 stab=90 dev=33 bug=1 test=0；按 taggerdate 最新标签为 dev32（2026-10-20 01:31:57 +0800）
+- 退出码: 0
+- 证据与判断: 技能默认基线公式按 `-v:refname` 排序会选中 stab84（2026-10-16），时间上早于 dev32，会重复计入 dev26..dev32 的改动。改用 taggerdate/拓扑上的真实最新标签 dev32 作为基线，避免变更清单虚增。
+
+### S2 — ~diff 变更分析
+- 目标: 构建 dev32..HEAD 的诚实变更清单
+- 命令/操作: git log dev32..HEAD --oneline --no-merges；git diff dev32..HEAD --stat；分文件读取 diff
+- 关键输出: 4 个提交（提交信息仅为时间戳，无可用描述）；29 files changed, 1042 insertions(+), 100 deletions(-)
+- 退出码: 0
+- 证据与判断: 归纳为 5 项——(1) AGENTS.md 复数名统一（form 技能新增 AGENT_FILE_SINGULAR 审计与双文件语义合并）；(2) 新增 bin/agent-goal.sh（Codex goal 预算查看与修复）；(3) 协议桥认证兜底重试与密钥缺失 503；(4) cl 途径 apiKeyHelper 认证回退修复；(5) auto 技能与索引文档、任务日志同步。
+
+### S3 — 历史链自检
+- 命令/操作: bash skills/tag/tag-chain.sh --check；bash skills/tag/tag-chain.sh --repair --dry-run
+- 关键输出: Root: stab0；Managed tags: 124；PASS: follow 链、提交祖先关系均正常。--repair --dry-run: PASS: 没有需要修正的 follow 链。
+- 退出码: 0
+- 证据与判断: 历史标签链无歧义、无回指错误，无需自动修正。
+
+### S4 — ~init 检查
+- 命令/操作: find 检索 CLAUDE.md/CODEX.md/AGENT.md/GEMINI.md/.claude/.codex/*.bak；bash skills/form/scripts/form-audit.sh --root . --strict --quiet；bash skills/form/scripts/form-snapshot-verify.sh --quiet
+- 关键输出: 仅命中 lib/_deepseek/.codex/config.toml（Git 跟踪的 Codex 配置模板）与 refer/git-rep/oh-my-codex/.agents/plugins/marketplace.json（外部只读拷贝，属 refer/ 维护范围外）；无任何 *.bak；audit_exit=0；snapshot_exit=0
+- 退出码: 0
+- 证据与判断: 无散落 agent 初始化文件需归档，~init 判定为「无变更」。
+
+### S5 — 打标前验证
+- 命令/操作: bash -n 逐个检查 10 个改动脚本；bash bin/agent-goal.test.sh；bash skills/form/scripts/form-scripts.test.sh；bash skills/log/scripts/write-log.test.sh；python3 bin/agent-protocol-bridge.test.py；bash bin/agent.test.sh
+- 关键输出: bash -n 全部 ok；agent-goal PASS: list/clear/budget/latest/dry-run/complete 保护与备份；form script tests: PASS；write-log tests: PASS；bridge Ran 8 tests OK；agent.test.sh exit=0，73 PASS / 0 FAIL
+- 退出码: 0
+- 证据与判断: 待打标树状态健康，无回归。
+
+### S6 — 创建注释标签
+- 命令/操作: git tag -a dev33 -m "follow dev32, 1. ...; 5. ...; [claude code]."
+- 关键输出: dev33 | zhangxin | 2026-10-20 11:53:48 +0800；peeled commit 0e2f7c5b832f80923a64ca4c9751c8275d73655d（= HEAD）
+- 退出码: 0
+- 证据与判断: 注释标签（-a），消息符合技能约定：follow 前一标签 dev32、编号项以 `;` 结尾、agent 后缀替换为实际名称 [claude code]。
+
+### S7 — 打标后复核
+- 命令/操作: bash skills/tag/tag-chain.sh --check；bash skills/tag/tag-chain.sh --repair --dry-run；git status --short；git diff --check
+- 关键输出: Managed tags: 125；PASS: follow 链、提交祖先关系均正常；无待修正项；工作区干净；git diff --check 无输出
+- 退出码: 0
+- 证据与判断: 新增 dev33 后全历史链仍自洽（124 → 125）。
+
+## 验证与证据
+- 测试/检查: bash -n（10 个改动脚本）；bin/agent.test.sh（73 PASS / 0 FAIL）；bin/agent-goal.test.sh；bin/agent-protocol-bridge.test.py（8 tests OK）；skills/form/scripts/form-scripts.test.sh；skills/log/scripts/write-log.test.sh；form-audit.sh --strict --quiet；form-snapshot-verify.sh --quiet；tag-chain.sh --check 与 --repair --dry-run；git diff --check
+- 结果: 全部通过，退出码均为 0
+- 未验证项: 未执行远程同步（未获授权），dev33 仅存在于本地；未在真实 Keychain 锁定 / API key 未批准环境下端到端验证 cl 的 apiKeyHelper 行为（当前环境不具备该条件）
+
+## 变更与产物
+- 文件: 本次未修改任何工作区文件（打标前后 git status 均为空）
+- 产物: Git 注释标签 dev33 → 提交 0e2f7c5b832f80923a64ca4c9751c8275d73655d
+- 未改动范围: bin/、skills/、AGENTS.md、lib/ 等全部源文件保持原样
+
+## 风险、限制与下一步
+- 风险: 标签未推送远程，其他机器需自行 git fetch --tags 才能获取 dev33；远程若已存在同名 dev33 会产生分叉（当前未检测到）
+- 阻塞: 无
+- 下一步: 若需同步远程，执行 git push origin main 与 git push origin dev33（需用户显式授权）
+
+## 用户输入指令
+~tag:dev
+
+## Agent 全文报告
+--- report begin ---
+技能 `tag` 已加载，参数 `dev`。按默认编排流程执行 ~diff → 历史自检 → ~init → ~tag。
+
+【基线判定】技能默认基线公式按 `-v:refname` 排序取 head -1 会得到 stab84（2026-10-16），但按 taggerdate 排序的真实最新标签是 dev32（2026-10-20 01:31:57），stab84 之后还有 dev26..dev32 七个标签。故采用 dev32 为基线，否则变更清单会把已打标内容重复计入。
+
+【~diff】dev32..HEAD 共 4 个提交（提交信息仅为时间戳，无描述），29 files changed, 1042 insertions(+), 100 deletions(-)。归纳 5 项变更。
+
+【历史自检】tag-chain.sh --check：Root stab0，124 个受管标签，follow 链与提交祖先关系全部正常；--repair --dry-run 报告无待修正项。
+
+【~init】仓库内无待归档的散落 agent 初始化文件（命中的 lib/_deepseek/.codex/config.toml 为有意跟踪的 Codex 模板，refer/ 下为外部只读拷贝），form-audit 与 form-snapshot-verify 均通过，判定无变更。
+
+【验证】bash -n 10 个改动脚本全 ok；agent.test.sh 73 PASS / 0 FAIL；agent-goal.test.sh、form-scripts.test.sh、write-log.test.sh 均 PASS；agent-protocol-bridge.test.py 8 tests OK。
+
+【打标】创建注释标签 dev33，消息 follow dev32，5 条编号变更项，agent 后缀 [claude code]，目标提交 0e2f7c5（= HEAD）。
+
+【复核】打标后 tag-chain.sh --check：125 个受管标签，链仍自洽；git status 干净，git diff --check 无输出。
+
+未获远程同步授权，dev33 为本地标签，未 push。
+--- report end ---
