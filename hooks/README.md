@@ -11,7 +11,7 @@
 | `before-edit` | 校验待编辑路径在仓库内，拒绝仓库根、`.git/`、技能会话日志和仓库外路径 | 拒绝路径时非零 |
 | `after-edit` | 检查工作树改动的空白、Shell 语法和会话日志 | 检查失败时非零 |
 | `stop` | 与 `after-edit` 相同，用于停止前复查 | 检查失败时非零 |
-| `agent-resume` | 检测 429/重试上限/连接中断/上游协议错误等瞬时故障，默认 10 秒后异步恢复原 run | 无候选时 0；调度失败时非零 |
+| `agent-resume` | 检测未主动停止或正常结束的意外中断，默认 10 秒后异步持续恢复原 run | 无候选时 0；调度失败时非零 |
 | `plugin-audit` | 静态审计 plugin/hook/MCP manifest、路径、超时和命令风险 | 有 high/critical 问题时非零 |
 | `notify` | 使用 `notify-send`（若存在）发送通知，否则输出到终端 | 始终尽量返回 0 |
 
@@ -42,11 +42,11 @@ hooks/agent-verify.sh --paths hooks/agent-hook.sh skills/all/SKILL.md
 
 `session-summary`/`handoff` 是只读的收尾事件：它不会修改工作树，只读取仓库根、分支、HEAD、最近提交和工作树状态，并按 `recent_path=` 输出最多 5 个上下文路径。
 
-`agent-resume` 先调用 `tools/agent-resume.sh --check`，只有 manifest 为失败状态、没有存活
-lock owner、错误属于瞬时服务故障且能从 Codex/Claude/OpenCode 本地状态恢复 session/thread 时才进入后台调度。后台工具默认等待
-10 秒，通过原 manifest 的 launcher 执行 `--resume RUN_ID --once`，并用 run 目录中的
-`.auto-resume-attempted` 保证每个 run 只自动恢复一次；持续 429 不会形成无界重试。手动重试可用
-`tools/agent-resume.sh --force`。
+`agent-resume` 先调用 `tools/agent-resume.sh --check`，只要 run 未主动停止或正常结束、没有存活
+lock owner，且能从 Codex/Claude/OpenCode 本地状态恢复 session/thread，就进入后台调度。后台工具默认等待
+10 秒，通过原 manifest 的 launcher 执行 `--resume RUN_ID --once`，失败后继续等待并重试，直到成功或
+run 结束。hook 只创建一个后台监督进程，`.auto-resume-schedule` 防止同一 run 出现并行恢复链；
+`AGENT_RESUME_MAX_ATTEMPTS=0` 表示无限重试，设置正整数可加安全上限。
 
 所有事件默认带总硬超时：session-start 30 秒、summary 20 秒、before-edit 10 秒、after-edit/stop
 120 秒、agent-resume 15 秒、plugin-audit 90 秒、notify 10 秒。该时限同时覆盖目标 hook 与 JSON 事件

@@ -19,7 +19,7 @@
 | 路径 | 用途 |
 |---|---|
 | `env.sh` | 环境主入口（shell 启动时被 source）：PATH/LD_LIBRARY_PATH（防重复）、locale、git 别名、两 shell 通用别名 |
-| `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用；统一启动器 `agent.sh`（软链接 cl/op/co/ops/cos 分发，Windows 版 `agent.bat` 按 `%~nx0` 分发）支持 cl（Claude Code）/op（OpenCode）/co（Codex）三系无人值守驱动模式，供应商快捷词包含 `pay/go/zen/gpt`，模型途径与各供应商/各 agent 默认模型/强度见 `bin/agent-config.json` 与 `bin/agent-custom.json.refer`（用户 `bin/agent-custom.json` 优先）；`bin/agent-dispatch.sh` 提供默认继承父 agent 设置的一次任务 JSON 派发接口，并对子 agent 的瞬时中断执行受控恢复；模型目录自动刷新、模糊匹配与强度顺延由 `bin/agent-model-catalog.py` 及 Windows runtime 对应实现，Chat-only 模型的 Responses/Messages 协议转换由 Unix `bin/agent-protocol-bridge.py` 提供，Codex 原生 goal 的预算查看与修复由 `bin/agent-goal.sh` 提供，详见 `bin/AGENTS.md` |
+| `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用；统一启动器 `agent.sh`（软链接 cl/op/co/ops/cos 分发，Windows 版 `agent.bat` 按 `%~nx0` 分发）支持 cl（Claude Code）/op（OpenCode）/co（Codex）三系无人值守驱动模式，供应商快捷词包含 `pay/go/zen/gpt`，模型途径与各供应商/各 agent 默认模型/强度见 `bin/agent-config.json` 与 `bin/agent-custom.json.refer`（用户 `bin/agent-custom.json` 优先）；`bin/agent-dispatch.sh` 提供默认继承父 agent 设置的一次任务 JSON 派发接口，并对子 agent 的意外中断执行持续恢复；模型目录自动刷新、模糊匹配与强度顺延由 `bin/agent-model-catalog.py` 及 Windows runtime 对应实现，Chat-only 模型的 Responses/Messages 协议转换由 Unix `bin/agent-protocol-bridge.py` 提供，Codex 原生 goal 的预算查看与修复由 `bin/agent-goal.sh` 提供，详见 `bin/AGENTS.md` |
 | `lib/` | 版本化环境配置与基础模板；`lib/requirements/` 保存 APT/PIP 功能依赖清单 |
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、doctor、optim、phys-model、diff、analy、pure、report、research-notes、log、rule、test、make、plan、review、skill-creator、conf-refer-skill、tdd、up、brainstorm、form、auto、all、dispatch、team、fast、go-on、follow-up、md-tex-sync、get-paper、absorb），`{~skill-name}` 触发；具体索引与公共契约见 `skills/AGENTS.md` |
@@ -27,9 +27,9 @@
 | `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENTS.md` 批次索引 |
 | `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
 | `data/` | agent 运行时本地数据：runs manifest/state/events/context/log/inputs，`cache/` 为 Codex 模型元数据目录缓存；默认不入库 |
-| `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；普通 TUI 由 `tools/agent-tui-watch.py` 对瞬时中断做原地恢复，进程退出后的 `agent-resume` 作为 headless/兜底路径；不会自动修改 agent 配置或 `core.hooksPath` |
+| `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；普通 TUI 由 `tools/agent-tui-watch.py` 对意外中断做原地恢复，进程退出后的 `agent-resume` 作为 headless/兜底路径并默认无限重试；不会自动修改 agent 配置或 `core.hooksPath` |
 | `plugins/` | Codex 插件推荐索引与显式安装器；支持固定 ref、只读状态和安装前 plugin/hook/MCP 静态审计；不自动安装第三方插件 |
-| `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 恢复瞬时中断 run，`agent-resources.py` 提供脱敏资源快照，`plugin-audit.py` 静态审计 plugin/hook/MCP manifest |
+| `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 按 10 秒间隔恢复意外中断 run，`agent-resources.py` 提供脱敏资源快照，`plugin-audit.py` 静态审计 plugin/hook/MCP manifest |
 | `lib/_clash/` | Clash 代理环境安装包包装目录；`setup.sh --check` 仅检查，默认执行会解压覆盖子目录 |
 
 ## 外部组件边界

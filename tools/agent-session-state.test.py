@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import json
+import runpy
 import sqlite3
 import subprocess
 import sys
@@ -20,6 +21,40 @@ TRANSIENT_TEXT = (
 
 
 class SessionStateTests(unittest.TestCase):
+    def test_concurrency_limit_variants_are_transient(self):
+        namespace = runpy.run_path(str(SCRIPT), run_name="agent_session_state_test")
+        is_transient = namespace["error_is_transient"]
+        phrases = (
+            "Concurrency limit reached",
+            "Too many concurrent requests",
+            "HTTP 429: concurrency limit",
+            "maximum concurrent sessions exceeded",
+            "parallel request limit reached",
+            "status code 429",
+            "并发上限",
+            "并发请求数超限",
+            "并发连接数已达上限",
+        )
+        for phrase in phrases:
+            with self.subTest(phrase=phrase):
+                self.assertTrue(is_transient(phrase))
+        self.assertTrue(is_transient({"http_status_code": 429}))
+        self.assertTrue(is_transient({"status": 429, "message": "request rejected"}))
+        self.assertTrue(is_transient({"concurrency_limit_exceeded": {}}))
+
+    def test_opencode_v2_failed_idle_without_assistant_error_is_failure(self):
+        namespace = runpy.run_path(str(SCRIPT), run_name="agent_session_state_test")
+        with sqlite3.connect(":memory:") as connection:
+            connection.execute(
+                "CREATE TABLE session_message (session_id TEXT NOT NULL, type TEXT NOT NULL, data TEXT NOT NULL, seq INTEGER NOT NULL, id TEXT NOT NULL)"
+            )
+            connection.execute(
+                "INSERT INTO session_message VALUES (?, ?, ?, ?, ?)",
+                ("session-1", "idle", json.dumps({"outcome": "failed"}), 1, "idle-1"),
+            )
+            result = namespace["opencode_completion_error"](connection, "session-1", 2)
+        self.assertEqual(result, (True, False, True, "completed"))
+
     def _run_lookup(
         self,
         agent: str,
@@ -91,6 +126,7 @@ class SessionStateTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn(f"session_id={session_id}", result.stdout)
             self.assertIn("transient_failure=1", result.stdout)
+            self.assertIn("failure_found=1", result.stdout)
             self.assertIn("turn_state=completed", result.stdout)
 
     def test_claude_latest_normal_turn_overrides_previous_api_error(self):
@@ -134,6 +170,7 @@ class SessionStateTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("transient_failure=0", result.stdout)
+            self.assertIn("failure_found=0", result.stdout)
             self.assertIn("turn_state=completed", result.stdout)
 
     def test_claude_newer_user_turn_is_in_progress(self):
@@ -169,6 +206,7 @@ class SessionStateTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("transient_failure=0", result.stdout)
+            self.assertIn("failure_found=0", result.stdout)
             self.assertIn("turn_state=in_progress", result.stdout)
 
     def test_claude_authentication_error_is_not_transient(self):
@@ -212,6 +250,7 @@ class SessionStateTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("transient_failure=0", result.stdout)
+            self.assertIn("failure_found=1", result.stdout)
 
     def test_opencode_v1_finds_session_and_latest_assistant_error(self):
         with tempfile.TemporaryDirectory() as temp:

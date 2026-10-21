@@ -125,15 +125,24 @@ case "$(basename -- "$0")" in
         printf 'opencode-config: %s\n' "${OPENCODE_CONFIG_CONTENT:-}" >> "$FAKE_CALL_LOG"
         ;;
     fake-claude.sh)
-        printf 'session_id=session-fake\n' >&2
+        _json_output=0
         _prev=''
         for _arg in "$@"; do
+            if [[ "${_prev}" == '--output-format' && "${_arg}" == 'json' ]]; then
+                _json_output=1
+            fi
             if [[ "${_prev}" == '--settings' && -f "${_arg}" ]]; then
                 printf 'claude-settings: %s\n' "$(cat -- "${_arg}")" >> "$FAKE_CALL_LOG"
                 printf 'claude-settings-path: %s\n' "${_arg}" >> "$FAKE_CALL_LOG"
             fi
             _prev="${_arg}"
         done
+        if (( _json_output )) && [[ "${FAKE_CLAUDE_NO_JSON:-0}" != 1 ]]; then
+            printf '{"type":"result","subtype":"success","is_error":false,"duration_ms":1,"num_turns":1,"result":"FAKE_CLAUDE_OK","session_id":"session-fake","total_cost_usd":0}\n'
+        else
+            printf 'session_id=session-fake\n' >&2
+            (( _json_output )) && printf 'FAKE_CLAUDE_TEXT_ONLY\n'
+        fi
         printf 'claude-env ANTHROPIC_BASE_URL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_AUTH_TOKEN=%s ANTHROPIC_API_KEY=%s CLAUDE_CODE_SUBAGENT_MODEL=%s CLAUDE_CODE_EFFORT_LEVEL=%s CLAUDE_CODE_AUTO_COMPACT_WINDOW=%s\n' \
             "${ANTHROPIC_BASE_URL:-}" "${ANTHROPIC_MODEL:-}" "${ANTHROPIC_DEFAULT_OPUS_MODEL:-}" \
             "${ANTHROPIC_DEFAULT_SONNET_MODEL:-}" "${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}" \
@@ -287,6 +296,9 @@ assert_file_contains "$call_log" 'model_providers.opencode-go.env_key="OPENCODE_
 assert_file_contains "$call_log" 'model_providers.opencode-go.wire_api="responses"'
 assert_file_contains "$call_log" 'model_providers.opencode-go.supports_websockets=false'
 assert_file_contains "$call_log" "### 全局 Agent 配置目录（按需读取） ###"
+assert_file_contains "$call_log" '用户未指定具体技能时，必须默认进入 auto+all 两技能'
+assert_file_contains "$call_log" '不得因任务简单、单步、只读、可直接回答或看起来无需迭代而跳过 auto+all'
+assert_file_not_contains "$call_log" '简单单步任务可径直按【工作流程】完成，不强套编排'
 assert_file_not_contains "$call_log" 'service_tier='
 printf 'PASS: Codex 默认模型、reasoning、默认 opencode-go 途径与 Fast 关闭\n'
 
@@ -525,6 +537,8 @@ assert_file_contains "$cl_run/manifest.env" 'agent=claude'
 assert_file_contains "$cl_run/manifest.env" 'session_id=session-fake'
 assert_file_contains "$cl_run/manifest.env" 'model=deepseek-v4.1-flash'
 assert_file_contains "$cl_run/events.jsonl" '"event":"session-bound"'
+assert_contains "$cl_output" 'FAKE_CLAUDE_OK'
+assert_file_contains "$call_log" '--output-format json'
 assert_file_contains "$call_log" '--model deepseek-v4.1-flash'
 assert_file_contains "$call_log" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go ANTHROPIC_MODEL=deepseek-v4.1-flash ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4.1-flash ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4.1-flash ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash ANTHROPIC_AUTH_TOKEN= ANTHROPIC_API_KEY=test-go-key CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash CLAUDE_CODE_EFFORT_LEVEL=max CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432'
 assert_file_not_contains "$call_log" 'ANTHROPIC_MODEL=external-model'
@@ -557,6 +571,46 @@ assert_file_contains "$call_log" "### 全局 Agent 配置目录（按需读取�
 assert_file_contains "$call_log" "### 全局技能（${HOME}/configure/skills） ###"
 assert_file_contains "$call_log" '### configure Agent Runtime Contract v1 ###'
 printf 'PASS: Claude --once、session 绑定、opencode-go 端点定死环境注入（env+--settings）和持久事件\n'
+
+cl_drive_before=$(call_count)
+set +e
+cl_drive_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --time 1s --max-turns 1 2>&1)
+cl_drive_status=$?
+set -e
+(( cl_drive_status == 0 )) || fail "Claude 多轮驱动 fake launcher 失败：$cl_drive_output"
+cl_drive_run_id=$(printf '%s\n' "$cl_drive_output" | sed -n 's/^  run: //p' | head -1)
+cl_drive_run="$data/runs/$cl_drive_run_id"
+assert_file_contains "$cl_drive_run/manifest.env" 'session_id=session-fake'
+assert_file_contains "$cl_drive_run/manifest.env" 'last_reason=达到 max-turns=1'
+assert_file_contains "$cl_drive_run/events.jsonl" '"event":"session-bound"'
+cl_drive_new=$(tail -n +$((cl_drive_before + 1)) "$call_log")
+assert_contains "$cl_drive_new" '--output-format json'
+assert_contains "$cl_drive_new" '--resume session-fake'
+cl_drive_delta=$(( $(call_count) - cl_drive_before ))
+(( cl_drive_delta == 2 )) || fail "Claude 驱动应执行初始回合+1 次继续，实际调用数：$cl_drive_delta"
+printf 'PASS: Claude 首轮 JSON 解析 session 并完成继续回合（max-turns=1）\n'
+
+cl_fallback_before=$(call_count)
+set +e
+cl_fallback_output=$(FAKE_CLAUDE_NO_JSON=1 OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --time 1s --max-turns 1 2>&1)
+cl_fallback_status=$?
+set -e
+(( cl_fallback_status == 0 )) || fail "Claude JSON 解析回退 fake launcher 失败：$cl_fallback_output"
+cl_fallback_run_id=$(printf '%s\n' "$cl_fallback_output" | sed -n 's/^  run: //p' | head -1)
+cl_fallback_run="$data/runs/$cl_fallback_run_id"
+assert_contains "$cl_fallback_output" '回退 stderr 会话提取'
+assert_file_contains "$cl_fallback_run/manifest.env" 'session_id=session-fake'
+cl_fallback_delta=$(( $(call_count) - cl_fallback_before ))
+(( cl_fallback_delta == 2 )) || fail "Claude 回退路径应继续完成回合，实际调用数：$cl_fallback_delta"
+printf 'PASS: Claude JSON 解析失败时回退 stderr 会话提取\n'
+
+cl_dispatch_text=$(AGENT_DATA_DIR="$dispatch_data" AGENT_MODEL_DISCOVERY=0 \
+    CLAUDE_BIN="$fake_claude" OPENCODE_GO_API_KEY=test-key FAKE_CALL_LOG="$call_log" \
+    "$script_dir/agent-dispatch.sh" --agent cl --provider go \
+    --model deepseek-v4.1-flash --cwd "$repo/nested" \
+    --task 'minimal claude dispatch task' --text)
+[[ "$cl_dispatch_text" == 'FAKE_CLAUDE_OK' ]] || fail "Claude 派发结果未取到 JSON result 文本：$cl_dispatch_text"
+printf 'PASS: Claude 派发结果取自 JSON result 文本\n'
 
 tui_cl_before=$(wc -l < "$call_log")
 set +e
@@ -636,7 +690,7 @@ status_json=$(AGENT_DATA_DIR="$data" "$status_script" --all --json)
 if ! printf '%s\n' "$status_json" | python3 -c '
 import json, sys
 runs = json.load(sys.stdin)
-sys.exit(0 if len(runs) == 13 and all(r.get("run_id") for r in runs) else 1)
+sys.exit(0 if len(runs) == 15 and all(r.get("run_id") for r in runs) else 1)
 '; then
     fail "agent-status JSON 结果不完整：$status_json"
 fi

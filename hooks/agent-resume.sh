@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Schedule the bounded agent-resume helper after a transient agent failure.
+# Schedule the agent-resume supervisor after an unexpected agent failure.
 
 set -Eeuo pipefail
 

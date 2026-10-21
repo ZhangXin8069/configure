@@ -440,3 +440,65 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-prompt-default-auto-all - final - 2026-10-21 23:41:55 +0800
+- 主任务: 落实 agent 默认 auto+all 提示词规则
+- 日志文件: logs/v2026102123.txt
+- 文件大小: 4566 bytes
+- 触发原因: 任务完成
+- 关键内容: 强化默认 auto+all 规则，移除单步绕过例外，并增加提示词注入回归断言
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## 20261021-agent-launcher-compare - final - 2026-10-21 23:45:35 +0800
+- 主任务: 对比 co/op/cl 三系启动器并输出 Markdown 报告
+- 日志文件: logs/v2026102123-2.txt
+- 文件大小: 27203 bytes
+- 触发原因: 任务完成
+- 关键内容: co/op/cl 协议、模型、自动化与安全姿态对比，报告见 docs/report_co_op_cl_20261021.md
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## conf-refer-auto-routing - final - 2026-10-21 23:58:37 +0800
+- 主任务: 修改 conf-refer-skill 自动发现与 auto 自动技能路由
+- 日志文件: logs/v2026102123-3.txt
+- 文件大小: 4842 bytes
+- 触发原因: 任务完成
+- 关键内容: conf-refer-skill 增加双域技能发现；auto 增加自动技能路由；测试与静态检查通过。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## 20261021-cl-drive-json - final - 2026-10-21 23:59:41 +0800
+- 主任务: 对比 co/op/cl 并修复 cl 驱动 session 提取
+- 日志文件: logs/v2026102123-4.txt
+- 文件大小: 29892 bytes
+- 触发原因: 任务完成
+- 关键内容: 修复 cl 首轮 JSON session 解析；77 项测试通过；对比报告同步更新
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## resume-verification-20261022 - final - 2026-10-22 00:10:10 +0800
+- 主任务: 验证 configure 仓库 agent resume 功能是否正常
+- 日志文件: logs/v2026102200.txt
+- 文件大小: 6927 bytes
+- 触发原因: 任务完成
+- 关键内容: 验证 resume 检测、自动调度、TUI/headless/dispatch 恢复及失败边界，全部回归通过；全库 form-audit 受既有 data/cache 内容阻塞
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+## resume-concurrency-limit-check-20261022 - final - 2026-10-22 00:22:05 +0800
+- 主任务: 判断 resume 是否支持并发上限中断后 10 秒自动恢复
+- 日志文件: logs/v2026102200-2.txt
+- 文件大小: 5209 bytes
+- 触发原因: 任务完成
+- 关键内容: 确认 429/rate limit 可在 10 秒后单次恢复；裸 concurrency limit 文案未命中，TUI 默认宽限为 5 秒
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## resume-infinite-retry-20261022 - final - 2026-10-22 01:18:19 +0800
+- 主任务: 修改 resume 以识别并发上限并无限自动恢复所有意外中断的 agent 进程
+- 日志文件: logs/v2026102201.txt
+- 文件大小: 8031 bytes
+- 触发原因: 任务完成
+- 关键内容: 并发上限识别、所有意外中断恢复、默认 10 秒无限重试、TUI 持续恢复、stop/stale-lock/信号清理与非 root 通用性已完成并通过回归
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

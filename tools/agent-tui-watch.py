@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resume a live TUI task after its latest turn ended in a transient failure."""
+"""Resume a live TUI task after its latest turn ended in an unexpected failure."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ DEFAULT_SCAN_BYTES = 2 * 1024 * 1024
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Watch a live agent TUI for a completed transient-failure turn."
+        description="Watch a live agent TUI for a completed failed turn."
     )
     parser.add_argument("--agent", choices=("codex", "claude", "opencode"), required=True)
     parser.add_argument("--run-id", required=True)
@@ -29,11 +29,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--created-at", default="")
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--state-db", default="")
+    parser.add_argument("--stop-file", default="")
     parser.add_argument("--scan-bytes", type=int, default=DEFAULT_SCAN_BYTES)
     parser.add_argument("--pid", type=int, required=True)
-    parser.add_argument("--grace", type=float, default=5.0)
+    parser.add_argument("--grace", type=float, default=10.0)
     parser.add_argument("--interval", type=float, default=2.0)
-    parser.add_argument("--max-runtime", type=float, default=86400.0)
+    parser.add_argument("--max-runtime", type=float, default=0.0)
     parser.add_argument("--heartbeat", type=float, default=60.0)
     parser.add_argument("--state-timeout", type=float, default=5.0)
     parser.add_argument("--recover-timeout", type=float, default=1800.0)
@@ -157,18 +158,65 @@ def append_event(path: str, event: str, **fields: Any) -> None:
         pass
 
 
-def claim_recovery(marker: str) -> bool:
+def state_fingerprint(state: dict[str, str]) -> str:
+    state_path = state.get("state_path", "")
+    if state_path:
+        try:
+            info = os.stat(state_path)
+            return f"{state_path}:{info.st_mtime_ns}:{info.st_size}"
+        except OSError:
+            pass
+    keys = ("state_path", "thread_id", "session_id", "turn_state", "failure_found")
+    return "|".join(f"{key}={state.get(key, '')}" for key in keys)
+
+
+def claim_recovery(marker: str, fingerprint: str, retry_after: float) -> bool:
     if not marker:
         return True
+    lock_path = f"{marker}.lock"
     try:
-        descriptor = os.open(marker, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        lock_descriptor = os.open(lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
     except FileExistsError:
-        return False
+        try:
+            if time.time() - os.stat(lock_path).st_mtime > max(60.0, retry_after * 2):
+                os.unlink(lock_path)
+                lock_descriptor = os.open(
+                    lock_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600
+                )
+            else:
+                return False
+        except (FileExistsError, OSError):
+            return False
     except OSError:
         return False
-    with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
-        stream.write(datetime.now().astimezone().isoformat(timespec="seconds") + "\n")
-    return True
+    try:
+        claimed_at = 0.0
+        claimed_fingerprint = ""
+        try:
+            payload = json.loads(Path(marker).read_text(encoding="utf-8"))
+            if isinstance(payload, dict):
+                claimed_at = float(payload.get("claimed_at", 0))
+                claimed_fingerprint = str(payload.get("fingerprint", ""))
+        except (OSError, ValueError, TypeError, json.JSONDecodeError):
+            pass
+        if claimed_fingerprint == fingerprint and time.time() - claimed_at < retry_after:
+            return False
+        payload = {
+            "fingerprint": fingerprint,
+            "claimed_at": time.time(),
+            "claimed_at_iso": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "pid": os.getpid(),
+        }
+        Path(marker).write_text(json.dumps(payload, separators=(",", ":")) + "\n", encoding="utf-8")
+        return True
+    except (OSError, TypeError, ValueError):
+        return False
+    finally:
+        os.close(lock_descriptor)
+        try:
+            os.unlink(lock_path)
+        except OSError:
+            pass
 
 
 def render_recovery_command(raw: str, state: dict[str, str], run_id: str) -> list[str] | None:
@@ -196,11 +244,13 @@ def validate_args(args: argparse.Namespace) -> str:
         return "invalid_run_id"
     if not os.path.isabs(args.cwd):
         return "cwd_not_absolute"
+    if args.stop_file and not os.path.isabs(args.stop_file):
+        return "stop_file_not_absolute"
     if args.pid <= 0:
         return "invalid_pid"
     if args.scan_bytes <= 0:
         return "invalid_scan_bytes"
-    if args.grace < 0 or args.interval <= 0 or args.max_runtime <= 0 or args.heartbeat <= 0:
+    if args.grace < 0 or args.interval <= 0 or args.max_runtime < 0 or args.heartbeat <= 0:
         return "invalid_timing"
     if args.state_timeout <= 0 or args.recover_timeout <= 0:
         return "invalid_timeout"
@@ -214,13 +264,17 @@ def main(argv: list[str] | None = None) -> int:
         print(f"status=invalid reason={invalid_reason}", file=sys.stderr)
         return 2
 
+    if args.stop_file and Path(args.stop_file).exists():
+        write_log(args.log, "stop", reason="stop_requested", pid=args.pid)
+        return 0
+
     alive, identity = process_identity(args.pid)
     if not alive:
         write_log(args.log, "stop", reason="process_not_alive", pid=args.pid)
         return 0
 
     started = time.monotonic()
-    deadline = started + args.max_runtime
+    deadline = started + args.max_runtime if args.max_runtime > 0 else None
     next_heartbeat = started + args.heartbeat
     pending_since: float | None = None
     write_log(
@@ -236,7 +290,10 @@ def main(argv: list[str] | None = None) -> int:
 
     while True:
         now = time.monotonic()
-        if now >= deadline:
+        if args.stop_file and Path(args.stop_file).exists():
+            write_log(args.log, "stop", reason="stop_requested", pid=args.pid)
+            return 0
+        if deadline is not None and now >= deadline:
             write_log(args.log, "stop", reason="max_runtime", pid=args.pid)
             return 3
 
@@ -250,15 +307,15 @@ def main(argv: list[str] | None = None) -> int:
             next_heartbeat = now + args.heartbeat
 
         state = read_session_state(args)
-        transient_complete = bool(
+        failure_complete = bool(
             state
             and state.get("turn_state") == "completed"
-            and state.get("transient_failure") == "1"
+            and state.get("failure_found") == "1"
         )
-        if transient_complete:
+        if failure_complete:
             if pending_since is None:
                 pending_since = now
-                write_log(args.log, "detected", reason="completed_transient_turn", pid=args.pid)
+                write_log(args.log, "detected", reason="completed_failed_turn", pid=args.pid)
             if now - pending_since >= args.grace:
                 alive, current_identity = process_identity(args.pid)
                 if not alive or (identity and current_identity and current_identity != identity):
@@ -268,22 +325,26 @@ def main(argv: list[str] | None = None) -> int:
                 if not (
                     confirm
                     and confirm.get("turn_state") == "completed"
-                    and confirm.get("transient_failure") == "1"
+                    and confirm.get("failure_found") == "1"
                 ):
                     write_log(args.log, "skip", reason="turn_changed", pid=args.pid)
                     pending_since = None
                 else:
+                    if args.stop_file and Path(args.stop_file).exists():
+                        write_log(args.log, "stop", reason="stop_requested", pid=args.pid)
+                        return 0
                     command = render_recovery_command(args.recover_command_json, confirm, args.run_id)
                     if not command:
                         write_log(args.log, "skip", reason="recover_command_missing", pid=args.pid)
                         return 3
-                    if not claim_recovery(args.attempt_marker):
-                        write_log(args.log, "skip", reason="already_attempted", pid=args.pid)
+                    fingerprint = state_fingerprint(confirm)
+                    if not claim_recovery(args.attempt_marker, fingerprint, max(args.grace, 0.05)):
+                        write_log(args.log, "skip", reason="recovery_in_progress", pid=args.pid)
                         return 4
                     write_log(
                         args.log,
                         "resume",
-                        reason="completed_transient_turn",
+                        reason="completed_failed_turn",
                         pid=args.pid,
                         command=Path(command[0]).name,
                     )
@@ -312,7 +373,8 @@ def main(argv: list[str] | None = None) -> int:
                             status="failed",
                             reason="recover_timeout",
                         )
-                        return 4
+                        pending_since = None
+                        continue
                     except OSError as error:
                         write_log(
                             args.log,
@@ -329,7 +391,8 @@ def main(argv: list[str] | None = None) -> int:
                             status="failed",
                             reason="recover_exec_error",
                         )
-                        return 4
+                        pending_since = None
+                        continue
                     if result.returncode != 0:
                         write_log(
                             args.log,
@@ -346,7 +409,8 @@ def main(argv: list[str] | None = None) -> int:
                             status="failed",
                             exit_code=result.returncode,
                         )
-                        return 4
+                        pending_since = None
+                        continue
                     write_log(args.log, "resume-ok", pid=args.pid)
                     append_event(
                         args.event_file,
@@ -355,14 +419,16 @@ def main(argv: list[str] | None = None) -> int:
                         pid=args.pid,
                         status="ok",
                     )
-                    return 0
+                    pending_since = None
         else:
             pending_since = None
 
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            continue
-        time.sleep(min(args.interval, remaining))
+        if deadline is None:
+            time.sleep(args.interval)
+        else:
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(args.interval, remaining))
 
 
 if __name__ == "__main__":
