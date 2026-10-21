@@ -245,6 +245,77 @@ _run_agent_command() {
     fi
 }
 
+# Claude 首轮 JSON 回合：--output-format json 从 stdout 同时取得 session_id 与最终文本。
+# 终端/派发接口只接收 result 文本；解析失败时保留原始输出，由调用方回退 stderr 正则。
+_CLAUDE_JSON_SESSION=""
+_CLAUDE_JSON_TMP=""
+_run_claude_json_command() {
+    local _json_file _result_file _sid_file _rc=0 _py_rc=0 _parsed=0 _is_error=0 _text=""
+    _CLAUDE_JSON_SESSION=""
+    _json_file="$(mktemp "${TMPDIR:-/tmp}/claude-json.XXXXXX")" || return 70
+    _CLAUDE_JSON_TMP="$_json_file"
+    _result_file="${_json_file}.result"
+    _sid_file="${_json_file}.sid"
+    "$@" >"${_json_file}" 2>>"${LOG_FILE}"
+    _rc=$?
+    if command -v "${AGENT_STATE_PYTHON:-python3}" >/dev/null 2>&1 &&
+       "${AGENT_STATE_PYTHON:-python3}" - "${_json_file}" "${_result_file}" "${_sid_file}" <<'PY'
+import json
+import sys
+
+src, result_path, sid_path = sys.argv[1:4]
+try:
+    with open(src, encoding="utf-8", errors="replace") as handle:
+        data = json.load(handle)
+except Exception:
+    sys.exit(3)
+text = data.get("result", "")
+if not isinstance(text, str):
+    text = json.dumps(text, ensure_ascii=False)
+with open(result_path, "w", encoding="utf-8") as handle:
+    handle.write(text)
+with open(sid_path, "w", encoding="utf-8") as handle:
+    handle.write(str(data.get("session_id") or data.get("sessionId") or ""))
+sys.exit(4 if data.get("is_error") else 0)
+PY
+    then
+        _parsed=1
+    else
+        _py_rc=$?
+        if (( _py_rc == 4 )); then
+            _parsed=1
+            _is_error=1
+        fi
+    fi
+    if (( _parsed )); then
+        _CLAUDE_JSON_SESSION="$(cat -- "${_sid_file}" 2>/dev/null || true)"
+        _text="$(cat -- "${_result_file}" 2>/dev/null || true)"
+        if [[ -n "${AGENT_DISPATCH_OUTPUT_FILE:-}" ]]; then
+            printf '%s' "${_text}" >"${AGENT_DISPATCH_OUTPUT_FILE}"
+        elif [[ -n "${_text}" ]]; then
+            printf '%s\n' "${_text}"
+        fi
+        if [[ -n "${_CLAUDE_JSON_SESSION}" ]]; then
+            printf 'session_id=%s\n' "${_CLAUDE_JSON_SESSION}" >>"${LOG_FILE}"
+        fi
+        if (( _is_error )) && (( _rc == 0 )); then
+            _rc=1
+        fi
+    else
+        echo "###${_NAME}: warning: 无法解析 claude JSON 输出（python3 缺失或输出非 JSON），回退 stderr 会话提取###" >&2
+        if [[ -s "${_json_file}" ]]; then
+            if [[ -n "${AGENT_DISPATCH_OUTPUT_FILE:-}" ]]; then
+                cp -- "${_json_file}" "${AGENT_DISPATCH_OUTPUT_FILE}" 2>/dev/null || true
+            else
+                cat -- "${_json_file}"
+            fi
+        fi
+    fi
+    rm -f -- "${_json_file}" "${_result_file}" "${_sid_file}"
+    _CLAUDE_JSON_TMP=""
+    return "${_rc}"
+}
+
 # OpenCode V2 JSONL 运行输出：stdout 同时保留给终端/派发接口，并缓存供会话 ID 解析。
 _run_opencode_v2() {
     local _capture="${AGENT_RUN_DIR}/opencode-events.jsonl" _rc=0
@@ -754,6 +825,9 @@ _cleanup() {
     [[ -n "${_LIVE_PID:-}" ]] && kill "${_LIVE_PID}" 2>/dev/null
     _agent_runtime_stop_codex_app_server
     _bridge_stop
+    if [[ -n "${_CLAUDE_JSON_TMP:-}" && -f "${_CLAUDE_JSON_TMP}" ]]; then
+        rm -f -- "${_CLAUDE_JSON_TMP}" "${_CLAUDE_JSON_TMP}.result" "${_CLAUDE_JSON_TMP}.sid"
+    fi
     if [[ -n "${_CLAUDE_SETTINGS_TMP:-}" && -f "${_CLAUDE_SETTINGS_TMP}" ]]; then
         rm -f -- "${_CLAUDE_SETTINGS_TMP}"
     fi
@@ -1210,7 +1284,7 @@ run_claude() {
     fi
 
     # ---- 驱动模式：headless claude -p → --resume 链式驱动 ----
-    # 回合1 prompt → 从 stderr 日志提取 session id →（可选）回合2 文件首指令 → 每 N 秒「继续」
+    # 回合1 prompt → 从 stdout JSON 提取 session id（解析失败回退 stderr）→（可选）回合2 文件首指令 → 每 N 秒「继续」
     # 实时活动监视器：claude stderr 无结构化事件行，仅筛出关键行（错误/警告/会话）实时输出
     _live_log()
     {
@@ -1250,7 +1324,7 @@ run_claude() {
     else
         echo "---- drive: prompt round start $(date "+%F-%T") ----"
         _agent_runtime_turn_begin
-        _run_agent_command "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}"
+        _run_claude_json_command "${_CLAUDE_BIN}" -p --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" --output-format json "${PROMPT}"
         _drv_rc=$?
         if (( _drv_rc != 0 )); then
             _agent_runtime_turn_failure
@@ -1258,7 +1332,10 @@ run_claude() {
             exit "${_drv_rc}"
         fi
         _agent_runtime_turn_success
-        _drv_sid="$(grep -oE 'session_(id|\.id)=[A-Za-z0-9_-]+' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+        _drv_sid="${_CLAUDE_JSON_SESSION:-}"
+        if [[ -z "${_drv_sid}" ]]; then
+            _drv_sid="$(grep -oE 'session_(id|\.id)=[A-Za-z0-9_-]+' "${LOG_FILE}" 2>/dev/null | head -1 | cut -d= -f2)"
+        fi
         if [[ -z "${_drv_sid}" ]]; then
             if (( ONCE_MODE )) && [[ -z "${DRIVE_FILE}" ]]; then
                 _agent_runtime_mark finished "once 模式（模型无会话 ID，无需续链）"
@@ -2593,7 +2670,7 @@ PY
         _CODEX_TUI_ARGS=("${CODEX_INITIAL_ARGS[@]}")
         _CODEX_TUI_RECOVERY=()
         if [[ -n "$_codex_resume_python" && -r "$_codex_resume_tool" ]] &&
-           _agent_runtime_start_codex_app_server "$_CODEX_BIN" "$AGENT_RUN_DIR"; then
+           _agent_runtime_start_codex_app_server "$_CODEX_BIN" "$AGENT_RUN_DIR" "${CODEX_COMMON_ARGS[@]}"; then
             _CODEX_TUI_ARGS+=(--remote "unix://${_TUI_APP_SERVER_SOCKET}")
             _CODEX_TUI_RECOVERY=(
                 "$_codex_resume_python" "$_codex_resume_tool"
@@ -2609,7 +2686,7 @@ PY
         unset _CODEX_TUI_RECOVERY
         _agent_runtime_turn_begin
         _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
-            "${_CODEX_TUI_ARGS[@]}" -- "${PROMPT}" \
+            "${_CODEX_BIN}" "${_CODEX_TUI_ARGS[@]}" -- "${PROMPT}" \
             2>"${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then

@@ -57,11 +57,12 @@ _agent_runtime_start_codex_app_server() {
     [[ -x "$codex_bin" && -d "$run_dir" ]] || return 1
     [[ "${AGENT_CODEX_APP_SERVER:-1}" != 0 ]] || return 1
     "$codex_bin" queue --help >/dev/null 2>&1 || return 1
+    shift 2 || return 1
 
     local socket="${run_dir}/app-server.sock"
     local server_log="${run_dir}/app-server.log"
     [[ ! -e "$socket" ]] || return 1
-    "$codex_bin" app-server --listen "unix://${socket}" \
+    "$codex_bin" "$@" app-server --listen "unix://${socket}" \
         </dev/null >>"$server_log" 2>&1 &
     _TUI_APP_SERVER_PID=$!
     _TUI_APP_SERVER_SOCKET="$socket"
@@ -153,18 +154,19 @@ _agent_runtime_run_tui_watched() {
         created_at=$6
         state_db=$7
         data_dir=$8
-        grace=$9
-        interval=${10}
-        max_runtime=${11}
-        heartbeat=${12}
-        state_timeout=${13}
-        recover_timeout=${14}
-        scan_bytes=${15}
-        watch_log=${16}
-        recover_command_json=${17}
-        attempt_marker=${18}
-        event_file=${19}
-        shift 19
+        stop_file=$9
+        grace=${10}
+        interval=${11}
+        max_runtime=${12}
+        heartbeat=${13}
+        state_timeout=${14}
+        recover_timeout=${15}
+        scan_bytes=${16}
+        watch_log=${17}
+        recover_command_json=${18}
+        attempt_marker=${19}
+        event_file=${20}
+        shift 20
         watch_args=(
             --agent "$agent"
             --run-id "$run_id"
@@ -185,13 +187,14 @@ _agent_runtime_run_tui_watched() {
         [[ -z "$created_at" ]] || watch_args+=(--created-at "$created_at")
         [[ -z "$state_db" ]] || watch_args+=(--state-db "$state_db")
         [[ -z "$data_dir" ]] || watch_args+=(--data-dir "$data_dir")
+        [[ -z "$stop_file" ]] || watch_args+=(--stop-file "$stop_file")
         "$python_bin" "$watcher" "${watch_args[@]}" </dev/null >>"${watch_log:-/dev/null}" 2>&1 &
         exec "$@"
     ' _ \
         "$python_bin" "$watcher" "$agent" "$run_id" "$cwd" "${AGENT_CREATED_AT:-}" \
-        "$state_db" "$data_dir" \
-        "${AGENT_TUI_WATCH_GRACE:-5}" "${AGENT_TUI_WATCH_INTERVAL:-2}" \
-        "${AGENT_TUI_WATCH_MAX_RUNTIME:-86400}" "${AGENT_TUI_WATCH_HEARTBEAT:-60}" \
+        "$state_db" "$data_dir" "${AGENT_STOP_FILE:-}" \
+        "${AGENT_TUI_WATCH_GRACE:-10}" "${AGENT_TUI_WATCH_INTERVAL:-2}" \
+        "${AGENT_TUI_WATCH_MAX_RUNTIME:-0}" "${AGENT_TUI_WATCH_HEARTBEAT:-60}" \
         "${AGENT_TUI_WATCH_STATE_TIMEOUT:-5}" "${AGENT_TUI_WATCH_RECOVER_TIMEOUT:-1800}" \
         "${AGENT_TUI_WATCH_SCAN_BYTES:-2097152}" "$watch_log" "$recover_command_json" \
         "${AGENT_RUN_DIR:+${AGENT_RUN_DIR}/.auto-resume-attempted}" "${AGENT_EVENT_FILE:-}" "$@"

@@ -20,7 +20,7 @@ usage() {
   before-edit         校验待编辑路径位于仓库内且不触及 .git/日志
   after-edit          校验当前工作树改动
   stop                停止前执行当前工作树验证
-  agent-resume        检测瞬时中断并在 10 秒后调度原任务恢复
+  agent-resume        检测意外中断并在 10 秒后调度原任务持续恢复
   plugin-audit        静态审计 Codex plugin/hook/MCP manifest，不执行插件代码
   notify              发送非阻塞完成通知
 

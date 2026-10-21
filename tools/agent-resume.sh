@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Resume one agent run after a transient infrastructure interruption.
+# Resume one agent run after an unexpected process interruption.
 
 set -Eeuo pipefail
 
@@ -12,32 +12,37 @@ run_id=${AGENT_RUN_ID:-}
 data_root_arg=""
 delay=${AGENT_RESUME_DELAY:-10}
 timeout_seconds=${AGENT_RESUME_TIMEOUT:-1800}
+heartbeat_seconds=${AGENT_RESUME_HEARTBEAT:-60}
+max_attempts=${AGENT_RESUME_MAX_ATTEMPTS:-0}
 provider=${AGENT_RESUME_PROVIDER:-${AGENT_PARENT_PROVIDER:-}}
 launcher_override=${AGENT_RESUME_LAUNCHER:-}
-force=0
+active_launcher_pid=""
+active_launcher_group=0
 
 usage() {
     cat <<'USAGE'
 用法：agent-resume.sh [选项]
 
-检测一次因瞬时服务故障（例如 429、重试上限、连接中断、上游协议错误）而退出的 agent run，
-默认等待 10 秒后用原统一 launcher 执行 `--resume RUN_ID --once`。每个 run
-只自动恢复一次，避免持续限流时形成无界重试。
+检测意外中断的 agent run，默认等待 10 秒后用原统一 launcher 执行
+`--resume RUN_ID --once`。失败后会继续等待并重试，直到恢复成功、收到 stop 标记、
+run 正常结束或达到可选的 AGENT_RESUME_MAX_ATTEMPTS 上限。
 
 选项：
   --run-id RUN_ID       指定 run；缺省依次读取 AGENT_RUN_ID 或最新可恢复 run
   --data-root DIR       覆盖 AGENT_DATA_DIR / configure 数据根
   --delay SECONDS       恢复前等待秒数，默认 10
   --timeout SECONDS     单次恢复的硬超时，默认 1800
+  --max-attempts N      最多恢复次数；0 表示无限，默认读取 AGENT_RESUME_MAX_ATTEMPTS=0
+  --heartbeat SECONDS   单次恢复运行期间的心跳间隔，默认 60
   --provider NAME       恢复时使用的供应商；默认继承 AGENT_PARENT_PROVIDER
   --launcher PATH       覆盖 manifest 对应的统一 launcher（主要供包装器/测试）
   --check               只检查是否可恢复，不等待、不写文件
   --dry-run             输出将要执行的恢复计划，不等待、不写文件
-  --force               忽略单次自动恢复标记
+  --force               兼容旧参数；当前恢复本身已支持无限重试
   -h, --help            显示帮助
 
-退出码：0 恢复成功；1 已恢复但 agent 失败；2 参数错误；3 不可恢复；
-4 正在运行、已停止或已尝试自动恢复；5 manifest/会话标识无效；6 找不到 run；
+退出码：0 恢复成功；1 达到可选重试上限后仍失败；2 参数错误；3 不可恢复；
+4 正在运行、已停止、已正常结束或已有恢复调度；5 manifest/会话标识无效；6 找不到 run；
 7 launcher 不可用；73 工作目录或写权限不可用；124 恢复超时。
 USAGE
 }
@@ -56,6 +61,12 @@ while (( $# > 0 )); do
         --timeout)
             (( $# >= 2 )) || { usage >&2; exit 2; }
             timeout_seconds=$2; shift 2;;
+        --max-attempts)
+            (( $# >= 2 )) || { usage >&2; exit 2; }
+            max_attempts=$2; shift 2;;
+        --heartbeat)
+            (( $# >= 2 )) || { usage >&2; exit 2; }
+            heartbeat_seconds=$2; shift 2;;
         --provider)
             (( $# >= 2 )) || { usage >&2; exit 2; }
             provider=$2; shift 2;;
@@ -65,7 +76,7 @@ while (( $# > 0 )); do
         --check|--dry-run)
             mode=check; shift;;
         --force)
-            force=1; shift;;
+            shift;;
         -h|--help)
             usage; exit 0;;
         *)
@@ -81,6 +92,14 @@ done
 }
 [[ "$timeout_seconds" =~ ^[1-9][0-9]*$ ]] || {
     printf '%s：--timeout 必须是正整数：%s\n' "$tool_name" "$timeout_seconds" >&2
+    exit 2
+}
+[[ "$heartbeat_seconds" =~ ^[1-9][0-9]*$ ]] || {
+    printf '%s：--heartbeat 必须是正整数：%s\n' "$tool_name" "$heartbeat_seconds" >&2
+    exit 2
+}
+[[ "$max_attempts" =~ ^[0-9]+$ ]] || {
+    printf '%s：--max-attempts 必须是非负整数：%s\n' "$tool_name" "$max_attempts" >&2
     exit 2
 }
 if [[ -n "$run_id" && ! "$run_id" =~ ^[A-Za-z0-9._-]+$ ]]; then
@@ -313,9 +332,9 @@ recover_session_ids() {
     [[ -n "$_session_id" ]]
 }
 
-log_has_transient_failure() {
+classify_transient_failure() {
     if [[ -r "$_log_file" ]] && tail -n 200 -- "$_log_file" 2>/dev/null | grep -Eiq \
-        'exceeded retry limit|429[[:space:]]+too many requests|too many requests|rate limit|overloaded_error|service unavailable|bad gateway|gateway timeout|connection reset by peer|connection refused|stream disconnected|unexpected eof|timed out|temporarily unavailable|upstream_error|reasoning_content.*passed back|http[^0-9]*(500|502|503|504)'; then
+        'exceeded retry limit|429[[:space:]]+too many requests|too many requests|rate limit|concurr(ency|ent)([[:space:]_\.-]*(request|session|job|task|run|connection)s?)?[[:space:]_\.-]*(limit|cap|quota|exceeded|reached)|too many concurrent([[:space:]_\.-]+(request|session|job|task|run|connection)s?)?|maximum concurrent([[:space:]_\.-]+(request|session|job|task|run|connection)s?)?|parallel(ism)?[[:space:]_\.-]*(request|session|job|task|run|connection)?s?[[:space:]_\.-]*(limit|cap|quota|exceeded|reached)|并发[^[:cntrl:]]{0,20}(上限|限制|超限|已满|过多)|overloaded_error|service unavailable|bad gateway|gateway timeout|connection reset by peer|connection refused|stream disconnected|unexpected eof|timed out|temporarily unavailable|upstream_error|reasoning_content.*passed back|(http|status([[:space:]_\.-]*code)?)[^0-9]*(429|500|502|503|504)'; then
         return 0
     fi
     agent_state_has_transient_failure
@@ -399,30 +418,24 @@ inspect_run() {
         _reason=agent_alive
         return 1
     fi
-    if (( lock_status == 2 )); then
-        _reason=lock_unreadable
-        return 1
-    fi
-
-    if [[ "$force" != 1 && -e "${_run_dir}/.auto-resume-attempted" ]]; then
-        _state=$(manifest_value "$manifest" state)
-        _reason=already_attempted
-        return 1
-    fi
+    # A malformed lock cannot identify a live owner. Treat it as stale; the
+    # launcher performs its own atomic stale-lock recovery before writing state.
+    (( lock_status == 2 )) && _reason=stale_lock
 
     _state=$(manifest_value "$manifest" state)
     case "$_state" in
-        failed|blocked) ;;
-        running) _reason=stale_running;;
-        finished|stopped|prepared|created)
-            _reason=state_${_state:-missing}
+        finished|stopped)
+            _reason=state_${_state}
             return 1;;
-        *) _reason=state_unknown; return 1;;
+        *);;
     esac
 
-    log_has_transient_failure || { _reason=non_transient_failure; return 1; }
+    if classify_transient_failure; then
+        _reason=transient_failure
+    else
+        _reason=unexpected_interruption
+    fi
     recover_session_ids || { _reason=session_missing; return 1; }
-    _reason=transient_failure
     return 0
 }
 
@@ -455,7 +468,7 @@ inspect_run "$manifest" || {
     printf '%s：status=skipped run_id=%s reason=%s\n' \
         "$tool_name" "${_run_id:-unknown}" "${_reason:-not_resumable}" >&2
     case "${_reason:-}" in
-        agent_alive|stop_requested|already_attempted|resume_already_scheduled) exit 4;;
+        agent_alive|stop_requested|state_finished|state_stopped|resume_already_scheduled) exit 4;;
         invalid_run_id|unsupported_schema|invalid_identity|run_dir_mismatch|workspace_missing|cwd_outside_workspace|log_outside_run|event_file_invalid|event_file_outside_run|invalid_model|invalid_reasoning|invalid_variant) exit 5;;
         *) exit 3;;
     esac
@@ -555,10 +568,34 @@ resolve_launcher() {
     printf '%s\n' "$candidate"
 }
 
+terminate_active_launcher() {
+    local pid=$active_launcher_pid group=$active_launcher_group
+    [[ -n "$pid" ]] || return 0
+    if kill -0 "$pid" 2>/dev/null; then
+        if (( group )); then
+            kill -TERM -- "-$pid" 2>/dev/null || true
+        else
+            kill -TERM "$pid" 2>/dev/null || true
+        fi
+        sleep 2
+        if kill -0 "$pid" 2>/dev/null; then
+            if (( group )); then
+                kill -KILL -- "-$pid" 2>/dev/null || true
+            else
+                kill -KILL "$pid" 2>/dev/null || true
+            fi
+        fi
+    fi
+    wait "$pid" 2>/dev/null || true
+    active_launcher_pid=""
+    active_launcher_group=0
+}
+
 run_launcher() {
-    local launcher_path=$1 pid started now elapsed rc use_setsid=0
+    local launcher_path=$1 pid started now elapsed rc use_setsid=0 next_heartbeat
     shift
     started=$(date '+%s')
+    next_heartbeat=$((started + heartbeat_seconds))
     if command -v setsid >/dev/null 2>&1; then
         use_setsid=1
     fi
@@ -579,10 +616,17 @@ run_launcher() {
         exec "$launcher_path" "$@"
     ) >>"$resume_log" 2>&1 &
     pid=$!
+    active_launcher_pid=$pid
+    active_launcher_group=$use_setsid
 
     while kill -0 "$pid" 2>/dev/null; do
         now=$(date '+%s')
         elapsed=$((now - started))
+        if (( now >= next_heartbeat )); then
+            printf '%s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z') run_id=${_run_id} heartbeat elapsed=${elapsed}s pid=${pid}" \
+                >>"$resume_log"
+            next_heartbeat=$((now + heartbeat_seconds))
+        fi
         if (( elapsed >= timeout_seconds )); then
             if (( use_setsid )); then
                 kill -TERM -- "-$pid" 2>/dev/null || true
@@ -596,6 +640,8 @@ run_launcher() {
                 kill -KILL "$pid" 2>/dev/null || true
             fi
             wait "$pid" 2>/dev/null || true
+            active_launcher_pid=""
+            active_launcher_group=0
             printf '%s：run_id=%s 恢复超时（%ss），已终止 launcher pid=%s\n' \
                 "$tool_name" "$_run_id" "$timeout_seconds" "$pid" >>"$resume_log"
             return 124
@@ -603,11 +649,13 @@ run_launcher() {
         sleep 1
     done
     if wait "$pid"; then
-        return 0
+        rc=0
     else
         rc=$?
-        return "$rc"
     fi
+    active_launcher_pid=""
+    active_launcher_group=0
+    return "$rc"
 }
 
 acquire_schedule_lock || {
@@ -615,47 +663,20 @@ acquire_schedule_lock || {
         "$tool_name" "$_run_id" "$_reason" >&2
     exit 4
 }
-trap release_schedule_lock EXIT
-trap 'release_schedule_lock; exit 129' HUP
-trap 'release_schedule_lock; exit 130' INT
-trap 'release_schedule_lock; exit 143' TERM
+cleanup_resume() {
+    terminate_active_launcher
+    release_schedule_lock
+}
+trap cleanup_resume EXIT
+trap 'cleanup_resume; exit 129' HUP
+trap 'cleanup_resume; exit 130' INT
+trap 'cleanup_resume; exit 143' TERM
 
 printf '%s\n' "$(date '+%Y-%m-%dT%H:%M:%S%z') run_id=${_run_id} scheduled_delay=${delay}s provider=${provider:-<inherit>}" \
     >>"$resume_log"
-printf '%s\n' "$$" >"$attempt_marker"
-append_run_event resume-scheduled ok "检测到瞬时中断，${delay} 秒后自动恢复"
+append_run_event resume-scheduled ok "检测到 agent 意外中断，${delay} 秒后自动恢复"
 printf '%s：status=scheduled run_id=%s delay=%s resume_log=%s\n' \
     "$tool_name" "$_run_id" "$delay" "$resume_log"
-
-sleep "$delay"
-
-# The marker intentionally proves that this run already consumed its single
-# automatic attempt; do not let it suppress the post-delay health check.
-force=1
-inspect_run "$manifest" || {
-    append_run_event resume-skipped info "等待后不再满足恢复条件：${_reason}"
-    printf '%s：status=skipped run_id=%s reason=%s\n' \
-        "$tool_name" "$_run_id" "$_reason" >&2
-    exit 4
-}
-
-update_manifest_identity "$manifest" || {
-    append_run_event resume-failed failed "无法写回 session/thread 标识"
-    printf '%s：status=failed run_id=%s reason=manifest_write_failed\n' \
-        "$tool_name" "$_run_id" >&2
-    exit 73
-}
-state_file=${_run_dir}/state.env
-if [[ -f "$state_file" ]]; then
-    update_manifest_identity "$state_file" || true
-fi
-
-launcher_path=$(resolve_launcher) || {
-    append_run_event resume-failed failed "统一 launcher 不存在或不可执行"
-    printf '%s：status=failed run_id=%s reason=launcher_unavailable\n' \
-        "$tool_name" "$_run_id" >&2
-    exit 7
-}
 
 launcher_args=(--resume "$_run_id" --once)
 case "$_agent" in
@@ -677,17 +698,54 @@ case "$_agent" in
         ;;
 esac
 
-append_run_event resume-start ok "等待结束，开始恢复"
-printf '%s：status=starting run_id=%s launcher=%s provider=%s\n' \
-    "$tool_name" "$_run_id" "$launcher_path" "${provider:-<inherit>}"
-if run_launcher "$launcher_path" "${launcher_args[@]}"; then
-    rc=0
-    append_run_event resume-end ok "自动恢复成功"
-    printf '%s：status=finished run_id=%s exit_code=0\n' "$tool_name" "$_run_id"
-else
-    rc=$?
-    append_run_event resume-end failed "自动恢复失败，退出码 ${rc}"
-    printf '%s：status=failed run_id=%s exit_code=%s resume_log=%s\n' \
-        "$tool_name" "$_run_id" "$rc" "$resume_log" >&2
-fi
-exit "$rc"
+attempt=0
+while true; do
+    sleep "$delay"
+    attempt=$((attempt + 1))
+    inspect_run "$manifest" || {
+        append_run_event resume-skipped info "重试前不再满足恢复条件：${_reason}"
+        printf '%s：status=skipped run_id=%s reason=%s attempts=%s\n' \
+            "$tool_name" "$_run_id" "$_reason" "$attempt" >&2
+        exit 4
+    }
+
+    update_manifest_identity "$manifest" || {
+        append_run_event resume-failed failed "无法写回 session/thread 标识"
+        printf '%s：status=failed run_id=%s reason=manifest_write_failed\n' "$tool_name" >&2
+        exit 73
+    }
+    state_file=${_run_dir}/state.env
+    if [[ -f "$state_file" ]]; then
+        update_manifest_identity "$state_file" || true
+    fi
+
+    launcher_path=$(resolve_launcher) || {
+        append_run_event resume-failed failed "统一 launcher 不存在或不可执行"
+        printf '%s：status=failed run_id=%s reason=launcher_unavailable\n' "$tool_name" >&2
+        exit 7
+    }
+
+    printf 'attempt=%s\nupdated_at=%s\n' "$attempt" "$(date '+%Y-%m-%dT%H:%M:%S%z')" \
+        >"$attempt_marker"
+    append_run_event resume-start ok "第 ${attempt} 次恢复开始"
+    printf '%s：status=starting run_id=%s attempt=%s launcher=%s provider=%s\n' \
+        "$tool_name" "$_run_id" "$attempt" "$launcher_path" "${provider:-<inherit>}"
+    if run_launcher "$launcher_path" "${launcher_args[@]}"; then
+        rc=0
+        append_run_event resume-end ok "第 ${attempt} 次自动恢复成功"
+        printf '%s：status=finished run_id=%s attempts=%s exit_code=0\n' \
+            "$tool_name" "$_run_id" "$attempt"
+        exit 0
+    else
+        rc=$?
+    fi
+
+    append_run_event resume-end failed "第 ${attempt} 次自动恢复失败，退出码 ${rc}"
+    printf '%s：status=retrying run_id=%s attempt=%s exit_code=%s resume_log=%s\n' \
+        "$tool_name" "$_run_id" "$attempt" "$rc" "$resume_log" >&2
+    if (( max_attempts > 0 && attempt >= max_attempts )); then
+        printf '%s：status=failed run_id=%s attempts=%s exit_code=%s resume_log=%s\n' \
+            "$tool_name" "$_run_id" "$attempt" "$rc" "$resume_log" >&2
+        exit "$rc"
+    fi
+done

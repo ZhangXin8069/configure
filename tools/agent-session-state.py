@@ -19,15 +19,25 @@ THREAD_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 SESSION_ID_RE = re.compile(r"^[A-Za-z0-9._-]+$")
 TRANSIENT_RE = re.compile(
     r"exceeded retry limit|429\s+too many requests|too many requests|rate limit|"
+    r"concurr(?:ency|ent)(?:[\s_.-]*(?:request|session|job|task|run|connection)s?)?"
+    r"[\s_.-]*(?:limit|cap|quota|exceeded|reached)|"
+    r"too many concurrent(?:[\s_.-]+(?:request|session|job|task|run|connection)s?)?|"
+    r"maximum concurrent(?:[\s_.-]+(?:request|session|job|task|run|connection)s?)?|"
+    r"parallel(?:ism)?[\s_.-]*(?:request|session|job|task|run|connection)?s?"
+    r"[\s_.-]*(?:limit|cap|quota|exceeded|reached)|"
+    r"并发[^\n]{0,20}(?:上限|限制|超限|已满|过多)|"
     r"overloaded_error|service unavailable|bad gateway|gateway timeout|"
     r"connection reset by peer|connection refused|stream disconnected|unexpected eof|"
     r"timed out|temporarily unavailable|upstream_error|"
-    r"reasoning_content[\s\S]{0,200}passed back|http[^0-9]*(500|502|503|504)",
+    r"reasoning_content[\s\S]{0,200}passed back|"
+    r"(?:http|status(?:[\s_.-]*code)?)[^0-9]*(429|500|502|503|504)",
     re.IGNORECASE | re.DOTALL,
 )
 TRANSIENT_ERROR_KEYS = {
     "response_too_many_failed_attempts",
     "responseTooManyFailedAttempts",
+    "concurrency_limit_exceeded",
+    "concurrencyLimitExceeded",
     "rate_limit_exceeded",
     "rateLimitExceeded",
     "server_overloaded",
@@ -202,6 +212,12 @@ def error_is_transient(error: Any, depth: int = 0) -> bool:
         return False
     if any(key in error for key in TRANSIENT_ERROR_KEYS):
         return True
+    status = error.get("http_status_code", error.get("httpStatusCode", error.get("status")))
+    try:
+        if int(status) in (429, 500, 502, 503, 504):
+            return True
+    except (TypeError, ValueError):
+        pass
     for key, value in error.items():
         if key in TRANSIENT_ERROR_KEYS:
             return True
@@ -214,7 +230,7 @@ def error_is_transient(error: Any, depth: int = 0) -> bool:
     return False
 
 
-def latest_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, str]:
+def latest_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, bool, str]:
     for line in iter_reverse_lines(path, max_bytes):
         try:
             event = json.loads(line)
@@ -226,14 +242,16 @@ def latest_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, str
         event_type = event.get("type")
         payload_type = payload.get("type") if isinstance(payload, dict) else None
         if event_type == "task_complete":
-            return True, error_is_transient(event.get("error")), "completed"
+            error = event.get("error")
+            return True, error_is_transient(error), bool(error), "completed"
         if event_type == "event_msg" and payload_type == "task_complete":
-            return True, error_is_transient(payload.get("error")), "completed"
+            error = payload.get("error")
+            return True, error_is_transient(error), bool(error), "completed"
         if event_type == "turn_context" or (
             event_type == "event_msg" and payload_type in ("task_started", "turn_started")
         ):
-            return False, False, "in_progress"
-    return False, False, "unknown"
+            return False, False, False, "in_progress"
+    return False, False, False, "unknown"
 
 
 def content_text(content: Any) -> str:
@@ -299,7 +317,7 @@ def claude_session_match(
     return None
 
 
-def claude_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, str]:
+def claude_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, bool, str]:
     in_last_turn = False
     last_unfinished_error: Any = None
     for line in iter_reverse_lines(path, max_bytes):
@@ -310,7 +328,7 @@ def claude_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, str
         if not isinstance(event, dict):
             continue
         if event.get("type") == "user" and not in_last_turn:
-            return False, False, "in_progress"
+            return False, False, False, "in_progress"
         if event.get("type") == "system" and event.get("subtype") == "turn_duration":
             if in_last_turn:
                 break
@@ -320,11 +338,11 @@ def claude_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, str
             continue
         text = content_text(event.get("message", {}).get("content")) if isinstance(event.get("message"), dict) else ""
         if in_last_turn:
-            return True, error_is_transient(text), "completed"
+            return True, error_is_transient(text), True, "completed"
         last_unfinished_error = text
     if last_unfinished_error is not None:
-        return False, error_is_transient(last_unfinished_error), "in_progress"
-    return in_last_turn, False, "completed" if in_last_turn else "unknown"
+        return False, error_is_transient(last_unfinished_error), True, "in_progress"
+    return in_last_turn, False, False, "completed" if in_last_turn else "unknown"
 
 
 def table_names(connection: sqlite3.Connection) -> set[str]:
@@ -430,7 +448,7 @@ def opencode_completion_error(
     connection: sqlite3.Connection,
     session_id: str,
     version: int,
-) -> tuple[bool, bool, str]:
+) -> tuple[bool, bool, bool, str]:
     tables = table_names(connection)
     if version == 2 and "session_message" in tables:
         rows = connection.execute(
@@ -438,27 +456,31 @@ def opencode_completion_error(
             (session_id,),
         ).fetchall()
         completion_found = False
+        failed_idle = False
         for kind, data in rows:
             value = json_value(data)
             if kind == "idle":
                 completion_found = True
-                if value.get("outcome") == "succeeded":
-                    return True, False, "completed"
+                outcome = str(value.get("outcome", ""))
+                if outcome == "succeeded":
+                    return True, False, False, "completed"
+                if outcome in {"failed", "error"}:
+                    failed_idle = True
                 continue
             if kind == "assistant":
                 if value.get("error"):
-                    return True, error_is_transient(value["error"]), "completed"
+                    return True, error_is_transient(value["error"]), True, "completed"
                 if not completion_found:
-                    return False, False, "in_progress"
+                    return False, False, False, "in_progress"
                 continue
             if kind == "user":
                 if completion_found:
-                    return True, False, "completed"
-                return False, False, "in_progress"
-        return completion_found, False, "completed" if completion_found else "unknown"
+                    return True, False, False, "completed"
+                return False, False, False, "in_progress"
+        return completion_found, False, failed_idle, "completed" if completion_found else "unknown"
 
     if "message" not in tables:
-        return False, False, "unknown"
+        return False, False, False, "unknown"
     rows = connection.execute(
         "SELECT data FROM message WHERE session_id=? ORDER BY time_created DESC, id DESC LIMIT 1",
         (session_id,),
@@ -466,13 +488,13 @@ def opencode_completion_error(
     for (data,) in rows:
         value = json_value(data)
         if value.get("role") == "user":
-            return False, False, "in_progress"
+            return False, False, False, "in_progress"
         if value.get("role") != "assistant":
-            return False, False, "unknown"
+            return False, False, False, "unknown"
         if value.get("error"):
-            return True, error_is_transient(value["error"]), "completed"
-        return True, False, "completed"
-    return False, False, "unknown"
+            return True, error_is_transient(value["error"]), True, "completed"
+        return True, False, False, "completed"
+    return False, False, False, "unknown"
 
 
 def lookup_codex(args: argparse.Namespace, created_at: datetime | None) -> tuple[int, dict[str, Any] | None, str]:
@@ -506,7 +528,9 @@ def lookup_codex(args: argparse.Namespace, created_at: datetime | None) -> tuple
         rollout = rollout.resolve()
         if not path_within(rollout, codex_home):
             continue
-        completion_found, transient, turn_state = latest_completion_error(rollout, args.scan_bytes)
+        completion_found, transient, failure_found, turn_state = latest_completion_error(
+            rollout, args.scan_bytes
+        )
         return 0, {
             "thread_id": thread_id,
             "session_id": thread_id,
@@ -514,6 +538,7 @@ def lookup_codex(args: argparse.Namespace, created_at: datetime | None) -> tuple
             "state_path": rollout,
             "source": "codex-rollout",
             "transient_failure": 1 if transient else 0,
+            "failure_found": 1 if failure_found else 0,
             "completion_found": 1 if completion_found else 0,
             "turn_state": turn_state,
         }, "found"
@@ -545,11 +570,12 @@ def lookup_claude(args: argparse.Namespace, created_at: datetime | None) -> tupl
         timestamp = match.pop("timestamp", None)
         distance = abs(int(timestamp.timestamp() * 1000) - start_ms) if timestamp and created_at else 0
         match["distance_ms"] = distance
-        match["transient_failure"], match["completion_found"] = (0, 0)
-        completion_found, transient, turn_state = claude_completion_error(
+        match["transient_failure"], match["failure_found"], match["completion_found"] = (0, 0, 0)
+        completion_found, transient, failure_found, turn_state = claude_completion_error(
             match["state_path"], args.scan_bytes
         )
         match["transient_failure"] = 1 if transient else 0
+        match["failure_found"] = 1 if failure_found else 0
         match["completion_found"] = 1 if completion_found else 0
         match["turn_state"] = turn_state
         match["source"] = "claude-session-jsonl"
@@ -581,7 +607,7 @@ def lookup_opencode(args: argparse.Namespace, created_at: datetime | None) -> tu
         if len(matches) > 1 and matches[0]["distance_ms"] == matches[1]["distance_ms"]:
             return 4, None, "opencode_session_ambiguous"
         selected = matches[0]
-        completion_found, transient, turn_state = opencode_completion_error(
+        completion_found, transient, failure_found, turn_state = opencode_completion_error(
             connection, selected["session_id"], selected["version"]
         )
     except sqlite3.Error:
@@ -596,6 +622,7 @@ def lookup_opencode(args: argparse.Namespace, created_at: datetime | None) -> tu
         "state_path": state_db.resolve(),
         "source": f"opencode-v{selected['version']}-sqlite",
         "transient_failure": 1 if transient else 0,
+        "failure_found": 1 if failure_found else 0,
         "completion_found": 1 if completion_found else 0,
         "turn_state": turn_state,
     }, "found"
@@ -615,6 +642,7 @@ def emit(record: dict[str, Any]) -> None:
         "rollout_path",
         "source",
         "transient_failure",
+        "failure_found",
         "completion_found",
         "turn_state",
     ):

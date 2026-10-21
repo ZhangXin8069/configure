@@ -139,16 +139,25 @@ state=failed
 last_exit=1
 last_reason=进程退出码 1
 EOF
-printf '%s\n' 'HTTP 401 Unauthorized' >"$second_dir/agent.log"
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-hook-permanent-thread"}' \
+    'HTTP 401 Unauthorized' \
+    >"$second_dir/agent.log"
 : >"$second_dir/events.jsonl"
-set +e
+export FAKE_CALL_LOG=$call_log
+export FAKE_MANIFEST=$second_dir/manifest.env
+export FAKE_LOG=$second_dir/agent.log
+: >"$call_log"
 permanent_output=$(AGENT_RESUME_TOOL="$resume_tool" AGENT_RESUME_LAUNCHER="$fake_launcher" \
     "$hook" --run-id "$second_id" --data-root "$data_root" --delay 0 2>&1)
-permanent_status=$?
-set -e
-(( permanent_status == 0 )) || fail "非瞬时失败应被 hook 静默跳过：$permanent_output"
-assert_contains "$permanent_output" 'reason=non_transient_failure'
-[[ ! -e "$second_dir/.auto-resume-attempted" ]] || fail '非瞬时失败不应创建恢复标记'
-printf 'PASS: hook 对永久错误保持 no-op，不启动后台恢复\n'
+assert_contains "$permanent_output" 'status=scheduled'
+for _ in $(seq 1 50); do
+    [[ -s "$call_log" ]] && break
+    sleep 0.1
+done
+[[ -s "$call_log" ]] || fail '普通失败没有启动后台恢复'
+grep -Fq 'thread_id=01a15ab8-hook-permanent-thread' "$second_dir/manifest.env" ||
+    fail '普通失败恢复后没有回写 thread_id'
+printf 'PASS: hook 对普通意外失败同样启动后台恢复\n'
 
-printf 'PASS: hooks/agent-resume.sh 异步调度、事件适配与永久错误边界全部通过\n'
+printf 'PASS: hooks/agent-resume.sh 异步调度、事件适配与普通失败恢复全部通过\n'

@@ -2,6 +2,7 @@
 
 import json
 import os
+import runpy
 import sqlite3
 import subprocess
 import sys
@@ -72,7 +73,27 @@ class TuiWatchTests(unittest.TestCase):
     def _recovery_script(root: Path) -> Path:
         path = root / "recover.py"
         path.write_text(
-            "import pathlib, sys\npathlib.Path(sys.argv[1]).write_text(sys.argv[2], encoding='utf-8')\n",
+            "import json, pathlib, sys\n"
+            "with pathlib.Path(sys.argv[1]).open('a', encoding='utf-8') as stream:\n"
+            "    stream.write(sys.argv[2] + '\\n')\n"
+            "if len(sys.argv) > 4:\n"
+            "    mode = sys.argv[4]\n"
+            "    error = None if mode == 'success' else {'message': 'Concurrency limit reached'}\n"
+            "    event = {'type': 'event_msg', 'payload': {'type': 'task_complete', 'error': error}}\n"
+            "    with pathlib.Path(sys.argv[3]).open('a', encoding='utf-8') as stream:\n"
+            "        stream.write(json.dumps(event, separators=(',', ':')) + '\\n')\n",
+            encoding="utf-8",
+        )
+        return path
+
+    @staticmethod
+    def _failing_recovery_script(root: Path) -> Path:
+        path = root / "fail-recover.py"
+        path.write_text(
+            "import pathlib, sys\n"
+            "with pathlib.Path(sys.argv[1]).open('a', encoding='utf-8') as stream:\n"
+            "    stream.write('failed-attempt\\n')\n"
+            "raise SystemExit(1)\n",
             encoding="utf-8",
         )
         return path
@@ -88,6 +109,8 @@ class TuiWatchTests(unittest.TestCase):
         grace: float = 0.1,
         recovery: Path | None = None,
         recovered: Path | None = None,
+        follow_up_mode: str = "success",
+        stop_file: Path | None = None,
     ) -> subprocess.CompletedProcess[str]:
         command = [
                 sys.executable,
@@ -113,9 +136,18 @@ class TuiWatchTests(unittest.TestCase):
                 "--log",
                 str(log),
             ]
+        if stop_file is not None:
+            command += ["--stop-file", str(stop_file)]
         if recovery is not None and recovered is not None:
             recovery_command = json.dumps(
-                [sys.executable, str(recovery), str(recovered), "{thread_id}"],
+                [
+                    sys.executable,
+                    str(recovery),
+                    str(recovered),
+                    "{thread_id}",
+                    str(cwd.parent / "codex-home" / "sessions" / "2026" / "10" / "21" / "rollout-watch.jsonl"),
+                    follow_up_mode,
+                ],
                 separators=(",", ":"),
             )
             command += [
@@ -159,28 +191,17 @@ class TuiWatchTests(unittest.TestCase):
                     root / "watch.log",
                     recovery=recovery,
                     recovered=recovered,
+                    max_runtime=1,
                 )
-                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertEqual(result.returncode, 3, result.stderr)
                 self.assertIsNone(child.poll())
                 self.assertEqual(
                     recovered.read_text(encoding="utf-8"),
-                    "01a15df3-e05e-7e23-aae4-b7fefee75e45",
+                    "01a15df3-e05e-7e23-aae4-b7fefee75e45\n",
                 )
                 log_text = (root / "watch.log").read_text(encoding="utf-8")
                 self.assertIn("action=resume-ok", log_text)
                 self.assertTrue((root / ".auto-resume-attempted").is_file())
-                second = self._run_watch(
-                    codex_home,
-                    cwd,
-                    child,
-                    root / "watch.log",
-                    recovery=recovery,
-                    recovered=recovered,
-                )
-                self.assertEqual(second.returncode, 4, second.stderr)
-                self.assertIn("reason=already_attempted", (
-                    root / "watch.log"
-                ).read_text(encoding="utf-8"))
             finally:
                 if child.poll() is None:
                     child.terminate()
@@ -214,7 +235,46 @@ class TuiWatchTests(unittest.TestCase):
                 child.terminate()
                 child.wait(timeout=2)
 
-    def test_does_not_terminate_for_permanent_error(self):
+    def test_stop_file_disables_tui_recovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, rollout = self._fixture(root)
+            self._write_events(
+                rollout,
+                [
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "error": {"message": "Concurrency limit reached"},
+                        },
+                    }
+                ],
+            )
+            child = self._child()
+            recovery = self._recovery_script(root)
+            recovered = root / "recovered.txt"
+            stop_file = root / "stop"
+            stop_file.touch()
+            try:
+                result = self._run_watch(
+                    codex_home,
+                    cwd,
+                    child,
+                    root / "watch.log",
+                    max_runtime=0.5,
+                    recovery=recovery,
+                    recovered=recovered,
+                    stop_file=stop_file,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+                self.assertFalse(recovered.exists())
+                self.assertIn("reason=stop_requested", (root / "watch.log").read_text(encoding="utf-8"))
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_resumes_permanent_error_until_the_turn_changes(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)
             codex_home, cwd, rollout = self._fixture(root)
@@ -231,15 +291,122 @@ class TuiWatchTests(unittest.TestCase):
                 ],
             )
             child = self._child()
+            recovery = self._recovery_script(root)
+            recovered = root / "recovered.txt"
             try:
                 result = self._run_watch(
-                    codex_home, cwd, child, root / "watch.log", max_runtime=0.6
+                    codex_home,
+                    cwd,
+                    child,
+                    root / "watch.log",
+                    max_runtime=1,
+                    recovery=recovery,
+                    recovered=recovered,
                 )
                 self.assertEqual(result.returncode, 3, result.stderr)
                 self.assertIsNone(child.poll())
+                self.assertEqual(
+                    recovered.read_text(encoding="utf-8"),
+                    "01a15df3-e05e-7e23-aae4-b7fefee75e45\n",
+                )
             finally:
                 child.terminate()
                 child.wait(timeout=2)
+
+    def test_reaps_repeated_failures_until_watch_runtime_ends(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, rollout = self._fixture(root)
+            self._write_events(
+                rollout,
+                [
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "error": {"message": "Concurrency limit reached"},
+                        },
+                    }
+                ],
+            )
+            child = self._child()
+            recovery = self._recovery_script(root)
+            recovered = root / "recovered.txt"
+            try:
+                result = self._run_watch(
+                    codex_home,
+                    cwd,
+                    child,
+                    root / "watch.log",
+                    max_runtime=0.8,
+                    grace=0.05,
+                    recovery=recovery,
+                    recovered=recovered,
+                    follow_up_mode="failure",
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                self.assertIsNone(child.poll())
+                self.assertGreaterEqual(
+                    len(recovered.read_text(encoding="utf-8").splitlines()), 2
+                )
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_retries_recovery_command_failures_without_state_change(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, rollout = self._fixture(root)
+            self._write_events(
+                rollout,
+                [
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "error": {"message": "Concurrency limit reached"},
+                        },
+                    }
+                ],
+            )
+            child = self._child()
+            recovery = self._failing_recovery_script(root)
+            recovered = root / "recovered.txt"
+            try:
+                result = self._run_watch(
+                    codex_home,
+                    cwd,
+                    child,
+                    root / "watch.log",
+                    max_runtime=0.7,
+                    grace=0.05,
+                    recovery=recovery,
+                    recovered=recovered,
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                self.assertIsNone(child.poll())
+                self.assertGreaterEqual(
+                    len(recovered.read_text(encoding="utf-8").splitlines()), 2
+                )
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_default_grace_is_ten_seconds(self):
+        namespace = runpy.run_path(str(SCRIPT), run_name="agent_tui_watch_test")
+        args = namespace["parse_args"](
+            [
+                "--agent",
+                "codex",
+                "--run-id",
+                RUN_ID,
+                "--cwd",
+                "/tmp",
+                "--pid",
+                str(os.getpid()),
+            ]
+        )
+        self.assertEqual(args.grace, 10.0)
 
     def test_runtime_helper_watches_foreground_tui_process(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -263,7 +430,14 @@ class TuiWatchTests(unittest.TestCase):
             recovery = self._recovery_script(root)
             recovered = root / "runtime-recovered.txt"
             recovery_command = json.dumps(
-                [sys.executable, str(recovery), str(recovered), "{thread_id}"],
+                [
+                    sys.executable,
+                    str(recovery),
+                    str(recovered),
+                    "{thread_id}",
+                    str(rollout),
+                    "success",
+                ],
                 separators=(",", ":"),
             )
             env = dict(os.environ)
@@ -306,9 +480,78 @@ class TuiWatchTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertEqual(
                 recovered.read_text(encoding="utf-8"),
-                "01a15df3-e05e-7e23-aae4-b7fefee75e45",
+                "01a15df3-e05e-7e23-aae4-b7fefee75e45\n",
             )
             self.assertIn("action=resume-ok", log.read_text(encoding="utf-8"))
+
+    def test_runtime_helper_passes_stop_file_to_watcher(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, rollout = self._fixture(root)
+            self._write_events(
+                rollout,
+                [
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "error": {"message": "Concurrency limit reached"},
+                        },
+                    }
+                ],
+            )
+            run_dir = root / "run"
+            run_dir.mkdir()
+            stop_file = run_dir / "stop"
+            stop_file.touch()
+            log = run_dir / "tui-watch.log"
+            recovery = self._recovery_script(root)
+            recovered = root / "runtime-recovered.txt"
+            recovery_command = json.dumps(
+                [sys.executable, str(recovery), str(recovered), "{thread_id}"],
+                separators=(",", ":"),
+            )
+            env = dict(os.environ)
+            env.update(
+                {
+                    "AGENT_CONFIGURE_ROOT": str(Path(__file__).resolve().parents[1]),
+                    "AGENT_RUN_ID": RUN_ID,
+                    "AGENT_RUN_DIR": str(run_dir),
+                    "AGENT_WORKDIR": str(cwd),
+                    "AGENT_CREATED_AT": CREATED_AT,
+                    "AGENT_CODEX_STATE_DB": str(codex_home / "state_5.sqlite"),
+                    "AGENT_STOP_FILE": str(stop_file),
+                    "AGENT_TUI_WATCH_GRACE": "0",
+                    "AGENT_TUI_WATCH_INTERVAL": "0.05",
+                    "AGENT_TUI_WATCH_MAX_RUNTIME": "2",
+                    "AGENT_TUI_WATCH_HEARTBEAT": "10",
+                    "AGENT_TUI_WATCH_STATE_TIMEOUT": "2",
+                    "AGENT_TUI_WATCH_RECOVER_TIMEOUT": "2",
+                }
+            )
+            runtime = Path(__file__).with_name("..") / "bin" / "agent-runtime.sh"
+            result = subprocess.run(
+                [
+                    "bash",
+                    "-c",
+                    'source "$1"; shift; _agent_runtime_run_tui_watched codex "$1" "${@:2}"',
+                    "_",
+                    str(runtime),
+                    recovery_command,
+                    sys.executable,
+                    "-c",
+                    "import time; time.sleep(0.5)",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=5,
+                env=env,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertFalse(recovered.exists())
+            self.assertIn("reason=stop_requested", log.read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

@@ -7,23 +7,24 @@
 - `configure-check.sh --strict` 将警告提升为失败，供需要零警告的 CI 门禁使用；默认模式仍区分警告与错误。
 - `coverage-report.sh` 是只读诊断入口，复用 `configure-check.sh` 的发现思路输出四树覆盖摘要、镜像一致性线索和缺口提示；允许缺口存在，但必须保持可执行、带 Bash shebang，并配套测试。其插件 manifest 诊断依赖 `python3`，其余部分只用 Bash/常见文本工具。
 - `task-scope.sh` 是只读任务分流入口，把自然语言任务映射到技能组合与拆分建议；保持可执行，并同步 `README.md` 里的用途、参数和测试入口。
-- `agent-resume.sh` 检测 agent run 的瞬时基础设施故障，默认等待 10 秒后通过原统一 launcher
-  执行一次 `--resume`；必须保持 fail-closed、识别存活进程、恢复 session/thread，并用单次标记
-  防止持续限流引发无界重试。检测范围包含 429、连接中断和 `upstream_error` /
-  `reasoning_content ... passed back` 等上游协议错误。配套 `agent-resume.test.sh`，并覆盖派发
+- `agent-resume.sh` 检测 agent run 的意外中断，默认等待 10 秒后通过原统一 launcher 执行
+  `--resume`；除用户停止、正常结束或仍有存活锁的 run 外，failed/blocked/stale-running 等状态均会恢复。
+  默认无限重试，`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数，达到可选上限后才退出；调度锁防止同一 run
+  出现并行恢复链，每次 launcher 仍受硬超时和心跳约束。检测范围包含 429、并发上限中英文变体、连接中断和
+  `upstream_error` / `reasoning_content ... passed back` 等错误。配套 `agent-resume.test.sh`，并覆盖派发
   子 agent 的同构 manifest。
 - `agent-session-state.py` 是 Codex、Claude Code、OpenCode 共用的只读会话解析器：按 manifest 的
   `run_id + cwd + created_at` 分别查询 Codex state DB/rollout、Claude 项目 JSONL、OpenCode V1/V2
-  SQLite，并只依据最后一个完整 turn 判断瞬时性；不修改各 agent 状态、不输出消息正文或凭据。
+  SQLite，并只依据最后一个完整 turn 输出 `failure_found` 与瞬时性分类；不修改各 agent 状态、不输出消息正文或凭据。
   `agent-codex-state.py` 保留为 Codex 兼容入口。配套 `agent-session-state.test.py` 与
   `agent-codex-state.test.py`。
 - `agent-tui-watch.py` 是 TUI 的同生命周期旁路监控器：复用会话解析器的最新 `turn_state` 与
-  瞬时失败判定，只有进程仍存活、当前 turn 已因瞬时故障结束且宽限期复查未变化时才执行启动器预构造的
+  `failure_found`，只要进程仍存活、当前 turn 已失败且宽限期复查未变化就执行启动器预构造的
   原生恢复命令；TUI 不退出。Codex 由 `agent-codex-resume.py` 使用标准库 WebSocket 执行
   `thread/resume → thread/queue/add → thread/queue/start`；Claude 使用 `--bg --resume`，OpenCode 使用
-  固定端口的 `run -s --attach`。`.auto-resume-attempted` 保证单次恢复；
-  进行中 turn、永久错误和状态不可用均 fail-closed。恢复中的 run 与 `AGENT_AUTO_RESUME=0` 自动停用；
-  配套 `agent-tui-watch.test.py`。
+  固定端口的 `run -s --attach`。恢复成功后继续监控，新失败按状态指纹再次恢复；默认宽限 10 秒，
+  `AGENT_TUI_WATCH_MAX_RUNTIME=0` 表示跟随 TUI 生命周期而非固定小时数。恢复中的 run 与
+  `AGENT_AUTO_RESUME=0` 自动停用；配套 `agent-tui-watch.test.py`。
 - `agent-codex-resume.py` 是 Codex 运行中 thread 的原生恢复客户端：只用 Python 标准库完成 Unix
   WebSocket 握手与 JSON-RPC，显式执行 thread resume、队列追加和队列启动，并校验返回的 turn id；
   不读取消息正文之外的会话内容，不修改 Codex 配置。配套 `agent-codex-resume.test.py`。

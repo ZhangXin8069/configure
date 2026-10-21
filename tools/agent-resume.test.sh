@@ -31,6 +31,13 @@ fake_launcher=$test_root/fake-launcher
 cat >"$fake_launcher" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
+count_file=${FAKE_COUNT_FILE:-}
+attempt=1
+if [[ -n "$count_file" ]]; then
+    attempt=$(cat -- "$count_file" 2>/dev/null || printf '0')
+    attempt=$((attempt + 1))
+    printf '%s\n' "$attempt" >"$count_file"
+fi
 {
     printf 'args=%s\n' "$*"
     printf 'pid=%s\n' "$$"
@@ -40,10 +47,15 @@ set -Eeuo pipefail
     printf 'claude_provider=%s\n' "${CLAUDE_PROVIDER:-}"
     printf 'resume_active=%s\n' "${AGENT_RESUME_ACTIVE:-}"
     printf 'auto_resume=%s\n' "${AGENT_AUTO_RESUME:-}"
-} >"${FAKE_CALL_LOG:?}"
+} >>"${FAKE_CALL_LOG:?}"
 [[ -z "${FAKE_SLEEP:-}" ]] || sleep "$FAKE_SLEEP"
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"resumed-ok"}}' \
     >>"${FAKE_RUN_LOG:?}"
+success_attempt=${FAKE_SUCCESS_ATTEMPT:-1}
+if (( attempt < success_attempt )); then
+    printf '%s\n' "simulated interruption attempt=${attempt}" >>"${FAKE_RUN_LOG:?}"
+    exit 1
+fi
 awk '
     BEGIN { done = 0 }
     /^state=/ { print "state=finished"; done = 1; next }
@@ -51,7 +63,7 @@ awk '
     END { if (!done) print "state=finished" }
 ' "${FAKE_MANIFEST:?}" >"${FAKE_MANIFEST}.tmp"
 mv -f -- "${FAKE_MANIFEST}.tmp" "${FAKE_MANIFEST}"
-exit "${FAKE_RC:-0}"
+exit 0
 EOF
 chmod 0755 "$fake_launcher"
 
@@ -114,10 +126,12 @@ EOF
 
 set_fake_env() {
     export FAKE_CALL_LOG=$test_root/calls.log
+    export FAKE_COUNT_FILE=$test_root/call-count.txt
     export FAKE_RUN_LOG=$log_file
     export FAKE_MANIFEST=$manifest
-    export FAKE_RC=0
+    export FAKE_SUCCESS_ATTEMPT=1
     : >"$FAKE_CALL_LOG"
+    : >"$FAKE_COUNT_FILE"
 }
 
 create_run 20261021T031022.dXBwYt codex co tasks
@@ -155,6 +169,33 @@ grep -Fq '"event":"resume-start"' "$event_file" || fail '缺少 resume-start 事
 grep -Fq '"event":"resume-end"' "$event_file" || fail '缺少 resume-end 事件'
 printf 'PASS: Codex 429 中断在默认策略下可检测并恢复原 thread\n'
 
+concurrency_index=0
+concurrency_phrases=(
+    'Concurrency limit reached'
+    'Too many concurrent requests'
+    'HTTP 429: concurrency limit'
+    'maximum concurrent sessions exceeded'
+    'parallel request limit reached'
+    'status code 429'
+    '并发上限'
+    '并发请求数超限'
+    '并发连接数已达上限'
+)
+for concurrency_phrase in "${concurrency_phrases[@]}"; do
+    concurrency_index=$((concurrency_index + 1))
+    concurrency_run=20261021T0311$(printf '%02d' "$concurrency_index").concurrency
+    create_run "$concurrency_run" codex co tasks
+    printf '%s\n' \
+        '{"type":"thread.started","thread_id":"01a15ab8-concurrency-thread"}' \
+        "{\"type\":\"turn.failed\",\"error\":{\"message\":\"${concurrency_phrase}\"}}" \
+        >"$log_file"
+    set_fake_env
+    concurrency_check=$("$resume_tool" --run-id "$concurrency_run" --data-root "$data_root" --check)
+    assert_contains "$concurrency_check" 'status=resumable'
+    assert_contains "$concurrency_check" 'reason=transient_failure'
+done
+printf 'PASS: 并发上限中英文变体均进入可恢复状态\n'
+
 create_run 20261021T031500.upstream codex co tasks
 printf '%s\n' \
     '{"type":"thread.started","thread_id":"01a15ab8-upstream-thread"}' \
@@ -179,20 +220,38 @@ duplicate_output=$("$resume_tool" --run-id 20261021T031022.dXBwYt --data-root "$
     --delay 0 --launcher "$fake_launcher" 2>&1)
 duplicate_status=$?
 set -e
-(( duplicate_status == 4 )) || fail "重复自动恢复应被单次标记阻止：$duplicate_output"
-[[ "$(cksum "$FAKE_CALL_LOG")" == "$before_calls" ]] || fail '重复调度不应再次调用 launcher'
-printf 'PASS: 同一 run 只自动恢复一次\n'
+(( duplicate_status == 4 )) || fail "已完成的 run 不应再次恢复：$duplicate_output"
+[[ "$(cksum "$FAKE_CALL_LOG")" == "$before_calls" ]] || fail '已完成的 run 不应再次调用 launcher'
+printf 'PASS: 已完成的 run 不会被重复恢复\n'
 
 create_run 20261021T040000.authn codex co tasks
-printf '%s\n' 'HTTP 401 Upstream request failed: Invalid credential' >"$log_file"
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-authn-thread"}' \
+    'HTTP 401 Upstream request failed: Invalid credential' \
+    >"$log_file"
 set_fake_env
-set +e
 auth_output=$("$resume_tool" --run-id 20261021T040000.authn --data-root "$data_root" --check --launcher "$fake_launcher" 2>&1)
-auth_status=$?
-set -e
-(( auth_status == 3 )) || fail "认证失败不应被当作瞬时中断：$auth_output"
-assert_contains "$auth_output" 'reason=non_transient_failure'
-printf 'PASS: 认证错误等永久失败不会被误恢复\n'
+assert_contains "$auth_output" 'status=resumable'
+assert_contains "$auth_output" 'reason=unexpected_interruption'
+auth_resume_output=$(AGENT_RESUME_MAX_ATTEMPTS=1 "$resume_tool" \
+    --run-id 20261021T040000.authn --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+assert_contains "$auth_resume_output" 'status=finished'
+printf 'PASS: 认证错误等普通失败也会进入恢复流程\n'
+
+create_run 20261021T040050.stale codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-stale-thread"}' \
+    'unexpected process termination' \
+    >"$log_file"
+awk 'BEGIN { done = 0 } /^state=/ { print "state=running"; done = 1; next } { print } END { if (!done) print "state=running" }' \
+    "$manifest" >"${manifest}.tmp"
+mv -f -- "${manifest}.tmp" "$manifest"
+set_fake_env
+stale_check=$("$resume_tool" --run-id 20261021T040050.stale --data-root "$data_root" --check)
+assert_contains "$stale_check" 'status=resumable'
+assert_contains "$stale_check" 'state=running'
+printf 'PASS: 存活锁失效的 running run 会按意外中断恢复\n'
 
 create_run 20261021T040100.alive codex co tasks
 printf '%s\n' '429 Too Many Requests' >"$log_file"
@@ -206,6 +265,17 @@ set -e
 assert_contains "$alive_output" 'reason=agent_alive'
 rm -f -- "$run_dir/.lock"
 printf 'PASS: 仍在运行的 agent 不会被重复启动\n'
+
+create_run 20261021T040150.malformed codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-malformed-lock-thread"}' \
+    'Concurrency limit reached' \
+    >"$log_file"
+printf '%s\n' 'not-a-pid' >"$run_dir/.lock"
+set_fake_env
+malformed_lock_check=$("$resume_tool" --run-id 20261021T040150.malformed --data-root "$data_root" --check)
+assert_contains "$malformed_lock_check" 'status=resumable'
+printf 'PASS: 损坏或未写完的 stale lock 不会永久阻止恢复\n'
 
 create_run 20261021T040200.child opencode op tasks/subagent worker
 printf '%s\n' \
@@ -451,7 +521,8 @@ printf '%s\n' \
 set_fake_env
 export FAKE_SLEEP=10
 set +e
-timeout_output=$("$resume_tool" --run-id 20261021T040400.timeout --data-root "$data_root" \
+timeout_output=$(AGENT_RESUME_MAX_ATTEMPTS=1 "$resume_tool" \
+    --run-id 20261021T040400.timeout --data-root "$data_root" \
     --delay 0 --timeout 1 --launcher "$fake_launcher" 2>&1)
 timeout_status=$?
 set -e
@@ -464,4 +535,49 @@ if kill -0 "$timed_pid" 2>/dev/null; then
 fi
 printf 'PASS: 恢复 launcher 受硬超时约束且超时后进程已清理\n'
 
-printf 'PASS: agent-resume.sh 检测、单次限制、身份恢复与子 agent 覆盖全部通过\n'
+create_run 20261021T040450.signal codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-signal-thread"}' \
+    'Concurrency limit reached' \
+    >"$log_file"
+set_fake_env
+export FAKE_SLEEP=30
+"$resume_tool" --run-id 20261021T040450.signal --data-root "$data_root" \
+    --delay 0 --timeout 60 --max-attempts 1 --launcher "$fake_launcher" \
+    >"$test_root/signal.out" 2>&1 &
+resume_supervisor_pid=$!
+for _ in $(seq 1 100); do
+    [[ -s "$FAKE_CALL_LOG" ]] && break
+    sleep 0.05
+done
+[[ -s "$FAKE_CALL_LOG" ]] || fail '信号清理测试未启动 launcher'
+signal_launcher_pid=$(sed -n 's/^pid=//p' "$FAKE_CALL_LOG" | head -1)
+kill -TERM "$resume_supervisor_pid"
+set +e
+wait "$resume_supervisor_pid"
+signal_resume_status=$?
+set -e
+unset FAKE_SLEEP
+(( signal_resume_status != 0 )) || fail '恢复监督进程收到 TERM 后不应返回成功'
+if kill -0 "$signal_launcher_pid" 2>/dev/null; then
+    fail "恢复监督进程退出后 launcher 仍存活：pid=$signal_launcher_pid"
+fi
+printf 'PASS: 恢复监督进程收到信号时会清理当前 launcher\n'
+
+create_run 20261021T040500.retry codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-retry-thread"}' \
+    'Concurrency limit reached' \
+    >"$log_file"
+set_fake_env
+export FAKE_SUCCESS_ATTEMPT=3
+retry_output=$("$resume_tool" \
+    --run-id 20261021T040500.retry --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+unset FAKE_SUCCESS_ATTEMPT
+assert_contains "$retry_output" 'status=finished'
+[[ "$(cat "$FAKE_COUNT_FILE")" == 3 ]] || fail "恢复应在第 3 次尝试成功，实际次数：$(cat "$FAKE_COUNT_FILE")"
+(( $(grep -c '"event":"resume-start"' "$event_file") == 3 )) || fail '三次恢复尝试未全部写入事件'
+printf 'PASS: 恢复失败后会无限重试直至成功\n'
+
+printf 'PASS: agent-resume.sh 检测、无限重试、身份恢复与子 agent 覆盖全部通过\n'

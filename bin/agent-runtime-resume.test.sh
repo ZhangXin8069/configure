@@ -64,4 +64,4 @@ run_exit_case normal 1 0 1
 run_exit_case disabled 0 0 0
 run_exit_case resumed_child 1 1 0
 
-printf 'PASS: agent-runtime.sh 仅对普通失败调度一次恢复，恢复中的子进程不会递归调度\n'
+printf 'PASS: agent-runtime.sh 只启动一个外层恢复监督进程，恢复中的子进程不会递归调度\n'

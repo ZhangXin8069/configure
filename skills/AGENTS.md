@@ -133,11 +133,11 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `plan` | 假设执行者零上下文（计划自包含）；纵向 tracer bullet + 真实 `Blocked by`；宽重构使用 expand-contract；任务粒度 = 最小独立测试单元；无占位符铁律；自审覆盖/依赖/一致性；优先 agent-dispatch.sh，失败回到本会话内联执行 | 多步骤任务拆解；跨上下文长任务；宽重构排序 |
 | `review` | 早审查常审查；Standards 与 Spec 双轴独立报告；优先 agent-dispatch.sh 审查；精确上下文裁剪；问题分级 Critical/Important/Minor；证据标确证/推断/未验证；检查掩盖型 fallback 与 AI 残留；反馈可反驳，接收审查"先验证后实现" | 提交前质量把关；规范与需求分别核验；AI 生成改动清理 |
 | `skill-creator` | 触发描述是唯一机制（写"何时使用"而非总结工作流）；分级披露（SKILL.md <500 行，长内容拆 references/）；规则形式匹配失败类型（明知故犯→禁止式+红旗表，输出形状→正配方）；措辞微测试（必须带无指令对照、≥5 次重复）；触发率评估 60/40 拆分 + 3 次重复 | 文档/指令类内容的结构设计；规则措辞与触发描述编写 |
-| `conf-refer-skill` | 外部参考技能原地直调：跨 `skills`、`agent_skills` 等 `*skills` 目录、插件镜像和符号链接安全发现候选，以打开文件描述符复核 TOCTOU 边界；清洗 frontmatter/路径控制字符，显式路径/仓库优先并处理同名；完整读取 `SKILL.md` 后只适配占位符、工具、路径和本地门禁；建立来源—动作—状态适配账本、递归上限与失败降级；用 10 正/10 负查询和有/无技能用例评估触发边界 | 复用 `refer/git-rep` 外部技能而不复制安装；外部领域流程的最小本地适配 |
+| `conf-refer-skill` | 技能发现与外部参考技能原地直调双模式：宽泛要求列出/查找/比较可用 skill 且未限定仅本地时，默认同时检索本地与外部参考库；执行模式跨 `skills`、`agent_skills` 等 `*skills` 目录、插件镜像和符号链接安全发现候选，以打开文件描述符复核 TOCTOU 边界；清洗 frontmatter/路径控制字符，显式路径/仓库优先并处理同名；完整读取 `SKILL.md` 后只适配占位符、工具、路径和本地门禁；建立来源—动作—状态适配账本、递归上限与失败降级；用 11 正/11 负执行触发查询、广域发现用例和有/无技能用例评估边界 | 全库技能盘点与选型；复用 `refer/git-rep` 外部技能而不复制安装；外部领域流程的最小本地适配 |
 | `md-tex-sync` | `{除非用户明确要求，否则不启用}`；Markdown 唯一源、TeX 派生源、PDF 编译件与全附件哈希清单四层分离；公式/代码保护后转换；`Overfull/Missing/Error=0`；全页栅格化；重复构建哈希幂等 | 仅在用户显式要求同源维护、双格式交付或全附件全集归档时使用 |
 | `tdd` | 铁律"无失败测试则无生产代码"（先写代码即删除重来）；RED-GREEN-REFACTOR 双强制验证（看过失败、看过通过）；反合理化表 + 红旗清单；修 bug 也是 TDD（先写复现测试） | 新功能/修复实现；防"后补测试"自我欺骗的纪律工具 |
 | `brainstorm` | 路径分类（spike/bounded/architectural）；棘轮单向升级；维护 Intent/Outcome/Scope/Non-goals/Decision boundaries/Success criteria clarity ledger；高影响问题下一轮批量提出；HARD-GATE 批准闸门；分节设计与红旗表 | 需求模糊的任务；设计前意图与边界确认 |
-| `auto` | 前缀式包装不重复实现（细节以目标技能为权威）；启动时绑定/继承 Codex goal（界面 `/goal` 入口）并贯穿轮次与收尾；一次性预授权分级（L1/L2/自定义）实现 0 交互；0 交互 ≠ 0 报告；停滞保护（连续 N 轮无进展换方向）；子代理失败按启动链重试后自动串行；中断报告含恢复方式；收尾默认执行常驻 rule 门控与 log 归档 | 无人值守长任务；需要把自动执行进度纳入 Codex goal 生命周期的场景 |
+| `auto` | 自动路由 + 前缀式包装：显式目标优先，未指定时按主要动作、产物和依赖选择专用技能，多阶段混合任务选 `all`、独立并行任务选 `dispatch`，并记录 `auto_route` 依据；目标技能细节以自身 `SKILL.md` 为权威；启动时绑定/继承 Codex goal（界面 `/goal` 入口）并贯穿轮次与收尾；一次性预授权分级（L1/L2/自定义）实现 0 交互；0 交互 ≠ 0 报告；停滞保护（连续 N 轮无进展换方向）；子代理失败按启动链重试后自动串行；中断报告含恢复方式；收尾默认执行常驻 rule 门控与 log 归档 | 无人值守长任务；自动选 skill；需要把自动执行进度纳入 Codex goal 生命周期的场景 |
 | `fast` | 多快好省修饰层：全链路传播 fast 上下文；全局默认最多 3 轮（显式例外可覆盖）；auto/all 边际收益阈值由 `<5%` 放宽为 `<25%`；合并重复工作、并行独立支线；analy/pure/report 默认 Markdown；效率 ≥3x 与质量 ≥60% 双闸门 | 需要降低关键路径、Token 与资源占用，同时保留硬性正确性和证据门槛的任务 |
 | `go-on` | 多源汇聚（输入清单/Git 改动/opencode 会话交叉验证）；无缝优先（opencode 原生 -c/-s/--fork/run -c 会话继续，消息历史与任务跟踪状态（TODO）天然继承）；孤儿进程先判定进程类；信息补查循环 3 轮上限防空转 | 任何"接着干"场景；会话中断恢复；新终端续接任务 |
 | `follow-up` | 先压缩再分发，行动项可执行、状态与动作分离、跨会话可续 | 周报、交接、复盘、行动项清单 |
@@ -168,7 +168,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `test` | 系统化测试：默认测试对象为上次 agent 生成的工作（参考 `.agent.*.list` 格式），可指定项目；中间变量自行计算并保存，中间/最终结果与图表落盘 `test_out/`，失败按 debug 循环修复、通过按 optim 循环优化，支持设备切换（GPU 优先/CPU/NPU）与多精度切换（默认 fp32），数据读写间精度转换显式管理|
 | `make` | 项目生成：生成对象为用户指定的项目，按需编排本目录全部相关技能并明确核心链（init/diff/analy/plan→最小改动实现→test→debug/optim→diff→init/tag/log），其余技能按任务接入，细节要求为所有相关技能的汇总|
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范|
-| `conf-refer-skill` | 外部参考技能直调与适配：定位 `$CONFIGURE_ROOT/refer/git-rep/**/*skills` 中的候选，按显式路径、仓库和语义匹配选择；完整读取外部 `SKILL.md` 原地执行，不复制安装；对占位符、工具名、相对资源、权限、Git 和输出契约做最小适配；处理同名镜像、越界/断链/循环链接、TOCTOU 读取边界、frontmatter 控制字符、缺失依赖与最多 3 层递归；以来源—动作—状态账本、10 正/10 负触发查询和有/无技能用例报告选择、适配和验证证据 |
+| `conf-refer-skill` | 技能发现与外部参考技能直调双模式：用户未限定仅本地时，盘点/列出/查找/比较某领域可用 skill 自动覆盖本地与 `$CONFIGURE_ROOT/refer/git-rep/**/*skills`，发现模式只读候选与摘要并跳过执行；执行模式按显式路径、仓库和语义匹配选择，完整读取外部 `SKILL.md` 原地执行，不复制安装；对占位符、工具名、相对资源、权限、Git 和输出契约做最小适配；处理同名镜像、越界/断链/循环链接、TOCTOU 读取边界、frontmatter 控制字符、缺失依赖与最多 3 层递归；以来源—动作—状态账本、触发查询、广域发现用例和有/无技能用例报告选择、适配和验证证据 |
 | `form` | Git 库格式治理：固定并校验参考 URL 的离线明文快照，`refer/git-rep` 参考子库以 submodule 引入、README 记录来源/致谢、分析文档集中 `docs/`，普通拷贝先迁移后重建；用 `form-audit.sh` 检查目录/文件布局、参考子库元数据与文档位置、`AGENT.md` 单数名、`logs/AGENTS.md`、agent 三态时间戳日志和标签形路径，人工判定函数/变量/对象语义命名及标签名边界；执行只读冲突表与较高权限整改，将双文件有效规则合并到 `AGENTS.md` 后删除单数文件，维护 docs/logs/data/testing 和框架入口，复现功能，用 `form-agents-sync.sh` 幂等同步根 `AGENTS.md` 规则且原约定优先，生成目标库特化 skill；提交前用 `form-large-files-check.sh` 阻断超过 10,000,000 字节的暂存文件，最后执行 diff/init/dev tag |
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，派发失败时回到本会话内联执行；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/pure/report/log/rule/test/plan/make/skill-creator/conf-refer-skill/form/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；dispatch 失败按启动链重试后串行；收尾默认执行常驻 rule 门控与 log 归档；生成类任务首轮复用 make，单步任务转对应技能|
@@ -180,7 +180,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `dispatch` | 并行子代理派发：优先 `agent-dispatch.sh --task --json` 且默认继承父设置；2+ 个独立子任务拆域并行，同消息派发=并行，代理指令四要素，返回后整合验证；派发失败复用当前启动链并最终串行；吸收 obra/superpowers dispatching-parallel-agents|
 | `team` | 状态机 + worker 隔离 + 能力匹配 + 单文件单写者/只读审查者 + 健康检查 + 失败重派；优先 agent-dispatch.sh 并默认继承父设置，派发链失败复用当前 agent 启动方式并最终串行；适用于长流程、多 worker 协作、模型/工具能力选择、重派和收敛收尾场景 |
 | `tdd` | 测试驱动开发：铁律（无失败测试则无生产代码，先写代码即删除重来）、RED-GREEN-REFACTOR 循环、验证失败/通过双强制、反合理化表+红旗清单；吸收 superpowers test-driven-development|
-| `auto` | 全自动前缀执行（元技能）：`~auto-<技能名> <任务>` 前缀启动任意技能，启动时绑定/继承 Codex goal 并一次性预授权权限与配置（唯一交互），此后 0 请求，自动循环调用其他技能直至收敛，除非强制中断（Ctrl+C/`~stop`）；子代理失败按启动链重试后自动串行；停滞保护防空转、收敛后自动收尾（diff/init/tag/log，rule/log 默认常驻）|
+| `auto` | 全自动代理与自动路由（元技能）：`~auto-<技能名> <任务>` 显式启动任意技能，`~auto <任务>` 自动按主要动作、产物和依赖选择专用 skill；单一主导任务直选，多步骤混合任务用 `all`，独立并行任务用 `dispatch`，并记录路由依据；启动时绑定/继承 Codex goal 并一次性预授权权限与配置（唯一交互），此后 0 请求，自动循环调用其他技能直至收敛，除非强制中断（Ctrl+C/`~stop`）；子代理失败按启动链重试后自动串行；停滞保护防空转、收敛后自动收尾（diff/init/tag/log，rule/log 默认常驻）|
 | `fast` | 多快好省修饰技能：`~fast <任务>` 默认补全为 `~fast+auto+all`，显式子技能和后续调用继承 fast；全局默认迭代上限 3（显式例外可覆盖）；auto/all 的收益停止阈值 `<5%→<25%`；analy/pure/report 默认 Markdown；合并重复工作并行独立支线，同时以效率 ≥3x、质量 ≥60% 和硬闸门约束收敛 |
 | `go-on` | 继续上次任务：多源汇聚输入清单、Git 改动、项目约定与原生会话；确认任务后优先原生继续，备选手动重建；孤儿进程分类处置，信息补查最多 3 轮 |
 | `follow-up` | 先压缩再分发，行动项可执行、状态与动作分离、跨会话可续；适用于周报、交接、复盘和行动项清单 |

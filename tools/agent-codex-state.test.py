@@ -131,6 +131,7 @@ class CodexStateLookupTests(unittest.TestCase):
             self.assertIn("thread_id=01a15e3f-e541-7c00-b8d3-4bd9643fd6f3", result.stdout)
             self.assertIn(f"rollout_path={rollout}", result.stdout)
             self.assertIn("transient_failure=1", result.stdout)
+            self.assertIn("failure_found=1", result.stdout)
             self.assertIn("turn_state=completed", result.stdout)
 
     def test_latest_normal_completion_overrides_earlier_transient_failure(self):
@@ -159,6 +160,7 @@ class CodexStateLookupTests(unittest.TestCase):
 
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("transient_failure=0", result.stdout)
+            self.assertIn("failure_found=0", result.stdout)
             self.assertIn("turn_state=completed", result.stdout)
 
     def test_newer_started_turn_is_reported_as_in_progress(self):

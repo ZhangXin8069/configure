@@ -63,17 +63,22 @@ bash tools/task-scope.test.sh
 
 ### `agent-resume.sh`
 
-检测 agent 因瞬时服务故障意外退出的 run，并在默认等待 10 秒后通过原统一 launcher 执行
-`--resume RUN_ID --once`。当前识别 429、重试上限、限流、服务不可用、网关错误、连接重置/超时、
-流中断，以及 `upstream_error` / `reasoning_content ... passed back` 等上游协议错误；认证失败、
-任务正常结束、用户停止、仍在运行的 run 不会恢复。
+检测 agent 意外中断的 run，并在默认等待 10 秒后通过原统一 launcher 执行
+`--resume RUN_ID --once`。failed、blocked，以及锁已失效但仍标记为 running 的 run 都会进入恢复；
+只有正常完成、用户主动停止、存在 stop 文件、仍有存活锁 owner，或无法找回 session/thread 的 run 会跳过。
+错误分类覆盖 429、并发上限中英文变体、重试上限、限流、服务不可用、网关错误、连接重置/超时、
+流中断，以及 `upstream_error` / `reasoning_content ... passed back`，但分类不再限制恢复资格。
 
 工具直接消费 `data/runs/<run-id>/manifest.env`，因此普通 agent 与 `agent-dispatch.sh` 派发的
 子 agent 使用同一恢复路径。若 Codex 在首个回合失败前已写入 `thread.started` 但 manifest 尚无
 `thread_id`，工具会从 `agent.log` 回填；TUI 日志为空时，还会用 `agent-session-state.py` 按
 `run_id + cwd + created_at` 查询 Codex/Claude Code/OpenCode 的本地会话存储，并依据最后一个完整
-turn 判断是否确为瞬时故障。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。每个 run 使用
-`.auto-resume-attempted` 限制为一次自动尝试，持续 429 不会形成重试风暴。
+turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。恢复监督进程默认无限重试，
+每次尝试之间等待 `AGENT_RESUME_DELAY` 秒；`.auto-resume-schedule` 防止同一 run 出现并行恢复链，
+`.auto-resume-attempted` 记录尝试次数。`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数，设置正整数可加安全上限。
+恢复链不要求 root 或系统级写权限：配置根来自 `AGENT_CONFIGURE_ROOT` 或脚本真实路径，数据根来自
+`AGENT_DATA_DIR` / `CONFIGURE_AGENT_DATA_DIR`、部署目录或当前用户 `$HOME/configure/data`，临时锁与日志均位于
+该用户可写的数据根内。
 
 ```bash
 tools/agent-resume.sh --check --run-id RUN_ID
@@ -82,11 +87,11 @@ tools/agent-resume.sh                 # 自动选择最新可恢复 run
 tools/agent-resume.sh --force --run-id RUN_ID
 ```
 
-退出码：`0` 恢复成功，`1` 已恢复但 agent 失败，`2` 参数错误，`3` 不可恢复，`4` 正在运行/
-已停止/已尝试自动恢复，`5` manifest 或会话标识无效，`6` 找不到 run，`7` launcher 不可用，
-`73` 工作目录或写权限不可用，`124` 恢复超时。恢复子进程默认硬超时 1800 秒，可用
-`--timeout`、`AGENT_RESUME_DELAY`、`AGENT_RESUME_TIMEOUT` 调整；`AGENT_AUTO_RESUME=0`
-可关闭 runtime 自动调度。
+退出码：`0` 恢复成功，`1` 达到可选重试上限后仍失败，`2` 参数错误，`3` 不可恢复，`4` 正在运行/
+已停止/已正常结束或已有恢复调度，`5` manifest 或会话标识无效，`6` 找不到 run，`7` launcher 不可用，
+`73` 工作目录或写权限不可用，`124` 单次恢复超时。恢复子进程默认硬超时 1800 秒、心跳 60 秒，可用
+`--timeout`、`--heartbeat`、`AGENT_RESUME_DELAY`、`AGENT_RESUME_TIMEOUT`、`AGENT_RESUME_HEARTBEAT`
+调整；`AGENT_RESUME_MAX_ATTEMPTS` 可设置重试上限；`AGENT_AUTO_RESUME=0` 可关闭 runtime 自动调度。
 
 回归测试：
 
@@ -109,25 +114,26 @@ bash tools/agent-resume.test.sh
   `OPENCODE_DATA_HOME` / XDG 数据目录下的 `opencode.db`，同时支持 V1 `message/part` 与 V2
   `session_message`。
 
-三系都限制 cwd 与创建时间窗口，且只以最新完整 turn 判定瞬时性；较早的 429/upstream_error 不会
+三系都限制 cwd 与创建时间窗口，且只以最新完整 turn 输出 `failure_found` 和瞬时性分类；较早失败不会
 覆盖后续成功。恢复调用默认受 5 秒硬超时约束，可用 `AGENT_STATE_TIMEOUT` 调整；超时、数据库
 不可读或会话不唯一时 fail-closed。`agent-codex-state.py` 是兼容旧路径的 Codex 入口。
 
 ### `agent-tui-watch.py`
 
-Codex/Claude/OpenCode 在 turn 级 429 后通常继续保持 TUI 存活，因此恢复不能等待进程退出。该
-watcher 由 `bin/agent-runtime.sh` 与前台 TUI 同生命周期启动，周期读取最新 `turn_state`；只有当前
-turn 已完成、失败被判定为瞬时且宽限期复查仍未变化时，才原子创建 `.auto-resume-attempted` 并执行
+Codex/Claude/OpenCode 在 turn 级失败后通常继续保持 TUI 存活，因此恢复不能等待进程退出。该
+watcher 由 `bin/agent-runtime.sh` 与前台 TUI 同生命周期启动，周期读取最新 `turn_state`；只要当前
+turn 已完成且 `failure_found=1`、宽限期复查仍未变化，就执行
 启动器预构造的原生恢复命令，TUI 保持运行。Codex 的每个 TUI run 使用 run 目录内的独立 app-server
 socket；`agent-codex-resume.py` 随后执行 `thread/resume`、`thread/queue/add` 和
 `thread/queue/start`，显式启动同一运行中 thread 的恢复 turn。Claude 使用 `--bg --resume`；
 OpenCode 使用固定端口上的 `run -s --attach`，复用 TUI 服务器中的同一 session。
-新 turn 已开始、永久错误、进程已退出或会话状态不可读时不会恢复。`AGENT_RESUME_ACTIVE=1` 与
-`AGENT_AUTO_RESUME=0` 会停用 watcher；headless/派发子 agent 仍由进程退出后的 `agent-resume.sh`
-兜底，避免恢复循环。
+新 turn 已开始、stop 文件已出现、进程已退出或会话状态不可读时不会恢复；普通错误同样会持续恢复，失败后会按新的状态
+指纹再次尝试。`.auto-resume-attempted` 记录当前状态指纹和领取时间，避免多个 watcher 同时恢复同一失败，
+同时允许后续新失败和超时失败继续重试。`AGENT_RESUME_ACTIVE=1` 与 `AGENT_AUTO_RESUME=0` 会停用 watcher；
+headless/派发子 agent 仍由进程退出后的 `agent-resume.sh` 兜底。
 
-默认预算为间隔 2 秒、宽限 5 秒、最长 24 小时、心跳 60 秒、状态查询 5 秒、恢复命令 1800 秒、反向扫描
-2 MiB；可用 `AGENT_TUI_WATCH_INTERVAL`、`AGENT_TUI_WATCH_GRACE`、
+默认预算为间隔 2 秒、宽限 10 秒、跟随 TUI 生命周期且不设固定最长运行时间、心跳 60 秒、状态查询
+5 秒、恢复命令 1800 秒、反向扫描 2 MiB；可用 `AGENT_TUI_WATCH_INTERVAL`、`AGENT_TUI_WATCH_GRACE`、
 `AGENT_TUI_WATCH_MAX_RUNTIME`、`AGENT_TUI_WATCH_HEARTBEAT`、`AGENT_TUI_WATCH_STATE_TIMEOUT`、
 `AGENT_TUI_WATCH_RECOVER_TIMEOUT`、`AGENT_TUI_WATCH_SCAN_BYTES` 调整。事件写入 run 目录的
 `tui-watch.log` 和 `events.jsonl`，不记录消息正文或凭据。
