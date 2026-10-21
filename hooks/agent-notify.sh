@@ -3,13 +3,13 @@
 
 set -Eeuo pipefail
 
-title=${CODEX_HOOK_TITLE:-Codex}
-message=${CODEX_HOOK_MESSAGE:-}
+title=${AGENT_HOOK_TITLE:-Agent}
+message=${AGENT_HOOK_MESSAGE:-}
 
 if (( $# > 0 )); then
     if [[ "$1" == '--title' ]]; then
         (( $# >= 2 )) || {
-            printf 'codex-notify: --title 缺少值\n' >&2
+            printf 'agent-notify: --title 缺少值\n' >&2
             exit 2
         }
         title=$2
@@ -20,13 +20,13 @@ if (( $# > 0 )); then
     fi
 fi
 
-if [[ -z "$message" && -n "${CODEX_HOOK_PAYLOAD:-}" ]]; then
-    message=$CODEX_HOOK_PAYLOAD
+if [[ -z "$message" && -n "${AGENT_HOOK_PAYLOAD:-}" ]]; then
+    message=$AGENT_HOOK_PAYLOAD
 elif [[ -z "$message" && ! -t 0 ]]; then
     message=$(< /dev/stdin)
 fi
 
-message=${message:-Codex agent 已完成当前任务}
+message=${message:-Agent 已完成当前任务}
 
 # Accept a JSON event as a convenience, but never execute anything from it.
 if [[ "$message" == \{* ]] && command -v python3 >/dev/null 2>&1; then
@@ -48,7 +48,7 @@ if isinstance(payload, dict):
             print(value)
             break
     else:
-        print("Codex agent event")
+        print("Agent event")
 else:
     print(raw)
 PY
@@ -59,10 +59,10 @@ fi
 
 if command -v notify-send >/dev/null 2>&1; then
     if ! notify-send -- "$title" "$message" >/dev/null 2>&1; then
-        printf 'codex-notify: notify-send 失败，已忽略\n' >&2
+        printf 'agent-notify: notify-send 失败，已忽略\n' >&2
     fi
 else
-    printf 'codex-notify: %s：%s\n' "$title" "$message"
+    printf 'agent-notify: %s：%s\n' "$title" "$message"
 fi
 
 exit 0

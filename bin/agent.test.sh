@@ -104,6 +104,13 @@ case "$(basename -- "$0")" in
             "${AGENT_PARENT_LAUNCHER:-}" "${AGENT_PARENT_AGENT:-}" "${AGENT_PARENT_PROVIDER:-}" \
             "${AGENT_PARENT_MODEL:-}" "${AGENT_PARENT_STRENGTH:-}" "${AGENT_PARENT_SECURE:-}" >> "$FAKE_CALL_LOG"
         printf '{"type":"thread.started","thread_id":"thread-fake"}\n'
+        if [[ "${FAKE_TRANSIENT_FIRST:-0}" == 1 && "$*" != *'exec resume'* &&
+              ! -e "${FAKE_TRANSIENT_MARKER:?}" ]]; then
+            : > "$FAKE_TRANSIENT_MARKER"
+            printf '{"type":"error","message":"exceeded retry limit, last status: 429 Too Many Requests"}\n' >&2
+            printf '{"type":"turn.failed","error":{"message":"exceeded retry limit, last status: 429 Too Many Requests"}}\n' >&2
+            exit 1
+        fi
         ;;
     fake-opencode.sh|fake-opencode-v2.sh)
         if [[ "$(basename -- "$0")" == 'fake-opencode-v2.sh' ]]; then
@@ -204,7 +211,11 @@ run_launcher() {
         co) (cd "$repo/nested" && \
             AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
             AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
+            AGENT_AUTO_RESUME="${AGENT_AUTO_RESUME:-1}" \
+            AGENT_RESUME_DELAY="${AGENT_RESUME_DELAY:-10}" \
             FAKE_CALL_LOG="$call_log" \
+            FAKE_TRANSIENT_FIRST="${FAKE_TRANSIENT_FIRST:-0}" \
+            FAKE_TRANSIENT_MARKER="${FAKE_TRANSIENT_MARKER:-}" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
             CODEX_BIN="$binary" \
@@ -221,6 +232,8 @@ run_launcher() {
         op) (cd "$repo/nested" && \
             AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
             AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
+            AGENT_AUTO_RESUME="${AGENT_AUTO_RESUME:-1}" \
+            AGENT_RESUME_DELAY="${AGENT_RESUME_DELAY:-10}" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
@@ -235,6 +248,8 @@ run_launcher() {
         cl) (cd "$repo/nested" && \
             AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
             AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
+            AGENT_AUTO_RESUME="${AGENT_AUTO_RESUME:-1}" \
+            AGENT_RESUME_DELAY="${AGENT_RESUME_DELAY:-10}" \
             FAKE_CALL_LOG="$call_log" \
             FAKE_FAIL_RESUMES="${FAKE_FAIL_RESUMES:-}" \
             FAKE_FAIL_COUNT_FILE="${FAKE_FAIL_COUNT_FILE:-}" \
@@ -305,6 +320,36 @@ assert_file_contains "$codex_run/context.txt" 'repo/AGENTS.md'
 assert_file_contains "$codex_run/events.jsonl" '"event":"session-end"'
 assert_file_contains "$call_log" '--model fake-model'
 printf 'PASS: Codex --once、模型覆盖、分层上下文和持久状态\n'
+
+transient_before=$(wc -l < "$call_log")
+transient_marker=$test_root/transient-first.marker
+set +e
+transient_output=$(AGENT_RESUME_DELAY=0 FAKE_TRANSIENT_FIRST=1 \
+    FAKE_TRANSIENT_MARKER="$transient_marker" \
+    run_launcher co "$fake_codex" --once --model transient-recovery-model 2>&1)
+transient_status=$?
+set -e
+(( transient_status != 0 )) || fail '首次 429 回合应返回非零，由后台恢复接管'
+transient_run_id=$(printf '%s\n' "$transient_output" | sed -n 's/^  run: //p' | head -1)
+[[ -n "$transient_run_id" ]] || fail '429 回合未创建可恢复 run'
+transient_run="$data/runs/$transient_run_id"
+for _attempt in $(seq 1 100); do
+    [[ -f "$transient_run/manifest.env" ]] || { sleep 0.1; continue; }
+    if grep -Fq 'state=finished' "$transient_run/manifest.env" &&
+       grep -Fq 'resume_count=1' "$transient_run/manifest.env" &&
+       grep -Fq '"event":"resume-end"' "$transient_run/events.jsonl"; then
+        break
+    fi
+    sleep 0.1
+done
+assert_file_contains "$transient_run/manifest.env" 'state=finished'
+assert_file_contains "$transient_run/manifest.env" 'resume_count=1'
+assert_file_contains "$transient_run/manifest.env" 'thread_id=thread-fake'
+assert_file_contains "$transient_run/events.jsonl" '"event":"resume-scheduled"'
+assert_file_contains "$transient_run/events.jsonl" '"event":"resume-end"'
+transient_new=$(tail -n +$((transient_before + 1)) "$call_log")
+assert_contains "$transient_new" 'exec resume --model transient-recovery-model'
+printf 'PASS: 普通 Codex 进程遇 429 后由 runtime hook 自动恢复同一 thread\n'
 
 set +e
 resume_output=$(run_launcher co "$fake_codex" --resume "$codex_run_id" --once 2>&1)
@@ -591,7 +636,7 @@ status_json=$(AGENT_DATA_DIR="$data" "$status_script" --all --json)
 if ! printf '%s\n' "$status_json" | python3 -c '
 import json, sys
 runs = json.load(sys.stdin)
-sys.exit(0 if len(runs) == 12 and all(r.get("run_id") for r in runs) else 1)
+sys.exit(0 if len(runs) == 13 and all(r.get("run_id") for r in runs) else 1)
 '; then
     fail "agent-status JSON 结果不完整：$status_json"
 fi

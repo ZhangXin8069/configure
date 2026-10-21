@@ -17,6 +17,7 @@ _usage() {
   --cwd DIR               默认继承父工作目录
   --timeout DUR           超时（如 30s/5m/1h；无 timeout 命令时不强制）
   --full                  使用完整 agent-prompt；默认使用最小子 agent prompt
+                          瞬时 429/重试上限失败会自动恢复一次同一 run
   --text                  返回纯文本；默认返回 JSON
   --json                  返回 JSON（默认）
   --secure/--no-secure    覆盖 secure/HPC launcher 继承
@@ -158,6 +159,7 @@ if [[ -n "${_timeout}" ]] && command -v timeout >/dev/null 2>&1; then
         AGENT_DISPATCH_TASK="${_task}" \
         AGENT_DISPATCH_MINIMAL="${_minimal}" \
         AGENT_DISPATCH_OUTPUT_FILE="${_result_file}" \
+        AGENT_AUTO_RESUME=0 \
         timeout "${_timeout}" "${_PATH}/${_launcher}" "${local_args[@]}"
     ) >"${_combined}" 2>&1
     _rc=$?
@@ -167,6 +169,7 @@ else
         AGENT_DISPATCH_TASK="${_task}" \
         AGENT_DISPATCH_MINIMAL="${_minimal}" \
         AGENT_DISPATCH_OUTPUT_FILE="${_result_file}" \
+        AGENT_AUTO_RESUME=0 \
         "${_PATH}/${_launcher}" "${local_args[@]}"
     ) >"${_combined}" 2>&1
     _rc=$?
@@ -183,6 +186,42 @@ elif [[ -n "${_run_id}" && -n "${AGENT_DATA_DIR:-}" && -f "${AGENT_DATA_DIR}/run
     _manifest="${AGENT_DATA_DIR}/runs/${_run_id}/manifest.env"
 fi
 
+_resume_status=not_needed
+_resume_rc=""
+if (( _rc != 0 )) && [[ -n "${_run_id}" && -n "${_manifest}" ]]; then
+    _resume_tool="${AGENT_RESUME_TOOL:-${AGENT_CONFIGURE_ROOT:-$(CDPATH= cd -- "${_PATH}/.." && pwd)}/tools/agent-resume.sh}"
+    if [[ -x "${_resume_tool}" ]]; then
+        _resume_data_root="${AGENT_PARENT_DATA_ROOT:-${AGENT_DATA_DIR:-}}"
+        _resume_args=(--run-id "${_run_id}" --delay "${AGENT_RESUME_DELAY:-10}")
+        [[ -z "${_resume_data_root}" ]] || _resume_args+=(--data-root "${_resume_data_root}")
+        [[ -z "${_provider}" ]] || _resume_args+=(--provider "${_provider}")
+        set +e
+        _resume_output=$(AGENT_RESUME_PROVIDER="${_provider}" \
+            "${_resume_tool}" "${_resume_args[@]}" 2>&1)
+        _resume_rc=$?
+        set -e
+        printf '%s\n' "${_resume_output}" >>"${_combined}"
+        case "${_resume_rc}" in
+            0)
+                _resume_status=finished
+                _rc=0
+                ;;
+            3)
+                _resume_status=not_recoverable
+                ;;
+            4)
+                _resume_status=skipped
+                ;;
+            *)
+                _resume_status=failed
+                _rc=${_resume_rc}
+                ;;
+        esac
+    else
+        _resume_status=unavailable
+    fi
+fi
+
 if [[ "${_format}" == text ]]; then
     if [[ -s "${_result_file}" ]]; then
         cat -- "${_result_file}"
@@ -194,13 +233,13 @@ if [[ "${_format}" == text ]]; then
 else
     python3 - "${_rc}" "${_agent}" "${_launcher}" "${_provider}" "${_model}" \
         "${_strength}" "${_run_id}" "${_manifest}" "${_log_file}" \
-        "${_result_file}" "${_combined}" <<'PY'
+        "${_result_file}" "${_combined}" "${_resume_status}" "${_resume_rc}" <<'PY'
 import json
 import os
 import sys
 
 (rc, agent, launcher, provider, model, strength, run_id, manifest,
- log_file, result_file, combined_file) = sys.argv[1:12]
+ log_file, result_file, combined_file, resume_status, resume_rc) = sys.argv[1:14]
 rc = int(rc)
 result = ""
 if os.path.isfile(result_file):
@@ -253,6 +292,10 @@ payload = {
     "log_file": log_file,
     "result": result,
     "output_tail": "" if result else combined_tail[-4000:],
+    "auto_resume": {
+        "status": resume_status,
+        "exit_code": int(resume_rc) if resume_rc else None,
+    },
 }
 print(json.dumps(payload, ensure_ascii=False, separators=(",", ":")))
 PY

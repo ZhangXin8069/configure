@@ -16,6 +16,7 @@
 
 - 初始化/更新：`git submodule update --init --recursive`。
 - 本库对这些参考库的分析文档统一放在 `refer/git-rep/docs/`，不要写入子库工作树。
+- 技能吸收记录见 `docs/skills-absorption-20261021.md`。
 - 子库工作树只读；需要修改上游内容时在上游仓库完成。
 - 新增参考库使用 `git submodule add <url> refer/git-rep/<upstream-name>`，并在上表登记
   path、URL、用途、固定提交、许可与致谢。
