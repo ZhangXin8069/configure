@@ -36,9 +36,38 @@ clean_path=/usr/bin:/bin
 real_git=$(command -v git)
 export REAL_GIT="$real_git"
 help_output=$(bash "$installer" --help 2>&1)
-assert_contains "$help_output" '76aaa77df6adc5b889e689007bf99b9a4f74af34'
+assert_contains "$help_output" '90606c8315ee09cafc303515c5f33024db6b9882'
+assert_contains "$help_output" '--audit-manifest PATH'
 assert_not_contains "$help_output" '0123456789abcdef0123456789abcdef01234567'
 printf 'PASS: help 示例使用真实固定 commit\n'
+
+audit_plugin=$test_root/audit-plugin
+mkdir -p "$audit_plugin/.codex-plugin"
+cat > "$audit_plugin/.codex-plugin/plugin.json" <<'EOF'
+{"name":"audit-plugin","version":"1.0.0","description":"audit fixture","license":"MIT"}
+EOF
+set +e
+manifest_audit_output=$(PATH="$clean_path" bash "$installer" \
+    --audit-manifest "$audit_plugin/.codex-plugin/plugin.json" 2>&1)
+manifest_audit_status=$?
+set -e
+(( manifest_audit_status == 0 )) || fail "clean manifest 审计失败\n输出：\n$manifest_audit_output"
+assert_contains "$manifest_audit_output" 'audit-plugin@1.0.0'
+assert_contains "$manifest_audit_output" 'PASS'
+
+unsafe_plugin=$test_root/unsafe-plugin
+mkdir -p "$unsafe_plugin/.codex-plugin"
+cat > "$unsafe_plugin/.codex-plugin/plugin.json" <<'EOF'
+{"name":"unsafe-plugin","version":"1.0.0","description":"unsafe","license":"MIT","hooks":"../../outside.json"}
+EOF
+set +e
+unsafe_audit_output=$(PATH="$clean_path" bash "$installer" \
+    --audit-manifest "$unsafe_plugin/.codex-plugin/plugin.json" 2>&1)
+unsafe_audit_status=$?
+set -e
+(( unsafe_audit_status != 0 )) || fail '越界 hooks 路径不应通过 manifest 审计'
+assert_contains "$unsafe_audit_output" 'PLUGIN_PATH_ESCAPE'
+printf 'PASS: --audit-manifest 委托 plugin-audit 并 fail-closed\n'
 
 git_bin=$test_root/git-bin
 git_log=$test_root/git.log
@@ -119,15 +148,27 @@ set -e
 assert_contains "$all_output" '社区插件使用内建固定 commit'
 assert_contains "$all_output" '组合定位：全部登记项，风险最高。'
 assert_contains "$all_output" 'build-web-data-visualization figma build-web-apps build-ios-apps build-macos-apps expo netlify'
-assert_contains "$all_output" 'affaan-m/ECC --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34'
+assert_contains "$all_output" 'affaan-m/ECC --ref 90606c8315ee09cafc303515c5f33024db6b9882'
+assert_contains "$all_output" 'Yeachan-Heo/oh-my-codex --ref 304fb3b4825c4132c273732b14d2d5e86b54f8e3'
 assert_contains "$all_output" 'addyosmani/agent-skills --ref aeac41d4d005999432bb7312f7ff06383a91d59d'
 assert_contains "$all_output" 'EveryInc/compound-engineering-plugin --ref fac349c0c31a543d497fd4825af9b44bdb7e7dfe'
 assert_contains "$all_output" 'a5c-ai/babysitter-codex --ref 694028503ae14a1111d4e32eaa5279752bc2194c'
 printf 'PASS: all profile 包含新增官方候选\n'
 
 set +e
+orchestration_output=$(PATH="$clean_path" bash "$installer" --profile orchestration --dry-run 2>&1)
+orchestration_status=$?
+set -e
+(( orchestration_status == 0 )) || fail "orchestration profile 在精简 Bash 环境中意外失败\n输出：\n$orchestration_output"
+assert_contains "$orchestration_output" '目标插件：babysitter omx'
+assert_contains "$orchestration_output" 'Yeachan-Heo/oh-my-codex --ref 304fb3b4825c4132c273732b14d2d5e86b54f8e3'
+assert_contains "$orchestration_output" 'OMX worker 编排 + babysitter 审批与长流程'
+assert_contains "$orchestration_output" 'OMX 的 hooks/MCP 完整运行依赖 omx runtime'
+printf 'PASS: orchestration profile 覆盖 OMX 与 babysitter\n'
+
+set +e
 global_ref_output=$(PATH="$clean_path" bash "$installer" --profile all \
-    --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 --dry-run 2>&1)
+    --ref 90606c8315ee09cafc303515c5f33024db6b9882 --dry-run 2>&1)
 global_ref_status=$?
 set -e
 (( global_ref_status != 0 )) || fail '单个 --ref 不应覆盖多个社区插件'
@@ -139,7 +180,7 @@ ref_output=$(PATH="$clean_path" bash "$installer" --dry-run ecc 2>&1)
 ref_status=$?
 set -e
 (( ref_status == 0 )) || fail "社区插件内建固定 ref 时不应失败\n输出：\n$ref_output"
-assert_contains "$ref_output" 'affaan-m/ECC --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34'
+assert_contains "$ref_output" 'affaan-m/ECC --ref 90606c8315ee09cafc303515c5f33024db6b9882'
 printf 'PASS: 社区插件使用内建完整 commit\n'
 
 fake_bin=$test_root/fake-bin
@@ -330,7 +371,7 @@ set -e
 (( commit_reject_rc != 0 )) || fail 'commit 策略不应接受浮动 ref'
 assert_contains "$commit_reject_output" '--ref-policy commit 要求 40 或 64 位十六进制提交哈希'
 
-commit_ref=76aaa77df6adc5b889e689007bf99b9a4f74af34
+commit_ref=90606c8315ee09cafc303515c5f33024db6b9882
 set +e
 commit_accept_output=$(PATH="$clean_path" bash "$installer" --dry-run --ref-policy commit --ref "$commit_ref" ecc 2>&1)
 commit_accept_rc=$?

@@ -350,3 +350,93 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## conf-refer-review - final - 2026-10-21 20:17:59 +0800
+- 主任务: 继续外部 code-review 端到端审查并修复 conf-refer-skill 发现的问题
+- 日志文件: logs/v2026102120.txt
+- 文件大小: 6691 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成两轴外部审查、行为评估、缺陷修复与任务范围门禁；保留并发工作树改动
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## absorb-refer-skills - final - 2026-10-21 20:23:14 +0800
+- 主任务: 吸收 refer/git-rep skills 的通用高价值内容
+- 日志文件: logs/v2026102120-2.txt
+- 文件大小: 6561 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 8 个参考源、1766 个技能文件的吸收矩阵，并将 12 个高价值机制适配到本地技能和资源工具
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-resume-debug - final - 2026-10-21 20:55:21 +0800
+- 主任务: 诊断 Codex TUI 429 后未触发 resume 的原因
+- 日志文件: logs/v2026102120-3.txt
+- 文件大小: 5106 bytes
+- 触发原因: 任务完成
+- 关键内容: 确认 429 属于存活 TUI 内的回合级失败；launcher 仍持有 run 锁，恢复器返回 agent_alive，同时识别 TUI thread_id 未持久化的潜在缺口。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## conf-refer-parallel-improve - final - 2026-10-21 20:55:24 +0800
+- 主任务: 并发完善 conf-refer-skill：并行审查代码、设计、集成并实施改进
+- 日志文件: logs/v2026102120-4.txt
+- 文件大小: 7154 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成三路并行审查、发现器安全与兼容修复、触发/评估完善及任务范围门禁；保留并发工作树
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-resume-optimization - final - 2026-10-21 21:23:20 +0800
+- 主任务: 优化本库 agent resume：TUI thread 找回与上游协议错误恢复
+- 日志文件: logs/v2026102121.txt
+- 文件大小: 5991 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 Codex state DB/rollout 只读回退，补齐 TUI thread 与瞬时性证据；识别 upstream_error/reasoning_content 错误，同时维持退出一致性、硬超时与单次恢复边界。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-resume-multiplex - final - 2026-10-21 21:41:25 +0800
+- 主任务: 扩展 agent resume 至 Codex、Claude Code 与 OpenCode
+- 日志文件: logs/v2026102121-2.txt
+- 文件大小: 5158 bytes
+- 触发原因: 任务完成
+- 关键内容: 统一三系本地会话解析与终态判定；Claude JSONL、OpenCode V1/V2 SQLite 均已接入，真实 401 认证错误不误恢复。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## hooks-tools-plugins-upgrade - final - 2026-10-21 21:52:59 +0800
+- 主任务: 参考 refer/git-rep 升级 hooks、tools、plugins 与 agent 中断恢复
+- 日志文件: logs/v2026102121-3.txt
+- 文件大小: 8082 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 hook 生命周期、plugin 静态审计、插件安装与 resume 闭环升级；严格验证通过并记录并行工作树限制
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-tui-turn-watch - final - 2026-10-21 21:56:51 +0800
+- 主任务: 修复 TUI 活进程下的 429 turn 级自动恢复断点
+- 日志文件: logs/v2026102121-4.txt
+- 文件大小: 5270 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增三系 TUI turn 终态 watcher；完成 turn 且瞬时失败时宽限复查后 SIGTERM，交由既有单次 resume 链恢复。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-tui-inplace-resume - final - 2026-10-21 22:38:43 +0800
+- 主任务: 纠正 TUI 恢复语义：任务中断即原地恢复
+- 日志文件: logs/v2026102122.txt
+- 文件大小: 6556 bytes
+- 触发原因: 任务完成
+- 关键内容: 移除强制退出 TUI；Codex app-server 显式 resume/add/start，Claude 后台 resume，OpenCode 固定端口 attach 续跑；当前 run 已热附加 watcher。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-resume-bug1-delivery - final - 2026-10-21 22:45:45 +0800
+- 主任务: 执行 diff、debug、init 与 tag 交付链路
+- 日志文件: logs/v2026102122-2.txt
+- 文件大小: 4983 bytes
+- 触发原因: 任务完成
+- 关键内容: 隔离 resume 核心改动并提交；tag-chain 通过；创建并推送 bug1，远端 main/tag 对象一致；并发工作树保持未提交。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -71,6 +71,6 @@
 
 ## 来源
 
-适配自 `refer/git-rep/skills/skills/productivity/writing-for-agents/SKILL.md`，上游
+适配自 `refer/git-rep/mattpocock-skills/skills/productivity/writing-for-agents/SKILL.md`，上游
 `mattpocock/skills` 固定提交 `5beb35b040e3de97e54fa9e386d7e42d15c295c2`，MIT License。
 本文件为精简改写，不复制上游全文。

@@ -27,9 +27,9 @@
 | `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENTS.md` 批次索引 |
 | `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
 | `data/` | agent 运行时本地数据：runs manifest/state/events/context/log/inputs，`cache/` 为 Codex 模型元数据目录缓存；默认不入库 |
-| `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；`agent-resume` 对瞬时中断做预检并异步调度恢复；不会自动修改 agent 配置或 `core.hooksPath` |
-| `plugins/` | Codex 插件推荐索引与显式安装器；不自动安装第三方插件 |
-| `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 默认等待 10 秒后恢复瞬时中断的普通/派发子 agent run，`agent-resources.py` 提供脱敏只读资源快照 |
+| `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；普通 TUI 由 `tools/agent-tui-watch.py` 对瞬时中断做原地恢复，进程退出后的 `agent-resume` 作为 headless/兜底路径；不会自动修改 agent 配置或 `core.hooksPath` |
+| `plugins/` | Codex 插件推荐索引与显式安装器；支持固定 ref、只读状态和安装前 plugin/hook/MCP 静态审计；不自动安装第三方插件 |
+| `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 恢复瞬时中断 run，`agent-resources.py` 提供脱敏资源快照，`plugin-audit.py` 静态审计 plugin/hook/MCP manifest |
 | `lib/_clash/` | Clash 代理环境安装包包装目录；`setup.sh --check` 仅检查，默认执行会解压覆盖子目录 |
 
 ## 外部组件边界
