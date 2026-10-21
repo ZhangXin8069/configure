@@ -1,6 +1,6 @@
-# Codex agent hooks
+# Agent hooks
 
-本目录提供一个显式的 Codex agent hook 适配层。由于当前无法从官方 OpenAI 文档核实统一的 Codex 生命周期 hook API，脚本不依赖某个版本的自动发现规则；调用方将事件映射到 `codex-hook.sh` 即可。
+本目录提供一个显式的通用 agent hook 适配层，事件模型兼容 Codex-style runner，但不依赖特定版本的自动发现规则；调用方将事件映射到 `agent-hook.sh` 即可。
 
 ## 事件
 
@@ -11,32 +11,40 @@
 | `before-edit` | 校验待编辑路径在仓库内，拒绝仓库根、`.git/`、技能会话日志和仓库外路径 | 拒绝路径时非零 |
 | `after-edit` | 检查工作树改动的空白、Shell 语法和会话日志 | 检查失败时非零 |
 | `stop` | 与 `after-edit` 相同，用于停止前复查 | 检查失败时非零 |
+| `agent-resume` | 检测 429/重试上限/连接中断等瞬时故障，默认 10 秒后异步恢复原 run | 无候选时 0；调度失败时非零 |
 | `notify` | 使用 `notify-send`（若存在）发送通知，否则输出到终端 | 始终尽量返回 0 |
 
 ## 调用示例
 
 ```bash
 # 统一入口
-hooks/codex-hook.sh session-start
-hooks/codex-hook.sh session-summary
-hooks/codex-hook.sh handoff
-hooks/codex-hook.sh before-edit -- hooks/codex-hook.sh skills/all/SKILL.md
-hooks/codex-hook.sh after-edit
-hooks/codex-hook.sh stop
+hooks/agent-hook.sh session-start
+hooks/agent-hook.sh session-summary
+hooks/agent-hook.sh handoff
+hooks/agent-hook.sh before-edit -- hooks/agent-hook.sh skills/all/SKILL.md
+hooks/agent-hook.sh after-edit
+hooks/agent-hook.sh stop
+hooks/agent-hook.sh agent-resume --run-id 20261021T031022.dXBwYt
 
 # 通知：纯文本、环境变量或 JSON 均可
-hooks/codex-hook.sh notify '任务已完成'
-CODEX_HOOK_MESSAGE='任务已完成' hooks/codex-hook.sh notify
-CODEX_HOOK_PAYLOAD='{"message":"任务已完成"}' hooks/codex-hook.sh notify
+hooks/agent-hook.sh notify '任务已完成'
+AGENT_HOOK_MESSAGE='任务已完成' hooks/agent-hook.sh notify
+AGENT_HOOK_PAYLOAD='{"message":"任务已完成"}' hooks/agent-hook.sh notify
 ```
 
 `before-edit` 无命令行路径时可从 stdin 接收逐行路径，也可接收含 `path`、`paths`、`file` 或 `files` 字段的 JSON payload。路径校验兼容 BSD/macOS 与 GNU `realpath`，对尚不存在的待创建路径会解析已有父目录后再做边界判断。`after-edit` 默认检查当前工作树相对 `HEAD` 的全部新增/修改文件（包含仅暂存的改动）以及未跟踪文件；仅验证指定文件时使用：
 
 ```bash
-hooks/codex-verify.sh --paths hooks/codex-hook.sh skills/all/SKILL.md
+hooks/agent-verify.sh --paths hooks/agent-hook.sh skills/all/SKILL.md
 ```
 
 `session-summary`/`handoff` 是只读的收尾事件：它不会修改工作树，只读取仓库根、分支、HEAD、最近提交和工作树状态，并按 `recent_path=` 输出最多 5 个上下文路径。
+
+`agent-resume` 先调用 `tools/agent-resume.sh --check`，只有 manifest 为失败状态、没有存活
+lock owner、错误属于瞬时服务故障且能恢复 session/thread 时才进入后台调度。后台工具默认等待
+10 秒，通过原 manifest 的 launcher 执行 `--resume RUN_ID --once`，并用 run 目录中的
+`.auto-resume-attempted` 保证每个 run 只自动恢复一次；持续 429 不会形成无界重试。手动重试可用
+`tools/agent-resume.sh --force`。
 
 ## 安全与依赖
 
@@ -52,6 +60,7 @@ hooks/codex-verify.sh --paths hooks/codex-hook.sh skills/all/SKILL.md
 
 ```bash
 bash hooks/hooks.test.sh
+bash hooks/agent-resume.test.sh
 ```
 
 当前目录已有的 `pre-commit`/`pre-push` 是独立的 Git 质量门禁，不与本适配层混用。

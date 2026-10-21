@@ -1,0 +1,81 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 19:50:10 +0800
+批次: skills-conf-refer
+主任务: 编写 conf-refer-skill：按场景直接调用 refer/git-rep 外部技能并做最小适配
+触发原因: 任务完成
+摘要: 新增外部参考技能发现与直调适配 skill、离线回归及技能表编排联动，全部结构门禁通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 调研与设计
+- 目标: 新建 `conf-refer-skill`，在任务契合 `$CONFIGURE_ROOT/refer/git-rep/**/skills` 时直接调用外部技能，仅在调用机制、路径、工具和本地门禁上做最小适配。
+- 调研: 完整读取 `skill-creator`、`log`、`rule`，参考 `absorb`、`init`、`dispatch` 及外部技能目录结构。
+- 关键输出: 识别 6 个外层 `skills/` 入口，真实索引去重后得到 273 个外部 `SKILL.md`；同名技能和 `oh-my-codex` 插件镜像需要稳定排序。
+- 证据与判断: 外部技能不能原地复制或直接信任；调用必须保留来源路径，并优先服从用户与本库安全规则。
+
+### S2 — 实现
+- 新增: `skills/conf-refer-skill/SKILL.md`、`AGENTS.md`、`scripts/find_refer_skills.py`、`scripts/test_find_refer_skills.py`。
+- 核心行为: 支持标准、插件和嵌套 `skills/`；安全跟随 `refer/git-rep` 内部符号链接，拒绝越界链接；按真实路径去重；解析 frontmatter；支持 `--query`、`--name`、`--path` 和 JSON/TSV。
+- 选择规则: 显式路径和仓库优先；活跃技能优于 `in-progress`/`deprecated`；标准目录优于插件镜像；同名无法区分时稳定取首个并披露候选。
+- 适配边界: 映射参数占位符、工具名、相对资源和输出要求；外部自动 Git、网络、凭据或破坏性操作不获得额外授权；递归调用最多 3 层。
+- 联动: 更新 `skills/AGENTS.md` 参考文件、计数、互鉴表和技能表；更新 `all`、`make` 编排路由及根 `AGENTS.md` 技能清单。
+
+### S3 — 验证
+- Python 回归: `PYTHONDONTWRITEBYTECODE=1 python3 -m unittest -v skills/conf-refer-skill/scripts/test_find_refer_skills.py`，5/5 通过。
+- 真实索引: `find_refer_skills.py --root /root/configure --name plan` 返回 273 个候选，`plan` 同名结果按标准目录优先于插件镜像。
+- 场景探测: `academic paper review` 首选 `academic-paper-reviewer`；`single cell RNA analysis` 返回相关单细胞/RNA 技能；`autopilot long task` 首选标准 `autopilot`。
+- 配置门禁: `tools/configure-check.sh` 报告 skills=33、errors=0；仅保留既有插件 manifest 警告。
+- 结构门禁: `form-audit.sh --strict --quiet` 与 `form-snapshot-verify.sh --quiet` 均通过。
+- Git 检查: `git diff --check` 通过；未暂存、未提交、未推送。
+
+## 验证与证据
+- 测试/检查: 5 项脚本回归、Python 语法检查、真实目录索引、配置检查、结构审计、快照校验、diff 检查。
+- 结果: 全部本任务相关门禁通过。
+- 未验证项: 未执行跨运行器的真实触发率 60/40 对照实验；触发描述已通过仓库静态门禁，发现器行为已有离线覆盖。
+
+## 变更与产物
+- 文件: `skills/conf-refer-skill/SKILL.md`
+- 文件: `skills/conf-refer-skill/AGENTS.md`
+- 文件: `skills/conf-refer-skill/scripts/find_refer_skills.py`
+- 文件: `skills/conf-refer-skill/scripts/test_find_refer_skills.py`
+- 文件: `skills/AGENTS.md`
+- 文件: `skills/all/SKILL.md`
+- 文件: `skills/make/SKILL.md`
+- 文件: `AGENTS.md`
+- 未改动范围: 未修改 `refer/git-rep` 外部技能内容；未回退或覆盖工作树中其他既有改动。
+
+## 风险、限制与下一步
+- 风险: 外部技能正文仍可能包含过时命令、缺失依赖或平台假设；执行时需按适配账本逐项处理。
+- 阻塞: 无。
+- 下一步: 可选择一个真实外部技能任务做端到端试运行，验证具体候选选择和适配效果。
+
+## 用户输入指令
+参考已有经验,编写conf-refer-skill skill:当任务需求契合{${CONFIGURE_ROOT}/refer/git-rep/***skills}的应用场景时,本skill将直接调用{${CONFIGURE_ROOT}/refer/git-rep/***skills}中的skill,必要时做一定的针对性适配
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- 新增 `skills/conf-refer-skill`，定义外部参考技能的原地发现、选择、完整读取、最小适配、执行、验证与失败降级流程。
+- 新增 `find_refer_skills.py`，覆盖嵌套 `skills/`、插件镜像、同名技能、frontmatter、符号链接边界、真实路径去重、关键词/名称/路径查询及 JSON/TSV 输出。
+- 新增 5 项离线回归，覆盖标准/嵌套/插件目录、同名排序、路径越界、链接去重、缺失 frontmatter 和多行描述。
+- 更新 `skills/AGENTS.md` 的技能计数、参考文件、互鉴表和技能表，并在 `all`、`make` 及根 `AGENTS.md` 中登记调用路由。
+
+**推理依据**
+- 外部技能应以 `SKILL.md` 为权威原地执行，避免复制后来源漂移和脚本相对路径失效。
+- 外部技能正文不能覆盖用户指令、本库安全边界和 Git 授权；因此只适配参数、工具、路径、权限和输出契约。
+- 同名外部技能必须可解释地排序；标准目录优先于插件镜像，活跃技能优先，显式路径始终最高优先级。
+
+**验证结果**
+- 5/5 发现器回归通过。
+- 真实索引识别 273 个外部技能，典型学术审稿与 autopilot 查询命中正确。
+- `configure-check.sh`：33 个技能，0 错误；仅有既有插件 manifest 警告。
+- `form-audit.sh --strict --quiet`、`form-snapshot-verify.sh --quiet`、`git diff --check` 均通过。
+- 未暂存、未提交、未推送。仓库中原有其他未提交改动未被覆盖。
+
+**后续步骤**
+- 建议选一个真实外部技能任务做端到端试运行；当前未做跨运行器的 60/40 触发率对照实验。
+--- report end ---

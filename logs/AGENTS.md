@@ -323,3 +323,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-resume - final - 2026-10-21 18:43:30 +0800
+- 主任务: agent-resume 瞬时中断自动恢复工具
+- 日志文件: logs/v2026102118-2.txt
+- 文件大小: 5893 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 hooks/tools 恢复工具、runtime/dispatch 接入、子 agent 覆盖和全量回归
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-hook-rename - final - 2026-10-21 19:40:38 +0800
+- 主任务: 将 hooks 的 codex-* 系列统一迁移为 agent-*
+- 日志文件: logs/v2026102119.txt
+- 文件大小: 4357 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 7 个 hook 脚本、AGENT_HOOK_* 环境变量、测试和文档的通用命名迁移
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## skills-conf-refer - final - 2026-10-21 19:50:10 +0800
+- 主任务: 编写 conf-refer-skill：按场景直接调用 refer/git-rep 外部技能并做最小适配
+- 日志文件: logs/v2026102119-2.txt
+- 文件大小: 5930 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增外部参考技能发现与直调适配 skill、离线回归及技能表编排联动，全部结构门禁通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

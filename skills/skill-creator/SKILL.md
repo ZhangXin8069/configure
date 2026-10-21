@@ -35,6 +35,8 @@ metadata:
 3. **分级披露（progressive disclosure）**：SKILL.md 保持精简（理想 <500 行）；
    过长内容拆到 `references/` 并按需读取；脚本放 `scripts/`（可执行、确定性任务）；
    资源放 `assets/`。
+   每个按需文件必须由明确 context pointer 指向，并写清哪些分支触发读取；常驻描述只承担触发，
+   不在 description 中重复完整工作流。
 4. **解释 why，而非堆 MUST**：用"为什么这样做"的说明替代全大写 MUST/NEVER；
    硬性规则是黄旗——优先讲清理由让模型真正理解。
    规则形式必须匹配失败类型（吸收 superpowers writing-skills "Match the Form to the Failure"）：
@@ -107,6 +109,8 @@ metadata:
 
 - 长度：保持精简（<500 行）；超长时拆 `references/`（如分场景的长指令、大表格）；
   从 SKILL.md 明确指引"何时读取哪个 reference"；
+- 编写或修改 `SKILL.md`、`AGENTS.md`、技能引用文档时，读取
+  `references/agent-doc-writing.md`，检查 pointer 分支、上下文负载、信息层级、完成判据和无效句子；
 - 命令示例必须真实可执行；指令用祈使句；
 - 保留本目录既有 skill 的公共约定：`文件:行号` 引用、证据驱动；过程只在终端输出。
 

@@ -3,12 +3,12 @@
 set -Eeuo pipefail
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-hook_script=$script_dir/codex-hook.sh
-verify_script=$script_dir/codex-verify.sh
-guard_script=$script_dir/codex-guard.sh
-preflight_script=$script_dir/codex-preflight.sh
-event_script=$script_dir/codex-event.sh
-test_root=$(mktemp -d "${TMPDIR:-/tmp}/codex-verify-test.XXXXXX")
+hook_script=$script_dir/agent-hook.sh
+verify_script=$script_dir/agent-verify.sh
+guard_script=$script_dir/agent-guard.sh
+preflight_script=$script_dir/agent-preflight.sh
+event_script=$script_dir/agent-event.sh
+test_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-verify-test.XXXXXX")
 
 cleanup() {
     rm -rf -- "$test_root"
@@ -114,7 +114,7 @@ preflight_status=$?
 set -e
 
 (( preflight_status == 0 )) || fail "session-start 预检失败\n输出：\n$output"
-assert_contains "$output" 'codex-preflight event=session-start'
+assert_contains "$output" 'agent-preflight event=session-start'
 assert_contains "$output" 'instruction_count=0'
 printf 'PASS: session-start 预检兼容 Bash 3.2\n'
 
@@ -162,9 +162,9 @@ printf 'PASS: 仓库内说明文件符号链接不能越界读取仓库外文件
 
 hook_data="$test_root/hook-data"
 set +e
-json_output=$(cd -- "$repo" && CODEX_HOOK_DATA_DIR="$hook_data" \
-    CODEX_HOOK_RUN_ID=hook-run CODEX_HOOK_SESSION_ID=session-hook \
-    CODEX_HOOK_TURN_ID=3 "$hook_script" --json session-start 2>&1)
+json_output=$(cd -- "$repo" && AGENT_HOOK_DATA_DIR="$hook_data" \
+    AGENT_HOOK_RUN_ID=hook-run AGENT_HOOK_SESSION_ID=session-hook \
+    AGENT_HOOK_TURN_ID=3 "$hook_script" --json session-start 2>&1)
 json_status=$?
 set -e
 
@@ -188,7 +188,7 @@ printf 'PASS: JSON hook envelope 与持久事件日志\n'
 control_event_dir="$hook_data/control"
 control_detail=$(printf 'control:\001detail')
 set +e
-control_output=$(cd -- "$repo" && CODEX_HOOK_DATA_DIR="$control_event_dir" \
+control_output=$(cd -- "$repo" && AGENT_HOOK_DATA_DIR="$control_event_dir" \
     "$event_script" session-start ok "$control_detail" 2>&1)
 control_status=$?
 set -e
@@ -211,7 +211,7 @@ if command -v jq >/dev/null 2>&1; then
     done
     set +e
     fallback_output=$(cd -- "$repo" && PATH="$fallback_bin" \
-        CODEX_HOOK_DATA_DIR="$fallback_event_dir" "$bash_path" "$event_script" \
+        AGENT_HOOK_DATA_DIR="$fallback_event_dir" "$bash_path" "$event_script" \
         session-start ok "$control_detail" 2>&1)
     fallback_status=$?
     set -e
@@ -228,7 +228,7 @@ missing_parser_output=$(cd -- "$repo" && PATH="$missing_parser_bin" \
     "$bash_path" "$event_script" session-start 2>&1)
 missing_parser_status=$?
 set -e
-(( missing_parser_status != 0 )) || fail '缺少 JSON 编码器时 codex-event 不应成功'
+(( missing_parser_status != 0 )) || fail '缺少 JSON 编码器时 agent-event 不应成功'
 assert_contains "$missing_parser_output" 'JSON 编码需要 python3 或 jq'
 printf 'PASS: 事件 JSON 对控制字符可靠编码并在 jq 回退/缺失时明确处理\n'
 
@@ -238,7 +238,7 @@ output=$(cd -- "$repo" && "$verify_script" --paths untracked.txt 2>&1)
 status=$?
 set -e
 
-(( status != 0 )) || fail '未跟踪文件的尾随空白不应通过 codex-verify'
+(( status != 0 )) || fail '未跟踪文件的尾随空白不应通过 agent-verify'
 assert_contains "$output" 'trailing whitespace'
 
 printf 'PASS: 未跟踪文件的尾随空白被拒绝\n'
@@ -248,7 +248,7 @@ output=$(cd -- "$repo" && "$guard_script" -- new/created.sh ../outside.txt 2>&1)
 guard_status=$?
 set -e
 
-(( guard_status != 0 )) || fail '仓库外路径与仓库内新路径的组合不应通过 codex-guard'
+(( guard_status != 0 )) || fail '仓库外路径与仓库内新路径的组合不应通过 agent-guard'
 assert_contains "$output" 'before-edit allow: new/created.sh'
 assert_contains "$output" '路径在仓库外'
 printf 'PASS: 不存在的仓库内路径可规范化，仓库外路径被拒绝\n'
@@ -261,7 +261,7 @@ output=$(cd -- "$repo" && "$guard_script" -- escape/created.sh 2>&1)
 symlink_status=$?
 set -e
 
-(( symlink_status != 0 )) || fail '经过仓库内符号链接逃逸的路径不应通过 codex-guard'
+(( symlink_status != 0 )) || fail '经过仓库内符号链接逃逸的路径不应通过 agent-guard'
 assert_contains "$output" '路径在仓库外'
 printf 'PASS: 符号链接逃逸路径被拒绝\n'
 
@@ -269,30 +269,30 @@ set +e
 output=$(cd -- "$repo" && "$guard_script" </dev/null 2>&1)
 empty_guard_status=$?
 set -e
-(( empty_guard_status != 0 )) || fail '无路径且 stdin 为空时 codex-guard 不应成功'
+(( empty_guard_status != 0 )) || fail '无路径且 stdin 为空时 agent-guard 不应成功'
 assert_contains "$output" '未收到路径'
 
 set +e
 output=$(cd -- "$repo" && "$guard_script" <<< '' 2>&1)
 blank_guard_status=$?
 set -e
-(( blank_guard_status != 0 )) || fail '空 stdin 时 codex-guard 不应成功'
+(( blank_guard_status != 0 )) || fail '空 stdin 时 agent-guard 不应成功'
 assert_contains "$output" '未收到路径'
 
 set +e
 output=$(cd -- "$repo" && "$guard_script" <<< '{}' 2>&1)
 json_guard_status=$?
 set -e
-(( json_guard_status != 0 )) || fail 'JSON payload 无路径时 codex-guard 不应成功'
+(( json_guard_status != 0 )) || fail 'JSON payload 无路径时 agent-guard 不应成功'
 assert_contains "$output" 'JSON payload 未能提取路径'
-printf 'PASS: codex-guard 对空路径输入 fail-closed\n'
+printf 'PASS: agent-guard 对空路径输入 fail-closed\n'
 
 set +e
 output=$(cd -- "$repo" && "$verify_script" --paths missing.sh 2>&1)
 missing_status=$?
 set -e
 
-(( missing_status != 0 )) || fail '显式指定的不存在路径不应通过 codex-verify'
+(( missing_status != 0 )) || fail '显式指定的不存在路径不应通过 agent-verify'
 assert_contains "$output" '路径不存在或不是普通文件'
 
 printf 'PASS: 不存在的显式路径被拒绝\n'
@@ -310,7 +310,7 @@ set +e
 runtime_guard_output=$(cd -- "$committed_repo" && "$guard_script" -- data/runs/session 2>&1)
 runtime_guard_status=$?
 set -e
-(( runtime_guard_status != 0 )) || fail 'agent runtime 数据路径不应通过 codex-guard'
+(( runtime_guard_status != 0 )) || fail 'agent runtime 数据路径不应通过 agent-guard'
 assert_contains "$runtime_guard_output" 'agent 运行时数据'
 printf 'PASS: agent runtime 数据路径被保护\n'
 
@@ -343,7 +343,7 @@ output=$(cd -- "$staged_whitespace_repo" && "$verify_script" --changed 2>&1)
 staged_whitespace_status=$?
 set -e
 
-(( staged_whitespace_status != 0 )) || fail '仅暂存的尾随空白不应通过 codex-verify --changed'
+(( staged_whitespace_status != 0 )) || fail '仅暂存的尾随空白不应通过 agent-verify --changed'
 assert_contains "$output" 'git diff --cached --check 失败'
 assert_contains "$output" 'staged.txt'
 printf 'PASS: --changed 检查仅暂存的尾随空白\n'
@@ -353,7 +353,7 @@ output=$(cd -- "$staged_whitespace_repo" && "$verify_script" --paths staged.txt 
 staged_paths_status=$?
 set -e
 
-(( staged_paths_status != 0 )) || fail '仅暂存的尾随空白不应通过 codex-verify --paths'
+(( staged_paths_status != 0 )) || fail '仅暂存的尾随空白不应通过 agent-verify --paths'
 assert_contains "$output" 'git diff --cached --check 失败'
 assert_contains "$output" 'staged.txt'
 printf 'PASS: --paths 检查仅暂存的尾随空白\n'
@@ -370,7 +370,7 @@ summary_status=$?
 set -e
 
 (( summary_status == 0 )) || fail "session-summary 不应失败\n输出：\n$output"
-assert_contains "$output" 'codex-summary event=session-summary'
+assert_contains "$output" 'agent-summary event=session-summary'
 assert_contains "$output" "repo_root=$committed_repo_realpath"
 assert_contains "$output" 'worktree_status=dirty'
 assert_contains "$output" 'staged_count=1'
@@ -390,7 +390,7 @@ handoff_status=$?
 set -e
 
 (( handoff_status == 0 )) || fail "handoff 别名不应失败\n输出：\n$output"
-assert_contains "$output" 'codex-summary event=session-summary'
+assert_contains "$output" 'agent-summary event=session-summary'
 after_alias_status=$(cd -- "$committed_repo" && git status --short --untracked-files=normal)
 [[ "$after_alias_status" == "$baseline_status" ]] || fail 'handoff 不应修改工作树'
 

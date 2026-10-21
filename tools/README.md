@@ -61,6 +61,60 @@ tools/task-scope.sh --task "先帮我评估这个分类器的可行性，再给�
 bash tools/task-scope.test.sh
 ```
 
+### `agent-resume.sh`
+
+检测 agent 因瞬时服务故障意外退出的 run，并在默认等待 10 秒后通过原统一 launcher 执行
+`--resume RUN_ID --once`。当前识别 429、重试上限、限流、服务不可用、网关错误、连接重置/超时
+和流中断；认证失败、任务正常结束、用户停止、仍在运行的 run 不会恢复。
+
+工具直接消费 `data/runs/<run-id>/manifest.env`，因此普通 agent 与 `agent-dispatch.sh` 派发的
+子 agent 使用同一恢复路径。若 Codex 在首个回合失败前已写入 `thread.started` 但 manifest 尚无
+`thread_id`，工具会从 `agent.log` 回填；Claude/OpenCode 分别恢复 `session_id`。每个 run 使用
+`.auto-resume-attempted` 限制为一次自动尝试，持续 429 不会形成重试风暴。
+
+```bash
+tools/agent-resume.sh --check --run-id RUN_ID
+tools/agent-resume.sh --run-id RUN_ID
+tools/agent-resume.sh                 # 自动选择最新可恢复 run
+tools/agent-resume.sh --force --run-id RUN_ID
+```
+
+退出码：`0` 恢复成功，`1` 已恢复但 agent 失败，`2` 参数错误，`3` 不可恢复，`4` 正在运行/
+已停止/已尝试自动恢复，`5` manifest 或会话标识无效，`6` 找不到 run，`7` launcher 不可用，
+`73` 工作目录或写权限不可用，`124` 恢复超时。恢复子进程默认硬超时 1800 秒，可用
+`--timeout`、`AGENT_RESUME_DELAY`、`AGENT_RESUME_TIMEOUT` 调整；`AGENT_AUTO_RESUME=0`
+可关闭 runtime 自动调度。
+
+回归测试：
+
+```bash
+bash tools/agent-resume.test.sh
+```
+
+### `agent-resources.py`
+
+只读输出 agent 规划所需的保守资源快照，区分 host CPU/内存、当前进程 affinity、cgroup v2 hard
+limit、Slurm allocation、工作盘和 accelerator 可见性。工具不运行 benchmark/stress、不写系统状态，
+也不输出 hostname、绝对路径、job ID、device UUID 或原始环境变量值。容器或调度环境中缺失 cgroup
+限制时保持 `review_required=true`，不会把 host 可见资源写成 unlimited。
+
+```bash
+python3 tools/agent-resources.py
+python3 tools/agent-resources.py --no-accelerators --compact
+python3 tools/agent-resources.py --proc-root /proc --cgroup-root /sys/fs/cgroup
+```
+
+输出为 JSON schema 1，关键字段包括 `cpu.effective_capacity_cores`、`cpu.worker_ceiling`、
+`memory.effective_limit_bytes`、`memory.available_estimate_bytes`、`scheduler`、`disk`、
+`accelerators`、`completeness`、`warnings` 和 `provenance`。accelerator 管理查询可见只表示候选，
+`runtime_usable_devices` 仍为 `null`，不能在未做目标环境验证时宣称框架可用。
+
+回归测试：
+
+```bash
+python3 tools/agent-resources.test.py
+```
+
 ## 上游推荐
 
 | 项目 | 来源 | 推荐用途 | 本库定位 |

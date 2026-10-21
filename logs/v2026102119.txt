@@ -1,0 +1,61 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 19:40:38 +0800
+批次: agent-hook-rename
+主任务: 将 hooks 的 codex-* 系列统一迁移为 agent-*
+触发原因: 任务完成
+摘要: 完成 7 个 hook 脚本、AGENT_HOOK_* 环境变量、测试和文档的通用命名迁移
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 命名审计
+- 目标: 将 `"codex-"` 系列修改为更通用的 `"agent-"` 系列。
+- 范围: `hooks/` 下 7 个脚本、hook 测试、README/AGENTS、根目录说明和现有 agent 架构分析文档。
+- 冲突表: `codex-hook/event/guard/notify/preflight/summary/verify.sh` 全部命中旧前缀；`CODEX_HOOK_*` 环境变量和测试变量 `codex_hook` 同样属于旧命名。
+- 例外: `refer/` 中上游真实文件 `codex-native-hook.ts` 是外部证据路径，保留原名。
+
+### S2 — 批量迁移
+- 文件重命名: `hooks/codex-{event,guard,hook,notify,preflight,summary,verify}.sh` 改为 `hooks/agent-*`。
+- 符号迁移: 命令输出、usage、临时目录、事件转发目标和测试变量全部改为 `agent-*`。
+- 环境变量: `CODEX_HOOK_*` 改为 `AGENT_HOOK_*`，包括 `FORMAT`、`EVENT`、`DATA_DIR`、`EVENT_FILE`、`SOURCE`、`RUN_ID`、`SESSION_ID`、`THREAD_ID`、`TURN_ID`、`TITLE`、`MESSAGE`、`PAYLOAD`。
+- 文档迁移: 根 `AGENTS.md`、`hooks/AGENTS.md`、`hooks/README.md` 和 `docs/analy_agent_configure_20260909.tex` 同步为通用 agent hook 名称。
+- 兼容策略: 按用户指令使用彻底替换，不保留旧 `codex-*` 别名，避免双命名并存。
+
+## 验证与证据
+- `bash hooks/hooks.test.sh`: PASS，覆盖 preflight、JSON event、guard、verify、summary/handoff 和权限检查。
+- `bash hooks/agent-resume.test.sh`: PASS，验证命名为 `agent-hook.sh` 后恢复事件映射和异步调度仍正常。
+- `bash bin/agent-runtime-resume.test.sh`: PASS。
+- `bash bin/agent-dispatch.test.sh`: PASS。
+- `bash -n hooks/*.sh hooks/pre-commit hooks/pre-push`: PASS。
+- `tools/configure-check.sh`: errors=0，hooks-shell=13；仅有既存的无插件 manifest 警告。
+- `skills/form/scripts/form-audit.sh --root . --strict --quiet`: PASS。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`: PASS。
+- `git diff --check`: PASS。
+- 旧名称扫描: `codex-hook|codex-event|codex-guard|codex-notify|codex-preflight|codex-summary|codex-verify|CODEX_HOOK_|codex_hook` 在排除历史日志、数据和上游参考后为零。
+
+## 变更与产物
+- 重命名: `hooks/agent-event.sh`、`agent-guard.sh`、`agent-hook.sh`、`agent-notify.sh`、`agent-preflight.sh`、`agent-summary.sh`、`agent-verify.sh`。
+- 更新: `hooks/hooks.test.sh`、`hooks/agent-resume.test.sh`。
+- 文档: `AGENTS.md`、`hooks/AGENTS.md`、`hooks/README.md`、`docs/analy_agent_configure_20260909.tex`。
+- 未提交、未推送、未打标签。
+
+## 风险、限制与下一步
+- `CODEX_HOOK_*` 已不兼容旧值；已有外部 hook 配置需要迁移到 `AGENT_HOOK_*`。
+- 上游参考文件名 `codex-native-hook.ts` 保持不变，因为它描述真实外部对象。
+- 当前改动与上一轮 `agent-resume` 未提交改动共存，未执行暂存或提交。
+
+## 用户输入指令
+- "codex-"系列应修改为更加通用的"agent-"系列
+
+## Agent 全文报告
+--- report begin ---
+finished：`hooks/` 的 `codex-*` 系列已统一迁移为 `agent-*`。
+
+改动内容：7 个 hook 脚本重命名为 `agent-hook.sh`、`agent-event.sh`、`agent-guard.sh`、`agent-notify.sh`、`agent-preflight.sh`、`agent-summary.sh`、`agent-verify.sh`；同步迁移 `CODEX_HOOK_*` 到 `AGENT_HOOK_*`，更新测试、README、AGENTS 和 agent 架构分析文档。旧名称未保留兼容别名。上游真实文件 `codex-native-hook.ts` 保持原名。
+
+推理依据：事件适配层的职责并不专属于 Codex，而覆盖 Codex、Claude、OpenCode 等 agent runner；统一使用 `agent-*` 可避免命名误导，并让文件、事件变量和测试接口保持一致。
+
+验证结果：hooks 全量测试、agent-resume hook 测试、runtime 恢复测试、dispatch 测试、全部 hook `bash -n`、configure-check、form audit、snapshot verify 和 `git diff --check` 均通过；旧命名扫描为零。
+
+后续步骤：已有外部 hook 环境变量配置需从 `CODEX_HOOK_*` 改为 `AGENT_HOOK_*`。未提交或推送。
+--- report end ---

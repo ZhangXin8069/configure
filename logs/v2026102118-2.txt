@@ -1,0 +1,74 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 18:43:30 +0800
+批次: agent-resume
+主任务: agent-resume 瞬时中断自动恢复工具
+触发原因: 任务完成
+摘要: 完成 hooks/tools 恢复工具、runtime/dispatch 接入、子 agent 覆盖和全量回归
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 需求与代码调查
+- 目标: 在 hooks 与 tools 中加入 agent 瞬时中断后的 10 秒自动恢复能力，并覆盖派发子 agent。
+- 操作: 读取 root/hooks/tools/bin 相关规则与运行层实现，选择性参考 go-on 的存活检查与权威状态优先原则。
+- 证据: 实际失败 run `20261021T031022.dXBwYt` 的日志包含 `exceeded retry limit, last status: 429 Too Many Requests`，manifest 为 `state=failed` 且 thread ID 只在日志中。
+- 判断: 必须从日志恢复 thread/session，再走统一 launcher 的 `--resume RUN_ID --once`，不能裸调 agent 二进制。
+
+### S2 — 工具与 hook 实现
+- 新增 `tools/agent-resume.sh`: 检测瞬时故障、检查 lock owner、恢复 thread/session、默认等待 10 秒、一次自动尝试、硬超时和 run 事件。
+- 新增 `hooks/agent-resume.sh`: 快速预检后脱离 agent 进程异步调度工具。
+- 更新 `hooks/codex-hook.sh`: 增加 `agent-resume` 事件及 `resume` 别名。
+- 更新 `bin/agent-runtime.sh`: failed/blocked run 释放 lock 后调度恢复 hook。
+- 更新 `bin/agent-dispatch.sh`: 派发子 agent 的瞬时失败同步恢复，并在 JSON 增加 `auto_resume` 状态。
+
+### S3 — 安全与边界
+- 操作: 对认证错误、正常结束、用户停止、存活进程、缺少 session/thread、非法 manifest 和重复自动尝试全部 fail-closed。
+- 证据: `tools/agent-resume.test.sh` 的永久错误、存活进程、session_missing 和单次标记用例通过。
+- 判断: 每个 run 仅自动恢复一次，持续 429 不会形成重试风暴。
+
+## 验证与证据
+- `bash tools/agent-resume.test.sh`: PASS，覆盖 Codex 429、单次限制、认证失败、存活 lock、派发子 agent、缺失会话、缺失 run、硬超时与进程清理。
+- `bash hooks/agent-resume.test.sh`: PASS，覆盖 codex-hook 事件预检、异步调度和永久错误 no-op。
+- `bash bin/agent-dispatch.test.sh`: PASS，子 agent 首次失败后恢复并返回 `ok=true`、`auto_resume.status=finished`。
+- `bash bin/agent-runtime-resume.test.sh`: PASS，验证普通失败调度与恢复子进程不递归调度。
+- `bash bin/agent.test.sh`: PASS，含真实启动器级模拟：首次 Codex 429 退出后自动 `exec resume`，最终 `state=finished`、`resume_count=1`。
+- `bash hooks/hooks.test.sh`: PASS。
+- `bash tools/configure-check.test.sh`、`coverage-report.test.sh`、`task-scope.test.sh`: PASS。
+- `bash -n` 全部修改脚本: PASS。
+- `tools/configure-check.sh`: errors=0，仅保留仓库既有“无插件 manifest”警告。
+- `skills/form/scripts/form-audit.sh --root . --strict --quiet`: PASS。
+- `skills/form/scripts/form-snapshot-verify.sh --quiet`: PASS。
+- `git diff --check`: PASS。
+- 实际样本检查: `tools/agent-resume.sh --check --run-id 20261021T031022.dXBwYt` 输出 `status=resumable`、`delay=10`、`reason=transient_failure`。
+
+## 变更与产物
+- `tools/agent-resume.sh`、`hooks/agent-resume.sh` 及各自测试。
+- `bin/agent-runtime.sh`、`bin/agent-dispatch.sh` 与对应回归测试。
+- `bin/agent-runtime-resume.test.sh`、`bin/agent.test.sh`。
+- `AGENTS.md`、`bin/AGENTS.md`、`hooks/AGENTS.md`、`hooks/README.md`、`tools/AGENTS.md`、`tools/README.md`。
+- 未提交、未推送、未打标签。
+
+## 风险、限制与下一步
+- 自动恢复只针对强瞬时故障信号；认证、权限、业务断言失败不会重试。
+- 每个 run 默认只自动恢复一次；持续限流需人工调查或显式 `--force`。
+- 若 provider 没有在首个失败回合前产生 thread/session 标识，工具会跳过而不是开启无上下文新会话。
+- 当前自动 runtime 接线位于 Unix `agent-runtime.sh`；Windows PowerShell runtime 未新增自动 hook 接线。
+
+## 用户输入指令
+- 在hooks和tools添加agent辅助工具resume:当agent意外中断(例如" exceeded retry limit, last status: 429 Too Many Requests")后10秒自动令agent继续被意外中断的任务
+- 选择性参考skills/go-on
+- 继续
+- 此辅助工具同样适用于被派发的子agent
+
+## Agent 全文报告
+--- report begin ---
+finished：已完成 agent 瞬时中断自动恢复工具。
+
+改动内容：新增 `tools/agent-resume.sh` 与 `hooks/agent-resume.sh`；接入 `codex-hook.sh agent-resume`、Unix agent runtime 和 `agent-dispatch.sh`。工具会识别 429、重试上限、限流、网关错误、连接中断等强信号，确认原进程已退出并恢复 thread/session，默认等待 10 秒后通过原统一 launcher 执行 `--resume RUN_ID --once`。每个 run 只自动尝试一次，认证失败、正常结束、用户停止、存活进程和缺少会话标识均不会恢复。
+
+推理依据：现有 manifest 已保存 launcher/model/strength/data root，但首个 Codex 429 回合可能只把 `thread_id` 写入 `agent.log`，因此工具先从日志回填 manifest，再调用统一 launcher；派发子 agent 使用同一 manifest 结构，并在 `agent-dispatch.sh` 中同步等待恢复结果。该设计复用现有恢复链，不裸调底层 agent。
+
+验证结果：工具、hook、runtime、dispatch 和真实启动器级 429 回归全部通过；`bash bin/agent.test.sh`、相关 hooks/tools 测试、`bash -n`、configure-check、form audit、snapshot verify 和 `git diff --check` 均通过。实际样本 `20261021T031022.dXBwYt` 被识别为 `status=resumable`、`delay=10`。
+
+后续步骤：当前 Unix runtime 已自动接线；如需 Windows PowerShell runtime 也自动调度，应另行移植 hook 接线与测试。
+--- report end ---
