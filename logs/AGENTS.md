@@ -314,3 +314,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## env-nnvtop-autorestart - final - 2026-10-21 18:15:56 +0800
+- 主任务: 在 env.sh 中新增 nvtop 异常退出后 10 秒自动重启的 nnvtop 别名
+- 日志文件: logs/v2026102118.txt
+- 文件大小: 3673 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 nnvtop 自动重启别名并完成 Bash/Zsh、异常重试及仓库结构验证
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

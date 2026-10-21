@@ -1,0 +1,67 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-21 18:15:56 +0800
+批次: env-nnvtop-autorestart
+主任务: 在 env.sh 中新增 nvtop 异常退出后 10 秒自动重启的 nnvtop 别名
+触发原因: 任务完成
+摘要: 新增 nnvtop 自动重启别名并完成 Bash/Zsh、异常重试及仓库结构验证
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 需求确认与实现
+- 目标: 在根目录 `env.sh` 中增加 `nnvtop`，作为 `nvtop` 异常退出后自动重启的别名。
+- 决策: 使用 `_nnvtop_restart` 函数封装循环，再定义 `alias nnvtop='_nnvtop_restart'`，兼容 Bash 与 Zsh 并透传参数。
+- 行为: 退出码 `0` 或 `Ctrl-C` 对应的 `130` 结束；其他非零状态输出提示并在 `sleep 10` 后重试。
+- 边界: 不修改实际 `nvtop` 二进制或其他环境配置。
+
+### S2 — 验证
+- 语法检查: `bash -n env.sh` 与 `zsh -n env.sh` 均通过。
+- 加载检查: Bash 中 `alias nnvtop` 展开为 `_nnvtop_restart`；Zsh 中函数类型识别为 `function`。
+- 异常重启: 使用无效参数模拟状态码 `1`，在 13 秒限时内观察到 2 次重启提示，证明 10 秒后发生重试。
+- 正常退出: `_nnvtop_restart --version` 返回 `0`，只执行一次并输出 `nvtop version 1.2.2`。
+- 结构检查: `form-audit.sh --strict --quiet` 与 `form-snapshot-verify.sh --quiet` 均通过。
+- 差异检查: `git diff --check` 通过。
+
+## 验证与证据
+- 通过: `bash -n env.sh`、`zsh -n env.sh`、Bash/Zsh source 与别名加载。
+- 通过: 异常退出后 10 秒自动重试的行为测试，限时 `13s`，重启提示计数为 `2`。
+- 通过: 正常退出不重启。
+- 通过: 仓库 form 结构审计、快照校验及 `git diff --check`。
+- 未验证项: 未主动制造真实 `nvtop` GPU 断言崩溃；以相同的非零退出路径进行了等价验证。
+
+## 变更与产物
+- 文件: `/root/configure/env.sh`
+- 产物: 新增私有函数 `_nnvtop_restart` 与别名 `nnvtop`。
+- 产物: 本最终日志及 `logs/AGENTS.md` 索引更新。
+- 未改动范围: 未修改 `nvtop` 程序本身，未暂存、提交、推送或打标签。
+
+## 风险、限制与下一步
+- 风险: 除 `Ctrl-C` 外的任意非零退出都会重试，包括参数错误等持续性错误；需由用户按 `Ctrl-C` 停止。
+- 下一步: 重新加载 shell 配置，例如执行 `source /root/configure/env.sh` 后使用 `nnvtop`。
+
+## 用户输入指令
+在env.sh添加别名nnvtop:nvtop的自动重启版,即当意外中断(如" nvtop: ./src/extract_gpuinfo.c:205: gpuinfo_populate_process_infos: Assertion `devices[i].processes[j].gpu_memory_percentage <= 100' failed.
+[1]    356729 IOT instruction (core dumped)  nvtop
+#")后能10秒后重启
+
+## Agent 全文报告
+--- report begin ---
+已完成 `env.sh` 中的 `nnvtop` 自动重启别名。
+
+实现方式：
+- 新增 `_nnvtop_restart` 函数，调用实际 `nvtop` 并透传所有参数。
+- 正常退出码 `0` 和用户按 `Ctrl-C` 产生的 `130` 会结束循环。
+- 其他非零退出会向 stderr 输出状态码，等待 10 秒后自动重启。
+- 新增 `alias nnvtop='_nnvtop_restart'`，兼容 Bash 和 Zsh。
+
+验证结果：
+- `bash -n env.sh`、`zsh -n env.sh` 通过。
+- Bash/Zsh 加载及别名检查通过。
+- 用无效参数模拟异常退出，13 秒内观察到 2 次重启提示，确认 10 秒重试生效。
+- `nnvtop --version` 正常返回 `0`，不会重启。
+- form 结构审计、快照校验和 `git diff --check` 均通过。
+
+使用前重新加载配置：`source /root/configure/env.sh`，随后执行 `nnvtop`。本次未暂存、提交或推送。
+
+状态：finished。
+--- report end ---

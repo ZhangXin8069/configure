@@ -100,3 +100,19 @@ fi
 # @@ZHANGXIN@@
 # alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
 alias nv-smi='nvidia-smi -l 1'
+# nvtop 异常退出后 10 秒自动重启；正常退出或 Ctrl-C 时结束
+_nnvtop_restart() {
+    local _nnvtop_status
+    while true; do
+        command nvtop "$@"
+        _nnvtop_status=$?
+        case "${_nnvtop_status}" in
+        0 | 130) return "${_nnvtop_status}" ;;
+        esac
+        printf 'nnvtop: nvtop 异常退出（状态码 %s），10 秒后重启；按 Ctrl-C 停止。\n' "${_nnvtop_status}" >&2
+        sleep 10
+        _nnvtop_status=$?
+        [ "${_nnvtop_status}" -eq 0 ] || return "${_nnvtop_status}"
+    done
+}
+alias nnvtop='_nnvtop_restart'
