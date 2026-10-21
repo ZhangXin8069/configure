@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 usage() {
     cat <<'USAGE'
-用法：codex-guard.sh [--] <路径...>
+用法：agent-guard.sh [--] <路径...>
 
 路径可用相对当前目录的形式传入；不传参数时从 stdin 读取逐行路径，
 也接受含 path/paths/file/files 字段的 JSON payload。
@@ -22,11 +22,11 @@ if [[ "${1:-}" == '--' ]]; then
 fi
 
 command -v git >/dev/null 2>&1 || {
-    printf 'codex-guard: 未找到 git\n' >&2
+    printf 'agent-guard: 未找到 git\n' >&2
     exit 2
 }
 command -v realpath >/dev/null 2>&1 || {
-    printf 'codex-guard: 未找到 realpath\n' >&2
+    printf 'agent-guard: 未找到 realpath\n' >&2
     exit 2
 }
 
@@ -87,7 +87,7 @@ canonicalize_path() {
 }
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    printf 'codex-guard: 当前目录不在 Git 仓库中\n' >&2
+    printf 'agent-guard: 当前目录不在 Git 仓库中\n' >&2
     exit 1
 }
 repo_root=$(cd -- "$repo_root" && pwd -P)
@@ -103,7 +103,7 @@ else
     fi
     if [[ "$input" == \{* || "$input" == \[* ]]; then
         command -v python3 >/dev/null 2>&1 || {
-            printf 'codex-guard: 解析 JSON payload 需要 python3\n' >&2
+            printf 'agent-guard: 解析 JSON payload 需要 python3\n' >&2
             exit 2
         }
         if ! json_paths=$(python3 - "$input" <<'PY'
@@ -141,7 +141,7 @@ for path in paths:
     print(path)
 PY
         ); then
-            printf 'codex-guard: JSON payload 未能提取路径\n' >&2
+            printf 'agent-guard: JSON payload 未能提取路径\n' >&2
             exit 1
         fi
         while IFS= read -r path || [[ -n "$path" ]]; do
@@ -159,7 +159,7 @@ PY
 fi
 
 if (( ${#paths[@]} == 0 )); then
-    printf 'codex-guard: 未收到路径，拒绝执行\n' >&2
+    printf 'agent-guard: 未收到路径，拒绝执行\n' >&2
     exit 2
 fi
 
@@ -227,8 +227,8 @@ for raw_path in "${paths[@]}"; do
 done
 
 if (( failures > 0 )); then
-    printf '✗ codex-guard: %d 个路径被拒绝，%d 个路径通过\n' "$failures" "$checked" >&2
+    printf '✗ agent-guard: %d 个路径被拒绝，%d 个路径通过\n' "$failures" "$checked" >&2
     exit 1
 fi
 
-printf '✓ codex-guard: %d 个路径通过\n' "$checked"
+printf '✓ agent-guard: %d 个路径通过\n' "$checked"

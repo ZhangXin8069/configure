@@ -129,16 +129,16 @@ configure 先确定 workspace root，再创建数据根和运行目录；新运�
 
 \subsection{上下文与 CLI 适配}
 上下文发现沿当前目录到 Git 根逐层收集 \code{AGENTS.md}、\code{CODEX.md}、\code{CLAUDE.md} 和 \code{OPENCODE.md}，近处优先；运行时只把路径和行数写入 context 清单，正文仍由 agent 按需读取。实现见
-\code{bin/agent-runtime.sh:292--360}，hook 的只读预检见 \code{hooks/codex-preflight.sh:36--71}。
+\code{bin/agent-runtime.sh:292--360}，hook 的只读预检见 \code{hooks/agent-preflight.sh:36--71}。
 
 Claude 通过 \code{claude -p} 和 \code{--resume} 绑定 session；OpenCode 通过持久日志提取 session id 并调用 \code{run -s}；Codex 通过 \code{codex exec --json} 提取 thread id 并调用 \code{exec resume}。三条链的关键入口分别为
 \code{bin/agent.sh:345--463}、\code{bin/agent.sh:726--824} 和
 \code{bin/agent.sh:1133--1209}。模型显式覆盖优先，resume 默认复用原记录中的模型及相关推理设置。
 
 \subsection{hook 和质量边界}
-\code{codex-hook.sh} 把 session-start、summary、before-edit、after-edit、stop 和 notify 统一映射；\code{--json} 通过 \code{codex-event.sh} 产生包含 schema、event、workspace、run/session/thread、turn 和 status 的 JSONL envelope。路径 guard 使用结构化 JSON 解析，拒绝仓库外、符号链接逃逸、日志和运行时数据路径。证据为
-\code{hooks/codex-hook.sh:14--103}、\code{hooks/codex-event.sh:14--62} 和
-\code{hooks/codex-guard.sh:97--225}。
+\code{agent-hook.sh} 把 session-start、summary、before-edit、after-edit、stop 和 notify 统一映射；\code{--json} 通过 \code{agent-event.sh} 产生包含 schema、event、workspace、run/session/thread、turn 和 status 的 JSONL envelope。路径 guard 使用结构化 JSON 解析，拒绝仓库外、符号链接逃逸、日志和运行时数据路径。证据为
+\code{hooks/agent-hook.sh:14--103}、\code{hooks/agent-event.sh:14--62} 和
+\code{hooks/agent-guard.sh:97--225}。
 
 \subsection{OMX 的关键扩展}
 OMX 的 team 状态机由 \code{orchestrator.ts:8--146} 定义；角色提示和任务路由由
@@ -172,7 +172,7 @@ OMX 的 team 状态机由 \code{orchestrator.ts:8--146} 定义；角色提示和
 5 & 运行首回合；每回合写 turn-start，完成或失败后更新计数。 & \code{bin/agent-runtime.sh:550--571} \\
 6 & 检查 stop-file、max-turns、max-runtime 和连续失败阈值。 & \code{bin/agent-runtime.sh:574--596} \\
 7 & 到达终态后追加 session-end/session-stop，并仅释放当前 owner 锁。 & \code{bin/agent-runtime.sh:598--615} \\
-8 & 用 status、hook verify 和测试脚本检查持久输出及工作树。 & \code{bin/agent-status.sh:99--176}; \code{hooks/codex-verify.sh:157--289} \\
+8 & 用 status、hook verify 和测试脚本检查持久输出及工作树。 & \code{bin/agent-status.sh:99--176}; \code{hooks/agent-verify.sh:157--289} \\
 \bottomrule
 \end{tabularx}
 \end{table}
@@ -284,11 +284,11 @@ OMX 选择的是“把 Codex 扩展成完整的工作流和多 agent 平台”�
 \code{bin/agent.sh:178--1237} & Claude/OpenCode/Codex 分发、驱动和参数解析。 \\
 \code{bin/agent-runtime.sh:62--615} & manifest、state、lock、context、事件、恢复和终态。 \\
 \code{bin/agent-status.sh:9--176} & 只读状态查询和 JSON 输出。 \\
-\code{hooks/codex-hook.sh:14--103} & hook 事件映射和 JSON 模式。 \\
-\code{hooks/codex-event.sh:14--62} & 统一 JSONL event envelope。 \\
-\code{hooks/codex-guard.sh:97--225} & 仓库边界、符号链接和运行数据保护。 \\
-\code{hooks/codex-preflight.sh:36--71} & 分层上下文只读预检。 \\
-\code{hooks/codex-verify.sh:157--289} & Git、Shell、日志和数据路径验证。 \\
+\code{hooks/agent-hook.sh:14--103} & hook 事件映射和 JSON 模式。 \\
+\code{hooks/agent-event.sh:14--62} & 统一 JSONL event envelope。 \\
+\code{hooks/agent-guard.sh:97--225} & 仓库边界、符号链接和运行数据保护。 \\
+\code{hooks/agent-preflight.sh:36--71} & 分层上下文只读预检。 \\
+\code{hooks/agent-verify.sh:157--289} & Git、Shell、日志和数据路径验证。 \\
 \code{bin/agent.test.sh:120--325} & configure agent fake CLI 回归。 \\
 \code{hooks/hooks.test.sh:1--227} & hook 质量门禁回归。 \\
 \code{data/README.md:7--27} & 运行时数据协议和隔离规则。 \\

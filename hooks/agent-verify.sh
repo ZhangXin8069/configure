@@ -5,7 +5,7 @@ set -Eeuo pipefail
 
 usage() {
     cat <<'USAGE'
-用法：codex-verify.sh [--changed|--paths <路径...>]
+用法：agent-verify.sh [--changed|--paths <路径...>]
 
   --changed       检查 Git 工作树中全部新增/修改文件（默认）
   --paths <...>   只检查指定路径，路径相对当前目录或使用绝对路径
@@ -28,13 +28,13 @@ case "${1:-}" in
         ;;
     *)
         usage >&2
-        printf 'codex-verify: 未知选项：%s\n' "$1" >&2
+        printf 'agent-verify: 未知选项：%s\n' "$1" >&2
         exit 2
         ;;
 esac
 
 command -v git >/dev/null 2>&1 || {
-    printf 'codex-verify: 未找到 git\n' >&2
+    printf 'agent-verify: 未找到 git\n' >&2
     exit 2
 }
 
@@ -95,7 +95,7 @@ canonicalize_path() {
 }
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    printf 'codex-verify: 当前目录不在 Git 仓库中\n' >&2
+    printf 'agent-verify: 当前目录不在 Git 仓库中\n' >&2
     exit 1
 }
 repo_root=$(cd -- "$repo_root" && pwd -P)
@@ -121,11 +121,11 @@ if [[ "$mode" == changed ]]; then
     done < <(git ls-files --others --exclude-standard -z --)
 else
     if (( ${#requested_paths[@]} == 0 )); then
-        printf 'codex-verify: --paths 至少需要一个路径\n' >&2
+        printf 'agent-verify: --paths 至少需要一个路径\n' >&2
         exit 2
     fi
     command -v realpath >/dev/null 2>&1 || {
-        printf 'codex-verify: 未找到 realpath\n' >&2
+        printf 'agent-verify: 未找到 realpath\n' >&2
         exit 2
     }
     for raw_path in "${requested_paths[@]}"; do
@@ -155,7 +155,7 @@ else
 fi
 
 if (( ${#paths[@]} == 0 )); then
-    printf '✓ codex-verify: 没有新增或修改文件\n'
+    printf '✓ agent-verify: 没有新增或修改文件\n'
     exit 0
 fi
 
@@ -285,10 +285,10 @@ for path in "${paths[@]}"; do
 done
 
 if (( failures > 0 )); then
-    printf '✗ codex-verify: %d 项错误，%d 个 Shell 文件，%d 个日志文件\n' \
+    printf '✗ agent-verify: %d 项错误，%d 个 Shell 文件，%d 个日志文件\n' \
         "$failures" "$shell_count" "$log_count" >&2
     exit 1
 fi
 
-printf '✓ codex-verify: %d 个路径，%d 个 Shell 文件\n' \
+printf '✓ agent-verify: %d 个路径，%d 个 Shell 文件\n' \
     "${#paths[@]}" "$shell_count"

@@ -796,6 +796,26 @@ _agent_runtime_should_stop() {
     return 1
 }
 
+_agent_runtime_schedule_auto_resume() {
+    local rc="${1:-0}" hook="${AGENT_CONFIGURE_ROOT:-}/hooks/agent-resume.sh"
+    local hook_log="${AGENT_RUN_DIR:-}/resume-hook.log"
+    (( rc != 0 )) || return 0
+    [[ "${AGENT_AUTO_RESUME:-1}" != 0 ]] || return 0
+    [[ "${AGENT_RESUME_ACTIVE:-0}" != 1 ]] || return 0
+    case "${AGENT_RUNTIME_STATE:-}" in
+        failed|blocked) ;;
+        *) return 0;;
+    esac
+    [[ -n "${AGENT_CONFIGURE_ROOT:-}" && -x "$hook" ]] || return 0
+    if command -v timeout >/dev/null 2>&1; then
+        timeout 5 "$hook" --run-id "${AGENT_RUN_ID:-}" --data-root "$AGENT_DATA_ROOT" \
+            >>"$hook_log" 2>&1 || true
+    else
+        "$hook" --run-id "${AGENT_RUN_ID:-}" --data-root "$AGENT_DATA_ROOT" \
+            >>"$hook_log" 2>&1 || true
+    fi
+}
+
 _agent_runtime_on_exit() {
     local rc="${1:-0}"
     if [[ -z "${AGENT_RUN_DIR:-}" ]]; then
@@ -814,4 +834,5 @@ _agent_runtime_on_exit() {
         esac
     fi
     _agent_runtime_release_lock
+    _agent_runtime_schedule_auto_resume "$rc"
 }

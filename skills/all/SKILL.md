@@ -65,7 +65,7 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
   性能不足 → 该轮转 optim；收敛后打标签 → tag；收敛后复查 → diff；
   阶段成果或收敛后归档 → 常驻 log（用户明确关闭除外）；
   多步骤任务先规划 → plan；优化 skill 自身 → skill-creator；skill 库升级 → up；
-  论文/文献证据获取 → get-paper；外部新内容吸收 → absorb；
+  论文/文献证据获取 → get-paper；外部参考技能直调 → conf-refer-skill；外部新内容吸收 → absorb；
   仓库命名/目录/交付格式整改 → form；
   需求模糊 → brainstorm；实现先测试 → tdd；审查改动质量 → review；
   多独立子任务（多失败/多文件/多目标）→ dispatch 并行派发；
@@ -82,6 +82,7 @@ fast 字段，不能回退到 all 的普通默认值。未被 fast_context 标�
 | 仓库命名/目录/交付格式整改 | form → test → diff → init/tag | 先只读冲突表再分批整改；功能复现后收尾 |
 | 修复类任务 | debug → test → diff | 复现→根因→修复→回归 |
 | 分析/报告类 | get-paper（按需）→ analy → pure → report | 缺少外部论文证据时先固定文献来源与许可；analy 建立整体结构与依赖链，pure 深挖核心细节，report 消费证据成稿；结论附 `文件:行号` |
+| 外部参考技能调用 | conf-refer-skill →（领域验证） | 仅在任务场景契合或用户点名 `refer/git-rep/**/skills` 时直调；显式来源优先、原地读取、最小适配并验证，不复制安装 |
 | 外部内容吸收 | absorb → review/test/debug/optim → diff | 先全量盘点 provenance/license 与风险，建立吸收矩阵，再最小适配和回归；未覆盖候选不得宣称吸收完成 |
 | 多独立子任务（多失败/多文件/多目标） | dispatch →（整合）→ test/diff | 拆域并行（无共享状态/无顺序依赖/互不改同文件才并行），一轮一动作不冲突 |
 | 仓库初始化/归档 | init → diff | 两阶段执行 |

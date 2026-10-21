@@ -4,12 +4,12 @@
 set -Eeuo pipefail
 
 command -v git >/dev/null 2>&1 || {
-    printf 'codex-summary: 未找到 git\n' >&2
+    printf 'agent-summary: 未找到 git\n' >&2
     exit 2
 }
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    printf 'codex-summary: 当前目录不在 Git 仓库中\n' >&2
+    printf 'agent-summary: 当前目录不在 Git 仓库中\n' >&2
     exit 1
 }
 repo_root=$(cd -- "$repo_root" && pwd -P)
@@ -87,7 +87,7 @@ else
     worktree_status=dirty
 fi
 
-printf 'codex-summary event=session-summary\n'
+printf 'agent-summary event=session-summary\n'
 printf 'repo_root=%s\n' "$repo_root"
 printf 'branch=%s\n' "$branch"
 printf 'head=%s\n' "$head"
@@ -103,4 +103,4 @@ if ((${#recent_paths[@]} > 0)); then
     done
 fi
 
-printf 'codex-summary: 只读交接摘要完成\n'
+printf 'agent-summary: 只读交接摘要完成\n'

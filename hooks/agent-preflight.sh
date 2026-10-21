@@ -4,23 +4,23 @@
 set -Eeuo pipefail
 
 command -v git >/dev/null 2>&1 || {
-    printf 'codex-preflight: 未找到 git\n' >&2
+    printf 'agent-preflight: 未找到 git\n' >&2
     exit 2
 }
 command -v realpath >/dev/null 2>&1 || {
-    printf 'codex-preflight: 未找到 realpath\n' >&2
+    printf 'agent-preflight: 未找到 realpath\n' >&2
     exit 2
 }
 
 repo_root=$(git rev-parse --show-toplevel 2>/dev/null) || {
-    printf 'codex-preflight: 当前目录不在 Git 仓库中\n' >&2
+    printf 'agent-preflight: 当前目录不在 Git 仓库中\n' >&2
     exit 1
 }
 repo_root=$(cd -- "$repo_root" && pwd -P)
 
 branch=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || printf 'HEAD(detached)')
 
-printf 'codex-preflight event=session-start\n'
+printf 'agent-preflight event=session-start\n'
 printf 'repo_root=%s\n' "$repo_root"
 printf 'branch=%s\n' "$branch"
 
@@ -86,4 +86,4 @@ for runtime_config in \
 done
 
 printf 'instruction_count=%d\n' "$instruction_count"
-printf 'codex-preflight: 只读预检完成\n'
+printf 'agent-preflight: 只读预检完成\n'
