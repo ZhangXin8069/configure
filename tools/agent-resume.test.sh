@@ -155,6 +155,24 @@ grep -Fq '"event":"resume-start"' "$event_file" || fail '缺少 resume-start 事
 grep -Fq '"event":"resume-end"' "$event_file" || fail '缺少 resume-end 事件'
 printf 'PASS: Codex 429 中断在默认策略下可检测并恢复原 thread\n'
 
+create_run 20261021T031500.upstream codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-upstream-thread"}' \
+    '{"error":{"message":"{\"error\":{\"param\":null,\"type\":\"invalid_request_error\",\"code\":\"invalid_request_error\",\"message\":\"Upstream request failed: [invalid_request_error] The `reasoning_content` in the thinking mode must be passed back to the API.\"}},\"type\":\"upstream_error\"}"}' \
+    >"$log_file"
+set_fake_env
+upstream_check=$("$resume_tool" --run-id 20261021T031500.upstream --data-root "$data_root" --check)
+assert_contains "$upstream_check" 'status=resumable'
+set +e
+upstream_resume=$("$resume_tool" --run-id 20261021T031500.upstream --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+upstream_status=$?
+set -e
+(( upstream_status == 0 )) || fail "上游 reasoning_content 错误未恢复：$upstream_resume"
+grep -Fq 'thread_id=01a15ab8-upstream-thread' "$manifest" ||
+    fail '上游 reasoning_content 错误未保留可恢复 thread'
+printf 'PASS: 上游 reasoning_content 协议错误可受控恢复一次\n'
+
 before_calls=$(cksum "$FAKE_CALL_LOG")
 set +e
 duplicate_output=$("$resume_tool" --run-id 20261021T031022.dXBwYt --data-root "$data_root" \
@@ -166,7 +184,7 @@ set -e
 printf 'PASS: 同一 run 只自动恢复一次\n'
 
 create_run 20261021T040000.authn codex co tasks
-printf '%s\n' 'HTTP 401 Unauthorized' >"$log_file"
+printf '%s\n' 'HTTP 401 Upstream request failed: Invalid credential' >"$log_file"
 set_fake_env
 set +e
 auth_output=$("$resume_tool" --run-id 20261021T040000.authn --data-root "$data_root" --check --launcher "$fake_launcher" 2>&1)
@@ -208,6 +226,203 @@ assert_contains "$calls" "cwd=$workspace_root/tasks/subagent"
 assert_contains "$calls" 'opencode_provider=opencode-go'
 grep -Fq 'session_id=ses_dispatch_child' "$manifest" || fail '未恢复派发子 agent 的 session_id'
 printf 'PASS: 派发子 agent 的 manifest/log 使用同一恢复路径\n'
+
+create_run 20261021T031022.tui429 codex co tasks
+: >"$log_file"
+codex_home=$test_root/codex-home
+codex_rollout_dir=$codex_home/sessions/2026/10/21
+codex_state_db=$codex_home/state_5.sqlite
+codex_rollout=$codex_rollout_dir/rollout-tui429.jsonl
+mkdir -p "$codex_rollout_dir"
+python3 - "$codex_state_db" "$codex_rollout" "$workspace_root/tasks" <<'PY'
+import sqlite3
+import sys
+from datetime import datetime
+
+state_db, rollout, cwd = sys.argv[1:]
+created_ms = int(datetime.strptime("2026-10-21T03:10:22+0800", "%Y-%m-%dT%H:%M:%S%z").timestamp() * 1000)
+with sqlite3.connect(state_db) as connection:
+    connection.execute(
+        """
+        CREATE TABLE threads (
+            id TEXT PRIMARY KEY,
+            created_at_ms INTEGER NOT NULL,
+            cwd TEXT NOT NULL,
+            source TEXT NOT NULL,
+            archived INTEGER NOT NULL DEFAULT 0,
+            first_user_message TEXT NOT NULL DEFAULT '',
+            preview TEXT NOT NULL DEFAULT '',
+            rollout_path TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        """
+        INSERT INTO threads (
+            id, created_at_ms, cwd, source, archived,
+            first_user_message, preview, rollout_path
+        ) VALUES (?, ?, ?, 'cli', 0, ?, ?, ?)
+        """,
+        (
+            "01a15e3f-e541-7c00-b8d3-4bd9643fd6f3",
+            created_ms,
+            cwd,
+            "runtime contract\nrun_id=20261021T031022.tui429\n",
+            "runtime contract\nrun_id=20261021T031022.tui429\n",
+            rollout,
+        ),
+    )
+PY
+python3 - "$codex_rollout" <<'PY'
+import json
+import sys
+
+event = {
+    "type": "event_msg",
+    "payload": {
+        "type": "task_complete",
+        "error": {
+            "message": "exceeded retry limit, last status: 429 Too Many Requests",
+            "codex_error_info": {"response_too_many_failed_attempts": {"http_status_code": 429}},
+        },
+    },
+}
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+PY
+set_fake_env
+tui_output=$(AGENT_CODEX_STATE_DB="$codex_state_db" \
+    "$resume_tool" --run-id 20261021T031022.tui429 --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher")
+assert_contains "$tui_output" 'status=finished'
+grep -Fq 'thread_id=01a15e3f-e541-7c00-b8d3-4bd9643fd6f3' "$manifest" ||
+    fail 'TUI 型 429 未从 Codex 状态库恢复 thread_id'
+printf 'PASS: TUI 空日志时可从 Codex 状态库与 rollout 恢复同一 thread\n'
+
+create_run 20261021T031600.claude claude cl tasks
+: >"$log_file"
+claude_config=$test_root/claude-config
+claude_project=$claude_config/projects/-root-configure-agent-launcher-test
+claude_session_id=11111111-2222-4333-8444-555555555555
+mkdir -p "$claude_project"
+python3 - "$claude_project/$claude_session_id.jsonl" "$workspace_root/tasks" <<'PY'
+import json
+import sys
+
+path, cwd = sys.argv[1:]
+session_id = "11111111-2222-4333-8444-555555555555"
+text = (
+    "Upstream request failed: [invalid_request_error] The `reasoning_content` "
+    "in the thinking mode must be passed back to the API."
+)
+events = [
+    {
+        "type": "user",
+        "sessionId": session_id,
+        "cwd": cwd,
+        "timestamp": "2026-10-21T03:10:23.000Z",
+        "message": {
+            "role": "user",
+            "content": [{"type": "text", "text": "runtime contract\nrun_id=20261021T031600.claude\n"}],
+        },
+    },
+    {
+        "type": "assistant",
+        "isApiErrorMessage": True,
+        "sessionId": session_id,
+        "message": {"content": [{"type": "text", "text": text}]},
+    },
+    {"type": "system", "subtype": "turn_duration", "sessionId": session_id},
+]
+with open(path, "w", encoding="utf-8") as stream:
+    for event in events:
+        stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+PY
+set_fake_env
+claude_output=$(AGENT_CLAUDE_CONFIG_DIR="$claude_config" \
+    "$resume_tool" --run-id 20261021T031600.claude --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+assert_contains "$claude_output" 'status=finished'
+grep -Fq "session_id=$claude_session_id" "$manifest" ||
+    fail 'Claude TUI 未从本地 session 文件恢复 session_id'
+printf 'PASS: Claude Code TUI 空日志时可按 run_id 找回 session 并恢复\n'
+
+create_run 20261021T031700.opencode opencode op tasks
+: >"$log_file"
+opencode_data=$test_root/opencode-data
+opencode_db=$opencode_data/opencode.db
+opencode_session=ses_dispatch_tui_upstream
+mkdir -p "$opencode_data"
+python3 - "$opencode_db" "$workspace_root/tasks" "$opencode_session" <<'PY'
+import json
+import sqlite3
+import sys
+from datetime import datetime
+
+db, cwd, session_id = sys.argv[1:]
+created_ms = int(datetime.strptime("2026-10-21T03:10:22+0800", "%Y-%m-%dT%H:%M:%S%z").timestamp() * 1000)
+text = (
+    "Upstream request failed: [invalid_request_error] The `reasoning_content` "
+    "in the thinking mode must be passed back to the API."
+)
+with sqlite3.connect(db) as connection:
+    connection.executescript(
+        """
+        CREATE TABLE session (
+            id TEXT PRIMARY KEY, directory TEXT NOT NULL,
+            time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL
+        );
+        CREATE TABLE message (
+            id TEXT PRIMARY KEY, session_id TEXT NOT NULL,
+            time_created INTEGER NOT NULL, time_updated INTEGER NOT NULL,
+            data TEXT NOT NULL
+        );
+        CREATE TABLE part (
+            id TEXT PRIMARY KEY, message_id TEXT NOT NULL,
+            session_id TEXT NOT NULL, time_created INTEGER NOT NULL,
+            time_updated INTEGER NOT NULL, data TEXT NOT NULL
+        );
+        """
+    )
+    connection.execute(
+        "INSERT INTO session VALUES (?, ?, ?, ?)",
+        (session_id, cwd, created_ms, created_ms + 5000),
+    )
+    user_id = "msg_opencode_user"
+    connection.execute(
+        "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+        (user_id, session_id, created_ms + 1, created_ms + 1, '{"role":"user"}'),
+    )
+    connection.execute(
+        "INSERT INTO part VALUES (?, ?, ?, ?, ?, ?)",
+        (
+            "prt_opencode_user",
+            user_id,
+            session_id,
+            created_ms + 1,
+            created_ms + 1,
+            json.dumps({"type": "text", "text": "run_id=20261021T031700.opencode"}),
+        ),
+    )
+    connection.execute(
+        "INSERT INTO message VALUES (?, ?, ?, ?, ?)",
+        (
+            "msg_opencode_assistant",
+            session_id,
+            created_ms + 2,
+            created_ms + 3,
+            json.dumps({"role": "assistant", "error": {"name": "UnknownError", "data": {"message": text}}}),
+        ),
+    )
+PY
+set_fake_env
+opencode_output=$(AGENT_OPENCODE_DATA_DIR="$opencode_data" \
+    "$resume_tool" --run-id 20261021T031700.opencode --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+assert_contains "$opencode_output" 'status=finished'
+grep -Fq "session_id=$opencode_session" "$manifest" ||
+    fail 'OpenCode TUI 未从本地数据库恢复 session_id'
+printf 'PASS: OpenCode TUI 空日志时可按 run_id 找回 session 并恢复\n'
 
 create_run 20261021T040300.nosession codex co tasks
 printf '%s\n' '429 Too Many Requests' >"$log_file"
