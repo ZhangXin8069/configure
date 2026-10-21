@@ -149,7 +149,7 @@ cleanup=<进程、临时文件和失败产物清理方式>
    再按任务真实进度调整。单个原子步骤无法频繁输出时，由外层心跳配合每步开始/结束记录。
 4. 所有工具调用同时设置工具级超时；需要操作系统级兜底时使用 `timeout` 或等价机制。
 5. 无法形成有限预算时，不启动该进程；先拆分、试跑或报告阻塞原因。
-6. 资源敏感或共享环境任务先运行 `python3 "${CONFIGURE_ROOT}/tools/agent-resources.py"`；
+6. 资源敏感或共享环境任务先运行 `python3 "${CONFIGURE_ROOT:-$HOME/configure}/tools/agent-resources.py"`；
    将 host inventory、affinity、cgroup hard limit 和 scheduler allocation 分开解释。可见 host
    资源不等于当前 allocation 可用，未知值不能用 `unlimited` 替代。
 

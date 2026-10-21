@@ -49,9 +49,9 @@ metadata:
 9. **设备、精度与诚实性**：设备探测后择优（CUDA GPU 优先），可显式切换 CPU/NPU；
    默认单精度，可切换多精度；数据读写间显式管理精度转换（dtype 记录与转换规则）。
    设备缺失、精度限制、测试未覆盖项如实报告；无法测试的项标注原因，绝不虚报"通过"。
-10. **动态行为可用时增加对抗场景**：正常测试之外，按需覆盖 malformed input、重复中断、
-    stale state、dirty worktree、超时、flaky rerun 和 misleading success；不安全场景标记 blocked，
-    不执行破坏性命令或读取凭据。
+10. **出现可观察触发条件时增加对抗场景**：改动涉及 malformed input、resume/cancel、stale state、
+    安全边界、长任务、flaky 行为或 misleading success 时，按需覆盖对应类别；普通单元回归不自动膨胀。
+    不安全场景标记 blocked，不执行破坏性命令或读取凭据。
 
 ## Git 检查
 
@@ -146,8 +146,9 @@ nproc
 2. 确定**通过标准**：每项测试的预期输出/数值容差/行为断言；
 3. 输出一句**任务定义**（如"测试对象：bin/agent.sh（用户输入清单与 Git 检查点功能）"），
    在终端摘要中说明；对象或标准不明确时**立即向用户提问**（所有问题一次全部列出，不逐次追问）。
-4. 若被测对象有可运行端到端行为，补充 adversarial QA 场景矩阵、安全边界、最大轮数和
-   cleanup 条件；不适用时明确写 `adversarial_qa=not_applicable` 及原因。
+4. 若被测对象命中 resume/cancel、stale state、输入解析/安全边界、长任务、flaky 行为或用户显式要求，
+   补充 adversarial QA 场景矩阵、安全边界、最大轮数和 cleanup 条件；不适用时写
+   `adversarial_qa=not_applicable` 及观察理由。
 
 ### Step 2. 环境与基线
 

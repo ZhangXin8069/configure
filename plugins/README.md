@@ -31,7 +31,7 @@ bash install-recommended.sh
 | `gpu-research` | `nvidia`、`zotero` | GPU/HPC 与文献检索 |
 | `bioinformatics` | `life-science-research`、`ngs-analysis` | 生命科学和测序分析 |
 | `engineering` | `ecc`、`agent-skills`、`compound-engineering` | 外部工程工作流；重复能力较多 |
-| `orchestration` | `babysitter` | 事件溯源、审批和长流程编排 |
+| `orchestration` | `babysitter`、`omx` | OMX worker 编排与 babysitter 审批/长流程 |
 | `all` | 安装器登记的全部项目 | 仅在逐项审查后使用 |
 
 ```bash
@@ -39,9 +39,13 @@ bash install-recommended.sh --profile gpu-research
 bash install-recommended.sh --profile research-workbench
 bash install-recommended.sh --profile workspace
 bash install-recommended.sh --profile app-dev
-bash install-recommended.sh --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
-bash install-recommended.sh --ref-policy commit --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
+bash install-recommended.sh --ref 90606c8315ee09cafc303515c5f33024db6b9882 ecc
+bash install-recommended.sh --ref-policy commit --ref 90606c8315ee09cafc303515c5f33024db6b9882 ecc
+bash install-recommended.sh --audit-manifest refer/git-rep/ecc-skills/.codex-plugin/plugin.json
 ```
+
+`--audit-manifest` 使用 strict 静态审计；ECC/OMX 当前因 hook timeout、Node eval 或 MCP runtime
+会按设计返回非零并列出发现，不会执行 marketplace 写入。
 
 安装前可只读检查当前 Codex 状态，不会调用安装命令：
 
@@ -141,7 +145,7 @@ bash install-recommended.sh --audit superpowers nvidia
 
 - 来源：[GitHub](https://github.com/affaan-m/ECC)
 - 许可证：MIT；固定
-  [commit `76aaa77`](https://github.com/affaan-m/ECC/tree/76aaa77df6adc5b889e689007bf99b9a4f74af34)
+  [commit `90606c`](https://github.com/affaan-m/ECC/tree/90606c8315ee09cafc303515c5f33024db6b9882)
   的版本为 2.2.3，提供原生 `.codex-plugin/plugin.json`、Codex marketplace manifest、技能、MCP 配置和
   Codex hooks；manifest SHA256 为
   `09d1f838f55e4463aa9da6673f812edc33952572e3425eb77dee9ec31280d424`。
@@ -151,6 +155,22 @@ bash install-recommended.sh --audit superpowers nvidia
 - 风险与重叠：内容规模大（固定 ref 下登记约 281 个 Codex 技能），且显式加载 hooks 与
   Chrome DevTools MCP；与本库 `all`、`debug`、`review`、`test`、`up` 等能力有重叠。不要与旧版手工
   sync 流程叠加，安装后另行审查并信任 hooks/MCP。
+
+### Yeachan-Heo/oh-my-codex
+
+- 来源：[GitHub](https://github.com/Yeachan-Heo/oh-my-codex)
+- 许可证：MIT；固定
+  [commit `304fb3b`](https://github.com/Yeachan-Heo/oh-my-codex/tree/304fb3b4825c4132c273732b14d2d5e86b54f8e3)
+  的版本为 0.21.4，提供原生 `.codex-plugin/plugin.json`、本地 marketplace manifest、skills、hooks、
+  MCP 和 apps；manifest SHA256 为
+  `e494fa956511b3cba28614b4261ff10ceaaa7adf3ad3ea37a3fc9754aeff4873`。
+- 适用场景：需要 OMX 的多 agent、worker mailbox、HUD、持久 goal 和事件状态编排时按需安装。
+- 安装入口：`codex plugin marketplace add Yeachan-Heo/oh-my-codex --ref 304fb3b4825c4132c273732b14d2d5e86b54f8e3`，
+  然后 `codex plugin add oh-my-codex --marketplace oh-my-codex-local`。
+- 风险与重叠：hooks 覆盖 SessionStart、PreToolUse、PostToolUse、UserPromptSubmit、Compact 和 Stop；
+  多个 command hook 未声明 timeout，MCP 中包含 OMX 运行时命令；与本库 `team`、`all`、`auto`、`plan`
+  和 `go-on` 有明显重叠。默认不安装，安装器也不会隐式安装或启用 omx runtime；安装后必须审查
+  hooks/MCP 并确认触发优先级。
 
 ### addyosmani/agent-skills
 
@@ -219,7 +239,7 @@ GitHub API 首次请求曾收到 HTTP 504，重试第 1 次（30 秒超时）即
 
 本轮完整核对 GitHub、GitLab、Codeberg 各前 10 项（Gitee 为结构化空结果），没有新增默认采纳项；
 现有推荐和“暂不纳入”决策保持不变。三个已推荐插件项的核验证据更新为 `superpowers@bb92a77`、
-`ECC@76aaa77`、`agent-skills@aeac41d`，其中前两项的官方/上游版本差异和 hooks/MCP 风险已在上文标注。
+`ECC@90606c`、`agent-skills@aeac41d`，其中前两项的官方/上游版本差异和 hooks/MCP 风险已在上文标注。
 
 - 本轮重点核对的原生入口：[openai/plugins marketplace](https://github.com/openai/plugins/tree/main/.agents/plugins)、
   [ECC Codex manifest](https://github.com/affaan-m/ECC/tree/main/.codex-plugin)、

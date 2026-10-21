@@ -37,6 +37,11 @@ if ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
     fail 'JSON hook 测试需要 jq 或 python3 解析 JSON'
 fi
 
+list_output=$("$hook_script" --list)
+assert_contains "$list_output" 'plugin-audit'
+assert_contains "$list_output" 'agent-resume'
+printf 'PASS: agent-hook 事件目录列出超时与审计入口\n'
+
 json_envelope_valid() {
     local json=$1
     if command -v jq >/dev/null 2>&1; then
@@ -143,6 +148,200 @@ assert_contains "$output" 'instruction_count=3'
 assert_not_contains "$output" "$instruction_outside_realpath/AGENTS.md"
 assert_not_contains "$output" "$instruction_outside_realpath/linked-nested"
 printf 'PASS: session-start 使用物理路径并限制层级说明文件在仓库内\n'
+
+plugin_fixture=$test_root/plugin-fixture
+mkdir -p "$plugin_fixture/.codex-plugin"
+cat > "$plugin_fixture/.codex-plugin/plugin.json" <<'EOF'
+{"name":"fixture-plugin","version":"1.0.0","description":"fixture","license":"MIT"}
+EOF
+set +e
+plugin_audit_output=$(cd -- "$repo" && "$hook_script" plugin-audit --manifest "$plugin_fixture/.codex-plugin/plugin.json" 2>&1)
+plugin_audit_status=$?
+set -e
+(( plugin_audit_status == 0 )) || fail "plugin-audit hook 失败\n输出：\n$plugin_audit_output"
+assert_contains "$plugin_audit_output" 'fixture-plugin@1.0.0'
+assert_contains "$plugin_audit_output" 'PASS'
+printf 'PASS: plugin-audit hook 委托静态 manifest 审计\n'
+
+fake_notify_bin=$test_root/fake-notify-bin
+mkdir -p "$fake_notify_bin"
+notify_pid_file=$test_root/notify-child.pid
+cat > "$fake_notify_bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$$" > "${NOTIFY_PID_FILE:?}"
+sleep 10
+EOF
+chmod 0755 "$fake_notify_bin/notify-send"
+set +e
+timeout_output=$(cd -- "$repo" && PATH="$fake_notify_bin:$PATH" \
+    NOTIFY_PID_FILE="$notify_pid_file" AGENT_HOOK_TIMEOUT=1 \
+    "$hook_script" notify 'timeout test' 2>&1)
+timeout_status=$?
+set -e
+(( timeout_status == 124 )) || fail "hook 硬超时应返回 124，实际 $timeout_status\n$timeout_output"
+assert_contains "$timeout_output" '硬超时'
+notify_pid=$(cat "$notify_pid_file")
+if kill -0 "$notify_pid" 2>/dev/null; then
+    fail "hook 超时后 notify-send 子进程仍存活：$notify_pid"
+fi
+printf 'PASS: hook 硬超时会终止整个进程组\n'
+
+signal_notify_bin=$test_root/signal-notify-bin
+mkdir -p "$signal_notify_bin"
+signal_pid_file=$test_root/signal-notify-child.pid
+cat > "$signal_notify_bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$$" > "${NOTIFY_PID_FILE:?}"
+sleep 10
+EOF
+chmod 0755 "$signal_notify_bin/notify-send"
+(
+    cd -- "$repo" || exit 73
+    exec env PATH="$signal_notify_bin:$PATH" NOTIFY_PID_FILE="$signal_pid_file" \
+        "$hook_script" notify 'signal forwarding test'
+) >"$test_root/signal-notify.out" 2>&1 &
+signal_wrapper_pid=$!
+for _ in $(seq 1 50); do
+    [[ -s "$signal_pid_file" ]] && break
+    sleep 0.1
+done
+[[ -s "$signal_pid_file" ]] || fail '信号测试未启动 notify-send'
+kill -TERM "$signal_wrapper_pid"
+set +e
+wait "$signal_wrapper_pid"
+signal_wrapper_status=$?
+set -e
+(( signal_wrapper_status == 143 )) || fail "包装器 TERM 应返回 143，实际 $signal_wrapper_status"
+signal_notify_pid=$(cat "$signal_pid_file")
+for _ in $(seq 1 20); do
+    kill -0 "$signal_notify_pid" 2>/dev/null || break
+    sleep 0.1
+done
+if kill -0 "$signal_notify_pid" 2>/dev/null; then
+    fail "包装器收到 TERM 后 notify-send 子进程仍存活：$signal_notify_pid"
+fi
+printf 'PASS: 外部 TERM 会转发并清理受控子进程组\n'
+
+json_signal_pid_file=$test_root/json-signal-notify-child.pid
+(
+    cd -- "$repo" || exit 73
+    exec env PATH="$signal_notify_bin:$PATH" NOTIFY_PID_FILE="$json_signal_pid_file" \
+        AGENT_HOOK_FORMAT=json "$hook_script" notify 'JSON signal forwarding test'
+) >"$test_root/json-signal-notify.out" 2>&1 &
+json_signal_wrapper_pid=$!
+for _ in $(seq 1 50); do
+    [[ -s "$json_signal_pid_file" ]] && break
+    sleep 0.1
+done
+[[ -s "$json_signal_pid_file" ]] || fail 'JSON 信号测试未启动 notify-send'
+kill -TERM "$json_signal_wrapper_pid"
+set +e
+wait "$json_signal_wrapper_pid"
+json_signal_wrapper_status=$?
+set -e
+(( json_signal_wrapper_status == 143 )) || fail "JSON 包装器 TERM 应返回 143，实际 $json_signal_wrapper_status"
+json_signal_notify_pid=$(cat "$json_signal_pid_file")
+for _ in $(seq 1 20); do
+    kill -0 "$json_signal_notify_pid" 2>/dev/null || break
+    sleep 0.1
+done
+if kill -0 "$json_signal_notify_pid" 2>/dev/null; then
+    fail "JSON 包装器收到 TERM 后 notify-send 子进程仍存活：$json_signal_notify_pid"
+fi
+printf 'PASS: JSON 模式外部 TERM 同样清理受控子进程组\n'
+
+background_notify_bin=$test_root/background-notify-bin
+mkdir -p "$background_notify_bin"
+background_pid_file=$test_root/background-notify-child.pid
+cat > "$background_notify_bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+sleep 10 &
+printf '%s\n' "$!" > "${BACKGROUND_PID_FILE:?}"
+exit 0
+EOF
+chmod 0755 "$background_notify_bin/notify-send"
+set +e
+background_output=$(cd -- "$repo" && PATH="$background_notify_bin:$PATH" \
+    BACKGROUND_PID_FILE="$background_pid_file" \
+    "$hook_script" notify 'background cleanup test' 2>&1)
+background_status=$?
+set -e
+(( background_status == 0 )) || fail "后台清理测试的 hook 应成功，实际 $background_status\n$background_output"
+background_pid=$(cat "$background_pid_file")
+if kill -0 "$background_pid" 2>/dev/null; then
+    kill -KILL -- "-$background_pid" 2>/dev/null || kill -KILL "$background_pid" 2>/dev/null || true
+    fail "成功 hook 返回后后台子进程仍存活：$background_pid"
+fi
+printf 'PASS: 成功 hook 会清理遗留后台子进程\n'
+
+stubborn_notify_bin=$test_root/stubborn-notify-bin
+mkdir -p "$stubborn_notify_bin"
+stubborn_pid_file=$test_root/stubborn-notify-child.pid
+cat > "$stubborn_notify_bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+trap '' HUP INT TERM
+printf '%s\n' "$$" > "${STUBBORN_PID_FILE:?}"
+while :; do
+    sleep 10
+done
+EOF
+chmod 0755 "$stubborn_notify_bin/notify-send"
+(
+    cd -- "$repo" || exit 73
+    exec env PATH="$stubborn_notify_bin:$PATH" STUBBORN_PID_FILE="$stubborn_pid_file" \
+        "$hook_script" notify 'repeated signal test'
+) >"$test_root/stubborn-notify.out" 2>&1 &
+stubborn_wrapper_pid=$!
+for _ in $(seq 1 50); do
+    [[ -s "$stubborn_pid_file" ]] && break
+    sleep 0.1
+done
+[[ -s "$stubborn_pid_file" ]] || fail '连续 TERM 测试未启动 notify-send'
+stubborn_notify_pid=$(cat "$stubborn_pid_file")
+kill -TERM "$stubborn_wrapper_pid"
+sleep 0.1
+kill -TERM "$stubborn_wrapper_pid" 2>/dev/null || true
+set +e
+wait "$stubborn_wrapper_pid"
+stubborn_wrapper_status=$?
+set -e
+(( stubborn_wrapper_status == 143 )) || fail "连续 TERM 包装器应返回 143，实际 $stubborn_wrapper_status"
+if kill -0 "$stubborn_notify_pid" 2>/dev/null; then
+    kill -KILL -- "-$stubborn_notify_pid" 2>/dev/null || kill -KILL "$stubborn_notify_pid" 2>/dev/null || true
+    fail "连续 TERM 中断清理后 notify-send 子进程仍存活：$stubborn_notify_pid"
+fi
+printf 'PASS: 连续 TERM 不会绕过进程组 KILL 升级\n'
+
+quick_notify_bin=$test_root/quick-notify-bin
+mkdir -p "$quick_notify_bin"
+cat > "$quick_notify_bin/notify-send" <<'EOF'
+#!/usr/bin/env bash
+exit 0
+EOF
+chmod 0755 "$quick_notify_bin/notify-send"
+json_timeout_fifo=$test_root/json-timeout-events.fifo
+mkfifo "$json_timeout_fifo"
+(
+    cd -- "$repo" || exit 73
+    exec env PATH="$quick_notify_bin:$PATH" AGENT_HOOK_FORMAT=json AGENT_HOOK_TIMEOUT=1 \
+        AGENT_HOOK_EVENT_FILE="$json_timeout_fifo" \
+        "$hook_script" notify 'JSON event timeout test'
+) >"$test_root/json-event-timeout.out" 2>&1 &
+json_event_wrapper_pid=$!
+(
+    sleep 3
+    kill -TERM "$json_event_wrapper_pid" 2>/dev/null || true
+) &
+json_event_watchdog_pid=$!
+set +e
+wait "$json_event_wrapper_pid"
+json_event_status=$?
+set -e
+kill -TERM "$json_event_watchdog_pid" 2>/dev/null || true
+wait "$json_event_watchdog_pid" 2>/dev/null || true
+(( json_event_status == 124 )) || fail "JSON 事件写入超时应返回 124，实际 $json_event_status"
+assert_contains "$(cat "$test_root/json-event-timeout.out")" '硬超时'
+printf 'PASS: JSON 事件写入受完整 wrapper 硬超时约束\n'
 
 instruction_symlink_repo=$test_root/instruction-symlink-repo
 instruction_symlink_outside=$test_root/instruction-symlink-outside
@@ -462,3 +661,40 @@ assert_contains "$staged_mode_output" '100644'
 assert_contains "$tracked_mode_output" 'Shell 入口索引权限应为 100755'
 assert_contains "$tracked_mode_output" '100644'
 printf 'PASS: check.sh 校验 Shell 入口索引权限并保留快照例外\n'
+
+python_repo=$test_root/python-repo
+mkdir -p "$python_repo/tools"
+git -C "$python_repo" init -q
+git -C "$python_repo" config user.name 'Hook Test'
+git -C "$python_repo" config user.email 'hook-test@example.invalid'
+printf '#!/usr/bin/env python3\nprint("ok")\n' > "$python_repo/tools/demo.py"
+chmod 0755 "$python_repo/tools/demo.py"
+git -C "$python_repo" add -- tools/demo.py
+git -C "$python_repo" commit -qm initial
+printf '#!/usr/bin/env python3\nif (\n' > "$python_repo/tools/demo.py"
+git -C "$python_repo" add -- tools/demo.py
+set +e
+python_output=$(cd -- "$python_repo" && bash "$check_script" --staged 2>&1)
+python_status=$?
+set -e
+(( python_status != 0 )) || fail '非法 Python 暂存文件不应通过 check.sh'
+assert_contains "$python_output" 'Python AST 解析失败'
+printf 'PASS: check.sh 校验暂存 Python AST\n'
+
+json_repo=$test_root/json-repo
+mkdir -p "$json_repo/plugins/demo/.codex-plugin"
+git -C "$json_repo" init -q
+git -C "$json_repo" config user.name 'Hook Test'
+git -C "$json_repo" config user.email 'hook-test@example.invalid'
+printf '%s\n' '{"name":"demo","version":"1.0.0"}' > "$json_repo/plugins/demo/.codex-plugin/plugin.json"
+git -C "$json_repo" add -- plugins/demo/.codex-plugin/plugin.json
+git -C "$json_repo" commit -qm initial
+printf '%s\n' '{broken' > "$json_repo/plugins/demo/.codex-plugin/plugin.json"
+git -C "$json_repo" add -- plugins/demo/.codex-plugin/plugin.json
+set +e
+json_output=$(cd -- "$json_repo" && bash "$check_script" --staged 2>&1)
+json_status=$?
+set -e
+(( json_status != 0 )) || fail '非法 plugin JSON 不应通过 check.sh'
+assert_contains "$json_output" 'JSON 解析失败'
+printf 'PASS: check.sh 校验 plugin JSON\n'

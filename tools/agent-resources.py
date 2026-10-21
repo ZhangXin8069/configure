@@ -13,11 +13,19 @@ import datetime as dt
 import json
 import os
 import platform
+import re
 import shutil
+import signal
 import subprocess
 import sys
+import tempfile
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
+
+try:
+    import resource
+except ImportError:  # pragma: no cover - non-POSIX platforms
+    resource = None  # type: ignore[assignment]
 
 
 MAX_TEXT_BYTES = 64 * 1024
@@ -87,6 +95,19 @@ def parse_cpu_max(value: Optional[str]) -> Optional[float]:
     return round(quota / period, 3)
 
 
+def parse_gpu_count(value: Optional[str]) -> Optional[int]:
+    """Parse a bounded GPU count from allowlisted Slurm values."""
+    if not value:
+        return None
+    text = value.strip()
+    if re.fullmatch(r"[0-9]+", text):
+        return int(text)
+    matches = re.findall(r":([0-9]+)(?:\(|,|$)", text)
+    if not matches:
+        return None
+    return sum(int(item) for item in matches)
+
+
 def parse_meminfo(value: Optional[str]) -> Dict[str, Optional[int]]:
     result: Dict[str, Optional[int]] = {
         "total_bytes": None,
@@ -133,20 +154,61 @@ def _slurm_allocation(env: Dict[str, str], warnings: List[str]) -> Dict[str, obj
         memory_mib = memory_per_cpu * cpus_per_task
     if "SLURM_MEM_PER_NODE" in env and memory_per_node is None:
         warnings.append("slurm_memory_parse_failed")
+    gpu_text = env.get("SLURM_GPUS_ON_NODE") or env.get("SLURM_GPUS")
+    gpu_count = parse_gpu_count(gpu_text)
+    if gpu_text is not None and gpu_count is None:
+        warnings.append("slurm_gpu_parse_failed")
     return {
         "detected": present,
         "name": "slurm" if present else None,
         "cpu_per_task": cpus_per_task,
         "cpus_on_node": cpus_on_node,
         "memory_mib": memory_mib,
-        "gpus": env.get("SLURM_GPUS_ON_NODE") or env.get("SLURM_GPUS"),
-        "partition": env.get("SLURM_JOB_PARTITION"),
+        "gpu_count": gpu_count,
+        "partition_present": "SLURM_JOB_PARTITION" in env,
+        "job_id_present": "SLURM_JOB_ID" in env,
     }
+
+
+def _terminate_process(process: subprocess.Popen[bytes]) -> None:
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGTERM)
+        else:
+            process.terminate()
+    except (OSError, ProcessLookupError):
+        return
+    try:
+        process.wait(timeout=1)
+        return
+    except subprocess.TimeoutExpired:
+        pass
+    try:
+        if os.name == "posix":
+            os.killpg(process.pid, signal.SIGKILL)
+        else:
+            process.kill()
+    except (OSError, ProcessLookupError):
+        pass
+    try:
+        process.wait(timeout=1)
+    except subprocess.TimeoutExpired:
+        pass
+
+
+def _limit_probe_process() -> None:
+    if resource is None:
+        raise RuntimeError("resource limits unavailable")
+    os.setsid()
+    resource.setrlimit(resource.RLIMIT_FSIZE, (MAX_TEXT_BYTES, MAX_TEXT_BYTES))
 
 
 def _probe_nvidia(warnings: List[str]) -> Optional[Dict[str, object]]:
     executable = shutil.which("nvidia-smi")
     if not executable:
+        return None
+    if os.name != "posix" or resource is None:
+        warnings.append("nvidia_probe_unsupported_platform")
         return None
     command = [
         executable,
@@ -154,22 +216,30 @@ def _probe_nvidia(warnings: List[str]) -> Optional[Dict[str, object]]:
         "--format=csv,noheader,nounits",
     ]
     try:
-        completed = subprocess.run(
-            command,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL,
-            text=True,
-            timeout=2,
-            check=False,
-        )
-    except (OSError, subprocess.TimeoutExpired):
+        with tempfile.SpooledTemporaryFile(max_size=8192, mode="w+b") as output:
+            process = subprocess.Popen(
+                command,
+                stdin=subprocess.DEVNULL,
+                stdout=output,
+                stderr=subprocess.DEVNULL,
+                preexec_fn=_limit_probe_process,
+            )
+            try:
+                returncode = process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                _terminate_process(process)
+                warnings.append("nvidia_probe_timeout")
+                return None
+            output.seek(0)
+            stdout = output.read(MAX_TEXT_BYTES).decode("utf-8", errors="replace")
+    except OSError:
         warnings.append("nvidia_probe_failed")
         return None
-    if completed.returncode != 0:
+    if returncode != 0:
         warnings.append("nvidia_probe_failed")
         return None
     memories = []
-    for line in completed.stdout.splitlines()[:64]:
+    for line in stdout.splitlines()[:64]:
         memory = _int_or_none(line.strip())
         if memory is not None:
             memories.append(memory)
@@ -189,6 +259,7 @@ def collect_snapshot(
     affinity_count: Optional[int] = None,
     logical_cpu_count: Optional[int] = None,
     probe_accelerators: bool = True,
+    container_markers_override: Optional[List[str]] = None,
 ) -> Dict[str, object]:
     env = dict(os.environ if env is None else env)
     warnings: List[str] = []
@@ -240,13 +311,16 @@ def collect_snapshot(
     slurm_memory_bytes = None
     if isinstance(slurm["memory_mib"], int):
         slurm_memory_bytes = slurm["memory_mib"] * 1024 * 1024
-    container_markers = []
-    if Path("/.dockerenv").exists():
-        container_markers.append("docker")
-    if Path("/run/.containerenv").exists():
-        container_markers.append("container")
-    if "container" in env:
-        container_markers.append("container_env")
+    if container_markers_override is None:
+        container_markers = []
+        if Path("/.dockerenv").exists():
+            container_markers.append("docker")
+        if Path("/run/.containerenv").exists():
+            container_markers.append("container")
+        if "container" in env:
+            container_markers.append("container_env")
+    else:
+        container_markers = list(container_markers_override)
     isolation_active = bool(container_markers) or bool(slurm["detected"])
     host_memory_candidates = [] if isolation_active else [meminfo["total_bytes"]]
     memory_limit = _min_known(host_memory_candidates + [cgroup_memory_max, slurm_memory_bytes])
@@ -254,13 +328,23 @@ def collect_snapshot(
     if cgroup_memory_max is not None and cgroup_memory_current is not None:
         cgroup_remaining = max(cgroup_memory_max - cgroup_memory_current, 0)
     host_available_candidates = [] if isolation_active else [meminfo["available_bytes"]]
-    memory_available = _min_known(
-        host_available_candidates + [cgroup_remaining, slurm_memory_bytes]
-    )
-    review_required = (
-        (bool(container_markers) and cgroup_memory_max is None)
-        or (bool(slurm["detected"]) and slurm_memory_bytes is None)
-    )
+    memory_available = _min_known(host_available_candidates + [cgroup_remaining])
+    review_reasons = []
+    if container_markers and cgroup_memory_max is None:
+        review_reasons.append("container_memory_limit_unknown")
+    if slurm["detected"] and slurm_memory_bytes is None:
+        review_reasons.append("scheduler_memory_limit_unknown")
+    if container_markers and cgroup_cpus is None and quota_cores is None:
+        review_reasons.append("container_cpu_limit_unknown")
+    if slurm["detected"] and slurm["cpu_per_task"] is None:
+        review_reasons.append("scheduler_cpu_limit_unknown")
+    if capacity_cores is None:
+        review_reasons.append("cpu_capacity_unknown")
+    if memory_limit is None:
+        review_reasons.append("memory_limit_unknown")
+    if memory_available is None:
+        review_reasons.append("memory_available_unknown")
+    review_required = bool(review_reasons)
 
     try:
         disk = shutil.disk_usage(workdir)
@@ -277,6 +361,8 @@ def collect_snapshot(
             "capacity_bytes": None,
             "free_bytes": None,
         }
+    if disk_snapshot["free_bytes"] is None:
+        review_reasons.append("workspace_disk_unknown")
 
     accelerators: Dict[str, object] = {
         "candidates": [],
@@ -325,6 +411,7 @@ def collect_snapshot(
         "scheduler": slurm,
         "container_markers": sorted(set(container_markers)),
         "review_required": review_required,
+        "review_reasons": sorted(review_reasons),
         "accelerators": accelerators,
         "completeness": "partial" if warnings else "complete",
         "warnings": sorted(set(warnings)),

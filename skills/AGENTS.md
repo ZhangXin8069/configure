@@ -13,7 +13,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - `form/scripts/form-audit.sh`：只读的仓库路径布局与命名基线审计。
 - `form/scripts/form-snapshot-verify.sh`：离线快照完整性、排除项和符号链接校验。
 - `form/scripts/form-scripts.test.sh`：审计脚本与快照校验脚本的合成仓库自测。
-- `conf-refer-skill/scripts/find_refer_skills.py`：只读发现 `refer/git-rep/**/skills` 外部技能，处理嵌套目录、同名、镜像、符号链接边界与关键词匹配。
+- `conf-refer-skill/scripts/find-refer-skills.py`：只读发现 `refer/git-rep/**/*skills` 外部技能，处理嵌套目录、同名、镜像、符号链接边界、frontmatter 控制字符与关键词匹配。
 - `conf-refer-skill/scripts/find-refer-skills.test.sh`：外部技能发现脚本的离线回归入口；具体用例位于同目录 `find_refer_skills_cases.py`。
 - `rule/references/process-and-resources.md`：进程预算、共享环境限流、调度作业资源规格校准与终止流程。
 - `rule/references/conditional-delivery.md`：条件式自动提交、推送和非破坏性标签闸门。
@@ -127,16 +127,16 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `research-notes` | 过程优先、证据索引、三态结论和接续摘要 | 过程记录、调试笔记和临时结论归档 |
 | `log` | 默认常驻并随任一单技能启用（用户明确关闭除外）；三态日志门（阶段成果/一般记录/任务完成）、`write-log.sh` 确定性写入、关键证据压缩、全文报告与最终用户指令归档、KB 级目标和 10 MiB 硬上限、冲突无锁回退、`logs/AGENTS.md` 批次索引 | 主任务阶段报告归档、执行日志补写、最终报告落盘和可提交日志管理 |
 | `rule` | 默认常驻的进程与交付治理层；所有进程有硬时限，超过 10 分钟必须有真实进度与心跳；共享环境最小充分资源、调度作业显式校准资源规格、停滞先取证后 TERM/KILL 并转 debug/optim；真实大任务保留完整质量；阶段验收后可条件式提交、推送和非破坏性打标 | 长任务监控、共享工作站/集群作业、异常资源占用、自动交付安全闸门 |
-| `test` | 声明闸门五步（IDENTIFY→RUN→READ→VERIFY→ONLY THEN）；中间变量自行计算并保存；产物落盘分层（intermediate/results/figures）；设备切换 + 多精度切换 + 精度转换显式管理 | 任何需要“可复现验证”的场景；数值类项目的环境管理 |
+| `test` | 声明闸门五步（IDENTIFY→RUN→READ→VERIFY→ONLY THEN）；中间变量自行计算并保存；产物落盘分层（intermediate/results/figures）；设备切换 + 多精度切换 + 精度转换显式管理；命中 resume/stale state/安全边界等条件时增加有界对抗 QA 场景矩阵 | 任何需要“可复现验证”的场景；数值类项目的环境管理；可运行交互状态的对抗回归 |
 | `make` | 技能编排矩阵（阶段\|调用技能\|关键要求）——编排调用全景；计划表质量要求（bite-sized、无占位符、覆盖/一致性检查）；dry-run 计划表确认后执行；收尾默认执行常驻 log 归档 | 多技能协作的复杂任务；任何"先计划后执行"的生成任务 |
 | `all` | 收敛判据硬闸门（通过标准/收益<5%/连续两轮无变化/用户终止四判据）；迭代守卫（默认最大 5 轮）；一轮一动作（先 debug 后 optim 分轮）；每轮留证据；失效模式识别（振荡/扩张/低质平台→换方向而非加轮，吸收 agentpatterns.ai 收敛检测）；dispatch 失败按启动链重试并最终串行；收尾默认执行常驻 log 归档 | 任何需要"循环到最优"的任务；防无限空转的资源控制 |
-| `plan` | 假设执行者零上下文（计划自包含）；任务间 Consumes/Produces 显式声明接口；任务粒度 = 最小独立测试单元（2-5 分钟）；无占位符铁律；自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，失败回到本会话内联执行 | 多步骤任务拆解；跨任务命名/接口一致性检查 |
-| `review` | 早审查常审查；优先 agent-dispatch.sh 审查；精确上下文裁剪（只给产物信息，不传会话历史）；问题分级 Critical/Important/Minor；反馈可反驳（技术推理 + 证据）；接收审查"先验证后实现"（不表演性同意）；子代理失败按启动链重试后串行审查 | 任何提交前质量把关；派发子代理时的上下文纪律 |
+| `plan` | 假设执行者零上下文（计划自包含）；纵向 tracer bullet + 真实 `Blocked by`；宽重构使用 expand-contract；任务粒度 = 最小独立测试单元；无占位符铁律；自审覆盖/依赖/一致性；优先 agent-dispatch.sh，失败回到本会话内联执行 | 多步骤任务拆解；跨上下文长任务；宽重构排序 |
+| `review` | 早审查常审查；Standards 与 Spec 双轴独立报告；优先 agent-dispatch.sh 审查；精确上下文裁剪；问题分级 Critical/Important/Minor；证据标确证/推断/未验证；检查掩盖型 fallback 与 AI 残留；反馈可反驳，接收审查"先验证后实现" | 提交前质量把关；规范与需求分别核验；AI 生成改动清理 |
 | `skill-creator` | 触发描述是唯一机制（写"何时使用"而非总结工作流）；分级披露（SKILL.md <500 行，长内容拆 references/）；规则形式匹配失败类型（明知故犯→禁止式+红旗表，输出形状→正配方）；措辞微测试（必须带无指令对照、≥5 次重复）；触发率评估 60/40 拆分 + 3 次重复 | 文档/指令类内容的结构设计；规则措辞与触发描述编写 |
-| `conf-refer-skill` | 外部参考技能原地直调：跨嵌套 `skills/`、插件镜像和符号链接安全发现候选；显式路径/仓库优先并处理同名；完整读取 `SKILL.md` 后只适配占位符、工具、路径和本地门禁；建立适配账本、递归上限与失败降级 | 复用 `refer/git-rep` 外部技能而不复制安装；外部领域流程的最小本地适配 |
+| `conf-refer-skill` | 外部参考技能原地直调：跨 `skills`、`agent_skills` 等 `*skills` 目录、插件镜像和符号链接安全发现候选，以打开文件描述符复核 TOCTOU 边界；清洗 frontmatter/路径控制字符，显式路径/仓库优先并处理同名；完整读取 `SKILL.md` 后只适配占位符、工具、路径和本地门禁；建立来源—动作—状态适配账本、递归上限与失败降级；用 10 正/10 负查询和有/无技能用例评估触发边界 | 复用 `refer/git-rep` 外部技能而不复制安装；外部领域流程的最小本地适配 |
 | `md-tex-sync` | `{除非用户明确要求，否则不启用}`；Markdown 唯一源、TeX 派生源、PDF 编译件与全附件哈希清单四层分离；公式/代码保护后转换；`Overfull/Missing/Error=0`；全页栅格化；重复构建哈希幂等 | 仅在用户显式要求同源维护、双格式交付或全附件全集归档时使用 |
 | `tdd` | 铁律"无失败测试则无生产代码"（先写代码即删除重来）；RED-GREEN-REFACTOR 双强制验证（看过失败、看过通过）；反合理化表 + 红旗清单；修 bug 也是 TDD（先写复现测试） | 新功能/修复实现；防"后补测试"自我欺骗的纪律工具 |
-| `brainstorm` | 路径分类（spike/bounded/architectural）按复杂度定产物规模；棘轮单向升级（不降级）；HARD-GATE 批准闸门（简单任务缩短设计不缩短批准）；分节设计按复杂度缩放；红旗表（"太简单不用设计"等自欺借口） | 需求模糊的任务；设计前的假设检视 |
+| `brainstorm` | 路径分类（spike/bounded/architectural）；棘轮单向升级；维护 Intent/Outcome/Scope/Non-goals/Decision boundaries/Success criteria clarity ledger；高影响问题下一轮批量提出；HARD-GATE 批准闸门；分节设计与红旗表 | 需求模糊的任务；设计前意图与边界确认 |
 | `auto` | 前缀式包装不重复实现（细节以目标技能为权威）；启动时绑定/继承 Codex goal（界面 `/goal` 入口）并贯穿轮次与收尾；一次性预授权分级（L1/L2/自定义）实现 0 交互；0 交互 ≠ 0 报告；停滞保护（连续 N 轮无进展换方向）；子代理失败按启动链重试后自动串行；中断报告含恢复方式；收尾默认执行常驻 rule 门控与 log 归档 | 无人值守长任务；需要把自动执行进度纳入 Codex goal 生命周期的场景 |
 | `fast` | 多快好省修饰层：全链路传播 fast 上下文；全局默认最多 3 轮（显式例外可覆盖）；auto/all 边际收益阈值由 `<5%` 放宽为 `<25%`；合并重复工作、并行独立支线；analy/pure/report 默认 Markdown；效率 ≥3x 与质量 ≥60% 双闸门 | 需要降低关键路径、Token 与资源占用，同时保留硬性正确性和证据门槛的任务 |
 | `go-on` | 多源汇聚（输入清单/Git 改动/opencode 会话交叉验证）；无缝优先（opencode 原生 -c/-s/--fork/run -c 会话继续，消息历史与任务跟踪状态（TODO）天然继承）；孤儿进程先判定进程类；信息补查循环 3 轮上限防空转 | 任何"接着干"场景；会话中断恢复；新终端续接任务 |
@@ -168,7 +168,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `test` | 系统化测试：默认测试对象为上次 agent 生成的工作（参考 `.agent.*.list` 格式），可指定项目；中间变量自行计算并保存，中间/最终结果与图表落盘 `test_out/`，失败按 debug 循环修复、通过按 optim 循环优化，支持设备切换（GPU 优先/CPU/NPU）与多精度切换（默认 fp32），数据读写间精度转换显式管理|
 | `make` | 项目生成：生成对象为用户指定的项目，按需编排本目录全部相关技能并明确核心链（init/diff/analy/plan→最小改动实现→test→debug/optim→diff→init/tag/log），其余技能按任务接入，细节要求为所有相关技能的汇总|
 | `skill-creator` | 技能创建与优化：意图捕获→草稿→测试评估→迭代→触发描述优化；遵循分级披露（SKILL.md 精简、references 拆分）、解释 why 而非堆 MUST、触发描述写"何时使用"；吸收 Anthropic 官方 skill-creator 与 Agent Skills 规范|
-| `conf-refer-skill` | 外部参考技能直调与适配：定位 `$CONFIGURE_ROOT/refer/git-rep` 嵌套 `skills/` 中的候选，按显式路径、仓库和语义匹配选择；完整读取外部 `SKILL.md` 原地执行，不复制安装；对占位符、工具名、相对资源、权限、Git 和输出契约做最小适配，处理同名镜像、符号链接越界、缺失依赖与最多 3 层递归，并报告选择、适配和验证证据 |
+| `conf-refer-skill` | 外部参考技能直调与适配：定位 `$CONFIGURE_ROOT/refer/git-rep/**/*skills` 中的候选，按显式路径、仓库和语义匹配选择；完整读取外部 `SKILL.md` 原地执行，不复制安装；对占位符、工具名、相对资源、权限、Git 和输出契约做最小适配；处理同名镜像、越界/断链/循环链接、TOCTOU 读取边界、frontmatter 控制字符、缺失依赖与最多 3 层递归；以来源—动作—状态账本、10 正/10 负触发查询和有/无技能用例报告选择、适配和验证证据 |
 | `form` | Git 库格式治理：固定并校验参考 URL 的离线明文快照，`refer/git-rep` 参考子库以 submodule 引入、README 记录来源/致谢、分析文档集中 `docs/`，普通拷贝先迁移后重建；用 `form-audit.sh` 检查目录/文件布局、参考子库元数据与文档位置、`AGENT.md` 单数名、`logs/AGENTS.md`、agent 三态时间戳日志和标签形路径，人工判定函数/变量/对象语义命名及标签名边界；执行只读冲突表与较高权限整改，将双文件有效规则合并到 `AGENTS.md` 后删除单数文件，维护 docs/logs/data/testing 和框架入口，复现功能，用 `form-agents-sync.sh` 幂等同步根 `AGENTS.md` 规则且原约定优先，生成目标库特化 skill；提交前用 `form-large-files-check.sh` 阻断超过 10,000,000 字节的暂存文件，最后执行 diff/init/dev tag |
 | `plan` | 实现计划编写：为多步骤任务编写可执行计划——文件结构设计→任务分解（bite-sized、每任务独立测试周期）→无占位符（禁 TBD/TODO）→自审（覆盖/占位符/一致性）；优先 agent-dispatch.sh，派发失败时回到本会话内联执行；吸收 obra/superpowers writing-plans 方法论，计划存 `docs/plans/`|
 | `all` | 全流程收敛编排（元技能）：解析任务→技能编排矩阵判定所需技能集合→反复调用本目录技能（init/tag/debug/optim/diff/analy/pure/report/log/rule/test/plan/make/skill-creator/conf-refer-skill/form/brainstorm/tdd/review/dispatch/up/go-on/auto）循环迭代直至收敛为最佳（通过标准全达成/收益<5%/连续两轮无变化/用户终止四判据硬闸门），迭代守卫默认最大 5 轮、一轮一动作、失效模式转向（振荡/扩张/低质平台→换方案不加轮）；dispatch 失败按启动链重试后串行；收尾默认执行常驻 rule 门控与 log 归档；生成类任务首轮复用 make，单步任务转对应技能|

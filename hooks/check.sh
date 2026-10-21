@@ -13,8 +13,8 @@ usage() {
     cat <<'USAGE'
 用法：check.sh [--staged|--tracked]
 
-  --staged   检查暂存区中新增或修改的文件（默认）
-  --tracked  检查 hooks/ 与 skills/ 下索引中的全部受跟踪文件
+  --staged   检查暂存区中新增或修改的 hooks/skills/tools/plugins 文件（默认）
+  --tracked  检查 hooks/skills/tools/plugins 下索引中的全部受跟踪文件
   -h, --help 显示帮助
 USAGE
 }
@@ -49,15 +49,17 @@ if [[ "$mode" == staged ]]; then
     # --diff-filter excludes deletions: there is no blob to syntax-check.
     while IFS= read -r -d '' path; do
         paths+=("$path")
-    done < <(git diff --cached --name-only --diff-filter=ACMR -z -- hooks skills)
+    done < <(git diff --cached --name-only --diff-filter=ACMR -z -- hooks skills tools plugins)
 else
     while IFS= read -r -d '' path; do
         paths+=("$path")
-    done < <(git ls-files -z -- hooks skills)
+    done < <(git ls-files -z -- hooks skills tools plugins)
 fi
 
 failures=0
 shell_count=0
+python_count=0
+json_count=0
 skill_count=0
 log_count=0
 
@@ -87,7 +89,7 @@ validate_shell_mode() {
 }
 
 if [[ "$mode" == staged ]]; then
-    if ! diff_output=$(git diff --cached --check -- hooks skills 2>&1); then
+    if ! diff_output=$(git diff --cached --check -- hooks skills tools plugins 2>&1); then
         printf '✗ 暂存区存在空白或冲突标记问题：\n%s\n' "$diff_output" >&2
         failures=$((failures + 1))
     fi
@@ -96,6 +98,54 @@ fi
 staged_blob_first_line() {
     local path=$1
     git show --no-ext-diff --format= ":$path" | sed -n '1p'
+}
+
+python_interpreter() {
+    local path=$1
+    local first_line
+
+    case "$path" in
+        *.py) printf 'python3\n'; return 0 ;;
+    esac
+    first_line=$(staged_blob_first_line "$path") || return 1
+    if [[ "$first_line" =~ (^|[[:space:]/])python3?([[:space:]]|$) ]]; then
+        printf 'python3\n'
+    fi
+    return 0
+}
+
+validate_python() {
+    local path=$1
+    local output
+    if ! command -v python3 >/dev/null 2>&1; then
+        printf '✗ %s：缺少 Python 语法检查器 python3\n' "$path" >&2
+        failures=$((failures + 1))
+        return
+    fi
+    if ! output=$(git show --no-ext-diff --format= ":$path" | python3 -c \
+        'import ast, sys; ast.parse(sys.stdin.read())' 2>&1); then
+        printf '✗ %s：Python AST 解析失败\n%s\n' "$path" "$output" >&2
+        failures=$((failures + 1))
+        return
+    fi
+    python_count=$((python_count + 1))
+}
+
+validate_json() {
+    local path=$1
+    local output
+    if ! command -v python3 >/dev/null 2>&1; then
+        printf '✗ %s：缺少 JSON 检查器 python3\n' "$path" >&2
+        failures=$((failures + 1))
+        return
+    fi
+    if ! output=$(git show --no-ext-diff --format= ":$path" | python3 -c \
+        'import json, sys; json.load(sys.stdin)' 2>&1); then
+        printf '✗ %s：JSON 解析失败\n%s\n' "$path" "$output" >&2
+        failures=$((failures + 1))
+        return
+    fi
+    json_count=$((json_count + 1))
 }
 
 shell_interpreter() {
@@ -213,6 +263,12 @@ for path in "${paths[@]}"; do
         validate_skill_manifest "$path"
     fi
 
+    case "$path" in
+        hooks/*.json|tools/*.json|plugins/*.json|plugins/*/*.json|plugins/*/*/*.json)
+            validate_json "$path"
+            ;;
+    esac
+
     if ! interpreter=$(shell_interpreter "$path"); then
         printf '✗ %s：无法读取暂存内容\n' "$path" >&2
         failures=$((failures + 1))
@@ -225,13 +281,22 @@ for path in "${paths[@]}"; do
         esac
         validate_shell "$path" "$interpreter"
     fi
+
+    if interpreter=$(python_interpreter "$path"); then
+        if [[ -n "$interpreter" ]]; then
+            case "$path" in
+                skills/form/references/source-snapshots/*) ;;
+                *) validate_shell_mode "$path"; validate_python "$path" ;;
+            esac
+        fi
+    fi
 done
 
 if (( failures > 0 )); then
-    printf '✗ 检查失败：%d 项错误，%d 个 Shell 文件，%d 个技能清单，%d 个日志文件。\n' \
-        "$failures" "$shell_count" "$skill_count" "$log_count" >&2
+    printf '✗ 检查失败：%d 项错误，%d 个 Shell 文件，%d 个 Python 文件，%d 个 JSON 文件，%d 个技能清单，%d 个日志文件。\n' \
+        "$failures" "$shell_count" "$python_count" "$json_count" "$skill_count" "$log_count" >&2
     exit 1
 fi
 
-printf '✓ 检查通过：%d 个路径，%d 个 Shell 文件，%d 个技能清单。\n' \
-    "${#paths[@]}" "$shell_count" "$skill_count"
+printf '✓ 检查通过：%d 个路径，%d 个 Shell 文件，%d 个 Python 文件，%d 个 JSON 文件，%d 个技能清单。\n' \
+    "${#paths[@]}" "$shell_count" "$python_count" "$json_count" "$skill_count"

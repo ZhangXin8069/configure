@@ -64,12 +64,15 @@ bash tools/task-scope.test.sh
 ### `agent-resume.sh`
 
 检测 agent 因瞬时服务故障意外退出的 run，并在默认等待 10 秒后通过原统一 launcher 执行
-`--resume RUN_ID --once`。当前识别 429、重试上限、限流、服务不可用、网关错误、连接重置/超时
-和流中断；认证失败、任务正常结束、用户停止、仍在运行的 run 不会恢复。
+`--resume RUN_ID --once`。当前识别 429、重试上限、限流、服务不可用、网关错误、连接重置/超时、
+流中断，以及 `upstream_error` / `reasoning_content ... passed back` 等上游协议错误；认证失败、
+任务正常结束、用户停止、仍在运行的 run 不会恢复。
 
 工具直接消费 `data/runs/<run-id>/manifest.env`，因此普通 agent 与 `agent-dispatch.sh` 派发的
 子 agent 使用同一恢复路径。若 Codex 在首个回合失败前已写入 `thread.started` 但 manifest 尚无
-`thread_id`，工具会从 `agent.log` 回填；Claude/OpenCode 分别恢复 `session_id`。每个 run 使用
+`thread_id`，工具会从 `agent.log` 回填；TUI 日志为空时，还会用 `agent-session-state.py` 按
+`run_id + cwd + created_at` 查询 Codex/Claude Code/OpenCode 的本地会话存储，并依据最后一个完整
+turn 判断是否确为瞬时故障。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。每个 run 使用
 `.auto-resume-attempted` 限制为一次自动尝试，持续 429 不会形成重试风暴。
 
 ```bash
@@ -88,8 +91,68 @@ tools/agent-resume.sh --force --run-id RUN_ID
 回归测试：
 
 ```bash
+bash -n tools/agent-resume.sh
+python3 tools/agent-session-state.test.py
+python3 tools/agent-codex-state.test.py
 bash tools/agent-resume.test.sh
 ```
+
+### `agent-session-state.py`
+
+只读解析三个 agent 的本地状态，供 `agent-resume.sh` 在 TUI stderr 为空时使用：
+
+- Codex：读取 `AGENT_CODEX_STATE_DB` 或 `$CODEX_HOME/state_*.sqlite`，匹配首条用户消息中的
+  `run_id`，校验 rollout 位于 Codex home 内，并读取最后一个 `task_complete`。
+- Claude Code：读取 `AGENT_CLAUDE_CONFIG_DIR` / `CLAUDE_CONFIG_DIR` 下项目 JSONL，优先精确
+  项目目录，必要时只读扫描其他项目目录；只判断最后一个已完成 turn。
+- OpenCode：读取 `AGENT_OPENCODE_STATE_DB` 或 `AGENT_OPENCODE_DATA_DIR` /
+  `OPENCODE_DATA_HOME` / XDG 数据目录下的 `opencode.db`，同时支持 V1 `message/part` 与 V2
+  `session_message`。
+
+三系都限制 cwd 与创建时间窗口，且只以最新完整 turn 判定瞬时性；较早的 429/upstream_error 不会
+覆盖后续成功。恢复调用默认受 5 秒硬超时约束，可用 `AGENT_STATE_TIMEOUT` 调整；超时、数据库
+不可读或会话不唯一时 fail-closed。`agent-codex-state.py` 是兼容旧路径的 Codex 入口。
+
+### `agent-tui-watch.py`
+
+Codex/Claude/OpenCode 在 turn 级 429 后通常继续保持 TUI 存活，因此恢复不能等待进程退出。该
+watcher 由 `bin/agent-runtime.sh` 与前台 TUI 同生命周期启动，周期读取最新 `turn_state`；只有当前
+turn 已完成、失败被判定为瞬时且宽限期复查仍未变化时，才原子创建 `.auto-resume-attempted` 并执行
+启动器预构造的原生恢复命令，TUI 保持运行。Codex 的每个 TUI run 使用 run 目录内的独立 app-server
+socket；`agent-codex-resume.py` 随后执行 `thread/resume`、`thread/queue/add` 和
+`thread/queue/start`，显式启动同一运行中 thread 的恢复 turn。Claude 使用 `--bg --resume`；
+OpenCode 使用固定端口上的 `run -s --attach`，复用 TUI 服务器中的同一 session。
+新 turn 已开始、永久错误、进程已退出或会话状态不可读时不会恢复。`AGENT_RESUME_ACTIVE=1` 与
+`AGENT_AUTO_RESUME=0` 会停用 watcher；headless/派发子 agent 仍由进程退出后的 `agent-resume.sh`
+兜底，避免恢复循环。
+
+默认预算为间隔 2 秒、宽限 5 秒、最长 24 小时、心跳 60 秒、状态查询 5 秒、恢复命令 1800 秒、反向扫描
+2 MiB；可用 `AGENT_TUI_WATCH_INTERVAL`、`AGENT_TUI_WATCH_GRACE`、
+`AGENT_TUI_WATCH_MAX_RUNTIME`、`AGENT_TUI_WATCH_HEARTBEAT`、`AGENT_TUI_WATCH_STATE_TIMEOUT`、
+`AGENT_TUI_WATCH_RECOVER_TIMEOUT`、`AGENT_TUI_WATCH_SCAN_BYTES` 调整。事件写入 run 目录的
+`tui-watch.log` 和 `events.jsonl`，不记录消息正文或凭据。
+
+回归测试：
+
+```bash
+python3 tools/agent-tui-watch.test.py
+python3 tools/agent-codex-resume.test.py
+```
+
+### `agent-codex-resume.py`
+
+对运行中的 Codex app-server 执行一次显式恢复：
+
+```bash
+python3 tools/agent-codex-resume.py \
+  --remote unix:///absolute/path/to/app-server.sock \
+  --thread THREAD_ID \
+  --message "继续上次任务"
+```
+
+客户端仅使用 Python 标准库完成 WebSocket/JSON-RPC 握手，依次调用 `thread/resume`、
+`thread/queue/add` 和 `thread/queue/start`，成功时输出新的 `turn_id`。它不会启动第二个 TUI，
+也不会终止现有 TUI；socket 不存在、RPC 失败或超时时返回非零。
 
 ### `agent-resources.py`
 
@@ -106,13 +169,40 @@ python3 tools/agent-resources.py --proc-root /proc --cgroup-root /sys/fs/cgroup
 
 输出为 JSON schema 1，关键字段包括 `cpu.effective_capacity_cores`、`cpu.worker_ceiling`、
 `memory.effective_limit_bytes`、`memory.available_estimate_bytes`、`scheduler`、`disk`、
-`accelerators`、`completeness`、`warnings` 和 `provenance`。accelerator 管理查询可见只表示候选，
+`accelerators`、`completeness`、`review_required`、`review_reasons`、`warnings` 和 `provenance`。
+Slurm memory 只作为 allocation upper bound，不冒充当前剩余内存；accelerator 管理查询可见只表示候选，
 `runtime_usable_devices` 仍为 `null`，不能在未做目标环境验证时宣称框架可用。
 
 回归测试：
 
 ```bash
 python3 tools/agent-resources.test.py
+```
+
+### `plugin-audit.py`
+
+对 Codex plugin/hook/MCP manifest 做只读静态审计，不执行插件、hook、MCP 或外部命令。检查
+`.codex-plugin/plugin.json` 必需字段、`skills`/`hooks`/`mcpServers` 相对路径边界、hook event/schema、
+重复 id、命令风险、timeout、远程 HTTP hook、硬编码凭据和 MCP runtime 启动方式。hook/MCP 命令中的
+父目录穿越、绝对路径和解析到插件根外的文件会单独标记；MCP `env`/`headers` 与包装命令中的常见
+runtime 启动器也在检查范围内。JSON 使用严格语义，重复键、`NaN`/`Infinity` 和无效 UTF-8 均拒绝。
+
+```bash
+python3 tools/plugin-audit.py --manifest path/to/.codex-plugin/plugin.json
+python3 tools/plugin-audit.py --root refer/git-rep --format json
+python3 tools/plugin-audit.py --manifest path/to/.codex-plugin/plugin.json --strict
+```
+
+默认只在 high/critical 问题时失败；`--strict` 同时将 medium 问题提升为失败。输出中的证据只包含
+发现类型、脱敏后的位置和固定说明，不回显命中的凭据赋值，也不会把控制字符直接写到终端。
+`--root` 扫描允许 marketplace 包引用同一审计根内的父级资源，但仍标为 medium；越出审计根才判
+critical。目录或 manifest 数量达到发现上限时返回 2，不会静默审计一个子集。
+`plugins/install-recommended.sh --audit-manifest PATH` 复用该工具。
+
+回归测试：
+
+```bash
+python3 tools/plugin-audit.test.py
 ```
 
 ## 上游推荐

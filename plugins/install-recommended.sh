@@ -2,6 +2,7 @@
 set -Eeuo pipefail
 
 # 只调用 Codex 的 marketplace 命令；不复制第三方源码、不安装 npm 依赖、不删除插件。
+script_dir=$(CDPATH= cd -- "$(dirname -- "${BASH_SOURCE[0]:-$0}")" && pwd)
 DEFAULT_PROFILE="recommended"
 REF="${CODEX_PLUGIN_REF:-}"
 DRY_RUN=false
@@ -10,6 +11,7 @@ REF_POLICY=default
 OFFICIAL_MARKETPLACE_SHOWN=false
 PROFILE=""
 REQUESTED=()
+MANIFEST_AUDIT=""
 
 usage() {
   cat <<'EOF'
@@ -23,6 +25,7 @@ usage() {
   --ref-policy POLICY  社区来源策略：default 或 commit（仅接受 40/64 位提交哈希）
   --dry-run            只打印命令，不写入 Codex 配置
   --status, --audit    只读查询插件和 marketplace 状态，不安装或修改配置
+  --audit-manifest PATH 静态审计本地 .codex-plugin/plugin.json 后退出
   --list               列出可安装的推荐项
   -h, --help           显示帮助
 
@@ -31,9 +34,10 @@ usage() {
   ./install-recommended.sh --profile gpu-research
   ./install-recommended.sh --profile research-workbench
   ./install-recommended.sh --profile app-dev
-  ./install-recommended.sh --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
-  ./install-recommended.sh --ref-policy commit --ref 76aaa77df6adc5b889e689007bf99b9a4f74af34 ecc
+  ./install-recommended.sh --ref 90606c8315ee09cafc303515c5f33024db6b9882 ecc
+  ./install-recommended.sh --ref-policy commit --ref 90606c8315ee09cafc303515c5f33024db6b9882 ecc
   ./install-recommended.sh --status --profile recommended
+  ./install-recommended.sh --audit-manifest refer/git-rep/ecc-skills/.codex-plugin/plugin.json
   ./install-recommended.sh --profile app-dev --dry-run
 
 说明：
@@ -86,7 +90,8 @@ plugin_spec() {
     netlify)                 printf '%s\n' 'official|openai/plugins|openai-curated|netlify' ;;
     ngs-analysis)            printf '%s\n' 'official|openai/plugins|openai-curated|ngs-analysis' ;;
     life-science-research)   printf '%s\n' 'official|openai/plugins|openai-curated|life-science-research' ;;
-    ecc)                     printf '%s\n' 'community|affaan-m/ECC|ecc|ecc|76aaa77df6adc5b889e689007bf99b9a4f74af34' ;;
+    ecc)                     printf '%s\n' 'community|affaan-m/ECC|ecc|ecc|90606c8315ee09cafc303515c5f33024db6b9882' ;;
+    omx)                     printf '%s\n' 'community|Yeachan-Heo/oh-my-codex|oh-my-codex-local|oh-my-codex|304fb3b4825c4132c273732b14d2d5e86b54f8e3' ;;
     agent-skills)            printf '%s\n' 'community|addyosmani/agent-skills|agent-skills|agent-skills|aeac41d4d005999432bb7312f7ff06383a91d59d' ;;
     compound-engineering)   printf '%s\n' 'community|EveryInc/compound-engineering-plugin|compound-engineering-plugin|compound-engineering|fac349c0c31a543d497fd4825af9b44bdb7e7dfe' ;;
     babysitter)              printf '%s\n' 'community|a5c-ai/babysitter-codex|babysitter|babysitter|694028503ae14a1111d4e32eaa5279752bc2194c' ;;
@@ -104,8 +109,8 @@ profile_plugins() {
     gpu-research)     printf '%s\n' nvidia zotero ;;
     bioinformatics)   printf '%s\n' life-science-research ngs-analysis ;;
     engineering)      printf '%s\n' ecc agent-skills compound-engineering ;;
-    orchestration)    printf '%s\n' babysitter ;;
-    all)              printf '%s\n' superpowers nvidia zotero notion google-drive airtable hugging-face build-web-data-visualization figma build-web-apps build-ios-apps build-macos-apps expo netlify life-science-research ngs-analysis ecc agent-skills compound-engineering babysitter ;;
+    orchestration)    printf '%s\n' babysitter omx ;;
+    all)              printf '%s\n' superpowers nvidia zotero notion google-drive airtable hugging-face build-web-data-visualization figma build-web-apps build-ios-apps build-macos-apps expo netlify life-science-research ngs-analysis ecc omx agent-skills compound-engineering babysitter ;;
     *) return 1 ;;
   esac
 }
@@ -130,6 +135,7 @@ print_catalog() {
   ngs-analysis            官方：NGS/FASTQ/BCL 及测序分析路由
   life-science-research   官方：生命科学检索与证据综合
   ecc                     社区：TDD、安全、审查与自主开发工作流
+  omx                     社区：OMX 技能、Hooks、MCP 与多 agent 编排
   agent-skills            社区：规格、计划、实现、测试、审查与发布
   compound-engineering    社区：brainstorm → plan → build → review → compound
   babysitter              社区：事件溯源的复杂流程编排与人工审批
@@ -143,7 +149,7 @@ profile：
   gpu-research          仅 GPU/HPC + 文献
   bioinformatics        生命科学与测序分析
   engineering           外部工程工作流；重复能力较多
-  orchestration         事件溯源、审批和长流程编排
+  orchestration         OMX worker 编排 + babysitter 审批与长流程
   all                   安装器登记的全部项目
 EOF
 }
@@ -632,7 +638,7 @@ install_one() {
   IFS='|' read -r kind source marketplace plugin default_ref <<<"$spec"
 
   case "$key" in
-    superpowers|ecc|agent-skills|compound-engineering)
+    superpowers|ecc|omx|agent-skills|compound-engineering)
       printf '提示：%s 与本库或彼此存在技能职责重叠，安装后请确认触发优先级。\n' "$key" ;;
   esac
   if [[ "$key" == life-science-research ]]; then
@@ -642,11 +648,14 @@ install_one() {
     notion|google-drive|airtable|hugging-face|figma|netlify)
       printf '提示：%s 可能需要在首次使用时完成外部账号授权或连接；本脚本不会代为登录。\n' "$key" ;;
   esac
-  if [[ "$key" == ecc || "$key" == babysitter ]]; then
+  if [[ "$key" == ecc || "$key" == omx || "$key" == babysitter ]]; then
     printf '提示：%s 含 hooks/MCP 或运行时集成；安装后需单独审查并信任相关 hooks。\n' "$key"
   fi
   if [[ "$key" == babysitter ]]; then
     printf '提示：Babysitter 的完整运行还需要按上游说明安装其 CLI/SDK；本脚本不隐式安装 npm 依赖。\n'
+  fi
+  if [[ "$key" == omx ]]; then
+    printf '提示：OMX 的 hooks/MCP 完整运行依赖 omx runtime；本脚本不隐式安装或启用该 runtime。\n'
   fi
 
   if [[ "$kind" == official ]]; then
@@ -719,7 +728,7 @@ profile_note() {
     engineering)
       printf '组合定位：外部工程工作流，包含较重的社区插件。\n' ;;
     orchestration)
-      printf '组合定位：长流程、审批和事件溯源。\n' ;;
+      printf '组合定位：OMX worker 编排 + babysitter 审批与长流程。\n' ;;
     all)
       printf '组合定位：全部登记项，风险最高。\n' ;;
   esac
@@ -751,6 +760,11 @@ main() {
         STATUS_ONLY=true
         shift
         ;;
+      --audit-manifest)
+        (($# >= 2)) || die '--audit-manifest 需要一个 manifest 路径。'
+        MANIFEST_AUDIT="$2"
+        shift 2
+        ;;
       --dry-run)
         DRY_RUN=true
         shift
@@ -781,6 +795,14 @@ main() {
     die '不能同时指定 profile 和插件名。'
   fi
   [[ "$STATUS_ONLY" != true || "$DRY_RUN" != true ]] || die '--status/--audit 不能与 --dry-run 同时使用。'
+  if [[ -n "$MANIFEST_AUDIT" ]]; then
+    [[ -f "$MANIFEST_AUDIT" ]] || die "manifest 不存在：$MANIFEST_AUDIT"
+    command -v python3 >/dev/null 2>&1 || die '--audit-manifest 需要 python3。'
+    local audit_tool="$script_dir/../tools/plugin-audit.py"
+    [[ -x "$audit_tool" ]] || die "plugin audit 工具不存在：$audit_tool"
+    python3 "$audit_tool" --manifest "$MANIFEST_AUDIT" --strict
+    return $?
+  fi
 
   local -a selected=()
   local selected_plugin selected_spec selected_kind

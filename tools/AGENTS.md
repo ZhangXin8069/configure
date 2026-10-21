@@ -9,11 +9,33 @@
 - `task-scope.sh` 是只读任务分流入口，把自然语言任务映射到技能组合与拆分建议；保持可执行，并同步 `README.md` 里的用途、参数和测试入口。
 - `agent-resume.sh` 检测 agent run 的瞬时基础设施故障，默认等待 10 秒后通过原统一 launcher
   执行一次 `--resume`；必须保持 fail-closed、识别存活进程、恢复 session/thread，并用单次标记
-  防止持续限流引发无界重试。配套 `agent-resume.test.sh`，并覆盖派发子 agent 的同构 manifest。
+  防止持续限流引发无界重试。检测范围包含 429、连接中断和 `upstream_error` /
+  `reasoning_content ... passed back` 等上游协议错误。配套 `agent-resume.test.sh`，并覆盖派发
+  子 agent 的同构 manifest。
+- `agent-session-state.py` 是 Codex、Claude Code、OpenCode 共用的只读会话解析器：按 manifest 的
+  `run_id + cwd + created_at` 分别查询 Codex state DB/rollout、Claude 项目 JSONL、OpenCode V1/V2
+  SQLite，并只依据最后一个完整 turn 判断瞬时性；不修改各 agent 状态、不输出消息正文或凭据。
+  `agent-codex-state.py` 保留为 Codex 兼容入口。配套 `agent-session-state.test.py` 与
+  `agent-codex-state.test.py`。
+- `agent-tui-watch.py` 是 TUI 的同生命周期旁路监控器：复用会话解析器的最新 `turn_state` 与
+  瞬时失败判定，只有进程仍存活、当前 turn 已因瞬时故障结束且宽限期复查未变化时才执行启动器预构造的
+  原生恢复命令；TUI 不退出。Codex 由 `agent-codex-resume.py` 使用标准库 WebSocket 执行
+  `thread/resume → thread/queue/add → thread/queue/start`；Claude 使用 `--bg --resume`，OpenCode 使用
+  固定端口的 `run -s --attach`。`.auto-resume-attempted` 保证单次恢复；
+  进行中 turn、永久错误和状态不可用均 fail-closed。恢复中的 run 与 `AGENT_AUTO_RESUME=0` 自动停用；
+  配套 `agent-tui-watch.test.py`。
+- `agent-codex-resume.py` 是 Codex 运行中 thread 的原生恢复客户端：只用 Python 标准库完成 Unix
+  WebSocket 握手与 JSON-RPC，显式执行 thread resume、队列追加和队列启动，并校验返回的 turn id；
+  不读取消息正文之外的会话内容，不修改 Codex 配置。配套 `agent-codex-resume.test.py`。
 - `agent-resources.py` 是只读资源快照入口，分离 host inventory、process affinity、cgroup v2、
   Slurm allowlist 和 accelerator management visibility；不得运行 benchmark/stress、写系统状态、
   输出 hostname、绝对路径、job/device ID 或未脱敏环境变量。未知值保持 `null`，配套
   `agent-resources.test.py`。
+- `plugin-audit.py` 是只读 plugin/hook/MCP 静态审计入口：校验 `.codex-plugin/plugin.json`、
+  相对路径边界、hook event/schema、重复 id、命令风险、timeout、远程 hook 与 MCP runtime；
+  拒绝重复 JSON 键与非有限数值，检查 hook/MCP 命令的父目录穿越和符号链接逃逸，并对输出中的已知
+  凭据赋值脱敏；`--root` 达到发现上限时 fail-closed。不执行插件、hook、MCP 或外部二进制。
+  配套 `plugin-audit.test.py`。
 - 工具不得自动安装依赖、执行 hook/plugin 或修改仓库；第三方项目只记录在 `README.md`。
 - 新增 shell 工具后同步说明用途、参数、退出码和依赖，并做权限、语法和边界参数验证；只读诊断工具的“成功”指报表或建议成功生成，不要求仓库被修改。
 - `configure-check.sh` 的路径枚举失败必须 fail-closed；其临时 NUL 清单仅用于检查过程并在退出时清理。

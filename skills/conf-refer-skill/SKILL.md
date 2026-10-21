@@ -1,12 +1,9 @@
 ---
 name: conf-refer-skill
 description: |
-  当用户的任务场景与 `${CONFIGURE_ROOT}/refer/git-rep` 下任意 `skills/` 中的外部技能契合，
-  包括学术论文写作与审稿、文献研究、系统综述、科研数据分析与可视化、生物信息与实验设计、
-  复杂规划与代码审查、autopilot 或 team worker 等参考技能覆盖的流程；用户点名某个参考技能、
-  oh-my-codex 技能、scientific-agent-skills 技能，要求复用 refer/git-rep 中的方法，或需要在
-  不复制外部技能的前提下直接调用、组合、最小适配这些参考技能时使用；也用于参考技能同名选型、
-  路径校验、外部脚本适配和调用失败降级。
+  当用户明确要求执行、复用、直接调用或最小适配 `refer/git-rep` 中某个外部技能，说“用参考技能”
+  “调用外部 skill”，或本库现有技能无法覆盖且用户明确同意使用外部参考技能时使用；也用于已确定使用
+  外部技能后的同名选型、路径校验、附属脚本适配和调用失败降级。
 metadata:
   openclaw:
     emoji: 🔗
@@ -16,14 +13,14 @@ metadata:
 
 ## 执行前置
 
-遵循当前目录 `AGENTS.md`「技能执行公共契约」。本技能把“调用外部 skill”定义为：完整读取所选
+遵循上级 `../AGENTS.md`「技能执行公共契约」。本技能把“调用外部 skill”定义为：完整读取所选
 `SKILL.md`，在当前运行器中按其领域流程执行，并按其相对路径读取必要附属文件；不要求先把外部 skill
 复制或安装到本库。
 
 配置根优先使用 `$CONFIGURE_ROOT`；未设置时从当前已加载 `SKILL.md` 的绝对路径回退两级解析，不能假定仓库
 位于 `$HOME/configure`。参考根为 `$configure_root/refer/git-rep`。候选发现与去重由
-`scripts/find_refer_skills.py` 完成，离线回归入口为 `scripts/find-refer-skills.test.sh`。外部目录是只读
-参考源，除用户明确要求吸收外，不在其中修改文件。
+`scripts/find-refer-skills.py` 完成，离线回归入口为 `scripts/find-refer-skills.test.sh`。外部目录默认
+只读，不在其中修改文件；用户明确要求持久吸收时转入 `absorb` 处理来源、许可和并入流程。
 
 ## 核心原则
 
@@ -74,15 +71,22 @@ git -C "$repo_root" status --short
 ### Step 1. 固定任务、根目录与访问边界
 
 1. 提取任务目标、输入、预期产物、约束和停止条件。
-2. 解析配置根与本技能目录：
+2. 解析配置根与本技能目录。命令会优先使用 `CONFIGURE_ROOT`，其次接受当前 Git 根中的本库安装，
+   最后回退到 `$HOME/configure`；任一路径不成立时明确报错：
 
    ```bash
-   skill_file=<当前已加载 SKILL.md 的绝对路径>
-   skill_dir="$(cd -- "$(dirname -- "$skill_file")" && pwd -P)"
-   configure_root="${CONFIGURE_ROOT:-$(cd -- "$skill_dir/../.." && pwd -P)}"
+   if [[ -n "${CONFIGURE_ROOT:-}" ]]; then
+     configure_root="$CONFIGURE_ROOT"
+   elif git_root="$(git rev-parse --show-toplevel 2>/dev/null)" &&
+        [[ -f "$git_root/skills/conf-refer-skill/SKILL.md" ]]; then
+     configure_root="$git_root"
+   else
+     configure_root="$HOME/configure"
+   fi
+   skill_dir="$configure_root/skills/conf-refer-skill"
    refer_root="$configure_root/refer/git-rep"
    test -d "$refer_root"
-   test -f "$skill_dir/scripts/find_refer_skills.py"
+   test -f "$skill_dir/scripts/find-refer-skills.py"
    ```
 
 3. 若 `$refer_root` 不存在，报告路径缺失并回到本库技能或普通流程，不搜索其他目录。仅访问用户已引入且与
@@ -93,7 +97,7 @@ git -C "$repo_root" status --short
 优先使用用户给出的绝对路径、仓库名和技能名。未给路径时，用任务关键词发现候选：
 
 ```bash
-python3 "$skill_dir/scripts/find_refer_skills.py" \
+python3 "$skill_dir/scripts/find-refer-skills.py" \
   --root "$configure_root" \
   --query "<任务关键词>" \
   --limit 12
@@ -102,8 +106,8 @@ python3 "$skill_dir/scripts/find_refer_skills.py" \
 精确名称或路径可分别使用：
 
 ```bash
-python3 "$skill_dir/scripts/find_refer_skills.py" --root "$configure_root" --name "<skill-name>"
-python3 "$skill_dir/scripts/find_refer_skills.py" --root "$configure_root" --path "<path/to/SKILL.md>"
+python3 "$skill_dir/scripts/find-refer-skills.py" --root "$configure_root" --name "<skill-name>"
+python3 "$skill_dir/scripts/find-refer-skills.py" --root "$configure_root" --path "<path/to/SKILL.md>"
 ```
 
 若关键词结果为空，先运行 `--limit 30 --format tsv` 浏览活跃技能，再根据描述收窄；不要为制造命中而强选
@@ -141,17 +145,17 @@ match_reason=<显式路径 / 场景匹配 / 同名择优>
 
 ### Step 4. 建立最小适配账本
 
-执行前列出实际发生的适配，不把未改内容写成“已适配”：
+执行前列出实际发生的适配，不把未改内容写成“已适配”。每项至少记录来源行、本地动作和状态，执行后补验证证据：
 
-| 外部约定 | 本地动作 |
-|---|---|
-| `{{ARGUMENTS}}`、`$ARGUMENTS`、`Task:` 或空参数占位符 | 替换为完整用户任务，保留原始约束与验收条件 |
-| `references/`、`scripts/`、`assets/` 等相对路径 | 解析到所选技能目录；越界链接拒绝 |
-| `$skill`、Skill/task 工具、`Read/Write/Edit/Glob/Grep` | 映射为当前运行器等价能力；不伪造不存在的工具 |
-| Claude/OpenCode 专有 frontmatter、`allowed-tools`、slash command | 只当作来源元数据；权限仍由当前运行器和用户指令决定 |
-| 自动 commit/push/tag、安装依赖、修改全局配置 | 不自动执行；按本库授权和 `rule` 门控处理 |
-| 网络、凭据、外部 API、付费服务 | 仅在用户任务确需且已授权时执行；报告隐私和成本边界 |
-| 输出模板与验收标准 | 原样保留领域内容；追加当前任务要求的证据、路径和状态 |
+| 来源证据 | 外部约定 | 本地动作 | 状态与验证 |
+|---|---|---|---|
+| `SKILL.md:行号` | `{{ARGUMENTS}}`、`$ARGUMENTS` 或空参数占位符 | 替换为完整用户任务，保留原始约束与验收条件 | `pending/verified/skipped` + 证据 |
+| `SKILL.md:行号` | `references/`、`scripts/`、`assets/` 等相对路径 | 解析到所选技能目录；越界链接拒绝 | `pending/verified/skipped` + 证据 |
+| `SKILL.md:行号` | `$skill`、Skill/task 工具、`Read/Write/Edit/Glob/Grep` | 映射为当前运行器等价能力；不伪造不存在的工具 | `pending/verified/skipped` + 证据 |
+| `SKILL.md:行号` | Claude/OpenCode 专有 frontmatter、`allowed-tools`、slash command | 只当作来源元数据；权限由当前运行器和用户指令决定 | `pending/verified/skipped` + 证据 |
+| `SKILL.md:行号` | 自动 commit/push/tag、安装依赖、修改全局配置 | 不自动执行；按本库授权和 `rule` 门控处理 | `pending/verified/skipped` + 证据 |
+| `SKILL.md:行号` | 网络、凭据、外部 API、付费服务 | 仅在用户任务确需且已授权时执行；报告隐私和成本边界 | `pending/verified/skipped` + 证据 |
+| `SKILL.md:行号` | 输出模板与验收标准 | 保留领域内容；追加当前任务要求的证据、路径和状态 | `pending/verified/skipped` + 证据 |
 
 若外部技能依赖缺失的命令、模型、数据集或凭证，先找等价只读/本地路径；无法替代时明确阻塞，不伪造结果。
 
@@ -188,10 +192,10 @@ match_reason=<显式路径 / 场景匹配 / 同名择优>
 
 | 场景 | 处理 |
 |---|---|
-| `refer/git-rep` 或 `skills/` 不存在 | 报告实际检查路径，回到本库技能；不递归搜索无关目录 |
+| `refer/git-rep` 或任何名称以 `skills` 结尾的技能目录不存在 | 报告实际检查路径，回到本库技能；不递归搜索无关目录 |
 | 没有语义匹配 | 输出零候选和所用关键词，允许宽化一次；仍无匹配则停止，不强套外部技能 |
 | 同名技能多个来源 | 按显式仓库、非镜像、活跃状态、路径深度和稳定排序选择，并在报告披露 |
-| 显式路径越界或指向非 `skills/` | 拒绝读取，说明允许根与期望路径 |
+| 显式路径越界或不在 `*skills/` 下 | 拒绝读取，说明允许根与期望路径 |
 | 符号链接越界、断链或形成循环 | 跳过该链接并记录；不跟随到 `refer/git-rep` 外 |
 | frontmatter 缺失或名称异常 | 路径明确时以目录名和路径继续，记录元数据异常；不臆造描述 |
 | 附属文件缺失 | 停止依赖该文件的步骤；可用等价证据替代时说明，否则报告阻塞 |
@@ -210,4 +214,5 @@ match_reason=<显式路径 / 场景匹配 / 同名择优>
 - 同名不是等价：`plan`、`review`、`doctor`、`team` 等名称在不同仓库可能对应完全不同流程，必须核对描述和正文。
 - 关键词脚本只负责缩小候选，最终选择必须由 agent 对触发条件、输入和输出进行语义判断。
 - 外部技能要求的输出格式若与用户明确格式冲突，以用户格式为主，并保留该技能的关键证据与验收内容。
+- 外部 frontmatter 和路径可能包含终端控制字符；发现器会清洗 C0/C1/Cf 字符，展示时不得还原原值。
 - 不记录外部仓库中的敏感数据；日志只保留技能路径、选择依据、关键动作、退出码和脱敏结果。
