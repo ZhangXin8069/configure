@@ -20,7 +20,7 @@ usage() {
     cat <<'USAGE'
 用法：agent-resume.sh [选项]
 
-检测一次因瞬时服务故障（例如 429、重试上限、连接中断）而退出的 agent run，
+检测一次因瞬时服务故障（例如 429、重试上限、连接中断、上游协议错误）而退出的 agent run，
 默认等待 10 秒后用原统一 launcher 执行 `--resume RUN_ID --once`。每个 run
 只自动恢复一次，避免持续限流时形成无界重试。
 
@@ -158,6 +158,11 @@ reset_run_state() {
     _session_id=""
     _discovered_thread=""
     _discovered_session=""
+    _created_at=""
+    _agent_state_loaded=0
+    _agent_state_session=""
+    _agent_state_thread=""
+    _agent_state_transient=""
     _turn=0
     _reason=""
 }
@@ -195,6 +200,53 @@ lock_is_alive() {
     kill -0 "$owner" 2>/dev/null
 }
 
+report_value() {
+    local report=$1 key=$2
+    awk -F= -v wanted="$key" '
+        $1 == wanted {
+            sub(/^[^=]*=/, "", $0)
+            print
+            exit
+        }
+    ' <<<"$report"
+}
+
+load_agent_state_report() {
+    if [[ "$_agent_state_loaded" == 1 ]]; then
+        [[ -n "$_agent_state_session$_agent_state_thread" ]]
+        return
+    fi
+    _agent_state_loaded=1
+    local helper=${config_root}/tools/agent-session-state.py
+    local python_bin=${AGENT_STATE_PYTHON:-${AGENT_CODEX_STATE_PYTHON:-python3}}
+    [[ -r "$helper" ]] && command -v "$python_bin" >/dev/null 2>&1 || return 1
+
+    local -a state_args=(--agent "$_agent" --run-id "$_run_id" --cwd "$_run_cwd")
+    [[ -z "$_created_at" ]] || state_args+=(--created-at "$_created_at")
+    local report=""
+    if command -v timeout >/dev/null 2>&1; then
+        report=$(timeout "${AGENT_STATE_TIMEOUT:-${AGENT_CODEX_STATE_TIMEOUT:-5}}" \
+            "$python_bin" "$helper" "${state_args[@]}" 2>/dev/null) || return 1
+    else
+        report=$("$python_bin" "$helper" "${state_args[@]}" 2>/dev/null) || return 1
+    fi
+    local session_id thread_id
+    session_id=$(report_value "$report" session_id)
+    thread_id=$(report_value "$report" thread_id)
+    [[ -z "$session_id" || "$session_id" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
+    [[ -z "$thread_id" || "$thread_id" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
+    [[ -n "$session_id$thread_id" ]] || return 1
+    _agent_state_session=$session_id
+    _agent_state_thread=$thread_id
+    _agent_state_transient=$(report_value "$report" transient_failure)
+    return 0
+}
+
+agent_state_has_transient_failure() {
+    load_agent_state_report || return 1
+    [[ "$_agent_state_transient" == 1 ]]
+}
+
 recover_session_ids() {
     local id=""
     case "$_agent" in
@@ -207,11 +259,6 @@ recover_session_ids() {
                     _thread_id=$id
                 fi
             fi
-            if [[ -z "$_session_id" && -n "$_thread_id" ]]; then
-                _discovered_session=$_thread_id
-                _session_id=$_thread_id
-            fi
-            [[ -n "$_thread_id" ]]
             ;;
         claude)
             if [[ -z "$_session_id" && -r "$_log_file" ]]; then
@@ -222,7 +269,6 @@ recover_session_ids() {
                     _session_id=$id
                 fi
             fi
-            [[ -n "$_session_id" ]]
             ;;
         opencode)
             if [[ -z "$_session_id" && -r "$_log_file" ]]; then
@@ -241,18 +287,38 @@ recover_session_ids() {
                     _session_id=$id
                 fi
             fi
-            [[ -n "$_session_id" ]]
             ;;
         *)
             return 1
             ;;
     esac
+    if load_agent_state_report; then
+        if [[ -z "$_session_id" && -n "$_agent_state_session" ]]; then
+            _discovered_session=$_agent_state_session
+            _session_id=$_agent_state_session
+        fi
+        if [[ -z "$_thread_id" && -n "$_agent_state_thread" ]]; then
+            _discovered_thread=$_agent_state_thread
+            _thread_id=$_agent_state_thread
+        fi
+    fi
+    if [[ "$_agent" == codex ]]; then
+        if [[ -z "$_session_id" && -n "$_thread_id" ]]; then
+            _discovered_session=$_thread_id
+            _session_id=$_thread_id
+        fi
+        [[ -n "$_thread_id" ]]
+        return
+    fi
+    [[ -n "$_session_id" ]]
 }
 
 log_has_transient_failure() {
-    [[ -r "$_log_file" ]] || return 1
-    tail -n 200 -- "$_log_file" 2>/dev/null | grep -Eiq \
-        'exceeded retry limit|429[[:space:]]+too many requests|too many requests|rate limit|overloaded_error|service unavailable|bad gateway|gateway timeout|connection reset by peer|connection refused|stream disconnected|unexpected eof|timed out|temporarily unavailable|http[^0-9]*(500|502|503|504)'
+    if [[ -r "$_log_file" ]] && tail -n 200 -- "$_log_file" 2>/dev/null | grep -Eiq \
+        'exceeded retry limit|429[[:space:]]+too many requests|too many requests|rate limit|overloaded_error|service unavailable|bad gateway|gateway timeout|connection reset by peer|connection refused|stream disconnected|unexpected eof|timed out|temporarily unavailable|upstream_error|reasoning_content.*passed back|http[^0-9]*(500|502|503|504)'; then
+        return 0
+    fi
+    agent_state_has_transient_failure
 }
 
 inspect_run() {
@@ -302,6 +368,7 @@ inspect_run() {
         fi
     fi
     _stop_file=$(manifest_value "$manifest" stop_file)
+    _created_at=$(manifest_value "$manifest" created_at)
     _model=$(manifest_value "$manifest" model)
     _reasoning=$(manifest_value "$manifest" reasoning_effort)
     _variant=$(manifest_value "$manifest" variant)

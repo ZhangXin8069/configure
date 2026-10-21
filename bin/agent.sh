@@ -722,6 +722,9 @@ _append_skill_list() {
 # op 分支另有用户输入兜底补录（_recover_inputs，仅 op 分支定义）
 _LIVE_PID=""
 _CLAUDE_SETTINGS_TMP=""
+_TUI_APP_SERVER_PID=""
+_TUI_APP_SERVER_SOCKET=""
+_TUI_APP_SERVER_LOG=""
 _BRIDGE_PID=""
 _BRIDGE_READY_FILE=""
 _BRIDGE_PORT=""
@@ -749,6 +752,7 @@ _cleanup() {
         _recover_inputs
     fi
     [[ -n "${_LIVE_PID:-}" ]] && kill "${_LIVE_PID}" 2>/dev/null
+    _agent_runtime_stop_codex_app_server
     _bridge_stop
     if [[ -n "${_CLAUDE_SETTINGS_TMP:-}" && -f "${_CLAUDE_SETTINGS_TMP}" ]]; then
         rm -f -- "${_CLAUDE_SETTINGS_TMP}"
@@ -1177,14 +1181,31 @@ run_claude() {
 
     if (( ! DRIVE_MODE )); then
         # TUI 交互模式：与 op/co 一致，把初始提示词作为首条消息传入（--permission-mode 原语义保留）
+        local -a _CLAUDE_TUI_RECOVERY=(
+            "${_CLAUDE_BIN}"
+            --bg
+            --resume "{session_id}"
+            --settings "${_CLAUDE_SETTINGS_TMP}"
+            --permission-mode "${_CL_PERMISSION_MODE}"
+            --model "${MODEL_ID}"
+            "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
+        )
+        local _CLAUDE_RECOVERY_JSON='[]'
+        command -v python3 >/dev/null 2>&1 &&
+            _CLAUDE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CLAUDE_TUI_RECOVERY[@]}")"
+        unset _CLAUDE_TUI_RECOVERY
         _agent_runtime_turn_begin
-        "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}" 2> "${LOG_FILE}"
+        _agent_runtime_run_tui_watched claude "$_CLAUDE_RECOVERY_JSON" \
+            "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" \
+            --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}" \
+            2> "${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
         else
             _agent_runtime_turn_failure
         fi
+        unset _CLAUDE_RECOVERY_JSON
         return "${_run_rc}"
     fi
 
@@ -1732,22 +1753,51 @@ PYEOF
 
     if (( ! DRIVE_MODE )); then
         # 原有 TUI 交互模式（无驱动选项时保持原生交互）
-        _agent_runtime_turn_begin
+        local _op_tui_port=""
+        _op_tui_port="$(_agent_runtime_free_port 2>/dev/null || true)"
+        local -a _OPENCODE_TUI_ARGS _OPENCODE_TUI_RECOVERY
         if (( _op_v2 )); then
-            "${_OPENCODE_BIN}" --standalone --auto --prompt "${PROMPT}" \
-                    --print-logs --log-level debug \
-                    2> "${LOG_FILE}"
+            _OPENCODE_TUI_ARGS=(
+                "${_OPENCODE_BIN}" --standalone --auto --prompt "${PROMPT}"
+                --print-logs --log-level debug
+            )
+            [[ -z "$_op_tui_port" ]] || _OPENCODE_TUI_ARGS+=(--port "$_op_tui_port")
+            _OPENCODE_TUI_RECOVERY=(
+                "${_OPENCODE_BIN}" run -s "{session_id}"
+                --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}"
+                --format json --auto --print-logs --log-level debug
+            )
         else
-            "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}" \
-                    --print-logs --log-level DEBUG \
-                    2> "${LOG_FILE}"
+            _OPENCODE_TUI_ARGS=(
+                "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}"
+                --print-logs --log-level DEBUG
+            )
+            [[ -z "$_op_tui_port" ]] || _OPENCODE_TUI_ARGS+=(--port "$_op_tui_port")
+            _OPENCODE_TUI_RECOVERY=(
+                "${_OPENCODE_BIN}" run -s "{session_id}" --agent "${_OP_AGENT}"
+                --auto --print-logs --log-level DEBUG
+            )
         fi
+        if [[ -n "$_op_tui_port" ]]; then
+            _OPENCODE_TUI_RECOVERY+=(--attach "http://127.0.0.1:${_op_tui_port}")
+        fi
+        _OPENCODE_TUI_RECOVERY+=(
+            "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
+        )
+        local _OPENCODE_RECOVERY_JSON='[]'
+        command -v python3 >/dev/null 2>&1 &&
+            _OPENCODE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_OPENCODE_TUI_RECOVERY[@]}")"
+        unset _OPENCODE_TUI_RECOVERY
+        _agent_runtime_turn_begin
+        _agent_runtime_run_tui_watched opencode "$_OPENCODE_RECOVERY_JSON" \
+            "${_OPENCODE_TUI_ARGS[@]}" 2> "${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
         else
             _agent_runtime_turn_failure
         fi
+        unset _OPENCODE_TUI_ARGS _OPENCODE_RECOVERY_JSON
         return "${_run_rc}"
     else
         # ---- 驱动模式：headless opencode run 链式驱动 ----
@@ -2536,14 +2586,39 @@ PY
 
     if (( ! DRIVE_MODE )); then
         # 普通模式：保持 Codex TUI；只给模型旗标时不进入 exec 链。
+        local -a _CODEX_TUI_ARGS _CODEX_TUI_RECOVERY
+        local _codex_resume_python=""
+        local _codex_resume_tool="${_configure_agent_root}/tools/agent-codex-resume.py"
+        _codex_resume_python="$(command -v "${AGENT_STATE_PYTHON:-python3}" 2>/dev/null || true)"
+        _CODEX_TUI_ARGS=("${CODEX_INITIAL_ARGS[@]}")
+        _CODEX_TUI_RECOVERY=()
+        if [[ -n "$_codex_resume_python" && -r "$_codex_resume_tool" ]] &&
+           _agent_runtime_start_codex_app_server "$_CODEX_BIN" "$AGENT_RUN_DIR"; then
+            _CODEX_TUI_ARGS+=(--remote "unix://${_TUI_APP_SERVER_SOCKET}")
+            _CODEX_TUI_RECOVERY=(
+                "$_codex_resume_python" "$_codex_resume_tool"
+                --remote "unix://${_TUI_APP_SERVER_SOCKET}"
+                --thread "{thread_id}"
+                --message "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
+            )
+        fi
+        local _CODEX_RECOVERY_JSON='[]'
+        if (( ${#_CODEX_TUI_RECOVERY[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then
+            _CODEX_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CODEX_TUI_RECOVERY[@]}")"
+        fi
+        unset _CODEX_TUI_RECOVERY
         _agent_runtime_turn_begin
-        "${_CODEX_BIN}" "${CODEX_INITIAL_ARGS[@]}" -- "${PROMPT}" 2>"${LOG_FILE}"
+        _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
+            "${_CODEX_TUI_ARGS[@]}" -- "${PROMPT}" \
+            2>"${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
         else
             _agent_runtime_turn_failure
         fi
+        _agent_runtime_stop_codex_app_server
+        unset _CODEX_TUI_ARGS _CODEX_RECOVERY_JSON _codex_resume_python _codex_resume_tool
     else
         # ---- 驱动模式：headless codex exec → exec resume 链式驱动 ----
         # 回合1 prompt → thread.started → 每 N 秒发送固定的「继续」。

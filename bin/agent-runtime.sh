@@ -38,6 +38,165 @@ _agent_runtime_process_alive() {
     kill -0 "$pid" 2>/dev/null
 }
 
+_agent_runtime_free_port() {
+    local python_name="${AGENT_STATE_PYTHON:-python3}"
+    local python_bin=""
+    python_bin="$(command -v "$python_name" 2>/dev/null || true)"
+    [[ -n "$python_bin" ]] || return 1
+    "$python_bin" - <<'PY'
+import socket
+
+with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+    listener.bind(("127.0.0.1", 0))
+    print(listener.getsockname()[1])
+PY
+}
+
+_agent_runtime_start_codex_app_server() {
+    local codex_bin="${1:-}" run_dir="${2:-}"
+    [[ -x "$codex_bin" && -d "$run_dir" ]] || return 1
+    [[ "${AGENT_CODEX_APP_SERVER:-1}" != 0 ]] || return 1
+    "$codex_bin" queue --help >/dev/null 2>&1 || return 1
+
+    local socket="${run_dir}/app-server.sock"
+    local server_log="${run_dir}/app-server.log"
+    [[ ! -e "$socket" ]] || return 1
+    "$codex_bin" app-server --listen "unix://${socket}" \
+        </dev/null >>"$server_log" 2>&1 &
+    _TUI_APP_SERVER_PID=$!
+    _TUI_APP_SERVER_SOCKET="$socket"
+    _TUI_APP_SERVER_LOG="$server_log"
+
+    local attempt
+    for attempt in $(seq 1 50); do
+        [[ -S "$socket" ]] && return 0
+        if ! _agent_runtime_process_alive "$_TUI_APP_SERVER_PID"; then
+            _agent_runtime_stop_codex_app_server
+            return 1
+        fi
+        sleep 0.1
+    done
+    _agent_runtime_stop_codex_app_server
+    return 1
+}
+
+_agent_runtime_stop_codex_app_server() {
+    local pid="${_TUI_APP_SERVER_PID:-}"
+    if _agent_runtime_process_alive "$pid"; then
+        kill -TERM "$pid" 2>/dev/null || true
+        local attempt
+        for attempt in $(seq 1 30); do
+            _agent_runtime_process_alive "$pid" || break
+            sleep 0.1
+        done
+        if _agent_runtime_process_alive "$pid"; then
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+        fi
+    fi
+    _TUI_APP_SERVER_PID=""
+    _TUI_APP_SERVER_SOCKET=""
+    _TUI_APP_SERVER_LOG=""
+}
+
+_agent_runtime_run_tui_watched() {
+    local agent="${1:-}"
+    local recover_command_json="${2:-}"
+    [[ $# -gt 1 ]] && shift 2
+    case "$agent" in
+        codex|claude|opencode) ;;
+        *) "$@"; return $?;;
+    esac
+    [[ $# -gt 0 ]] || return 2
+
+    local configure_root="${AGENT_CONFIGURE_ROOT:-}"
+    local watcher="${configure_root}/tools/agent-tui-watch.py"
+    local python_name="${AGENT_STATE_PYTHON:-python3}"
+    local python_bin=""
+    python_bin="$(command -v "$python_name" 2>/dev/null || true)"
+    local run_id="${AGENT_RUN_ID:-}" cwd="${AGENT_WORKDIR:-$PWD}"
+    if [[ "${AGENT_AUTO_RESUME:-1}" == 0 || "${AGENT_RESUME_ACTIVE:-0}" == 1 ||
+          -z "$recover_command_json" || ! -r "$watcher" || -z "$python_bin" ]]; then
+        "$@"
+        return $?
+    fi
+    if ! _agent_runtime_safe_run_id "$run_id"; then
+        "$@"
+        return $?
+    fi
+
+    local state_db="" data_dir=""
+    case "$agent" in
+        codex)
+            state_db="${AGENT_CODEX_STATE_DB:-}"
+            ;;
+        claude)
+            data_dir="${AGENT_CLAUDE_CONFIG_DIR:-${CLAUDE_CONFIG_DIR:-}}"
+            ;;
+        opencode)
+            state_db="${AGENT_OPENCODE_STATE_DB:-}"
+            data_dir="${AGENT_OPENCODE_DATA_DIR:-${OPENCODE_DATA_HOME:-}}"
+            ;;
+    esac
+    local watch_log=""
+    [[ -n "${AGENT_RUN_DIR:-}" ]] && watch_log="${AGENT_RUN_DIR}/tui-watch.log"
+    local bash_bin=""
+    bash_bin="$(command -v bash 2>/dev/null || true)"
+    [[ -n "$bash_bin" ]] || { "$@"; return $?; }
+
+    "$bash_bin" -c '
+        python_bin=$1
+        watcher=$2
+        agent=$3
+        run_id=$4
+        cwd=$5
+        created_at=$6
+        state_db=$7
+        data_dir=$8
+        grace=$9
+        interval=${10}
+        max_runtime=${11}
+        heartbeat=${12}
+        state_timeout=${13}
+        recover_timeout=${14}
+        scan_bytes=${15}
+        watch_log=${16}
+        recover_command_json=${17}
+        attempt_marker=${18}
+        event_file=${19}
+        shift 19
+        watch_args=(
+            --agent "$agent"
+            --run-id "$run_id"
+            --cwd "$cwd"
+            --grace "$grace"
+            --interval "$interval"
+            --max-runtime "$max_runtime"
+            --heartbeat "$heartbeat"
+            --state-timeout "$state_timeout"
+            --recover-timeout "$recover_timeout"
+            --scan-bytes "$scan_bytes"
+            --pid "$$"
+            --log "$watch_log"
+            --recover-command-json "$recover_command_json"
+            --attempt-marker "$attempt_marker"
+            --event-file "$event_file"
+        )
+        [[ -z "$created_at" ]] || watch_args+=(--created-at "$created_at")
+        [[ -z "$state_db" ]] || watch_args+=(--state-db "$state_db")
+        [[ -z "$data_dir" ]] || watch_args+=(--data-dir "$data_dir")
+        "$python_bin" "$watcher" "${watch_args[@]}" </dev/null >>"${watch_log:-/dev/null}" 2>&1 &
+        exec "$@"
+    ' _ \
+        "$python_bin" "$watcher" "$agent" "$run_id" "$cwd" "${AGENT_CREATED_AT:-}" \
+        "$state_db" "$data_dir" \
+        "${AGENT_TUI_WATCH_GRACE:-5}" "${AGENT_TUI_WATCH_INTERVAL:-2}" \
+        "${AGENT_TUI_WATCH_MAX_RUNTIME:-86400}" "${AGENT_TUI_WATCH_HEARTBEAT:-60}" \
+        "${AGENT_TUI_WATCH_STATE_TIMEOUT:-5}" "${AGENT_TUI_WATCH_RECOVER_TIMEOUT:-1800}" \
+        "${AGENT_TUI_WATCH_SCAN_BYTES:-2097152}" "$watch_log" "$recover_command_json" \
+        "${AGENT_RUN_DIR:+${AGENT_RUN_DIR}/.auto-resume-attempted}" "${AGENT_EVENT_FILE:-}" "$@"
+}
+
 _agent_runtime_abs_path() {
     local candidate="${1:-}"
     if [[ "$candidate" == /* ]]; then
