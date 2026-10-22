@@ -502,3 +502,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## gpull-sub-20261022 - final - 2026-10-22 18:48:19 +0800
+- 主任务: 新增 gpull-sub 子模块远程更新脚本及回归测试
+- 日志文件: logs/v2026102218.txt
+- 文件大小: 6459 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 gpull-sub.sh 与测试：仅处理已映射子模块，复用 gpull 安全 fast-forward，支持筛选、初始化、递归与 dry-run；语法、回归、格式和差异检查通过。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## zg-all-pull-sub-20261022 - final - 2026-10-22 18:59:55 +0800
+- 主任务: 新增 gpull-sub 跨仓库 pull 系列与 zg-all-pull-sub 聚合入口
+- 日志文件: logs/v2026102218-2.txt
+- 文件大小: 6269 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 configure/PyQCD/MyQCD/PyQCU 的 pull-sub 包装器及 zg-all-pull-sub.sh；支持父仓更新、参数透传、dry-run/help 安全和失败聚合，回归与格式检查通过。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
