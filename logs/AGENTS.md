@@ -556,3 +556,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## tag-delivery - stage - 2026-10-24 00:03:39 +0800
+- 主任务: 为 configure、PyQCU、MyQCD、PyQCD 创建并推送 dev 标签
+- 日志文件: logs/v202610240003.txt
+- 文件大小: 3679 bytes
+- 触发原因: 阶段成果
+- 关键内容: configure dev41、MyQCD dev8、PyQCD dev25 已创建并推送；PyQCU 因既有已推送标签链冲突暂停。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
