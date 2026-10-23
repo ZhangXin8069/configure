@@ -529,3 +529,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-tools - final - 2026-10-23 23:43:41 +0800
+- 主任务: 修正 zg-all-back-sub.sh 只操作子模块而不处理父工作仓库
+- 日志文件: logs/v2026102323-2.txt
+- 文件大小: 5849 bytes
+- 触发原因: 任务完成
+- 关键内容: 移除 zg-all-back-sub.sh 对 zg-all-back.sh 的调用；实际 dry-run 前后父工作树状态完全一致。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
