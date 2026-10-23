@@ -538,3 +538,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-tools - final - 2026-10-23 23:46:53 +0800
+- 主任务: 修正 zg-all-pull-sub.sh 只更新子模块而不拉取父工作仓库
+- 日志文件: logs/v2026102323-3.txt
+- 文件大小: 4264 bytes
+- 触发原因: 任务完成
+- 关键内容: 移除 zg-all-pull-sub.sh 对 zg-all-pull.sh 的调用；实际 dry-run 前后父工作树状态完全一致。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## git-recovery - final - 2026-10-23 23:50:18 +0800
+- 主任务: 恢复因误调用 zg-all-back.sh 可能丢失的工作进度
+- 日志文件: logs/v2026102323-4.txt
+- 文件大小: 4413 bytes
+- 触发原因: 任务完成
+- 关键内容: 取证确认 gback 仅留下空 index commit，未完成 stash/reset；全部进度由 b89ca25 完整承接并已推送。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

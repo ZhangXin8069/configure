@@ -47,7 +47,7 @@ _make_fixture() {
     _write_child "${wrapper_bin}/zg-pyqcu-pull-sub.sh" pyqcu PYQCU_STATUS
 }
 
-_test_parent_then_sorted_children() {
+_test_only_sorted_children_run() {
     local fixture="${TEST_DIR}/all"
     local event_log="${fixture}/events.log"
     local wrapper_bin="${fixture}/configure/bin"
@@ -59,8 +59,9 @@ _test_parent_then_sorted_children() {
         > "${TEST_DIR}/all.log" 2>&1
 
     [[ "$(paste -sd, "${event_log}")" \
-        == parent-all,aaa:,configure:,myqcd:,pyqcd:,pyqcu: ]] \
-        || _fail "父仓库或动态发现的子系列执行顺序错误"
+        == aaa:,configure:,myqcd:,pyqcd:,pyqcu: ]] \
+        || _fail "动态发现的 pull-sub 子系列执行顺序错误"
+    ! grep -Fqx 'parent-all' "${event_log}" || _fail "不应执行父仓库 pull"
 }
 
 _test_help_is_non_mutating() {
@@ -75,7 +76,7 @@ _test_help_is_non_mutating() {
     [[ ! -e "${event_log}" ]] || _fail "help 不应执行父仓库或子系列"
 }
 
-_test_dry_run_skips_parent_and_forwards_arguments() {
+_test_dry_run_only_forwards_to_children() {
     local fixture="${TEST_DIR}/dry-run"
     local event_log="${fixture}/events.log"
 
@@ -84,7 +85,7 @@ _test_dry_run_skips_parent_and_forwards_arguments() {
         bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --dry-run --path refer/example \
         > "${TEST_DIR}/dry-run.log" 2>&1
 
-    ! grep -Fqx 'parent-all' "${event_log}" || _fail "dry-run 不应更新父仓库"
+    ! grep -Fqx 'parent-all' "${event_log}" || _fail "任何模式都不应执行父仓库 pull"
     grep -Fqx 'configure:--dry-run --path refer/example' "${event_log}" \
         || _fail "configure 参数未透传"
     grep -Fqx 'pyqcu:--dry-run --path refer/example' "${event_log}" \
@@ -99,17 +100,17 @@ _test_failures_are_aggregated() {
     _make_fixture "${fixture}"
     set +e
     EVENT_LOG="${event_log}" \
-        PARENT_STATUS=4 \
         MYQCD_STATUS=5 \
         bash "${fixture}/configure/bin/zg-all-pull-sub.sh" \
         > "${TEST_DIR}/failure.log" 2>&1
     status=$?
     set -e
 
-    ((status != 0)) || _fail "父仓或子系列失败应聚合为非零"
+    ((status != 0)) || _fail "子系列失败应聚合为非零"
     grep -Fqx 'pyqcd:' "${event_log}" || _fail "MyQCD 失败后仍应继续 PyQCD"
     grep -Fqx 'pyqcu:' "${event_log}" || _fail "MyQCD 失败后仍应继续 PyQCU"
-    grep -Fq 'Summary: failed=2' "${TEST_DIR}/failure.log" || _fail "失败数量汇总错误"
+    ! grep -Fqx 'parent-all' "${event_log}" || _fail "失败流程也不应执行父仓库 pull"
+    grep -Fq 'Summary: failed=1' "${TEST_DIR}/failure.log" || _fail "失败数量汇总错误"
 }
 
 _test_requires_multiple_matching_children() {
@@ -162,9 +163,9 @@ _test_wrappers_change_into_target_repositories() {
 }
 
 main() {
-    _test_parent_then_sorted_children
+    _test_only_sorted_children_run
     _test_help_is_non_mutating
-    _test_dry_run_skips_parent_and_forwards_arguments
+    _test_dry_run_only_forwards_to_children
     _test_failures_are_aggregated
     _test_requires_multiple_matching_children
     _test_wrappers_change_into_target_repositories
