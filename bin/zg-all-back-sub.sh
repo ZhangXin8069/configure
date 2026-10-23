@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Restore parent repositories, then force-align their mapped submodules.
+# Force-align mapped submodules without touching parent repository checkouts.
 
 _SRC=${BASH_SOURCE[0]:-${0}}
 case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
@@ -11,12 +11,13 @@ _usage() {
     cat <<'EOF'
 Usage: zg-all-back-sub.sh [gback-sub options]
 
-Restore configured parent repositories with zg-all-back.sh, then force-align
-their mapped submodules to the latest remote default branches. Child scripts are
-discovered from zg-*-back-sub.sh in this directory; at least two are required.
+Force-align mapped submodules to the latest remote default branches. Parent
+repository branches, indexes, commits, and worktrees are not restored or
+otherwise checked. Child scripts are discovered from zg-*-back-sub.sh in this
+directory; at least two are required.
 
 Options and positional paths supported by gback-sub.sh are forwarded unchanged.
---dry-run skips parent restoration and only shows the submodule restore plan.
+--dry-run only shows the submodule restore plan.
 EOF
 }
 
@@ -37,23 +38,9 @@ fi
 source "${_PATH}/_all_series.sh"
 _all_series_discover "${_NAME}" "${_PATH}" || exit 1
 
-_STATUS=0
-_DRY_RUN=0
-for _arg in "$@"; do
-    case "${_arg}" in
-        --dry-run) _DRY_RUN=1 ;;
-    esac
-done
-
-if (( _DRY_RUN )); then
-    echo "DRY-RUN: skipping parent repository restoration."
-else
-    bash "${_PATH}/zg-all-back.sh" || _STATUS=1
-fi
-
 echo "Matched: ${_ALL_SERIES_PATTERN} (${#_ALL_SERIES_SCRIPTS[@]} scripts)"
 _all_series_run "$@"
-_STATUS=$((_STATUS + _ALL_SERIES_FAILED))
+_STATUS=${_ALL_SERIES_FAILED}
 
 echo "Summary: failed=${_STATUS}"
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
