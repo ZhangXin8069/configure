@@ -520,3 +520,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-tools - final - 2026-10-23 23:37:10 +0800
+- 主任务: 修正跨仓库子模块拉取并统一 -all 文件名聚合逻辑
+- 日志文件: logs/v2026102323.txt
+- 文件大小: 7457 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增索引锁恢复、detached 默认分支恢复、back-sub 强制回退和动态 -all 文件名分派；9 项回归通过。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -234,6 +234,7 @@ _test_wrapper_propagates_failure() {
     mkdir -p "${wrapper_bin}"
     cp "${_PATH}/zg-configure-pull.sh" "${wrapper_bin}/"
     cp "${_PATH}/gpull.sh" "${wrapper_bin}/"
+    cp "${_PATH}/_git_lock.sh" "${wrapper_bin}/"
     git init -q --bare "${wrapper_remote}"
     git -C "${wrapper_remote}" symbolic-ref HEAD refs/heads/main
     git init -q "${wrapper_root}"
@@ -278,12 +279,86 @@ _test_fetch_failure_propagates() {
     grep -Fq 'git fetch failed' "${TEST_DIR}/fetch-failure.log" || _fail "缺少 fetch 失败提示"
 }
 
+_test_stale_index_lock_recovery() {
+    local remote="${TEST_DIR}/lock-remote.git"
+    local seed="${TEST_DIR}/lock-seed"
+    local work="${TEST_DIR}/lock-work"
+    local lock
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q "${seed}"
+    _configure_identity "${seed}"
+    git -C "${seed}" checkout -q -b main
+    printf 'base\n' > "${seed}/file.txt"
+    git -C "${seed}" add file.txt
+    git -C "${seed}" commit -q -m initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+
+    git clone -q "${remote}" "${work}"
+    lock=$(git -C "${work}" rev-parse --git-path index.lock)
+    [[ "${lock}" == /* ]] || lock="${work}/${lock}"
+    : > "${lock}"
+    touch -d '2 hours ago' "${lock}"
+
+    (
+        cd "${work}"
+        GIT_INDEX_LOCK_STALE_SECONDS=1 bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/stale-lock.log" 2>&1
+
+    [[ ! -e "${lock}" ]] || _fail "过期 index.lock 应被隔离"
+    compgen -G "${lock}.stale.*" >/dev/null || _fail "过期 index.lock 未保留备份"
+    grep -Fq 'quarantined stale index lock' "${TEST_DIR}/stale-lock.log" \
+        || _fail "缺少过期锁恢复提示"
+}
+
+_test_fresh_index_lock_is_not_removed() {
+    local remote="${TEST_DIR}/fresh-lock-remote.git"
+    local seed="${TEST_DIR}/fresh-lock-seed"
+    local work="${TEST_DIR}/fresh-lock-work"
+    local lock
+    local status
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q "${seed}"
+    _configure_identity "${seed}"
+    git -C "${seed}" checkout -q -b main
+    printf 'base\n' > "${seed}/file.txt"
+    git -C "${seed}" add file.txt
+    git -C "${seed}" commit -q -m initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+
+    git clone -q "${remote}" "${work}"
+    lock=$(git -C "${work}" rev-parse --git-path index.lock)
+    [[ "${lock}" == /* ]] || lock="${work}/${lock}"
+    : > "${lock}"
+
+    set +e
+    (
+        cd "${work}"
+        GIT_INDEX_LOCK_WAIT_SECONDS=0 GIT_INDEX_LOCK_STALE_SECONDS=3600 \
+            bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/fresh-lock.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || _fail "新 index.lock 应触发有界失败"
+    [[ -e "${lock}" ]] || _fail "新 index.lock 不应被自动删除"
+    grep -Fq 'Git index lock remains active' "${TEST_DIR}/fresh-lock.log" \
+        || _fail "缺少新锁等待失败提示"
+}
+
 main() {
     _test_pull_preserves_changes
     _test_detached_head_recovery
     _test_diverged_branch_refuses_rebase
     _test_wrapper_propagates_failure
     _test_fetch_failure_propagates
+    _test_stale_index_lock_recovery
+    _test_fresh_index_lock_is_not_removed
 }
 
 main "$@"

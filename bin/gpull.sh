@@ -4,6 +4,8 @@
 set -o pipefail
 
 _SRC=${BASH_SOURCE[0]:-${0}}
+case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
+if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
@@ -15,6 +17,23 @@ REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
 echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
+
+_DETACHED_MODE=${GPULL_DETACHED_MODE:-safe}
+
+if [[ ! -r "${_PATH}/_git_lock.sh" ]]; then
+    echo "ERROR: Missing Git lock helper: ${_PATH}/_git_lock.sh" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/_git_lock.sh"
+case "${_DETACHED_MODE}" in
+    safe|back) ;;
+    *)
+        echo "ERROR: GPULL_DETACHED_MODE must be one of: safe, back." >&2
+        exit 64
+        ;;
+esac
+_git_prepare_index_lock "${REPO_ROOT}" || exit $?
 
 _REMOTE_URL=$(git config --get remote.origin.url 2>/dev/null || true)
 if [[ -z "${_REMOTE_URL}" ]]; then
@@ -54,6 +73,13 @@ _find_origin_default_ref() {
         return 0
     fi
 
+    for candidate in origin/main origin/master; do
+        if git show-ref --verify --quiet "refs/remotes/${candidate}"; then
+            printf '%s\n' "${candidate}"
+            return 0
+        fi
+    done
+
     # Some old clones do not create origin/HEAD. Accept a remote branch only
     # when exactly one branch contains the detached commit.
     candidates=$(
@@ -73,6 +99,9 @@ _find_origin_default_ref() {
 _restore_detached_branch() {
     local remote_ref
     local branch
+    local backup_ref
+    local branch_backup_ref
+    local old_head
 
     if ! remote_ref=$(_find_origin_default_ref); then
         echo "ERROR: Detached HEAD; no unique origin branch can be selected safely." >&2
@@ -83,10 +112,31 @@ _restore_detached_branch() {
 
     branch=${remote_ref#origin/}
     if ! git merge-base --is-ancestor HEAD "${remote_ref}"; then
-        echo "ERROR: Detached HEAD is not contained in ${remote_ref}; refusing to switch branches." >&2
-        echo "Hint:  preserve local commits first:" >&2
-        echo "       git branch <backup-branch> && git checkout <target-branch>" >&2
-        return 1
+        if [[ "${_DETACHED_MODE}" != back ]]; then
+            echo "ERROR: Detached HEAD is not contained in ${remote_ref}; refusing to switch branches." >&2
+            echo "Hint:  preserve local commits first:" >&2
+            echo "       git branch <backup-branch> && git checkout <target-branch>" >&2
+            return 1
+        fi
+
+        old_head=$(git rev-parse HEAD) || return 1
+        backup_ref="refs/gpull-backups/${branch}/$(date "+%Y%m%d%H%M%S")-${old_head:0:12}-$$"
+        if ! git update-ref "${backup_ref}" HEAD; then
+            echo "ERROR: Unable to preserve detached HEAD before restoring ${remote_ref}." >&2
+            return 1
+        fi
+        echo "BACKUP: preserved detached HEAD as ${backup_ref}."
+
+        if git show-ref --verify --quiet "refs/heads/${branch}"; then
+            branch_backup_ref="${backup_ref}-branch"
+            git update-ref "${branch_backup_ref}" "refs/heads/${branch}" || return 1
+            echo "BACKUP: preserved local branch ${branch} as ${branch_backup_ref}."
+        fi
+        echo "NOTICE: Restoring ${branch} from ${remote_ref} and overriding the detached worktree."
+        git checkout -B "${branch}" --track "${remote_ref}" || return 1
+        BRANCH=${branch}
+        echo "Branch:  ${BRANCH}"
+        return 0
     fi
 
     echo "NOTICE: Restoring tracking branch ${branch} from ${remote_ref}."
