@@ -27,7 +27,9 @@ Usage: gpull-sub.sh [options] [--path submodule-path-or-name ...]
 
 Fast-forward initialized submodules of the current Git repository by invoking
 gpull.sh inside each mapped submodule. Uninitialized submodules are skipped
-unless --init is specified.
+unless --init is specified. Detached submodules are restored to the remote
+default branch; locally divergent detached commits are preserved under
+refs/gpull-backups/ before the worktree is aligned.
 
 Options:
   --init       Initialize missing submodules before pulling.
@@ -187,7 +189,11 @@ _pull_submodule() {
     else
         old_head=$(git -C "${submodule}" rev-parse --verify HEAD 2>/dev/null || true)
         _ensure_origin_head "${submodule}"
-        if ! (cd "${submodule}" && bash "${_GPULL}"); then
+        if ! (
+            cd "${submodule}" \
+                && GPULL_DETACHED_MODE="${GPULL_SUB_DETACHED_MODE:-${GPULL_DETACHED_MODE:-back}}" \
+                    bash "${_GPULL}"
+        ); then
             echo "ERROR: Pull failed for submodule ${path}." >&2
             return 1
         fi

@@ -55,6 +55,24 @@ _create_remote() {
     git -C "${seed}" push -q -u origin main
 }
 
+_create_submodule_fixture() {
+    local remote=$1
+    local seed=$2
+    local super=$3
+    local path=$4
+
+    _create_remote "${remote}" "${seed}"
+    git init -q "${super}"
+    _configure_identity "${super}"
+    git -C "${super}" checkout -q -b main
+    printf 'super\n' > "${super}/README.md"
+    git -C "${super}" add README.md
+    git -C "${super}" commit -q -m super-initial
+    git -C "${super}" -c protocol.file.allow=always submodule add -q "${remote}" "${path}"
+    git -C "${super}" commit -q -am add-submodule
+    git -C "${super}" config protocol.file.allow always
+}
+
 _test_mapped_submodule_pull() {
     local remote="${TEST_DIR}/sub-remote.git"
     local seed="${TEST_DIR}/sub-seed"
@@ -181,10 +199,68 @@ _test_unmapped_gitlink_is_ignored() {
         || _fail "不应处理缺少 .gitmodules 映射的 gitlink"
 }
 
+_test_divergent_detached_submodule_uses_remote_default() {
+    local remote="${TEST_DIR}/divergent-remote.git"
+    local seed="${TEST_DIR}/divergent-seed"
+    local super="${TEST_DIR}/divergent-super"
+    local submodule="${super}/refer/divergent-sub"
+    local local_commit
+
+    _create_submodule_fixture "${remote}" "${seed}" "${super}" refer/divergent-sub
+    git -C "${submodule}" checkout -q --detach HEAD
+    printf 'detached local\n' > "${submodule}/local-only.txt"
+    git -C "${submodule}" add local-only.txt
+    git -C "${submodule}" commit -q -m detached-local
+    local_commit=$(git -C "${submodule}" rev-parse HEAD)
+
+    printf 'latest remote\n' > "${seed}/value.txt"
+    git -C "${seed}" add value.txt
+    git -C "${seed}" commit -q -m latest-remote
+    git -C "${seed}" push -q
+
+    _run_gpull_sub "${super}" "${TEST_DIR}/divergent.log" --path refer/divergent-sub \
+        || _fail "分歧 detached 子模块应默认恢复远端主分支"
+
+    grep -Fqx 'latest remote' "${submodule}/value.txt" \
+        || _fail "分歧 detached 子模块未更新到远端最新版"
+    [[ "$(git -C "${submodule}" symbolic-ref --quiet --short HEAD)" == main ]] \
+        || _fail "分歧 detached 子模块未恢复到 main"
+    git -C "${submodule}" for-each-ref --format='%(objectname)' refs/gpull-backups \
+        | grep -Fqx "${local_commit}" || _fail "分歧 detached 提交未保留备份引用"
+    grep -Fq 'BACKUP: preserved detached HEAD' "${TEST_DIR}/divergent.log" \
+        || _fail "缺少 detached 提交备份提示"
+}
+
+_test_stale_index_lock_is_recovered() {
+    local remote="${TEST_DIR}/lock-remote.git"
+    local seed="${TEST_DIR}/lock-seed"
+    local super="${TEST_DIR}/lock-super"
+    local submodule="${super}/refer/lock-sub"
+    local lock
+
+    _create_submodule_fixture "${remote}" "${seed}" "${super}" refer/lock-sub
+    git -C "${submodule}" checkout -q --detach HEAD
+    lock=$(git -C "${submodule}" rev-parse --git-path index.lock)
+    [[ "${lock}" == /* ]] || lock="${submodule}/${lock}"
+    : > "${lock}"
+    touch -d '2 hours ago' "${lock}"
+
+    GIT_INDEX_LOCK_STALE_SECONDS=1 \
+        _run_gpull_sub "${super}" "${TEST_DIR}/stale-lock.log" --path refer/lock-sub \
+        || _fail "过期 index.lock 应被自动隔离"
+
+    [[ ! -e "${lock}" ]] || _fail "过期 index.lock 应被移走"
+    compgen -G "${lock}.stale.*" >/dev/null || _fail "过期 index.lock 未保留备份"
+    grep -Fq 'quarantined stale index lock' "${TEST_DIR}/stale-lock.log" \
+        || _fail "缺少过期锁恢复证据"
+}
+
 main() {
     _test_mapped_submodule_pull
     _test_failure_propagates
     _test_unmapped_gitlink_is_ignored
+    _test_divergent_detached_submodule_uses_remote_default
+    _test_stale_index_lock_is_recovered
 }
 
 main "$@"

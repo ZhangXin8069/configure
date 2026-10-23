@@ -17,62 +17,50 @@ _fail() {
     exit 1
 }
 
+_write_child() {
+    local path=$1
+    local label=$2
+    local status_var=$3
+
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        "printf '%s:%s\\n' '${label}' \"\$*\" >> \"\${EVENT_LOG:?}\"" \
+        "exit \"\${${status_var}:-0}\"" > "${path}"
+    chmod +x "${path}"
+}
+
 _make_fixture() {
     local fixture=$1
     local wrapper_bin="${fixture}/configure/bin"
-    local event_log="${fixture}/events.log"
 
-    mkdir -p "${wrapper_bin}" \
-        "${fixture}/configure/.git" \
-        "${fixture}/PyQCD/.git" \
-        "${fixture}/MyQCD/.git" \
-        "${fixture}/PyQCU/.git"
+    mkdir -p "${wrapper_bin}"
     cp "${_PATH}/zg-all-pull-sub.sh" "${wrapper_bin}/"
-    cp "${_PATH}/zg-configure-pull-sub.sh" "${wrapper_bin}/"
-    cp "${_PATH}/zg-pyqcd-pull-sub.sh" "${wrapper_bin}/"
-    cp "${_PATH}/zg-myqcd-pull-sub.sh" "${wrapper_bin}/"
-    cp "${_PATH}/zg-pyqcu-pull-sub.sh" "${wrapper_bin}/"
-    cp "${_PATH}/gpull-sub.sh" "${wrapper_bin}/"
-
+    cp "${_PATH}/_all_series.sh" "${wrapper_bin}/"
     printf '%s\n' \
         '#!/usr/bin/env bash' \
         'printf "parent-all\n" >> "${EVENT_LOG:?}"' \
         'exit "${PARENT_STATUS:-0}"' > "${wrapper_bin}/zg-all-pull.sh"
-
-    printf '%s\n' \
-        '#!/usr/bin/env bash' \
-        'printf "configure:%s\n" "$*" >> "${EVENT_LOG:?}"' \
-        'exit "${CONFIGURE_STATUS:-0}"' > "${wrapper_bin}/zg-configure-pull-sub.sh"
-    printf '%s\n' \
-        '#!/usr/bin/env bash' \
-        'printf "pyqcd:%s\n" "$*" >> "${EVENT_LOG:?}"' \
-        'exit "${PYQCD_STATUS:-0}"' > "${wrapper_bin}/zg-pyqcd-pull-sub.sh"
-    printf '%s\n' \
-        '#!/usr/bin/env bash' \
-        'printf "myqcd:%s\n" "$*" >> "${EVENT_LOG:?}"' \
-        'exit "${MYQCD_STATUS:-0}"' > "${wrapper_bin}/zg-myqcd-pull-sub.sh"
-    printf '%s\n' \
-        '#!/usr/bin/env bash' \
-        'printf "pyqcu:%s\n" "$*" >> "${EVENT_LOG:?}"' \
-        'exit "${PYQCU_STATUS:-0}"' > "${wrapper_bin}/zg-pyqcu-pull-sub.sh"
-    chmod +x "${wrapper_bin}/"*.sh
+    chmod +x "${wrapper_bin}/zg-all-pull.sh"
+    _write_child "${wrapper_bin}/zg-configure-pull-sub.sh" configure CONFIGURE_STATUS
+    _write_child "${wrapper_bin}/zg-myqcd-pull-sub.sh" myqcd MYQCD_STATUS
+    _write_child "${wrapper_bin}/zg-pyqcd-pull-sub.sh" pyqcd PYQCD_STATUS
+    _write_child "${wrapper_bin}/zg-pyqcu-pull-sub.sh" pyqcu PYQCU_STATUS
 }
 
-_test_parent_and_all_repositories_run() {
+_test_parent_then_sorted_children() {
     local fixture="${TEST_DIR}/all"
     local event_log="${fixture}/events.log"
+    local wrapper_bin="${fixture}/configure/bin"
 
     _make_fixture "${fixture}"
-    EVENT_LOG="${event_log}" \
-        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" \
+    _write_child "${wrapper_bin}/zg-aaa-pull-sub.sh" aaa AAA_STATUS
+
+    EVENT_LOG="${event_log}" bash "${wrapper_bin}/zg-all-pull-sub.sh" \
         > "${TEST_DIR}/all.log" 2>&1
 
-    [[ "$(sed -n '1p' "${event_log}")" == parent-all ]] \
-        || _fail "父仓库 pull 应先执行"
-    grep -Fqx 'configure:' "${event_log}" || _fail "configure 未执行"
-    grep -Fqx 'pyqcd:' "${event_log}" || _fail "PyQCD 未执行"
-    grep -Fqx 'myqcd:' "${event_log}" || _fail "MyQCD 未执行"
-    grep -Fqx 'pyqcu:' "${event_log}" || _fail "PyQCU 未执行"
+    [[ "$(paste -sd, "${event_log}")" \
+        == parent-all,aaa:,configure:,myqcd:,pyqcd:,pyqcu: ]] \
+        || _fail "父仓库或动态发现的子系列执行顺序错误"
 }
 
 _test_help_is_non_mutating() {
@@ -80,12 +68,11 @@ _test_help_is_non_mutating() {
     local event_log="${fixture}/events.log"
 
     _make_fixture "${fixture}"
-    EVENT_LOG="${event_log}" \
-        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --help \
+    EVENT_LOG="${event_log}" bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --help \
         > "${TEST_DIR}/help.log" 2>&1
 
     grep -Fq 'Usage: zg-all-pull-sub.sh' "${TEST_DIR}/help.log" || _fail "缺少聚合帮助"
-    [[ ! -e "${event_log}" ]] || _fail "help 不应更新父仓库或子模块"
+    [[ ! -e "${event_log}" ]] || _fail "help 不应执行父仓库或子系列"
 }
 
 _test_dry_run_skips_parent_and_forwards_arguments() {
@@ -94,34 +81,20 @@ _test_dry_run_skips_parent_and_forwards_arguments() {
 
     _make_fixture "${fixture}"
     EVENT_LOG="${event_log}" \
-        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --dry-run \
+        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --dry-run --path refer/example \
         > "${TEST_DIR}/dry-run.log" 2>&1
 
     ! grep -Fqx 'parent-all' "${event_log}" || _fail "dry-run 不应更新父仓库"
-    grep -Fqx 'configure:--dry-run' "${event_log}" || _fail "configure 参数未透传"
-    grep -Fqx 'pyqcd:--dry-run' "${event_log}" || _fail "PyQCD 参数未透传"
-    grep -Fqx 'myqcd:--dry-run' "${event_log}" || _fail "MyQCD 参数未透传"
-    grep -Fqx 'pyqcu:--dry-run' "${event_log}" || _fail "PyQCU 参数未透传"
-}
-
-_test_missing_repository_is_skipped() {
-    local fixture="${TEST_DIR}/missing"
-    local event_log="${fixture}/events.log"
-
-    _make_fixture "${fixture}"
-    rm -rf -- "${fixture}/PyQCU/.git"
-    EVENT_LOG="${event_log}" \
-        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" \
-        > "${TEST_DIR}/missing.log" 2>&1
-
-    grep -Fq 'SKIP: PyQCU 不存在或不是 Git 仓库' "${TEST_DIR}/missing.log" \
-        || _fail "缺少仓库时应明确跳过"
-    ! grep -Fq 'pyqcu:' "${event_log}" || _fail "缺失仓库不应调用子模块包装器"
+    grep -Fqx 'configure:--dry-run --path refer/example' "${event_log}" \
+        || _fail "configure 参数未透传"
+    grep -Fqx 'pyqcu:--dry-run --path refer/example' "${event_log}" \
+        || _fail "PyQCU 参数未透传"
 }
 
 _test_failures_are_aggregated() {
     local fixture="${TEST_DIR}/failure"
     local event_log="${fixture}/events.log"
+    local status
 
     _make_fixture "${fixture}"
     set +e
@@ -130,13 +103,32 @@ _test_failures_are_aggregated() {
         MYQCD_STATUS=5 \
         bash "${fixture}/configure/bin/zg-all-pull-sub.sh" \
         > "${TEST_DIR}/failure.log" 2>&1
-    local status=$?
+    status=$?
     set -e
 
-    ((status != 0)) || _fail "父仓或子模块失败应聚合为非零"
-    grep -Fqx 'pyqcd:' "${event_log}" || _fail "MyQCD 失败后仍应继续处理 PyQCU"
-    grep -Fq 'pyqcu:' "${event_log}" || _fail "失败后未继续处理后续仓库"
-    grep -Fq 'Summary: failed=1' "${TEST_DIR}/failure.log" || _fail "缺少失败汇总"
+    ((status != 0)) || _fail "父仓或子系列失败应聚合为非零"
+    grep -Fqx 'pyqcd:' "${event_log}" || _fail "MyQCD 失败后仍应继续 PyQCD"
+    grep -Fqx 'pyqcu:' "${event_log}" || _fail "MyQCD 失败后仍应继续 PyQCU"
+    grep -Fq 'Summary: failed=2' "${TEST_DIR}/failure.log" || _fail "失败数量汇总错误"
+}
+
+_test_requires_multiple_matching_children() {
+    local fixture="${TEST_DIR}/minimum"
+    local wrapper_bin="${fixture}/configure/bin"
+    local status
+
+    _make_fixture "${fixture}"
+    rm -f -- "${wrapper_bin}/zg-myqcd-pull-sub.sh" \
+        "${wrapper_bin}/zg-pyqcd-pull-sub.sh" \
+        "${wrapper_bin}/zg-pyqcu-pull-sub.sh"
+    set +e
+    bash "${wrapper_bin}/zg-all-pull-sub.sh" > "${TEST_DIR}/minimum.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || _fail "少于两个子系列时应失败"
+    grep -Fq 'requires at least 2 matching' "${TEST_DIR}/minimum.log" \
+        || _fail "缺少最小子系列数量错误"
 }
 
 _test_wrappers_change_into_target_repositories() {
@@ -170,11 +162,11 @@ _test_wrappers_change_into_target_repositories() {
 }
 
 main() {
-    _test_parent_and_all_repositories_run
+    _test_parent_then_sorted_children
     _test_help_is_non_mutating
     _test_dry_run_skips_parent_and_forwards_arguments
-    _test_missing_repository_is_skipped
     _test_failures_are_aggregated
+    _test_requires_multiple_matching_children
     _test_wrappers_change_into_target_repositories
 }
 
