@@ -583,3 +583,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 20261025-dev42-delivery - final - 2026-10-25 06:00:39 +0800
+- 主任务: 提交并推送 Docker/WSL 文档，创建并推送 dev42 标签
+- 日志文件: logs/v2026102506.txt
+- 文件大小: 5016 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 Docker/WSL 文档提交、main push、dev42 注释标签及远端核验
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
