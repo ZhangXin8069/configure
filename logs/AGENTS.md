@@ -574,3 +574,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 20261025-docker-wsl-guides - final - 2026-10-25 05:56:36 +0800
+- 主任务: 扩充 lib/_docker 的 Docker 与 WSL 实用配置指南
+- 日志文件: logs/v2026102505.txt
+- 文件大小: 5974 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 WSL 2 配置、import-in-place、迁移与磁盘维护指南，扩充 Docker Desktop、Compose、排障和安全边界
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
