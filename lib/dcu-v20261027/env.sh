@@ -20,9 +20,10 @@ export HIPCXX=dcc
 export CFLAGS="-Wno-return-type -Wno-inconsistent-missing-override"
 export CXXFLAGS="-Wno-return-type -Wno-inconsistent-missing-override"
 export HIPFLAGS="-Wno-return-type -Wno-inconsistent-missing-override"
+# @@QUDA@@
 source /public/home/jiangxy_1/.venv/bin/activate
-export PYTHONPATH=/public/home/jiangxy_1/PyQUDA:${PYTHONPATH}
 export QUDA_PATH="/public/home/jiangxy_1/Build-USQCD-SciDAC/scidac/install/quda-mpi-gfx906"   #JiangXY 2026.04.01
+export PYTHONPATH="/public/home/jiangxy_1/.venv/lib/python3.8/site-packages":${PYTHONPATH}
 # @ZHANGXIN@
 # @@TORCH@@
 # pip install /public/software/apps/DeepLearning/whl/dtk-23.10/pytorch/torch2.1/py38/torch-2.1.0a0+git793d2b5.abi0.dtk2310-cp38-cp38-manylinux2014_x86_64.whl --force-reinstall -t /public/home/sunpeng_1/.local/lib/python3.8/site-packages -U
