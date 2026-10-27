@@ -1,5 +1,6 @@
 # @JIANGXY@
 module purge
+module load apps/git/2.30.2
 module load compiler/cmake/3.25.0
 module load compiler/devtoolset/7.3.1
 module load mpi/hpcx/2.11.0/gcc-7.3.1
