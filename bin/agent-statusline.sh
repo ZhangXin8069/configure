@@ -24,26 +24,27 @@ segments="${segments_raw#[}"
 segments="${segments%]}"
 segments="${segments//\"/}"
 
-# 轻量 JSON 取值：payload 为单行小对象，grep/sed 足够且避免解释器启动开销
+# 轻量 JSON 取值：状态栏高频调用，用 bash 内置正则避免每字段 fork grep/sed/head。
+# payload 是单行官方状态对象；键名为 ASCII，字符串值按 UTF-8 原样保留。
 _field() { # 顶层字符串键
-    printf '%s' "${payload}" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" 2>/dev/null \
-        | head -1 | sed 's/^[^:]*:[[:space:]]*"//; s/"$//'
+    [[ "${payload}" =~ \"$1\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] || return 1
+    printf '%s' "${BASH_REMATCH[1]}"
 }
 _number() { # 顶层数字键
-    printf '%s' "${payload}" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*[0-9][0-9.eE+-]*" 2>/dev/null \
-        | head -1 | sed 's/.*:[[:space:]]*//'
+    [[ "${payload}" =~ \"$1\"[[:space:]]*:[[:space:]]*([0-9][0-9.eE+-]*) ]] || return 1
+    printf '%s' "${BASH_REMATCH[1]}"
 }
 _value_in() { # 一个对象层内的字符串键（section, key）
-    printf '%s' "${payload}" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*{[^}]*\"$2\"[[:space:]]*:[[:space:]]*\"[^\"]*\"" 2>/dev/null \
-        | head -1 | sed 's/.*":[[:space:]]*"//; s/"$//'
+    [[ "${payload}" =~ \"$1\"[[:space:]]*:[[:space:]]*\{[^}]*\"$2\"[[:space:]]*:[[:space:]]*\"([^\"]*)\" ]] || return 1
+    printf '%s' "${BASH_REMATCH[1]}"
 }
 _number_in() { # 一个对象层内的数字键（section, key）
-    printf '%s' "${payload}" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*{[^}]*\"$2\"[[:space:]]*:[[:space:]]*[0-9][0-9.eE+-]*" 2>/dev/null \
-        | head -1 | sed 's/.*:[[:space:]]*//'
+    [[ "${payload}" =~ \"$1\"[[:space:]]*:[[:space:]]*\{[^}]*\"$2\"[[:space:]]*:[[:space:]]*([0-9][0-9.eE+-]*) ]] || return 1
+    printf '%s' "${BASH_REMATCH[1]}"
 }
 _bool_field() { # 顶层布尔键
-    printf '%s' "${payload}" | grep -o "\"$1\"[[:space:]]*:[[:space:]]*\(true\|false\)" 2>/dev/null \
-        | head -1 | sed 's/^[^:]*:[[:space:]]*//'
+    [[ "${payload}" =~ \"$1\"[[:space:]]*:[[:space:]]*(true|false) ]] || return 1
+    printf '%s' "${BASH_REMATCH[1]}"
 }
 
 if [[ "${use_colors}" == "true" ]]; then
@@ -72,14 +73,24 @@ _render() {
             value="${_C_DIM}${dir/#${HOME}/~}${_C_RESET}"
             ;;
         hostname)
-            value="${_C_DIM}$(hostname 2>/dev/null)${_C_RESET}"
+            value="${_C_DIM}${HOSTNAME:-$(hostname 2>/dev/null)}${_C_RESET}"
             [[ -n "${value}" ]] || return 1
             ;;
         branch-changes)
             cwd="$(_field current_dir)"; [[ -n "${cwd}" ]] || cwd="${PWD}"
-            branch="$(git -C "${cwd}" rev-parse --abbrev-ref HEAD 2>/dev/null)" || return 1
+            # 单次 git 调用同时取分支与变更数，替代 rev-parse + status | wc 两条链
+            local _st _line
+            _st="$(git -C "${cwd}" status --porcelain=v2 --branch 2>/dev/null)" || return 1
+            branch=""; changes=0
+            while IFS= read -r _line; do
+                case "${_line}" in
+                    "# branch.head "*) branch="${_line#\# branch.head }";;
+                    "#"*|"") ;;
+                    *) changes=$((changes + 1));;
+                esac
+            done <<< "${_st}"
             [[ -n "${branch}" ]] || return 1
-            changes="$(git -C "${cwd}" status --porcelain 2>/dev/null | wc -l | tr -d ' ')"
+            [[ "${branch}" == "(detached)" ]] && branch="HEAD"
             value="${_C_GREEN}${branch}${_C_RESET}"
             [[ "${changes}" != "0" ]] && value+="${_C_YELLOW}*${changes}${_C_RESET}"
             ;;

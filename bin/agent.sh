@@ -248,12 +248,17 @@ _ensure_utf8_locale() {
     return 1
 }
 
-# 按字符截断实时日志行。非 UTF-8 locale 下 `cut -c` 按字节切，会把中文切成
-# 非法序列并在终端显示为乱码；统一在已知 UTF-8 locale 下执行 cut。
+# 按字符截断实时日志行。GNU `cut -c` 实际按字节切，在中文行上会留下半个
+# 字符形成乱码；用 python3 按 UTF-8 解码后截断，缺失解释器时退回 cut（保底不报错）。
 _clip_text() {
-    local _s="$1" _n="${2:-140}"
-    if [[ -n "${_AGENT_UTF8_LOCALE}" ]]; then
-        printf '%s' "${_s}" | LC_ALL="${_AGENT_UTF8_LOCALE}" cut -c1-"${_n}"
+    local _s="$1" _n="${2:-140}" _py
+    _py="$(command -v "${AGENT_STATE_PYTHON:-python3}" 2>/dev/null || true)"
+    if [[ -n "${_py}" ]]; then
+        printf '%s' "${_s}" | "${_py}" -c '
+import sys
+text = sys.stdin.buffer.read().decode("utf-8", "ignore")
+sys.stdout.buffer.write(text[:int(sys.argv[1])].encode("utf-8"))
+' "${_n}"
     else
         printf '%s' "${_s}" | cut -c1-"${_n}"
     fi
@@ -1384,6 +1389,8 @@ run_claude() {
     echo "---- drive: session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
     if [[ -n "${DRIVE_FILE}" ]]; then
         _drv_instr="$(<"${DRIVE_FILE}")"
+        # 指令文件可能来自 Windows（CRLF）；残留的 \r 会让 TUI 显示 ^M 并干扰匹配
+        _drv_instr="${_drv_instr//$'\r'/}"
         echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
         _agent_runtime_turn_begin
         "${_CLAUDE_BIN}" -p --resume "${_drv_sid}" --settings "${_CLAUDE_SETTINGS_TMP}" --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${_drv_instr}" \
@@ -1958,6 +1965,7 @@ PYEOF
         echo "---- drive: session=${_drv_sid} interval=${DRIVE_INTERVAL}s ----"
         if [[ -n "${DRIVE_FILE}" ]]; then
             _drv_instr="$(<"${DRIVE_FILE}")"
+            _drv_instr="${_drv_instr//$'\r'/}"
             echo "---- drive: first instruction <- ${DRIVE_FILE}（$(wc -c < "${DRIVE_FILE}") 字节）$(date "+%F-%T") ----"
             _agent_runtime_turn_begin
             if (( _op_v2 )); then
@@ -2851,6 +2859,7 @@ _OPENCODE_KEY_MODE="$(_detect_opencode_key_mode "$@")"
 _migrate_opencode_keys "${_OPENCODE_KEY_MODE}"
 unset _OPENCODE_KEY_MODE
 _agent_config_load
+_ensure_utf8_locale || true
 
 case "${_AGENT}" in
     claude)   run_claude "$@";;

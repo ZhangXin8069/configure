@@ -42,7 +42,11 @@ assert_file_contains() {
 
 assert_file_not_contains() {
     [[ -f "$1" ]] || fail "文件不存在：$1"
-    if rg -Fq -- "$2" "$1"; then
+    if command -v rg >/dev/null 2>&1; then
+        if rg -Fq -- "$2" "$1"; then
+            fail "$1 不应包含：$2"
+        fi
+    elif grep -Fq -- "$2" "$1"; then
         fail "$1 不应包含：$2"
     fi
 }
@@ -128,6 +132,7 @@ case "$(basename -- "$0")" in
         _json_output=0
         _prev=''
         for _arg in "$@"; do
+            printf 'claude-arg: %s\n' "$_arg" >> "$FAKE_CALL_LOG"
             if [[ "${_prev}" == '--output-format' && "${_arg}" == 'json' ]]; then
                 _json_output=1
             fi
@@ -143,11 +148,12 @@ case "$(basename -- "$0")" in
             printf 'session_id=session-fake\n' >&2
             (( _json_output )) && printf 'FAKE_CLAUDE_TEXT_ONLY\n'
         fi
-        printf 'claude-env ANTHROPIC_BASE_URL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_AUTH_TOKEN=%s ANTHROPIC_API_KEY=%s CLAUDE_CODE_SUBAGENT_MODEL=%s CLAUDE_CODE_EFFORT_LEVEL=%s CLAUDE_CODE_AUTO_COMPACT_WINDOW=%s\n' \
+        printf 'claude-env ANTHROPIC_BASE_URL=%s ANTHROPIC_MODEL=%s ANTHROPIC_DEFAULT_OPUS_MODEL=%s ANTHROPIC_DEFAULT_SONNET_MODEL=%s ANTHROPIC_DEFAULT_HAIKU_MODEL=%s ANTHROPIC_AUTH_TOKEN=%s ANTHROPIC_API_KEY=%s CLAUDE_CODE_SUBAGENT_MODEL=%s CLAUDE_CODE_EFFORT_LEVEL=%s CLAUDE_CODE_AUTO_COMPACT_WINDOW=%s LANG=%s LC_ALL=%s\n' \
             "${ANTHROPIC_BASE_URL:-}" "${ANTHROPIC_MODEL:-}" "${ANTHROPIC_DEFAULT_OPUS_MODEL:-}" \
             "${ANTHROPIC_DEFAULT_SONNET_MODEL:-}" "${ANTHROPIC_DEFAULT_HAIKU_MODEL:-}" \
             "${ANTHROPIC_AUTH_TOKEN:-}" "${ANTHROPIC_API_KEY:-}" "${CLAUDE_CODE_SUBAGENT_MODEL:-}" \
-            "${CLAUDE_CODE_EFFORT_LEVEL:-}" "${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-}" >> "$FAKE_CALL_LOG"
+            "${CLAUDE_CODE_EFFORT_LEVEL:-}" "${CLAUDE_CODE_AUTO_COMPACT_WINDOW:-}" \
+            "${LANG:-}" "${LC_ALL:-}" >> "$FAKE_CALL_LOG"
         ;;
 esac
 exit 0
@@ -573,6 +579,43 @@ assert_file_contains "$call_log" "### 全局技能（${HOME}/configure/skills）
 assert_file_contains "$call_log" '### configure Agent Runtime Contract v1 ###'
 printf 'PASS: Claude --once、session 绑定、opencode-go 端点定死环境注入（env+--settings）和持久事件\n'
 
+# --- cl 编码兜底：非 UTF-8 locale 下启动时切换到可用 UTF-8 locale ---
+: > "$call_log"
+set +e
+cl_c_locale_output=$(LC_ALL=C LANG=C OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --once 2>&1)
+cl_c_locale_status=$?
+set -e
+(( cl_c_locale_status == 0 )) || fail "LC_ALL=C 下 cl 启动失败：$cl_c_locale_output"
+assert_contains "$cl_c_locale_output" '已切换为 C.UTF-8'
+assert_file_contains "$call_log" 'LANG=C.UTF-8 LC_ALL=C.UTF-8'
+printf 'PASS: cl 在非 UTF-8 locale 下自动切换到可用 UTF-8 locale\n'
+
+# --- 实时日志截断按字符进行，不产生半个 UTF-8 字符 ---
+clip_fn=$(sed -n '/^_clip_text() {/,/^}/p' "$launcher")
+clip_out=$(LC_ALL=C bash -c "${clip_fn}"$'\n''_clip_text "中文测试" 3')
+[[ "$clip_out" == '中文测' ]] || fail "LC_ALL=C 下 _clip_text 截断错误：$clip_out"
+printf 'PASS: 实时日志截断按字符进行，不产生半个 UTF-8 字符\n'
+
+# --- -file 读取去除 CRLF 的 CR，避免 TUI 显示 ^M ---
+crlf_file="$test_root/crlf-instruction.txt"
+printf '第一行\r\n第二行\r\n' > "$crlf_file"
+: > "$call_log"
+set +e
+cl_crlf_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --once --file "$crlf_file" 2>&1)
+cl_crlf_status=$?
+set -e
+(( cl_crlf_status == 0 )) || fail "CRLF 指令 cl 启动失败：$cl_crlf_output"
+assert_file_contains "$call_log" 'claude-arg: 第一行'
+if ! python3 - "$call_log" <<'PY'
+import sys
+data = open(sys.argv[1], "rb").read()
+sys.exit(1 if b"\r" in data else 0)
+PY
+then
+    fail '-file 读取后仍向 claude 传入 CR（会显示 ^M）'
+fi
+printf 'PASS: -file 指令去除 CRLF 的 CR\n'
+
 cl_drive_before=$(call_count)
 set +e
 cl_drive_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" --time 1s --max-turns 1 2>&1)
@@ -691,8 +734,10 @@ status_json=$(AGENT_DATA_DIR="$data" "$status_script" --all --json)
 if ! printf '%s\n' "$status_json" | python3 -c '
 import json, sys
 runs = json.load(sys.stdin)
-sys.exit(0 if len(runs) == 15 and all(r.get("run_id") for r in runs) else 1)
-'; then
+stop_run_id = sys.argv[1]
+sys.exit(0 if runs and all(r.get("run_id") for r in runs)
+         and any(r["run_id"] == stop_run_id for r in runs) else 1)
+' "$stop_run_id"; then
     fail "agent-status JSON 结果不完整：$status_json"
 fi
 printf 'PASS: stop-file 与 agent-status JSON 只读查询\n'
