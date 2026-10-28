@@ -637,3 +637,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## cl-encoding-input - general - 2026-10-28 21:58:36 +0800
+- 主任务: cl 修复后推送与 optim 收敛复核
+- 日志文件: logs/v20261028215836.txt
+- 文件大小: 1996 bytes
+- 触发原因: 一般记录
+- 关键内容: main 与 bug2 已推送；statusline 进一步优化收益 <5% 收敛
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
