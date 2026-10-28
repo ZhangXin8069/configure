@@ -6,7 +6,7 @@ Linux / macOS：
 
 ```bash
 bash lib/_opencode/install.sh
-bash lib/_opencode/install.sh 1.18.31
+bash lib/_opencode/install.sh 2.2.0
 bash lib/_opencode/install.sh --new
 ```
 
@@ -14,11 +14,11 @@ Windows：
 
 ```bat
 lib\_opencode\install.bat
-lib\_opencode\install.bat 1.18.31
+lib\_opencode\install.bat 2.2.0
 lib\_opencode\install.bat --new
 ```
 
-安装脚本默认版本为 `1.18.31`，默认目录为 `$HOME/.local/bin` 或 `%USERPROFILE%\.local\bin`。可通过 `OPENCODE_INSTALL_DIR` 覆盖目录。
+安装脚本默认版本为 `2.2.0`，默认目录为 `$HOME/.local/bin` 或 `%USERPROFILE%\.local\bin`。可通过 `OPENCODE_INSTALL_DIR` 覆盖目录。
 
 Linux/macOS 的 `OPENCODE_BASE_URL` 可切换二进制源，默认：
 
@@ -37,7 +37,7 @@ https://opencode.ai/files/bin
 | `0.x`、`1.x` | V1 | `opencode.json` + `tui.json` |
 | `2.x` | V2 | `opencode.json` + `cli.json` |
 
-注意：安装脚本默认版本 `1.18.31` 会被当前检测逻辑归入 V1 分支，尽管部分注释称其为 V2 安装器。部署后应以实际 `opencode --version` 和 `config.sh --check` 输出为准。
+注意：安装脚本默认版本 `2.2.0` 属 V2 分支；`opencode.ai/files/bin` 镜像只提供 2.x 二进制，1.x（如 `1.18.31`）需另行获取。部署后应以实际 `opencode --version` 和 `config.sh --check` 输出为准。
 
 ## 配置
 

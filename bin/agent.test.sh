@@ -522,6 +522,7 @@ assert_contains "$v2_tui_new" '--standalone --auto --prompt'
 assert_contains "$v2_tui_new" '--log-level debug'
 case "$v2_tui_new" in
     *' --agent '*) fail 'OpenCode V2 顶层 TUI 不应传 --agent' ;;
+    *' --port '*) fail 'OpenCode V2 顶层 TUI 不应传 --port（2.2.0 起不支持）' ;;
 esac
 printf 'PASS: OpenCode V2 原生配置、standalone、JSON 会话解析与 TUI 参数兼容\n'
 

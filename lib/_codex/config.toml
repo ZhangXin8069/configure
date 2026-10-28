@@ -17,3 +17,6 @@ supports_websockets = true
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "hostname", "branch-changes", "run-state", "permissions", "approval-mode", "context-used", "context-window-size", "weekly-limit", "estimated-thread-cost", "thread-id", "fast-mode", "task-progress"]
 status_line_use_colors = true
+
+[features]
+daemon_auto_start = false

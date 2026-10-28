@@ -1,6 +1,6 @@
 @echo off
 rem Install OpenCode V2 (Windows x64/ARM64) into %USERPROFILE%\.local\bin
-rem Usage: install.bat [VERSION|--new]   (default: 1.18.31, --new: latest)
+rem Usage: install.bat [VERSION|--new]   (default: 2.2.0, --new: latest)
 rem Env:   OPENCODE_INSTALL_DIR  install directory (default %USERPROFILE%\.local\bin)
 rem        OPENCODE_BASE_URL     binary source (default https://opencode.ai/files/bin)
 
@@ -11,7 +11,7 @@ set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 if defined OPENCODE_INSTALL_DIR set "INSTALL_DIR=%OPENCODE_INSTALL_DIR%"
 set "OPENCODE_BASE=https://opencode.ai/files/bin"
 if defined OPENCODE_BASE_URL set "OPENCODE_BASE=%OPENCODE_BASE_URL%"
-set "DEFAULT_VER=1.18.31"
+set "DEFAULT_VER=2.2.0"
 
 title OpenCode Installer
 
