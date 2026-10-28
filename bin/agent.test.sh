@@ -1857,6 +1857,8 @@ rm -rf "$ai_secure_home"
 mkdir -p "$ai_secure_home"
 ai_secure_rel=".vscode-server./cli/servers/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/node/Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/server/out/debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713/result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d713"
 ai_secure_cos="$ai_secure_home/$ai_secure_rel/output_result_debug_Stable-4fe60c8b1cdac1c4c174f2fb180d0d758272d711"
+: > "$ai_call_log"
+: > "$ai_install_log"
 set +e
 ai_secure_out=$(cd "$repo/nested" && env -i PATH="$min_path" HOME="$ai_secure_home" \
     FAKE_CALL_LOG="$ai_call_log" FAKE_INSTALL_LOG="$ai_install_log" \
