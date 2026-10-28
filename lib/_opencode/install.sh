@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # Install OpenCode V2 (Linux / macOS) into ~/.local/bin
-# Usage: bash install.sh [VERSION|--new]   (default: 1.18.31, --new: latest)
+# Usage: bash install.sh [VERSION|--new]   (default: 2.2.0, --new: latest)
 # Env:   OPENCODE_INSTALL_DIR  安装目录（默认 $HOME/.local/bin）
 #        OPENCODE_BASE_URL     二进制源（默认 https://opencode.ai/files/bin）
 
 set -euo pipefail
 
 APP="opencode"
-DEFAULT_VERSION="1.18.31"
+DEFAULT_VERSION="2.2.0"
 INSTALL_DIR="${OPENCODE_INSTALL_DIR:-$HOME/.local/bin}"
 BASE_URL="${OPENCODE_BASE_URL:-https://opencode.ai/files/bin}"
 

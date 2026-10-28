@@ -109,6 +109,24 @@ mkdir -p "$INSTALL_DIR"
 mv "$tmpdir/$APP-$target" "$INSTALL_DIR/$APP"
 chmod 755 "$INSTALL_DIR/$APP"
 
+# --- Code Mode 宿主（Codex ≥0.165 的可选伴生二进制） ---
+# 缺失时 Codex 会报 "Code Mode is unavailable ... fail closed"；co 启动器会
+# 自动关闭 features.code_mode_host，但仍建议安装。旧版本无此资产时跳过。
+host_filename="codex-code-mode-host-$target.tar.gz"
+host_url="$REPO/download/rust-v${version}/$host_filename"
+if curl -fL --progress-bar -o "$tmpdir/$host_filename" "$host_url" 2>/dev/null; then
+    if tar -xzf "$tmpdir/$host_filename" -C "$tmpdir" 2>/dev/null &&
+       [ -f "$tmpdir/codex-code-mode-host-$target" ]; then
+        mv "$tmpdir/codex-code-mode-host-$target" "$INSTALL_DIR/codex-code-mode-host"
+        chmod 755 "$INSTALL_DIR/codex-code-mode-host"
+        echo "Code Mode 宿主已安装: $INSTALL_DIR/codex-code-mode-host"
+    else
+        echo "警告: Code Mode 宿主解压失败，已跳过（co 会自动关闭 features.code_mode_host）" >&2
+    fi
+else
+    echo "警告: 版本 $version 未提供 Code Mode 宿主，已跳过（co 会自动关闭 features.code_mode_host）" >&2
+fi
+
 # --- 验证 ---
 "$INSTALL_DIR/$APP" --version
 

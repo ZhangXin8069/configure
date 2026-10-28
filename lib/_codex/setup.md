@@ -95,6 +95,21 @@ co zen
 
 启动器会选择合适的端点、模型和必要的本地协议桥，避免手工维护重复 TOML。
 
+## Codex ≥0.165 standalone 兼容
+
+standalone 安装只有主二进制，没有 `CODEX_HOME/packages/app-server-daemon` 完整包；
+TUI 默认自动启动共享 daemon 时会报 `this CLI has no complete local package`。
+统一启动器已注入 `features.daemon_auto_start=false`，裸 `codex` 需在
+`~/.codex/config.toml` 中同样关闭（或每次加 `--no-daemon`）：
+
+```toml
+[features]
+daemon_auto_start = false
+```
+
+`codex-code-mode-host` 是 Code Mode 的可选伴生二进制，`install.sh` 会从同一 release
+尝试安装；缺失时启动器自动关闭 `features.code_mode_host`，普通会话不受影响。
+
 ## 认证
 
 ```bash

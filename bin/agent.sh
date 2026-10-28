@@ -1831,16 +1831,17 @@ PYEOF
     if (( ! DRIVE_MODE )); then
         # 原有 TUI 交互模式（无驱动选项时保持原生交互）
         local _op_tui_port=""
-        _op_tui_port="$(_agent_runtime_free_port 2>/dev/null || true)"
+        # V2（≥2.2.0）顶层 TUI 不再接受 --port，standalone 自行选择端口；
+        # 端口仅 V1 保留，用于恢复命令 --attach 回连同一私有 server
+        (( _op_v2 )) || _op_tui_port="$(_agent_runtime_free_port 2>/dev/null || true)"
         local -a _OPENCODE_TUI_ARGS _OPENCODE_TUI_RECOVERY
         if (( _op_v2 )); then
             _OPENCODE_TUI_ARGS=(
                 "${_OPENCODE_BIN}" --standalone --auto --prompt "${PROMPT}"
                 --print-logs --log-level debug
             )
-            [[ -z "$_op_tui_port" ]] || _OPENCODE_TUI_ARGS+=(--port "$_op_tui_port")
             _OPENCODE_TUI_RECOVERY=(
-                "${_OPENCODE_BIN}" run -s "{session_id}"
+                "${_OPENCODE_BIN}" run --standalone -s "{session_id}"
                 --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}"
                 --format json --auto --print-logs --log-level debug
             )
@@ -2516,6 +2517,20 @@ run_codex() {
     local CODEX_FORCED_LOGIN_METHOD="${CODEX_FORCED_LOGIN_METHOD:-${_CFG_AGENTS_CODEX_CONFIG_FORCED_LOGIN_METHOD:-api}}"
     local CODEX_TUI_STATUS_LINE="${CODEX_TUI_STATUS_LINE:-${_CFG_AGENTS_CODEX_CONFIG_TUI_STATUS_LINE:-${_CFG_STATUSLINE_SEGMENTS:-[\"model-with-reasoning\",\"current-dir\",\"hostname\",\"branch-changes\",\"run-state\",\"permissions\",\"approval-mode\",\"context-used\",\"weekly-limit\",\"estimated-thread-cost\",\"thread-id\",\"fast-mode\",\"task-progress\"]}}}"
     local CODEX_TUI_STATUS_LINE_USE_COLORS="${CODEX_TUI_STATUS_LINE_USE_COLORS:-${_CFG_AGENTS_CODEX_CONFIG_TUI_STATUS_LINE_USE_COLORS:-${_CFG_STATUSLINE_USE_COLORS:-true}}}"
+    # Codex ≥0.165 的 TUI 默认自动启动共享 daemon，而 daemon 需要完整本地包
+    # （CODEX_HOME/packages/app-server-daemon）；standalone 安装只有单一二进制，
+    # 会报 "this CLI has no complete local package"。co 在 run 目录自建 app-server
+    # 并通过 --remote 连接，不需要共享 daemon，故默认关闭自动启动。
+    # code-mode 宿主（codex-code-mode-host）同样不随 standalone 包发布，缺失时关闭
+    # 对应 feature，避免 "Code Mode is unavailable ... fail closed" 告警。
+    local CODEX_DAEMON_AUTO_START="${CODEX_DAEMON_AUTO_START:-false}"
+    local CODEX_CODE_MODE_HOST="${CODEX_CODE_MODE_HOST:-auto}"
+    local _cx_code_mode_host_enabled=true
+    if [[ "${CODEX_CODE_MODE_HOST}" == "0" || "${CODEX_CODE_MODE_HOST}" == "false" ]]; then
+        _cx_code_mode_host_enabled=false
+    elif [[ "${CODEX_CODE_MODE_HOST}" == "auto" && ! -x "$(dirname "${_CODEX_BIN}")/codex-code-mode-host" ]]; then
+        _cx_code_mode_host_enabled=false
+    fi
 
     # 构造数组，避免工作目录、模型名和 prompt 中的空格/特殊字符被重新分词。
     local -a CODEX_COMMON_ARGS CODEX_EXEC_ARGS CODEX_AGENT_DIR_ARGS CODEX_INITIAL_ARGS
@@ -2536,6 +2551,8 @@ run_codex() {
         --config "tui.status_line=${CODEX_TUI_STATUS_LINE}"
         --config "tui.status_line_use_colors=${CODEX_TUI_STATUS_LINE_USE_COLORS}"
         --config "features.fast_mode=${CODEX_FAST_MODE}"
+        --config "features.daemon_auto_start=${CODEX_DAEMON_AUTO_START}"
+        --config "features.code_mode_host=${_cx_code_mode_host_enabled}"
         --config "model_reasoning_effort=\"${REASONING_EFFORT}\""
         --config "approval_policy=\"${CODEX_APPROVAL_POLICY}\""
         --config "sandbox_mode=\"${CODEX_SANDBOX_MODE}\""
@@ -2550,10 +2567,9 @@ run_codex() {
         [[ -d "${_agent_dir}" ]] || continue
         CODEX_AGENT_DIR_ARGS+=(--add-dir "${_agent_dir}")
     done
-    CODEX_INITIAL_ARGS=(
-        "${CODEX_COMMON_ARGS[@]}"
-        "${CODEX_AGENT_DIR_ARGS[@]}"
-    )
+    # --add-dir 仅本地 TUI 支持；--remote 模式由服务端 cwd 决定工作区，
+    # 组合使用会被 Codex 拒绝，故在 TUI 分支按是否连上 app-server 再追加。
+    CODEX_INITIAL_ARGS=("${CODEX_COMMON_ARGS[@]}")
     CODEX_EXEC_ARGS=("${CODEX_COMMON_ARGS[@]}")
     if [[ -n "${AGENT_DISPATCH_TASK:-}" ]]; then
         CODEX_EXEC_ARGS+=(--skip-git-repo-check)
@@ -2678,6 +2694,9 @@ PY
                 --thread "{thread_id}"
                 --message "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
             )
+        else
+            # 无 app-server 时回退本地 TUI，此时才支持 --add-dir。
+            _CODEX_TUI_ARGS+=("${CODEX_AGENT_DIR_ARGS[@]}")
         fi
         local _CODEX_RECOVERY_JSON='[]'
         if (( ${#_CODEX_TUI_RECOVERY[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then

@@ -592,3 +592,39 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## codex-0.165-compat - final - 2026-10-28 20:40:52 +0800
+- 主任务: 修复 Codex 0.165 standalone / co 的 daemon、--add-dir 与 Code Mode 告警
+- 日志文件: logs/v2026102820.txt
+- 文件大小: 8534 bytes
+- 触发原因: 任务完成
+- 关键内容: co 兼容 Codex 0.165 standalone：关闭 daemon 自启、修复 --remote 下 --add-dir 冲突、安装 code-mode 宿主并完成回归
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## _opencode installer - final - 2026-10-28 20:57:08 +0800
+- 主任务: 修复 opencode 安装脚本默认版本 404
+- 日志文件: logs/v2026102820-2.txt
+- 文件大小: 3925 bytes
+- 触发原因: 任务完成
+- 关键内容: 默认版本 1.18.31→2.2.0，镜像探测与隔离安装验证通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## codex-op-v2-launcher - final - 2026-10-28 21:18:08 +0800
+- 主任务: 修复 OpenCode V2 下 op 启动器传入非法 --port 的问题
+- 日志文件: logs/v2026102821.txt
+- 文件大小: 5452 bytes
+- 触发原因: 任务完成
+- 关键内容: V2 TUI 移除非法 --port，恢复命令改用 run --standalone；语法、配置、定向启动和 V2 回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## bin launcher opencode v2 - final - 2026-10-28 21:26:38 +0800
+- 主任务: 修复 op/ops 在 opencode v2 启动失败
+- 日志文件: logs/v2026102821-2.txt
+- 文件大小: 4915 bytes
+- 触发原因: 任务完成
+- 关键内容: 移除 V2 TUI --port 与恢复 --attach，op go 实测恢复；63 PASS/1 无关失败
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

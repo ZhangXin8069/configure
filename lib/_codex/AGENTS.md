@@ -4,7 +4,8 @@ Codex CLI 跨平台安装与一键配置脚本（不部署到 `$HOME`，手动�
 
 - `install.sh` — Linux/macOS 安装脚本（GitHub releases 二进制 → `~/.local/bin`，
   musl 静态构建，PATH 防重复注入；参数 `[--new] [VERSION]`：默认 0.154.0，
-  `--new` 取最新版，显式 VERSION 优先级最高；安装目录可用 `CODEX_INSTALL_DIR` 覆盖）
+  `--new` 取最新版，显式 VERSION 优先级最高；安装目录可用 `CODEX_INSTALL_DIR` 覆盖；
+  同时尝试安装同版本 `codex-code-mode-host`，旧版本无此资产时警告并跳过）
 - `install.bat` — Windows 安装脚本（npm 全局安装 `@openai/codex` → `%USERPROFILE%\.local\bin`，
   经 `npm install -g --prefix` 指定目录；仅按当前进程 PATH 判断是否写入
   `HKCU\Environment`，可能重复追加，执行后需检查用户 PATH；
