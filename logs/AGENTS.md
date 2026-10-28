@@ -628,3 +628,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## cl-encoding-input - final - 2026-10-28 21:55:07 +0800
+- 主任务: 修复 cl 系列乱码与输入问题，并执行 absorb/up/debug/optim/tag
+- 日志文件: logs/v2026102821-3.txt
+- 文件大小: 20839 bytes
+- 触发原因: 任务完成
+- 关键内容: cl UTF-8 locale 兜底、字符截断、CRLF 去除；状态栏 134ms→74ms；up 参考源刷新
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

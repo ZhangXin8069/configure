@@ -2343,6 +2343,8 @@ function Run-Claude {
     if (-not [string]::IsNullOrWhiteSpace($script:DriveFile)) {
         Record-FirstInstruction
         $instruction = [System.IO.File]::ReadAllText($script:DriveFile)
+        # Windows 换行是 CRLF；CR 进入 TUI 会显示 ^M 并干扰指令匹配
+        $instruction = $instruction.Replace("`r", "")
         Write-Host "---- drive: first instruction <- $($script:DriveFile) ----"
         Turn-Begin
         $rc = Invoke-Logged $executable @('-p', '--resume', $sid, '--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, $instruction) $true
@@ -2518,6 +2520,8 @@ function Run-OpenCode {
     if (-not [string]::IsNullOrWhiteSpace($script:DriveFile)) {
         Record-FirstInstruction
         $instruction = [System.IO.File]::ReadAllText($script:DriveFile)
+        # Windows 换行是 CRLF；CR 进入 TUI 会显示 ^M 并干扰指令匹配
+        $instruction = $instruction.Replace("`r", "")
         Write-Host "---- drive: first instruction <- $($script:DriveFile) ----"
         Turn-Begin
         if ($openCodeV2) {
