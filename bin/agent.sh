@@ -225,6 +225,40 @@ _export_parent_context() {
     export AGENT_PARENT_APPROVAL="${_approval}"
 }
 
+# 终端编码兜底：cl/op/co 的 TUI 依赖 UTF-8 locale，但启动器可能来自
+# 未 source env.sh 的 SSH/IDE/非登录 shell（LANG=C，或 LANG 指向未生成的 locale）。
+# 这里用 `locale charmap` 实测，而不是只看 LANG 字符串是否含 UTF-8。
+_AGENT_UTF8_LOCALE=""
+_ensure_utf8_locale() {
+    local _charmap _cand
+    _charmap="$(locale charmap 2>/dev/null || true)"
+    if [[ "${_charmap}" == "UTF-8" ]]; then
+        _AGENT_UTF8_LOCALE="${LC_ALL:-${LC_CTYPE:-${LANG:-C.UTF-8}}}"
+        return 0
+    fi
+    for _cand in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8 zh_CN.UTF-8 zh_CN.utf8; do
+        if [[ "$(LC_ALL=${_cand} locale charmap 2>/dev/null || true)" == "UTF-8" ]]; then
+            export LANG="${_cand}" LC_ALL="${_cand}"
+            _AGENT_UTF8_LOCALE="${_cand}"
+            echo "###${_NAME}: warning: 当前 locale 非 UTF-8（charmap=${_charmap:-unknown}），已切换为 ${_cand} 以避免中文乱码###" >&2
+            return 0
+        fi
+    done
+    echo "###${_NAME}: warning: 未找到可用的 UTF-8 locale，中文可能显示异常（请安装 C.UTF-8 或 en_US.UTF-8）###" >&2
+    return 1
+}
+
+# 按字符截断实时日志行。非 UTF-8 locale 下 `cut -c` 按字节切，会把中文切成
+# 非法序列并在终端显示为乱码；统一在已知 UTF-8 locale 下执行 cut。
+_clip_text() {
+    local _s="$1" _n="${2:-140}"
+    if [[ -n "${_AGENT_UTF8_LOCALE}" ]]; then
+        printf '%s' "${_s}" | LC_ALL="${_AGENT_UTF8_LOCALE}" cut -c1-"${_n}"
+    else
+        printf '%s' "${_s}" | cut -c1-"${_n}"
+    fi
+}
+
 # JSON 字符串值转义（反斜杠/双引号/换行；用于 cl 的 --settings 私有设置文件）
 _json_escape() {
     local _s="$1"
@@ -1301,7 +1335,7 @@ run_claude() {
                   *ERROR*|*error*|*Error*|*WARN*|*warning*|*Warning*|*session*|*Session*) ;;
                   *) continue ;;
               esac
-              printf '[%s] %s\n' "$(date +%H:%M:%S)" "$(printf '%s' "${_lt}" | cut -c1-140)"
+              printf '[%s] %s\n' "$(date +%H:%M:%S)" "$(_clip_text "${_lt}" 140)"
           done ) &
         _LIVE_PID=$!
     }
@@ -1768,7 +1802,7 @@ PYEOF
                   *) continue ;;
               esac
               printf '[%s] %s\n' "$(date +%H:%M:%S)" \
-                     "$(sed -E 's/timestamp=[^ ]+ level=([A-Za-z]+) run=[^ ]+ message=/[\1] /; s/"//g' <<<"${_lt}" | tr '[:lower:]' '[:upper:]' | cut -c1-140)"
+                     "$(_clip_text "$(sed -E 's/timestamp=[^ ]+ level=([A-Za-z]+) run=[^ ]+ message=/[\1] /; s/"//g' <<<"${_lt}" | tr '[:lower:]' '[:upper:]')" 140)"
           done ) &
         _LIVE_PID=$!
     }
@@ -2624,7 +2658,7 @@ run_codex() {
                 _now="$(date +%H:%M:%S)"
                 if [[ "${_lt}" == *'"type":"item.completed"'* || "${_lt}" == *'"type": "item.completed"'* ]] &&
                    [[ "${_lt}" == *'agent_message'* ]]; then
-                    _msg="$(_codex_event_text "${_lt}" | tr '\n' ' ' | cut -c1-180)"
+                    _msg="$(_clip_text "$(_codex_event_text "${_lt}" | tr '\n' ' ')" 180)"
                     [[ -n "${_msg}" ]] && printf '[%s] [AGENT] %s\n' "${_now}" "${_msg}"
                     continue
                 fi
@@ -2634,11 +2668,11 @@ run_codex() {
                     continue
                 fi
                 if [[ "${_lt}" == *'approval'* || "${_lt}" == *'permission'* || "${_lt}" == *'exec_approval'* ]]; then
-                    printf '[%s] [WARN] %s\n' "${_now}" "$(printf '%s' "${_lt}" | cut -c1-180)"
+                    printf '[%s] [WARN] %s\n' "${_now}" "$(_clip_text "${_lt}" 180)"
                     continue
                 fi
                 if [[ "${_lt}" == *'turn.failed'* || "${_lt}" == *'"type":"error"'* || "${_lt}" == *'"type": "error"'* || "${_lt}" == *' ERROR '* ]]; then
-                    printf '[%s] [ERROR] %s\n' "${_now}" "$(printf '%s' "${_lt}" | cut -c1-180)"
+                    printf '[%s] [ERROR] %s\n' "${_now}" "$(_clip_text "${_lt}" 180)"
                 fi
             done
         ) &
