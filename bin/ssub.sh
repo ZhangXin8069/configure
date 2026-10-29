@@ -24,7 +24,8 @@ cat > .ssub.sh <<'EOF'
 #SBATCH --gres=gpu:1
 source "${HOME}/env.sh"
 EOF
-printf '%q ' "$@" >> .ssub.sh
+printf '%s ' "$@" >> .ssub.sh
 printf '\n' >> .ssub.sh
+printf '>log.txt 2>&1\n' >> .ddub.sh
 sbatch ./.ssub.sh
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

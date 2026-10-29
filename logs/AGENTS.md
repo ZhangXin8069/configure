@@ -646,3 +646,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: in-progress
 
+## ddub-ssub-command-logging - final - 2026-10-30 04:58:18 +0800
+- 主任务: 修改 ddub.sh 与 ssub.sh 的原始命令生成和日志重定向
+- 日志文件: logs/v2026103004.txt
+- 文件大小: 4895 bytes
+- 触发原因: 任务完成
+- 关键内容: 两脚本改用原样参数拼接，ssub.sh 按要求追加 .ddub.sh 日志重定向；语法、行为、form、快照与 diff 验证通过。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## documentation-freshness-audit - final - 2026-10-30 05:17:10 +0800
+- 主任务: 审查仓库维护文档中的错误和过时信息
+- 日志文件: logs/v2026103005.txt
+- 文件大小: 13384 bytes
+- 触发原因: 任务完成
+- 关键内容: 结构性检查覆盖 195 篇维护文档；确认 8 组重要问题和 4 组次要问题，涉及技能 Git 契约、submodule ref、Slurm、版本归档、安装指南与目录索引。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## diff-init-push-tag-delivery - stage - 2026-10-30 05:28:33 +0800
+- 主任务: 执行 diff、init、push、tag 交付链
+- 日志文件: logs/v202610300528.txt
+- 文件大小: 4255 bytes
+- 触发原因: 阶段成果
+- 关键内容: diff/init/验证通过；准备提交并推送当前分支，随后创建 dev43 标签。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+

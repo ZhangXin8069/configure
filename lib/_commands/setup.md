@@ -12,7 +12,7 @@
 | Git 初始化 | `git_init.sh` | 见 `../_git/setup.md` 与 `../_ssh/setup.md` |
 | Git 同步 | `gpull.sh`、`gpush.sh`、`gback.sh` | 见 `../_git/setup.md`；`gback.sh` 会先 stash 当前分支全部分叉，再强制对齐最新 upstream |
 | SSH | `ss.sh`、`ssnsc.sh`、`ssjtu.sh`、`xx99.sh` | 见 `../_ssh/setup.md` |
-| Slurm | `ssub.sh`、`ssrun.sh`、`ssqueue.sh`、`zsqueue.sh`、`sstop.sh` | 见 `../_slurm/setup.md` |
+| Slurm | `ddub.sh`、`ssub.sh`、`ssrun.sh`、`ssqueue.sh`、`zsqueue.sh`、`sstop.sh` | 见 `../_slurm/setup.md` |
 | Docker | `ddocker.sh`、`ddocker.bat` | 见 `../_docker/setup.md` |
 | Agent | `cl/cls/op/ops/co/cos` | 见 `../_agent/setup.md` |
 | ZeroTier | `zerotier_init.sh` | 见 `../_zerotier/setup.md` |

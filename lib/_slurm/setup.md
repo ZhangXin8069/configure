@@ -2,10 +2,11 @@
 
 ## 适用范围
 
-本仓库提供两类 Slurm 辅助入口：
+本仓库提供多种 Slurm 辅助入口：
 
 | 来源 | 用途 |
 |---|---|
+| `bin/ddub.sh` | 生成 DSUB `.ddub.sh` 并立即 `dsub -s` |
 | `bin/ssub.sh` | 生成 `.ssub.sh` 并立即 `sbatch` |
 | `bin/ssrun.sh` | 用固定参数执行交互式 `srun` |
 | `bin/ssqueue.sh`、`bin/zsqueue.sh` | 持续查看队列 |
@@ -21,6 +22,17 @@ squeue -u "$USER"
 ```
 
 不同集群的分区名、GPU/DCU 资源名、账号和 module 名称不同。不要直接复用其他集群的模板。
+
+## `ddub.sh`
+
+```bash
+cd /path/to/workdir
+ddub.sh python solve.py --input data.txt
+```
+
+脚本会在当前目录覆盖写入 `.ddub.sh`，默认使用 `q_hpcapp` 分区、单节点任务和
+600 分钟时限。命令参数按原始文本拼接，需要保留 `$VAR` 或空格的参数应由调用方
+提供相应引号文本。生成后的命令追加 `>log.txt 2>&1` 并交给 `dsub -s`。
 
 ## `ssub.sh`
 
@@ -47,7 +59,8 @@ source "$HOME/env.sh"
 四个注意点：
 
 1. `.ssub.sh` 每次覆盖，不复用上一次的自定义修改。
-2. 参数通过 `printf %q` 写入，适合简单命令和参数，不替代完整作业脚本。
+2. 参数通过 `printf %s` 按原始文本写入，适合简单命令和参数，不替代完整作业脚本；
+   当前实现还会向 `.ddub.sh` 追加 `>log.txt 2>&1`，提交前应确认该文件是否属于预期工作流。
 3. 默认 GPU、分区、邮箱和 `$HOME/env.sh` 都是个人环境假设。
 4. 脚本没有预览模式；执行命令本身就意味着提交作业。需要预览时，先根据模板手工创建等效脚本并检查，再决定是否提交。
 
