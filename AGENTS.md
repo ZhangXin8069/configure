@@ -88,18 +88,18 @@
   同目录两者并存时，以 `AGENTS.md` 为主文件合并双方有效内容并去重，确认后再删除单数文件。
 - 业务目录：顶层白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`；
   功能输入不得放入 `docs/`，包依赖清单存放在 `lib/requirements/`。
-- Agent 镜像：`.opencode/skills/` 是 `skills/` 的受控加载镜像，不是独立业务源；form 审计跳过
-  其重复副本，`tools/configure-check.sh` 逐项核对普通文件内容与软链接目标。
+- Agent 源与镜像：`skills/` 是唯一权威技能源；`.opencode/skills/` 若存在，则 form 审计跳过其
+  重复副本，`tools/configure-check.sh` 逐项核对普通文件内容与软链接目标。
 - 文档与日志：`docs/` 允许 Markdown、TeX、PDF、图片及生成的 `docs/.gitignore` 控制文件；
   `logs/` 允许 `AGENTS.md`、生成的 `logs/.gitignore` 和 `log/json/tsv/csv/txt`，agent 日志使用
   `vYYYYMMDD[HH[MM[SS]]].txt` 或对应连字符格式。
-- 数据：`data/` 仅跟踪 `.gitignore`、`AGENTS.md`、`README.md`；根与本地双层忽略必须有效，
-  `data/cache/**` 零例外。
+- 数据与缓存：`data/` 仅跟踪 `.gitignore`、`AGENTS.md`、`README.md`；任意层级 `.cache/` 与
+  `__pycache__/` 必须忽略，不能因后缀白名单重新进入 Git；`data/cache/**` 零例外。
 - 固定快照：`skills/form/references/source-snapshots/**` 保留上游名称、权限、blob 和软链接；
-  `bin/give_git_ignore.sh` 必须精确保留其中的无后缀参考入口。
+  `bin/give_git_ignore.sh` 必须精确保留其中的无后缀参考入口和 `bin/{cl,cls,co,cos,op,ops}`。
 - 测试与验收：shell 至少执行 `bash -n`；结构检查运行
   `skills/form/scripts/form-audit.sh --root . --strict --quiet`；快照检查运行
-  `skills/form/scripts/form-snapshot-verify.sh --quiet`；镜像与技能结构运行
+  `skills/form/scripts/form-snapshot-verify.sh --quiet`；镜像存在时运行
   `tools/configure-check.sh`，提交前另运行 `form-data-tracking-check.sh --root . --quiet`。
 - Git 收尾：普通改动执行 `git diff --check`；完整 `~form` 交付流程可按其 Step 8 执行提交、
   推送和 `dev` tag；禁止 force push、改写已推送标签及 `git add -A`/`git add .`。
@@ -107,7 +107,8 @@
   `skills/form/scripts/form-large-files-check.sh --root .`，命中时立即停止该批提交和推送。
 - 本地例外：`refer/**`、`.opencode/skills/**`、`skills/form/references/source-snapshots/**`、
   vendored/generated 文件保留上游或镜像名称；`docs/.gitignore` 与 `logs/.gitignore` 是
-  `give_git_ignore.sh` 维护的目录契约文件。本库自身新增业务文件不得据此随意申请例外。
+  `give_git_ignore.sh` 维护的目录契约文件；`lib/_deepseek/.codex/` 是安装模板而非活动配置。
+  本库自身新增业务文件不得据此随意申请例外。
 - 标签名只用于版本定位，可在更新说明、提交说明、注释和日志中作为版本引用，但不得进入
   文件、目录、对象、函数、变量等名称。发现违规时由 form 整批纠正全部受影响引用。
 <!-- form-skill:end -->

@@ -25,8 +25,8 @@ DEFAULT_KEEP=(
   '.env.example' '.env.sample' '.keep'
 )
 
-# form 的固定快照完整保留 15 个软链接；其中 6 个无后缀入口必须精确放行，
-# 既包括权威目录，也包括 OpenCode 加载镜像。不要放宽为整个快照目录通配。
+# form 的权威固定快照完整保留 15 个软链接；其中 6 个无后缀入口必须精确放行。
+# 不要放宽为整个快照目录通配，也不要重新引入已由 init 清理的 `.opencode` 镜像。
 FORM_SNAPSHOT_KEEP=(
   'skills/form/references/source-snapshots/configure-main/bin/cl'
   'skills/form/references/source-snapshots/configure-main/bin/cls'
@@ -34,12 +34,6 @@ FORM_SNAPSHOT_KEEP=(
   'skills/form/references/source-snapshots/configure-main/bin/cos'
   'skills/form/references/source-snapshots/configure-main/bin/op'
   'skills/form/references/source-snapshots/configure-main/bin/ops'
-  '.opencode/skills/form/references/source-snapshots/configure-main/bin/cl'
-  '.opencode/skills/form/references/source-snapshots/configure-main/bin/cls'
-  '.opencode/skills/form/references/source-snapshots/configure-main/bin/co'
-  '.opencode/skills/form/references/source-snapshots/configure-main/bin/cos'
-  '.opencode/skills/form/references/source-snapshots/configure-main/bin/op'
-  '.opencode/skills/form/references/source-snapshots/configure-main/bin/ops'
 )
 
 # 这些用户命令是无后缀软链接，必须随仓库分发；仅保留 bin/co 会造成新克隆缺入口。
@@ -205,8 +199,13 @@ gen() {
     echo "*"
     echo "# 2) 重新包含目录, 保证 git 能递归遍历(否则 !*.ext 不生效)"
     echo "!*/"
+    echo "# 3) 重新进入目录后再屏蔽隐藏状态与工具缓存，防止白名单后缀把缓存重新放行"
+    echo ".*"
+    echo "**/.*"
+    echo "**/.cache/"
+    echo "**/__pycache__/"
     echo
-    echo "# 3) 保留工作区现有后缀"
+    echo "# 4) 保留工作区现有后缀"
     if (( ${#exts[@]} == 0 )); then
         echo "# (无)"
     else
@@ -217,7 +216,7 @@ gen() {
         done
     fi
     echo
-    echo "# 4) 保留无后缀 / 特殊文件 (默认清单 + 用户 -k)"
+    echo "# 5) 保留无后缀 / 特殊文件 (默认清单 + 用户 -k)"
     if (( ${#uniq_keep[@]} == 0 )); then
         echo "# (无)"
     else

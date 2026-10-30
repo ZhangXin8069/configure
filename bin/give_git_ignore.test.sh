@@ -103,18 +103,15 @@ _test_form_snapshot_symlinks_are_kept() {
     ln -s agent.sh "${repo}/bin/cos"
     ln -s agent.sh "${repo}/bin/op"
     ln -s agent.sh "${repo}/bin/ops"
-    for root in \
-        skills/form/references/source-snapshots/configure-main/bin \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin; do
-        mkdir -p "${repo}/${root}"
-        printf '#!/usr/bin/env bash\n' > "${repo}/${root}/agent.sh"
-        ln -s agent.sh "${repo}/${root}/cl"
-        ln -s agent.sh "${repo}/${root}/cls"
-        ln -s agent.sh "${repo}/${root}/co"
-        ln -s agent.sh "${repo}/${root}/cos"
-        ln -s agent.sh "${repo}/${root}/op"
-        ln -s agent.sh "${repo}/${root}/ops"
-    done
+    root=skills/form/references/source-snapshots/configure-main/bin
+    mkdir -p "${repo}/${root}"
+    printf '#!/usr/bin/env bash\n' > "${repo}/${root}/agent.sh"
+    ln -s agent.sh "${repo}/${root}/cl"
+    ln -s agent.sh "${repo}/${root}/cls"
+    ln -s agent.sh "${repo}/${root}/co"
+    ln -s agent.sh "${repo}/${root}/cos"
+    ln -s agent.sh "${repo}/${root}/op"
+    ln -s agent.sh "${repo}/${root}/ops"
 
     (
         cd "${repo}"
@@ -133,17 +130,29 @@ _test_form_snapshot_symlinks_are_kept() {
         skills/form/references/source-snapshots/configure-main/bin/co \
         skills/form/references/source-snapshots/configure-main/bin/cos \
         skills/form/references/source-snapshots/configure-main/bin/op \
-        skills/form/references/source-snapshots/configure-main/bin/ops \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin/cl \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin/cls \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin/co \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin/cos \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin/op \
-        .opencode/skills/form/references/source-snapshots/configure-main/bin/ops; do
+        skills/form/references/source-snapshots/configure-main/bin/ops; do
         if git -C "${repo}" check-ignore --no-index -q -- "$relative"; then
             _fail "form 快照软链接仍被忽略：${relative}"
         fi
     done
+}
+
+_test_tool_cache_directories_are_ignored() {
+    local repo="${TEST_DIR}/cache-ignore-repo"
+
+    _make_repo "${repo}"
+    mkdir -p "${repo}/lib/example/.cache" "${repo}/tools/__pycache__"
+    printf '{}\n' > "${repo}/lib/example/.cache/probe.json"
+    printf 'cache\n' > "${repo}/tools/__pycache__/probe.pyc"
+    (
+        cd "${repo}"
+        bash "${_PATH}/give_git_ignore.sh" -f
+    ) > "${TEST_DIR}/cache-ignore.log" 2>&1
+
+    git -C "${repo}" check-ignore --no-index -q -- lib/example/.cache/probe.json \
+        || _fail "工具 .cache 未被忽略"
+    git -C "${repo}" check-ignore --no-index -q -- tools/__pycache__/probe.pyc \
+        || _fail "工具 __pycache__ 未被忽略"
 }
 
 _test_help_documents_sub_only() {
@@ -160,6 +169,7 @@ main() {
     _test_docs_ignore_dry_run_and_write
     _test_sub_only_preserves_root_ignore
     _test_form_snapshot_symlinks_are_kept
+    _test_tool_cache_directories_are_ignored
     _test_help_documents_sub_only
 }
 

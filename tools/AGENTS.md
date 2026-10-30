@@ -3,8 +3,8 @@
 本目录保存配置仓库维护工具和上游工具推荐信息。
 
 - `configure-check.sh` 是只读检查入口，必须保持可执行、带 Bash shebang，并通过 `bash -n`；
-  技能表与互鉴表同时核验登记完整性和 Markdown 列数一致性，并逐项核对
-  `skills/` 与 `.opencode/skills/` 的普通文件内容及软链接目标。
+  技能表与互鉴表同时核验登记完整性和 Markdown 列数一致性；`.opencode/skills/` 存在时逐项核对
+  其与 `skills/` 的普通文件内容及软链接目标，不存在时以 `skills/` 为唯一权威源。
 - `configure-check.sh --strict` 将警告提升为失败，供需要零警告的 CI 门禁使用；默认模式仍区分警告与错误。
 - `coverage-report.sh` 是只读诊断入口，复用 `configure-check.sh` 的发现思路输出四树覆盖摘要、镜像一致性线索和缺口提示；允许缺口存在，但必须保持可执行、带 Bash shebang，并配套测试。其插件 manifest 诊断依赖 `python3`，其余部分只用 Bash/常见文本工具。
 - `task-scope.sh` 是只读任务分流入口，把自然语言任务映射到技能组合与拆分建议；保持可执行，并同步 `README.md` 里的用途、参数和测试入口。

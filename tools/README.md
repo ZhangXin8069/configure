@@ -28,7 +28,7 @@ bash tools/configure-check.test.sh
 
 ### `coverage-report.sh`
 
-只读汇总当前仓库四棵配置树的覆盖状况，输出 `skills/`、`tools/`、`hooks/`、`plugins/` 的摘要、`skills/` 与 `.opencode/skills/` 的镜像一致性线索，以及缺口提示。它复用 `configure-check.sh` 的发现思路，但不做门禁判定：数据缺口只会出现在报告里，不会把脚本本身变成失败入口。`configure-check.sh` 的门禁还会比较镜像软链接目标，避免镜像中的分发入口在无内容差异时漏检。
+只读汇总当前仓库四棵配置树的覆盖状况，输出 `skills/`、`tools/`、`hooks/`、`plugins/` 的摘要、`skills/` 与 `.opencode/skills/` 的镜像一致性线索，以及缺口提示。它复用 `configure-check.sh` 的发现思路，但不做门禁判定：数据缺口只会出现在报告里，不会把脚本本身变成失败入口。`configure-check.sh` 在镜像存在时还会比较软链接目标，避免分发入口在无内容差异时漏检；镜像不存在时以 `skills/` 为唯一权威源。
 
 ```bash
 tools/coverage-report.sh
