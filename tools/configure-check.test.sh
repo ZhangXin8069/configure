@@ -187,6 +187,8 @@ cp "$repo/skills/demo/SKILL.md" "$mirror_repo/skills/demo/SKILL.md"
 cp "$repo/skills/demo/AGENTS.md" "$mirror_repo/skills/demo/AGENTS.md"
 cp "$repo/skills/demo/SKILL.md" "$mirror_repo/.opencode/skills/demo/SKILL.md"
 cp "$repo/skills/demo/AGENTS.md" "$mirror_repo/.opencode/skills/demo/AGENTS.md"
+ln -s SKILL.md "$mirror_repo/skills/demo/entry"
+ln -s SKILL.md "$mirror_repo/.opencode/skills/demo/entry"
 
 set +e
 mirror_output=$(bash "$checker" --root "$mirror_repo" 2>&1)
@@ -204,6 +206,16 @@ set -e
 (( drift_status != 0 )) || fail 'skills 镜像漂移不应通过检查'
 assert_contains "$mirror_output" '镜像内容不一致'
 printf 'PASS: skills 镜像漂移被拒绝\n'
+
+cp "$repo/skills/demo/SKILL.md" "$mirror_repo/.opencode/skills/demo/SKILL.md"
+ln -sfn AGENTS.md "$mirror_repo/.opencode/skills/demo/entry"
+set +e
+mirror_output=$(bash "$checker" --root "$mirror_repo" 2>&1)
+symlink_drift_status=$?
+set -e
+(( symlink_drift_status != 0 )) || fail 'skills 镜像软链接目标漂移不应通过检查'
+assert_contains "$mirror_output" '镜像软链接目标不一致'
+printf 'PASS: skills 镜像软链接目标漂移被拒绝\n'
 
 snapshot_repo=$test_root/snapshot-repo
 mkdir -p "$snapshot_repo/skills/demo" "$snapshot_repo/skills/form" \

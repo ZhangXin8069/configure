@@ -12,8 +12,8 @@
 调用 `~form` 默认授予较高权限，覆盖计划内仓库清理及常规提交、推送和标签；force push、
 改写已推送标签、系统配置和凭据操作仍须单独确认。其他情况下遵循上级 `AGENTS.md` 公共契约。
 
-`scripts/form-audit.sh`、`scripts/form-large-files-check.sh` 和
-`scripts/form-snapshot-verify.sh` 必须保持只读；审计脚本报告路径/布局候选冲突（含
+`scripts/form-audit.sh`、`scripts/form-large-files-check.sh`、`scripts/form-data-tracking-check.sh`
+和 `scripts/form-snapshot-verify.sh` 必须保持只读；审计脚本报告路径/布局候选冲突（含
 `refer/git-rep` 子库元数据、README 来源/致谢和分析文档位置），大文件脚本报告超限暂存
 内容，快照脚本校验离线参考。`scripts/form-agents-sync.sh` 只更新根 `AGENTS.md` 的
 `form-skill` 标记块，不改写块外本地约定。任何仓库修复都由 `SKILL.md` 的批准流程驱动。

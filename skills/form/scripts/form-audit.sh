@@ -130,7 +130,7 @@ is_allowed_top() {
 is_excluded() {
   local path=$1 pattern
   case "$path" in
-    .git/*|data/*|refer/*|skills/form/references/source-snapshots/*|\
+    .git/*|.opencode/*|data/*|refer/*|skills/form/references/source-snapshots/*|\
     node_modules/*|*/node_modules/*|vendor/*|*/vendor/*|\
     third_party/*|*/third_party/*|.venv/*|*/.venv/*|\
     site-packages/*|*/site-packages/*|build/*|*/build/*|\
@@ -262,7 +262,7 @@ while IFS= read -r -d '' path; do
   esac
 
   case "$path" in
-    logs/AGENTS.md) ;;
+    logs/AGENTS.md|logs/.gitignore) ;;
     logs/*)
       case "$ext" in
         log|json|tsv|csv|txt) ;;
@@ -360,7 +360,7 @@ fi
 
 while IFS= read -r -d '' path; do
   case "$path" in
-    data/*|refer/*|lib/_oh-my-zsh/*|lib/_vim/*|\
+    .opencode/*|data/*|refer/*|lib/_oh-my-zsh/*|lib/_vim/*|\
     skills/form/references/source-snapshots/*|*.test.sh)
       continue
       ;;

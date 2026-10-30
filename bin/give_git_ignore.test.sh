@@ -86,6 +86,48 @@ _test_sub_only_preserves_root_ignore() {
         || _fail "-sub 未写入 logs/.gitignore"
 }
 
+_test_form_snapshot_symlinks_are_kept() {
+    local repo="${TEST_DIR}/snapshot-keep-repo"
+    local root relative
+
+    _make_repo "${repo}"
+    for root in \
+        skills/form/references/source-snapshots/configure-main/bin \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin; do
+        mkdir -p "${repo}/${root}"
+        printf '#!/usr/bin/env bash\n' > "${repo}/${root}/agent.sh"
+        ln -s agent.sh "${repo}/${root}/cl"
+        ln -s agent.sh "${repo}/${root}/cls"
+        ln -s agent.sh "${repo}/${root}/co"
+        ln -s agent.sh "${repo}/${root}/cos"
+        ln -s agent.sh "${repo}/${root}/op"
+        ln -s agent.sh "${repo}/${root}/ops"
+    done
+
+    (
+        cd "${repo}"
+        bash "${_PATH}/give_git_ignore.sh" -f
+    ) > "${TEST_DIR}/snapshot-keep.log" 2>&1
+
+    for relative in \
+        skills/form/references/source-snapshots/configure-main/bin/cl \
+        skills/form/references/source-snapshots/configure-main/bin/cls \
+        skills/form/references/source-snapshots/configure-main/bin/co \
+        skills/form/references/source-snapshots/configure-main/bin/cos \
+        skills/form/references/source-snapshots/configure-main/bin/op \
+        skills/form/references/source-snapshots/configure-main/bin/ops \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin/cl \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin/cls \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin/co \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin/cos \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin/op \
+        .opencode/skills/form/references/source-snapshots/configure-main/bin/ops; do
+        if git -C "${repo}" check-ignore --no-index -q -- "$relative"; then
+            _fail "form 快照软链接仍被忽略：${relative}"
+        fi
+    done
+}
+
 _test_help_documents_sub_only() {
     local output="${TEST_DIR}/help.log"
 
@@ -99,6 +141,7 @@ _test_help_documents_sub_only() {
 main() {
     _test_docs_ignore_dry_run_and_write
     _test_sub_only_preserves_root_ignore
+    _test_form_snapshot_symlinks_are_kept
     _test_help_documents_sub_only
 }
 

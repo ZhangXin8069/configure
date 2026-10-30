@@ -33,14 +33,16 @@ metadata:
   `references/source-snapshots/configure-main/bin/`。
 - 代码文件全小写；批量 Git 命令使用 `gz-<repo>-push.sh` 和 `zg-<repo>-pull.sh`，
   聚合入口为 `gz-all-push.sh`、`zg-all-pull.sh`。
-- 顶层目录白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`。
+- 顶层业务目录白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`；
+  `.opencode/skills/` 是受 `configure-check.sh` 校验的技能加载镜像，不作为独立业务源审计。
 - 参考 Git 库统一放在 `refer/git-rep/<name>`，新增时使用
   `git submodule add <url> refer/git-rep/<name>`；本库对参考库的分析文档放
   `refer/git-rep/docs/`，来源与致谢写入 `refer/git-rep/README.md`。存量普通拷贝按
   Step 5 的参考子库流程迁移。
 - 包依赖清单位于 `lib/requirements/{apt,pip}.txt`，由 `bin/{apt,pip}_install.sh` 消费。
-- `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 允许 `AGENTS.md` 索引以及
-  `log/json/tsv/csv/txt`，agent 日志按 `log` 技能的三态时间戳命名。
+- `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 允许 `AGENTS.md` 索引、
+  `give_git_ignore.sh` 生成的 `.gitignore` 以及 `log/json/tsv/csv/txt`，agent 日志按 `log`
+  技能的三态时间戳命名。
 - 本库缺少独立构建系统时，验证入口为 `bash -n bin/*.sh`、
   `scripts/form-audit.sh --root /root/configure --strict --quiet` 和
   `scripts/form-snapshot-verify.sh --quiet`；涉及 Git 提交时另运行

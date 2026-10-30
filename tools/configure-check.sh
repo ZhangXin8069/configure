@@ -289,16 +289,25 @@ fi
 if [[ -d "$ROOT/.opencode/skills" && -d "$ROOT/skills" ]]; then
     new_temp_file
     mirror_source_list=$TEMP_FILE
-    if ! collect_find_output "$mirror_source_list" "$ROOT/skills" -type f; then
+    if ! collect_find_output "$mirror_source_list" "$ROOT/skills" \
+        \( -type f -o -type l \); then
         fail 'skills 镜像源文件枚举失败'
     else
         while IFS= read -r -d '' source_file; do
             relative=${source_file#"$ROOT/skills/"}
             mirror_file="$ROOT/.opencode/skills/$relative"
-            if [[ ! -f "$mirror_file" ]]; then
-                fail "skills 镜像缺少文件：$relative"
-            elif ! cmp -s -- "$source_file" "$mirror_file"; then
-                fail "skills 镜像内容不一致：$relative"
+            if [[ -L "$source_file" ]]; then
+                if [[ ! -L "$mirror_file" ]]; then
+                    fail "skills 镜像缺少软链接：$relative"
+                elif [[ "$(readlink -- "$source_file")" != "$(readlink -- "$mirror_file")" ]]; then
+                    fail "skills 镜像软链接目标不一致：$relative"
+                fi
+            else
+                if [[ ! -f "$mirror_file" || -L "$mirror_file" ]]; then
+                    fail "skills 镜像缺少文件或类型不一致：$relative"
+                elif ! cmp -s -- "$source_file" "$mirror_file"; then
+                    fail "skills 镜像内容不一致：$relative"
+                fi
             fi
         done < "$mirror_source_list"
         pass 'skills 与 .opencode/skills 镜像核对完成'

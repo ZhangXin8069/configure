@@ -25,6 +25,23 @@ DEFAULT_KEEP=(
   '.env.example' '.env.sample' '.keep'
 )
 
+# form 的固定快照完整保留 15 个软链接；其中 6 个无后缀入口必须精确放行，
+# 既包括权威目录，也包括 OpenCode 加载镜像。不要放宽为整个快照目录通配。
+FORM_SNAPSHOT_KEEP=(
+  'skills/form/references/source-snapshots/configure-main/bin/cl'
+  'skills/form/references/source-snapshots/configure-main/bin/cls'
+  'skills/form/references/source-snapshots/configure-main/bin/co'
+  'skills/form/references/source-snapshots/configure-main/bin/cos'
+  'skills/form/references/source-snapshots/configure-main/bin/op'
+  'skills/form/references/source-snapshots/configure-main/bin/ops'
+  '.opencode/skills/form/references/source-snapshots/configure-main/bin/cl'
+  '.opencode/skills/form/references/source-snapshots/configure-main/bin/cls'
+  '.opencode/skills/form/references/source-snapshots/configure-main/bin/co'
+  '.opencode/skills/form/references/source-snapshots/configure-main/bin/cos'
+  '.opencode/skills/form/references/source-snapshots/configure-main/bin/op'
+  '.opencode/skills/form/references/source-snapshots/configure-main/bin/ops'
+)
+
 FORCE=0; DRY=0; OUT=""; NO_DEFAULT=0; SUB_ONLY=0
 EXTRA_KEEP=()
 while [[ $# -gt 0 ]]; do
@@ -145,7 +162,7 @@ fi
 
 # ---- 合并 keep 清单并去重 ----
 keep=()
-(( NO_DEFAULT == 0 )) && keep+=("${DEFAULT_KEEP[@]}")
+(( NO_DEFAULT == 0 )) && keep+=("${DEFAULT_KEEP[@]}" "${FORM_SNAPSHOT_KEEP[@]}")
 (( ${#EXTRA_KEEP[@]} )) && keep+=("${EXTRA_KEEP[@]}")
 
 declare -A _seen=()
