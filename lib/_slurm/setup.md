@@ -30,9 +30,10 @@ cd /path/to/workdir
 ddub.sh python solve.py --input data.txt
 ```
 
-脚本会在当前目录覆盖写入 `.ddub.sh`，默认使用 `q_hpcapp` 分区、单节点任务和
-600 分钟时限。命令参数按原始文本拼接，需要保留 `$VAR` 或空格的参数应由调用方
-提供相应引号文本。生成后的命令追加 `>log.txt 2>&1` 并交给 `dsub -s`。
+脚本会在当前目录覆盖写入 `.ddub.sh`，默认使用 `q_hpcapp` 分区，并声明
+`-rpn 16`、`-N 16`、`-R "cpu=37;mem=8G"` 和 600 分钟时限。命令参数按原始文本拼接，
+需要保留 `$VAR` 或空格的参数应由调用方提供相应引号文本。生成后的命令追加
+`>log.txt 2>&1` 并交给 `dsub -s`。
 
 ## `ssub.sh`
 

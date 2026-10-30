@@ -11,9 +11,9 @@ cat > .ddub.sh <<'EOF'
 #DSUB -n qcu
 #DSUB -x job
 #DSUB -nn 1
-#DSUB -N 1
-#DSUB -rpn 1
-##DSUB -R "cpu=256;mem=256G"
+#DSUB -rpn 16
+#DSUB -N 16
+#DSUB -R "cpu=37;mem=8G"
 #DSUB -oo output.txt
 #DSUB -eo error.txt
 #DSUB -T 600

@@ -9,3 +9,4 @@ alias python='python3 -u'
 
 # @ENV@
 [ -r "${HOME}/env-key.sh" ] && source ${HOME}/env-key.sh
+[ -r "${HOME}/PyQCU/env.sh" ] && source ${HOME}/PyQCU/env.sh
