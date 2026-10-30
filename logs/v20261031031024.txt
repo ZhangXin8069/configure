@@ -1,0 +1,49 @@
+[日志元数据]
+日志类型: general
+生成时间: 2026-10-31 03:10:24 +0800
+批次: pyqcu-gpush-origin-recovery-20261031
+主任务: 恢复 PyQCU origin 并重试 gpush
+触发原因: 一般记录
+摘要: origin 已恢复；普通 push 因远端分叉和标签对象冲突被安全拒绝，等待覆盖授权
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — origin remote 恢复
+- 目标：修复 `/root/PyQCU` 中 `gpush.sh` 报 `origin` 不存在的问题。
+- 检查：`git remote -v` 原为空；SSH 地址 `git@gitee.com:zhangxin8069/PyQCU.git` 可由 `git ls-remote` 访问。
+- 操作：执行 `git remote add origin git@gitee.com:zhangxin8069/PyQCU.git`。
+- 结果：origin fetch/push URL 均已恢复。
+
+### S2 — 普通 gpush 重试
+- 命令：`timeout 600s bash /root/configure/bin/gpush.sh`
+- 本地状态：工作区干净，`Nothing to commit`。
+- branch 推送：`main` 被拒绝，远端包含本地没有的提交，提示 `fetch first`。
+- tag 推送：大量本地标签与远端同名但对象不同，全部被拒绝为 `already exists`。
+- 远端 `main`：`dc95d8600ef510c310ab0bf1f67b26f1d545c459`
+- 本地 `main`：`8d7002f908aa2c162705f840b604814971753171`
+- `git fetch --no-tags origin main` 在 60 秒上限内未完成，未取得 `FETCH_HEAD`。
+
+## 验证与证据
+- SSH remote 可达。
+- origin 配置已恢复。
+- 普通非快进 branch push 与同名不同对象 tag push 均被远端安全拒绝。
+- PyQCU 工作区仍干净，无本地提交或暂存改动。
+
+## 变更与产物
+- 修改：PyQCU 仓库本地 Git remote 配置，新增 `origin`。
+- 未修改远端引用。
+- 未提交、未推送、未执行 force push。
+
+## 风险、限制与下一步
+- 要同步本地重写后的历史，必须覆盖远端 `main` 和同名标签，属于破坏性操作。
+- 当前未获明确授权，不能执行 force push。
+- 建议使用 `--force-with-lease`；需用户明确确认覆盖范围和凭据可用性。
+
+## 用户输入指令
+```text
+gpush.sh
+...
+Nothing to commit.
+fatal: 'origin' does not appear to be a git repository
+...
+```

@@ -41,9 +41,20 @@ fi
 
 # Push current branch to its upstream (or origin)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
-git push origin "$BRANCH"
+PUSH_FAILED=0
+if ! git push origin "$BRANCH"; then
+    echo "ERROR: branch push failed: $BRANCH" >&2
+    PUSH_FAILED=1
+fi
 
 # Push tags
-git push origin --tags
+if ! git push origin --tags; then
+    echo "ERROR: tag push failed" >&2
+    PUSH_FAILED=1
+fi
+
+if (( PUSH_FAILED != 0 )); then
+    exit 1
+fi
 
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

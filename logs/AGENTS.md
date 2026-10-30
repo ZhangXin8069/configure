@@ -799,3 +799,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## pyqcu-gpush-origin-recovery-20261031 - general - 2026-10-31 03:10:24 +0800
+- 主任务: 恢复 PyQCU origin 并重试 gpush
+- 日志文件: logs/v20261031031024.txt
+- 文件大小: 2096 bytes
+- 触发原因: 一般记录
+- 关键内容: origin 已恢复；普通 push 因远端分叉和标签对象冲突被安全拒绝，等待覆盖授权
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## gpush-push-status-20261031 - general - 2026-10-31 03:21:02 +0800
+- 主任务: 修复 gpush 推送失败仍返回成功并核对 PyQCU 标签冲突
+- 日志文件: logs/v20261031032102.txt
+- 文件大小: 2175 bytes
+- 触发原因: 一般记录
+- 关键内容: main 已同步；305 个标签对象全部冲突；gpush 现会对 tag push 失败返回非零
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+

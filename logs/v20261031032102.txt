@@ -1,0 +1,46 @@
+[日志元数据]
+日志类型: general
+生成时间: 2026-10-31 03:21:02 +0800
+批次: gpush-push-status-20261031
+主任务: 修复 gpush 推送失败仍返回成功并核对 PyQCU 标签冲突
+触发原因: 一般记录
+摘要: main 已同步；305 个标签对象全部冲突；gpush 现会对 tag push 失败返回非零
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 最新 gpush 证据
+- 用户重新执行 `gpush.sh`。
+- `main`：`Everything up-to-date`，本地与远端分支已同步到 `8d7002f908aa2c162705f840b604814971753171`。
+- 标签：全部同名标签推送被拒绝。
+- 只读统计：本地 305 个标签、远端 305 个标签，305 个同名标签的对象全部不同。
+
+### S2 — gpush 失败语义修复
+- 根因：`git push origin "$BRANCH"` 与 `git push origin --tags` 未检查退出码，脚本最后无条件打印 done 并返回 0。
+- 修复：分别捕获 branch/tag push 状态，保留两者都尝试的现有行为；任一失败时输出明确错误并退出 1，只有全部成功才打印 done。
+- 回归：新增 fake-git 测试，强制 tag push 失败并验证非零退出、错误信息和无 done。
+
+## 验证与证据
+- `bash -n gpush.sh gpush.test.sh`：通过。
+- `gpush.test.sh`：通过。
+- 真实 PyQCU 重试：`main` 为 `Everything up-to-date`；tag push 失败；退出码 `1`；输出 `ERROR: tag push failed`；不再打印 done。
+- 目标 `git diff --check`：通过。
+
+## 变更与产物
+- 修改：`bin/gpush.sh`
+- 新增：`bin/gpush.test.sh`
+- 本 agent 未提交、未推送标签、未执行 force。
+
+## 风险、限制与下一步
+- 305 个标签指向被重写前后的不同对象。更新它们会覆盖远端已有标签，属于破坏性操作。
+- 需要用户明确授权后，才可评估 `git push --force origin --tags` 或安全的逐个 `--force-with-lease` 方案。
+- 若用户只想同步分支，当前分支已经成功；tags 可以保持不动。
+
+## 用户输入指令
+```text
+gpush.sh
+...
+Everything up-to-date
+...
+error: failed to push some refs to 'gitee.com:zhangxin8069/PyQCU.git'
+hint: Updates were rejected because the tag already exists in the remote.
+```
