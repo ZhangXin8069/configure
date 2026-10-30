@@ -1,3 +1,0 @@
-# Preserve generated provenance indexes despite the repository-wide *.tsv rule.
-!**/MANIFEST.tsv
-!**/SYMLINKS.tsv

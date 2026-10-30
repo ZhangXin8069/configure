@@ -1,1 +1,0 @@
-cpupower.sh
