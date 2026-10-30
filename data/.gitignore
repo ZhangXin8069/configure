@@ -1,6 +1,3 @@
-# Raw agent runtime data is local-only. Keep only the tracked directory contract.
-# This allowlist intentionally ignores cache/, runs/, hooks/, sessions/, shells and
-# every other current or future runtime artifact.
 *
 !.gitignore
 !AGENTS.md

@@ -73,16 +73,17 @@ fi
 # ===== 临时文件 =====
 PATHS_ALL=$(mktemp)
 PATHS_FILE=$(mktemp)
-trap 'rm -f "$PATHS_ALL" "$PATHS_FILE"' EXIT
+MATCHES_FILE=$(mktemp)
+trap 'rm -f "$PATHS_ALL" "$PATHS_FILE" "$MATCHES_FILE"' EXIT
 
 # ===== [1/6] 遍历历史，提取所有文件路径 =====
 echo "[1/6] 遍历历史，提取所有文件路径..."
-# rev-list --objects：遍历所有引用（heads/tags/remotes）的可达对象
-# cat-file --batch-check：标注类型，只保留 blob（文件）；子模块 gitlink 是 commit 类型，自然排除
+# log --name-only：遍历所有引用可达提交中的每个路径。
+# 不使用 rev-list --objects：相同 blob 被多个路径复用时，它只会输出其中一个路径。
 # 已知限制：路径含换行符时会被错误拆分（Git 允许但极罕见）
-git -C "$REPO_ROOT" rev-list --all --objects \
-  | git -C "$REPO_ROOT" cat-file --batch-check='%(objecttype) %(rest)' \
-  | awk '$1 == "blob" { sub(/^[^ ]+ /, ""); print }' \
+git -C "$REPO_ROOT" log --all --pretty=format: --name-only --no-renames -z \
+  | tr '\0' '\n' \
+  | awk 'NF' \
   | sort -u > "$PATHS_ALL"
 
 TOTAL=$(wc -l < "$PATHS_ALL")
@@ -100,20 +101,28 @@ fi
 #   - --no-index：即使文件已被跟踪也判定
 echo "[1/6] 用仓库内所有 .gitignore 规则匹配历史路径..."
 set +e
-MATCHES=$(git -C "$REPO_ROOT" -c core.excludesFile=/dev/null \
-    check-ignore --no-index --stdin -v < "$PATHS_ALL" 2>/dev/null)
+git -C "$REPO_ROOT" -c core.excludesFile=/dev/null \
+    check-ignore --no-index --stdin -v < "$PATHS_ALL" > "$MATCHES_FILE"
+CHECK_IGNORE_STATUS=$?
 set -e
+if (( CHECK_IGNORE_STATUS > 1 )); then
+    echo "ERROR: git check-ignore 失败（退出码 ${CHECK_IGNORE_STATUS}）" >&2
+    exit "$CHECK_IGNORE_STATUS"
+fi
 
 # 解析 -v 输出：<source>:<lineno>:<pattern>\t<pathname>
+# 否定规则（!pattern）表示路径最终未被忽略，不能传给 filter-repo。
 # 安全阀：永不删除 .gitignore 自身（即便规则匹配到它）
 mapfile -t TO_DELETE < <(
-    [[ -n "$MATCHES" ]] || exit 0
-    printf '%s\n' "$MATCHES" | awk -F'\t' '
+    awk -F'\t' '
         NF >= 2 && !seen[$2]++ {
+            pattern = $1
+            sub(/^.*:[0-9]+:/, "", pattern)
+            if (pattern ~ /^!/) next
             n = split($2, a, "/")
             if (a[n] != ".gitignore") print $2
         }
-    '
+    ' "$MATCHES_FILE"
 )
 
 if (( ${#TO_DELETE[@]} == 0 )); then
@@ -123,7 +132,7 @@ if (( ${#TO_DELETE[@]} == 0 )); then
 fi
 
 echo "匹配 ${#TO_DELETE[@]} 个历史文件将被永久移除："
-printf '  %s\n' "${TO_DELETE[@]}" | head -300
+printf '  %s\n' "${TO_DELETE[@]:0:300}"
 if (( ${#TO_DELETE[@]} > 300 )); then
     echo "  ... (还有 $(( ${#TO_DELETE[@]} - 300 )) 个)"
 fi
