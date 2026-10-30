@@ -441,6 +441,8 @@ class TuiWatchTests(unittest.TestCase):
                 separators=(",", ":"),
             )
             env = dict(os.environ)
+            env.pop("AGENT_AUTO_RESUME", None)
+            env.pop("AGENT_RESUME_ACTIVE", None)
             env.update(
                 {
                     "AGENT_CONFIGURE_ROOT": str(Path(__file__).resolve().parents[1]),
@@ -512,6 +514,8 @@ class TuiWatchTests(unittest.TestCase):
                 separators=(",", ":"),
             )
             env = dict(os.environ)
+            env.pop("AGENT_AUTO_RESUME", None)
+            env.pop("AGENT_RESUME_ACTIVE", None)
             env.update(
                 {
                     "AGENT_CONFIGURE_ROOT": str(Path(__file__).resolve().parents[1]),

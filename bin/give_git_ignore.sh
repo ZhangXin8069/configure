@@ -42,6 +42,16 @@ FORM_SNAPSHOT_KEEP=(
   '.opencode/skills/form/references/source-snapshots/configure-main/bin/ops'
 )
 
+# 这些用户命令是无后缀软链接，必须随仓库分发；仅保留 bin/co 会造成新克隆缺入口。
+AGENT_LAUNCHER_KEEP=(
+  'bin/cl'
+  'bin/cls'
+  'bin/co'
+  'bin/cos'
+  'bin/op'
+  'bin/ops'
+)
+
 FORCE=0; DRY=0; OUT=""; NO_DEFAULT=0; SUB_ONLY=0
 EXTRA_KEEP=()
 while [[ $# -gt 0 ]]; do
@@ -162,7 +172,11 @@ fi
 
 # ---- 合并 keep 清单并去重 ----
 keep=()
-(( NO_DEFAULT == 0 )) && keep+=("${DEFAULT_KEEP[@]}" "${FORM_SNAPSHOT_KEEP[@]}")
+(( NO_DEFAULT == 0 )) && keep+=(
+  "${DEFAULT_KEEP[@]}"
+  "${FORM_SNAPSHOT_KEEP[@]}"
+  "${AGENT_LAUNCHER_KEEP[@]}"
+)
 (( ${#EXTRA_KEEP[@]} )) && keep+=("${EXTRA_KEEP[@]}")
 
 declare -A _seen=()

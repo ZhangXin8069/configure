@@ -19,6 +19,7 @@ make_fake() {
 #!/usr/bin/env bash
 printf '%s\n' "$*" > "${FAKE_ARGS:?}"
 printf '%s' "${AGENT_DISPATCH_TASK:-}" > "${FAKE_TASK:?}"
+printf '%s' "${AGENT_DISPATCH_MINIMAL:-}" > "${FAKE_MINIMAL:?}"
 printf 'dispatch-result' > "${AGENT_DISPATCH_OUTPUT_FILE:?}"
 printf 'fake launcher output\n'
 exit "${FAKE_RC:-0}"
@@ -34,10 +35,11 @@ mkdir -p "$test_root/data/runs/fake-run"
 printf 'state=finished\n' > "$test_root/data/runs/fake-run/manifest.env"
 export FAKE_ARGS="$test_root/args"
 export FAKE_TASK="$test_root/task"
+export FAKE_MINIMAL="$test_root/minimal"
 export FAKE_LOG="$test_root/data/runs/fake-run/agent.log"
 : > "$FAKE_LOG"
 
-output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
+output=$(AGENT_DISPATCH_MINIMAL=0 AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
     AGENT_PARENT_MODEL=glm-5.3-flash AGENT_PARENT_STRENGTH=high \
     AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
     "$test_root/agent-dispatch.sh" --task 'say hi' --json)
@@ -53,6 +55,7 @@ assert x["ok"] is True
 ' || { printf 'FAIL: 默认继承 JSON 不正确：%s\n' "$output" >&2; exit 1; }
 grep -Fq -- "--once go --model glm-5.3-flash --variant high" "$FAKE_ARGS"
 grep -Fxq -- 'say hi' "$FAKE_TASK"
+grep -Fxq -- '1' "$FAKE_MINIMAL"
 
 output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
     AGENT_PARENT_MODEL=glm-5.3-flash AGENT_PARENT_STRENGTH=high \

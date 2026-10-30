@@ -3,6 +3,9 @@
 
 # 1) 先忽略一切
 *
+.codex
+.claude
+
 # 2) 重新包含目录, 保证 git 能递归遍历(否则 !*.ext 不生效)
 !*/
 
@@ -77,6 +80,12 @@
 !.env.example
 !.env.sample
 !.keep
+!bin/cl
+!bin/cls
+!bin/co
+!bin/cos
+!bin/op
+!bin/ops
 !skills/form/references/source-snapshots/configure-main/bin/cl
 !skills/form/references/source-snapshots/configure-main/bin/cls
 !skills/form/references/source-snapshots/configure-main/bin/co

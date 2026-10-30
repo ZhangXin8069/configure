@@ -38,7 +38,8 @@ _model="${AGENT_PARENT_MODEL:-}"
 _strength="${AGENT_PARENT_STRENGTH:-}"
 _cwd="${AGENT_PARENT_CWD:-$PWD}"
 _timeout=""
-_minimal="${AGENT_DISPATCH_MINIMAL:-1}"
+# --full 是单次派发选项；父 agent 的内部最小化状态不能污染后续默认派发。
+_minimal=1
 _format=json
 _secure="${AGENT_PARENT_SECURE:-0}"
 _agent_overridden=0
