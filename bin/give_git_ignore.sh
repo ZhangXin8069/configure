@@ -2,8 +2,9 @@
 # 依据 git 工作区现有文件的后缀生成 .gitignore：
 # 仅保留这些后缀 + keep 清单，其余全部忽略。
 # 若已存在 .gitignore，会先重命名为 .gitignore.<YYYY-MM-DD-HH-MM-SS>.bak
+# 同时为 data/ 和 logs/ 子目录按固定内容生成 .gitignore（目录不存在则跳过）
 #
-# 用法: gen_gitignore_from_exts.sh [-f] [-n] [-o OUT] [-k PATTERN]... [--no-default-keep]
+# 用法: give_git_ignore.sh [-f] [-n] [-o OUT] [-k PATTERN]... [--no-default-keep]
 #   -f               跳过备份，直接覆盖已存在的 .gitignore
 #   -n, --dry-run    只打印，不写入、不备份
 #   -o OUT           输出路径（默认 <repo>/.gitignore）
@@ -43,7 +44,7 @@ root=$(git rev-parse --show-toplevel 2>/dev/null) || {
 cd "$root"
 OUT=${OUT:-$root/.gitignore}
 
-# ---- 备份已存在的 .gitignore ----
+# ---- 备份已存在的文件 ----
 # 命名: <file>.<YYYY-MM-DD-HH-MM-SS>.bak；同秒冲突追加 -N
 backup_existing() {
     local f="$1" ts bak i
@@ -58,9 +59,68 @@ backup_existing() {
     printf '%s\n' "$bak"
 }
 
+# ---- 通用: 写子目录 .gitignore（备份逻辑同主 .gitignore） ----
+# 参数: <target_path> <content_line1> <content_line2> ...
+write_sub_ignore() {
+    local target="$1"; shift
+    local content=("$@")
+
+    if [[ -e "$target" ]]; then
+        if (( FORCE == 1 )); then
+            :  # 直接覆盖，不备份
+        elif (( DRY == 1 )); then
+            echo "[dry-run] would back up: $target -> ${target}.<ts>.bak" >&2
+        else
+            local bak
+            bak=$(backup_existing "$target")
+            echo "backed up: $target -> $bak"
+        fi
+    fi
+
+    if (( DRY == 1 )); then
+        echo "--- $target (dry-run) ---" >&2
+        printf '%s\n' "${content[@]}" >&2
+        echo "--- end ---" >&2
+    else
+        printf '%s\n' "${content[@]}" > "$target"
+        echo "written: $target"
+    fi
+}
+
+# ---- 各子目录 .gitignore 内容 ----
+# data/: 只保留 .gitignore、AGENTS.md、README.md
+apply_data_ignore() {
+    if [[ ! -d data ]]; then
+        echo "skip: data 目录不存在"
+        return 0
+    fi
+    write_sub_ignore "data/.gitignore" \
+        '*' \
+        '!.gitignore' \
+        '!AGENTS.md' \
+        '!README.md'
+}
+
+# logs/: 保留 .gitignore、AGENTS.md、README.md、所有 .txt
+# 注: 按用户要求字面保留开头的两个 `*`（重复的 * 无副作用）
+apply_logs_ignore() {
+    if [[ ! -d logs ]]; then
+        echo "skip: logs 目录不存在"
+        return 0
+    fi
+    write_sub_ignore "logs/.gitignore" \
+        '*' \
+        '*' \
+        '!.gitignore' \
+        '!AGENTS.md' \
+        '!README.md' \
+        '!.txt'
+}
+
+# ---- 备份主 .gitignore ----
 if [[ -e "$OUT" ]]; then
     if (( FORCE == 1 )); then
-        :  # 直接覆盖，不备份
+        :
     elif (( DRY == 1 )); then
         echo "[dry-run] would back up: $OUT -> ${OUT}.<ts>.bak" >&2
     else
@@ -83,8 +143,6 @@ for p in "${keep[@]}"; do
 done
 
 # ---- 收集工作区现有后缀 ----
-# 注: 备份文件 <file>.<ts>.bak 若以 . 开头（默认 .gitignore 就是），
-#     会被 basename 过滤规则 [[ $b != .* ]] 自动跳过，不污染白名单。
 mapfile -t exts < <(
     git ls-files -co --exclude-standard -z |
     while IFS= read -r -d '' f; do
@@ -122,13 +180,24 @@ gen() {
     fi
 }
 
+# ---- 主 .gitignore ----
 if (( DRY == 1 )); then
     gen
 else
     gen > "$OUT"
     echo "written: $OUT"
     echo "kept extensions (${#exts[@]}):"
-    (( ${#exts[@]} )) && printf '  .%s\n' "${exts[@]}"
+    if (( ${#exts[@]} )); then printf '  .%s\n' "${exts[@]}"; fi
     echo "kept special files (${#uniq_keep[@]}):"
-    (( ${#uniq_keep[@]} )) && printf '  %s\n' "${uniq_keep[@]}"
+    if (( ${#uniq_keep[@]} )); then printf '  %s\n' "${uniq_keep[@]}"; fi
 fi
+
+# ---- 子目录 .gitignore ----
+echo
+echo "# === 子目录 .gitignore ==="
+apply_data_ignore
+apply_logs_ignore
+
+# ---- 汇总 ----
+echo
+echo "done."
