@@ -1,0 +1,83 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 01:36:47 +0800
+批次: env-get-soft-links-target-20261031
+主任务: 修复 env.sh 中 get_soft_links 的符号链接目标解析并归档日志
+触发原因: 任务完成
+摘要: 修复 zsh path 特殊变量、bash 不兼容 glob、链接遍历与读取器回退；双 shell 回归一致，日志归档完成，未提交
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 复现与根因
+- 目标: 修复 get_soft_links 对可解析链接显示“?”的问题，并保持断链标记、双 shell 兼容和最终日志归档。
+- 复现: `source ./env.sh; get_soft_links .` 在 zsh 下扫描到链接，但所有目标均显示 `?`。
+- 关键证据: zsh 函数内 `local path=bin` 后 `PATH=bin`、`readlink=missing`；`path` 是 zsh 与 PATH 绑定的特殊数组。
+- 附加缺陷: zsh glob qualifier `(@N)` 使 `bash -n env.sh` 语法失败；bash globstar 会进入目录符号链接。
+- 退出码: 修复前 `bash -n env.sh` 为 2；zsh 原复现返回 0 但目标错误。
+
+### S2 — 代码修复
+- 将 `path` 改为非特殊局部变量 `root_dir`，消除 zsh 对 PATH 的覆盖。
+- 用 bash/zsh 均可解析的迭代队列遍历目录；处理隐藏项和含空格路径，遇到符号链接只记录不进入，并剪枝 `.git`、`node_modules`。
+- 读取器检测改为 zsh `whence -p`、bash `type -P`，只接受可执行路径，保证 readlink → ls → python3 → perl 回退链有效。
+- 验证函数执行前后 zsh/bash 的 PATH 均保持不变。
+
+### S3 — 验证
+- 语法: `bash -n env.sh`、`zsh -n env.sh` 均通过。
+- 全量回归: 系统 find 清单与 zsh/bash 输出计数一致；所有可解析和断链项都有实际目标，未知目标为 0。
+- 读取器矩阵: readlink、ls、python3、perl 在 zsh/bash 下各处理 5 个含空格、隐藏、断链和目录链接夹具，均成功且只标记 1 个断链。
+- 边界: 目录符号链接未递归；断链仍输出原始目标并附 `[broken]`。
+- Git: `git diff --check` 通过；代码改动仅为 `env.sh`。
+
+### S4 — 日志归档修复
+- 初次归档被 `logs/.gitignore` 拒绝，`git check-ignore` 显示 `*` 规则命中了版本化日志。
+- 根因是白名单写为 `!.txt`，它只匹配名为 `.txt` 的文件，并不匹配 `vYYYYMMDD.txt`。
+- 最小修正为 `!*.txt`；复核确认日志路径不再被忽略，历史 `.bak` 文件仍被忽略。
+- 随后使用 `skills/log/scripts/write-log.sh --mode final` 完成归档。
+
+## 验证与证据
+- 测试/检查: 双 shell 语法、原复现路径、全仓链接计数对照、四类读取器隔离 PATH 回归、PATH 副作用、日志忽略规则、Git 空白检查。
+- 结果: 针对本目标的功能、兼容性和日志归档验收项均通过。
+- 既有缺口: `form-audit.sh --strict --quiet` 与 `form-snapshot-verify.sh --quiet` 仍因既有 `.opencode/` 快照和 configure-main 符号链接清单返回 1；本次快照目录 diff 为 0。
+
+## 变更与产物
+- 文件: `/root/configure/env.sh`
+- 文件: `/root/configure/logs/.gitignore`
+- 产物: `/root/configure/logs/v2026103101.txt`
+- 产物: 回归输出保存在 `/root/configure/data/cache/get-soft-links-regression-20261031T012140/`，属于本地运行时缓存。
+- 未改动范围: 未暂存、提交、推送或创建标签。
+
+## 风险、限制与下一步
+- 风险: 无已知功能风险；遍历不进入目录符号链接，避免循环和重复扫描。
+- 阻塞: 无。
+- 下一步: 用户可自行决定是否提交；无需继续代码修复。
+
+## 用户输入指令
+修复 env.sh 中的 get_soft_links。用户给出的触发命令为从 `/root` 执行 `get_soft_links .`，示例汇总为 `188 symlink(s), 52 broken`，其中所有可解析与断链项均显示 `-> ?`。随后用户输入“继续”要求完成修复。
+
+## Agent 全文报告
+--- report begin ---
+结论：finished
+
+### 改动内容
+- 修复 `env.sh` 中 `get_soft_links` 的 zsh 特殊变量覆盖、bash 语法不兼容、目录链接递归和读取器回退检测问题。
+- 修正 `logs/.gitignore` 的文本日志白名单，使最终任务日志可以按仓库约定归档。
+- 保留原有颜色、断链标记和读取器降级设计。
+
+### 推理依据
+- zsh 的 `path` 与 `PATH` 绑定，原函数赋值后无法正常调用外部命令。
+- zsh glob qualifier 不能被 bash 解析；bash globstar 又会跨目录符号链接递归。
+- `command -v` 在 zsh 中可能返回别名而非可执行路径，因此改用 shell 原生的外部命令解析器。
+- `!.txt` 只匹配固定名称，不能放行版本化文本日志，故改为 `!*.txt`。
+
+### 验证结果
+- bash/zsh 语法检查通过。
+- zsh 与 bash 的全量扫描输出、链接数量和断链数量一致，未知目标为 0。
+- 四种读取器在两种 shell 下均通过含空格、隐藏、断链和目录链接夹具。
+- 函数调用前后 PATH 保持不变。
+- `git diff --check` 通过。
+- 日志写入器已成功生成最终日志和索引记录。
+
+### 后续步骤
+当前未暂存、未提交、未推送。代码修复和日志归档均已完成。
+--- report end ---

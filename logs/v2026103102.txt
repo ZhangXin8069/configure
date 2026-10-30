@@ -1,0 +1,71 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 02:05:28 +0800
+批次: bin-grm-ignore-20261031
+主任务: 修复 grm-ignore 软链接与 data 误删缺陷
+触发原因: 任务完成
+摘要: 历史 symlink、data 与祖先前缀全部保护，改用 filename callback 消除路径指令注入
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与根因
+- 目标：修复 `bin/grm-ignore.sh` 将历史软链接误列为 filter-repo 删除候选的问题，并确保任意层级 `data/` 路径被跳过。
+- 证据：隔离夹具中 dry-run 原实现列出 `data/runtime-cache`，完整重写会删除软链接；宽泛 `.gitignore` 与 `git check-ignore --no-index` 使路径分类丢失。
+- 根因：历史遍历只保留路径字符串，没有识别 Git mode `120000`；后续 `--paths-from-file` 还会解释 `literal:`、`glob:`、`regex:`、`#`、`==>`，存在扩大删除范围的风险。
+
+### S2 — 实现
+- `bin/grm-ignore.sh` 从全部可达 raw diff（含合并提交）提取历史 mode `120000` 路径。
+- 对历史软链接路径及任意 `data/` 组件路径生成“自身 + 全部祖先前缀”保护集，阻止 filter-repo 的子树匹配绕过。
+- 删除候选改为 NUL 列表 + `--filename-callback` 字节匹配，不再把文件名交给 filter-repo 指令语法。
+- `bin/grm-ignore.test.sh` 增加 symlink、已删除 symlink、路径类型转换、根级/嵌套 data、database/metadata 反例、dry-run 不变性与特殊指令文件名回归。
+
+## 验证与证据
+- `bash -n bin/grm-ignore.sh bin/grm-ignore.test.sh`：通过。
+- `bash bin/grm-ignore.test.sh`：通过；包含 dry-run 与隔离仓库真实 filter-repo 重写。
+- 真实 `configure` dry-run：4020 个历史路径、63 个历史软链接、109 个保护前缀；`symlink_leaks=0`、`data_leaks=0`，最终无需重写。
+- `form-data-tracking-check.sh --root /root/configure --quiet`：通过。
+- `git diff --check -- bin/grm-ignore.sh bin/grm-ignore.test.sh`：通过。
+- 子代理复核发现祖先路径与 paths-from-file 指令注入两项额外漏洞，均已加入失败测试并修复。
+- `form-audit --strict` 与 snapshot 校验失败，命中既有 `.opencode/**`、日志和快照 symlink 清单问题，与本次两个文件改动无交集。
+
+## 变更与产物
+- 修改：`bin/grm-ignore.sh`
+- 修改：`bin/grm-ignore.test.sh`
+- 日志：本文件
+- 未暂存、未提交、未推送。
+- 用户既有的 `AGENTS.md`、`env.sh`、`logs/AGENTS.md`、`logs/.gitignore`、`env.test.sh` 和既有日志改动均未覆盖。
+
+## 风险、限制与下一步
+- 已知既有边界：`.git/info/exclude` 仍参与匹配；含 TAB/换行的 Git 路径解析仍不可靠；`--no-push` 下 filter-repo 可能移除 origin；macOS Bash 3.2 不支持现有 `mapfile`。这些不在本次 symlink/data 修复范围内。
+- 当前仓库真实历史未执行重写。
+- 下一步：若需要继续收紧工具安全边界，可单独修复上述既有问题。
+
+## 用户输入指令
+- 先要求恢复 run `20261031T012348.2sOKUp`，随后改为直接处理 `grm-ignore.sh` 清除软链接的严重 bug。
+- 用户提供了 `/root find configure PyQCD PyQCU MyQCD/ -type l -printf '%p -> %l\n'` 的完整软链接清单，并要求修理软链接、任意 `data` 目录跳过。
+- 用户要求汇报进度。
+
+## Agent 全文报告
+--- report begin ---
+**状态：finished（本任务范围）**
+
+已修复 `grm-ignore.sh` 误删历史软链接并误处理 `data` 路径的问题，改动仅在 [grm-ignore.sh](/root/configure/bin/grm-ignore.sh:100) 与 [grm-ignore.test.sh](/root/configure/bin/grm-ignore.test.sh:79)。
+
+**改动内容**
+- 从全部历史 raw diff（含合并提交）识别 mode `120000`，保护所有曾经是软链接的路径。
+- 跳过任意完整组件为 `data` 的路径，并保护其全部祖先，防止 `filter-repo` 的目录子树语义绕过。
+- 改用 NUL 列表和 `--filename-callback`，阻止 `literal:`、`glob:`、`regex:`、`#`、`==>` 等特殊文件名变成 filter-repo 指令。
+- 新增隔离回归，覆盖现存/已删除 symlink、普通文件到目录的类型转换、根级/嵌套 `data`、`database`/`metadata` 反例、dry-run 不变性及真实历史重写。
+
+**验证结果**
+- `bash -n`：通过。
+- `grm-ignore.test.sh`：通过。
+- 真实 `/root/configure` dry-run：63 条历史软链接、109 条保护前缀，`symlink_leaks=0`、`data_leaks=0`。
+- `form-data-tracking-check` 与目标文件 `git diff --check`：通过。
+- 子代理独立发现祖先前缀和特殊路径指令注入问题，均已修复并加入回归。
+- `form-audit --strict`、snapshot 校验因既有 `.opencode/**`、日志与快照 symlink 清单问题失败，与本次改动无关。
+
+**后续步骤**
+- 未暂存、提交或推送；用户既有的 `AGENTS.md`、`env.sh`、日志等改动未被覆盖。
+- 仍存在既有边界：`.git/info/exclude` 参与匹配、TAB/换行路径不可靠、`--no-push` 可能移除 origin、macOS Bash 3.2 不支持 `mapfile`，需另立任务处理。
+--- report end ---

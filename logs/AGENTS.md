@@ -736,3 +736,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## env-get-soft-links-target-20261031 - final - 2026-10-31 01:36:47 +0800
+- 主任务: 修复 env.sh 中 get_soft_links 的符号链接目标解析并归档日志
+- 日志文件: logs/v2026103101.txt
+- 文件大小: 5163 bytes
+- 触发原因: 任务完成
+- 关键内容: 修复 zsh path 特殊变量、bash 不兼容 glob、链接遍历与读取器回退；双 shell 回归一致，日志归档完成，未提交
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## env-get-soft-links - final - 2026-10-31 01:49:31 +0800
+- 主任务: 修复 env.sh 的 get_soft_links 软链接目标解析
+- 日志文件: logs/v2026103101-2.txt
+- 文件大小: 4757 bytes
+- 触发原因: 任务完成
+- 关键内容: 修复读取器失败导致全部链接目标显示问号，并新增 bash/zsh 回退链回归测试。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## bin-grm-ignore-20261031 - final - 2026-10-31 02:05:28 +0800
+- 主任务: 修复 grm-ignore 软链接与 data 误删缺陷
+- 日志文件: logs/v2026103102.txt
+- 文件大小: 5094 bytes
+- 触发原因: 任务完成
+- 关键内容: 历史 symlink、data 与祖先前缀全部保护，改用 filename callback 消除路径指令注入
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

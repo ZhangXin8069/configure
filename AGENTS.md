@@ -109,6 +109,7 @@
 ## 命令
 
 - 无统一构建/lint 框架；仓库工具脚本以 shell 和 Python 为主，shell 用 `bash -n <script>`，Python 用 `python3 -m py_compile <script>`
+- 修改 `env.sh` 后运行 `bash -n env.sh env.test.sh` 与 `bash env.test.sh`
 - 修改 `skills/conf-refer-skill/scripts/` 后运行 `bash skills/conf-refer-skill/scripts/find-refer-skills.test.sh`
 - 修改 `skills/rule/scripts/` 后运行 `bash skills/rule/scripts/run-guarded.test.sh`
 - 修改 `skills/form/scripts/` 后运行 `bash skills/form/scripts/form-scripts.test.sh`

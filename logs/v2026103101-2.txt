@@ -1,0 +1,76 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 01:49:31 +0800
+批次: env-get-soft-links
+主任务: 修复 env.sh 的 get_soft_links 软链接目标解析
+触发原因: 任务完成
+摘要: 修复读取器失败导致全部链接目标显示问号，并新增 bash/zsh 回退链回归测试。
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 复现与根因
+- 目标: 定位 `get_soft_links` 输出 `-> ?`、目标路径缺失的原因。
+- 命令/操作: 在 bash 与 zsh 中 source `env.sh`，将可执行但始终失败的 `readlink` 放到 PATH 首位后调用函数。
+- 关键输出: 修复前 5 个测试链接均显示 `-> ?`；退出码为 0。
+- 证据与判断: 旧逻辑只按“命令文件存在”一次性选择读取器，未验证调用是否成功，因此坏 `readlink` 使全部目标丢失。
+
+### S2 — 最小修复与回归
+- 目标: 在读取器失败时继续解析，并覆盖路径边界。
+- 命令/操作: 修改 `env.sh` 的读取器选择与调用逻辑；新增 `env.test.sh`。
+- 关键输出: `env.test.sh` 在 bash 与 zsh 下分别覆盖原生 `readlink` 以及 `ls`、`python3`、`perl` 回退；每个场景均输出 `5 symlink(s), 1 broken`。
+- 退出码: 0。
+- 证据与判断: 普通链接、相对链接、隐藏链接、目录链接、坏链、空格路径和排除目录断言全部通过。
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh env.test.sh`，退出码 0。
+- 测试/检查: `zsh -n env.sh env.test.sh`，退出码 0。
+- 测试/检查: `TMPDIR=/root/configure/data/cache bash env.test.sh`，bash/zsh 四条读取器链全部通过，退出码 0。
+- 测试/检查: 在真实仓库分别以 bash/zsh 扫描当前目录，输出各 180 条链接，`grep -Fc -- ' -> ?'` 均为 0。
+- 测试/检查: `git diff --check`，退出码 0。
+- 测试/检查: `form-data-tracking-check.sh --root . --quiet`，退出码 0。
+- 测试/检查: `form-audit.sh --root . --strict --quiet` 退出码 1，命中既有 `.opencode` 快照命名/路径告警及 `logs/.gitignore` 扩展名告警；未命中本次 `env.sh` 或 `env.test.sh`。
+- 测试/检查: `form-snapshot-verify.sh --quiet` 退出码 1，报告 `configure-main symlink inventory mismatch`；相关快照无本次改动。
+- 未验证项: Windows 原生 shell 不适用；`get_soft_links` 面向 bash 4+ 与 zsh 5+。
+
+## 变更与产物
+- 文件: `env.sh`，逐链接尝试 `readlink -> ls -> python3 -> perl`，相对路径加 `./` 避免平台 `--` 选项差异。
+- 文件: `env.test.sh`，新增可执行回归测试。
+- 文件: `AGENTS.md`，补充 `env.sh` 的测试入口。
+- 产物: 无额外运行产物。
+- 未改动范围: 未暂存、提交或推送；工作树中原有的 `bin/grm-ignore*`、`logs/*` 改动未触碰。
+
+## 风险、限制与下一步
+- 风险: 仓库严格格式审计与快照校验仍有既有失败，需要独立任务处理。
+- 阻塞: 对本次修复无阻塞。
+- 下一步: 如需入库，由用户明确授权后只暂存 `AGENTS.md`、`env.sh`、`env.test.sh` 并重新执行交付门禁。
+
+## 用户输入指令
+修复 `env.sh` 中的 `get_soft_links`。用户报告命令输出包含 163 个软链接、39 个坏链，所有链接目标均显示 `?`，属于软链接目标路径缺失。
+
+## Agent 全文报告
+--- report begin ---
+已完成 `get_soft_links` 修复。
+
+改动内容:
+- `env.sh` 不再一次性信任“存在”的读取器，而是对每个链接依次尝试 `readlink`、`ls`、`python3`、`perl`，前一个失败不会再把全部目标变成 `?`。
+- 相对链接路径统一以 `./` 传给读取器，避免不同平台对 `--` 参数支持不一致。
+- 新增 `env.test.sh`，覆盖 bash/zsh、读取器逐级回退、空格路径、相对/隐藏/目录/嵌套/坏链接、`.git` 与 `node_modules` 排除、非 TTY 无色输出。
+- `AGENTS.md` 增加 `env.sh` 的固定测试入口。
+
+推理依据:
+- 原始函数只检测读取器可执行文件是否存在，不验证实际调用是否成功。
+- 复现中，只要 PATH 首位的 `readlink` 返回失败，原行为就会为每个链接打印 `?`；这与报告现象一致。
+
+验证结果:
+- `bash -n env.sh env.test.sh`: 通过。
+- `zsh -n env.sh env.test.sh`: 通过。
+- `bash env.test.sh`: bash/zsh 的原生和三级回退链均通过。
+- 当前仓库 bash/zsh 扫描: 各 180 条链接，`-> ?` 均为 0。
+- `git diff --check`: 通过。
+- `data/` 跟踪边界检查: 通过。
+- `form-audit --strict` 与快照校验仍有既有失败，命中既有 `.opencode`/`logs` 内容，不是本次文件导致。
+
+后续步骤:
+- 本次未暂存、提交或推送。若需入库，请明确授权，届时仅处理 `AGENTS.md`、`env.sh`、`env.test.sh`。
+--- report end ---

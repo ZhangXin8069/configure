@@ -72,9 +72,23 @@ fi
 
 # ===== 临时文件 =====
 PATHS_ALL=$(mktemp)
-PATHS_FILE=$(mktemp)
+DELETE_PATHS_FILE=$(mktemp)
 MATCHES_FILE=$(mktemp)
-trap 'rm -f "$PATHS_ALL" "$PATHS_FILE" "$MATCHES_FILE"' EXIT
+SYMLINKS_ALL=$(mktemp)
+PROTECTED_PATHS=$(mktemp)
+FILENAME_CALLBACK_FILE=$(mktemp)
+SKIPPED_PATHS=$(mktemp)
+CHECK_INPUT=$(mktemp)
+CHECK_OUTPUT=$(mktemp)
+CHECK_ERROR=$(mktemp)
+IGNORE_SHADOW_DIR=""
+_cleanup() {
+    rm -f -- "$PATHS_ALL" "$DELETE_PATHS_FILE" "$MATCHES_FILE" "$SYMLINKS_ALL" \
+        "$PROTECTED_PATHS" "$FILENAME_CALLBACK_FILE" "$SKIPPED_PATHS" \
+        "$CHECK_INPUT" "$CHECK_OUTPUT" "$CHECK_ERROR"
+    [[ -z "$IGNORE_SHADOW_DIR" ]] || rm -rf -- "$IGNORE_SHADOW_DIR"
+}
+trap _cleanup EXIT
 
 # ===== [1/6] 遍历历史，提取所有文件路径 =====
 echo "[1/6] 遍历历史，提取所有文件路径..."
@@ -94,15 +108,124 @@ if (( TOTAL == 0 )); then
     exit 0
 fi
 
+# 历史 symlink 以 mode 120000 存储。只要路径在任一可达提交中曾是
+# symlink，就整体保护该路径，避免 filter-repo 删除它或它后来变成的普通文件。
+# -m 让仅由合并提交解决的路径类型变化也出现在 raw diff 中。
+git -C "$REPO_ROOT" log --all --raw --no-renames -m -z --format= \
+  | tr '\0' '\n' \
+  | awk '
+        /^:[0-7]+ [0-7]+ / {
+            old_mode = substr($0, 2, 6)
+            new_mode = substr($0, 9, 6)
+            if (!getline path) next
+            if (old_mode == "120000" || new_mode == "120000") print path
+        }
+    ' \
+  | sort -u > "$SYMLINKS_ALL"
+TOTAL_SYMLINKS=$(wc -l < "$SYMLINKS_ALL")
+echo "  历史中曾为软链接的唯一路径: ${TOTAL_SYMLINKS}（始终保护）"
+
+# filter-repo 的 --path 会同时匹配其子路径。若旧提交中某路径是普通文件，
+# 后又变成目录，必须连同它的祖先前缀一起保护。
+{
+    cat "$SYMLINKS_ALL"
+    awk '/(^|\/)data(\/|$)/' "$PATHS_ALL"
+} | awk '
+        NF {
+            path = $0
+            print path
+            while (sub(/\/[^/]+$/, "", path)) print path
+        }
+    ' \
+  | sort -u > "$PROTECTED_PATHS"
+TOTAL_PROTECTED=$(wc -l < "$PROTECTED_PATHS")
+echo "  受保护路径及祖先前缀: ${TOTAL_PROTECTED}"
+
 # ===== [1/6] 用仓库内所有 .gitignore 规则匹配 =====
 # 关键：在真实仓库中运行 check-ignore
 #   - Git 会自动读取每一层的 .gitignore，规则相对其所在目录生效（data/.gitignore 的 * 只作用于 data/）
 #   - -c core.excludesFile=/dev/null：排除 ~/.config/git/ignore 等全局规则干扰
 #   - --no-index：即使文件已被跟踪也判定
 echo "[1/6] 用仓库内所有 .gitignore 规则匹配历史路径..."
+mapfile -t CHECK_PATHS < <(
+    awk -v protected_file="$PROTECTED_PATHS" '
+        BEGIN {
+            while ((getline path < protected_file) > 0) protected[path] = 1
+            close(protected_file)
+        }
+        !($0 in protected)
+    ' "$PATHS_ALL"
+)
+
+_check_ignore_range() {
+    local start=$1 count=$2 rc midpoint
+    (( count > 0 )) || return 0
+
+    printf '%s\n' "${CHECK_PATHS[@]:start:count}" > "$CHECK_INPUT"
+    set +e
+    LC_ALL=C git -C "$REPO_ROOT" -c core.excludesFile=/dev/null -c core.quotePath=false \
+        check-ignore --no-index --stdin -v < "$CHECK_INPUT" > "$CHECK_OUTPUT" 2> "$CHECK_ERROR"
+    rc=$?
+    set -e
+
+    if (( rc <= 1 )); then
+        cat "$CHECK_OUTPUT" >> "$MATCHES_FILE"
+        return 0
+    fi
+
+    if (( count == 1 )) && (( rc == 128 )) \
+        && grep -Fq 'is beyond a symbolic link' "$CHECK_ERROR"; then
+        printf '%s\n' "${CHECK_PATHS[start]}" >> "$SKIPPED_PATHS"
+        return 0
+    fi
+
+    if (( count == 1 )); then
+        cat "$CHECK_ERROR" >&2
+        return "$rc"
+    fi
+
+    midpoint=$(( count / 2 ))
+    _check_ignore_range "$start" "$midpoint" 0 || return $?
+    _check_ignore_range "$((start + midpoint))" "$((count - midpoint))" 0 || return $?
+}
+
+_check_skipped_in_shadow() {
+    local git_dir ignore_path source dest
+
+    IGNORE_SHADOW_DIR=$(mktemp -d)
+    while IFS= read -r -d '' ignore_path; do
+        [[ "${ignore_path##*/}" == ".gitignore" ]] || continue
+        case "$ignore_path" in
+            data|data/*|*/data|*/data/*) continue ;;
+        esac
+        source=${REPO_ROOT}/${ignore_path}
+        [[ -f "$source" && ! -L "$source" ]] || continue
+        dest=${IGNORE_SHADOW_DIR}/${ignore_path}
+        mkdir -p -- "$(dirname -- "$dest")"
+        cp -- "$source" "$dest"
+    done < <(git -C "$REPO_ROOT" ls-files -z --cached --others --exclude-standard)
+
+    while IFS= read -r ignore_path; do
+        [[ -n "$ignore_path" ]] || continue
+        mkdir -p -- "$IGNORE_SHADOW_DIR/$(dirname -- "$ignore_path")"
+    done < "$SKIPPED_PATHS"
+
+    git_dir=$(git -C "$REPO_ROOT" rev-parse --absolute-git-dir)
+    set +e
+    LC_ALL=C git --git-dir="$git_dir" --work-tree="$IGNORE_SHADOW_DIR" \
+        -c core.excludesFile=/dev/null -c core.quotePath=false \
+        check-ignore --no-index --stdin -v < "$SKIPPED_PATHS" > "$CHECK_OUTPUT" 2> "$CHECK_ERROR"
+    local rc=$?
+    set -e
+    (( rc <= 1 )) || return "$rc"
+
+    cat "$CHECK_OUTPUT" >> "$MATCHES_FILE"
+    : > "$SKIPPED_PATHS"
+}
+
+: > "$MATCHES_FILE"
 set +e
-git -C "$REPO_ROOT" -c core.excludesFile=/dev/null -c core.quotePath=false \
-    check-ignore --no-index --stdin -v < "$PATHS_ALL" > "$MATCHES_FILE"
+_check_ignore_range 0 "${#CHECK_PATHS[@]}" 0
 CHECK_IGNORE_STATUS=$?
 set -e
 if (( CHECK_IGNORE_STATUS > 1 )); then
@@ -110,17 +233,43 @@ if (( CHECK_IGNORE_STATUS > 1 )); then
     exit "$CHECK_IGNORE_STATUS"
 fi
 
+if [[ -s "$SKIPPED_PATHS" ]]; then
+    set +e
+    _check_skipped_in_shadow
+    SHADOW_CHECK_STATUS=$?
+    set -e
+    if (( SHADOW_CHECK_STATUS > 1 )); then
+        echo "  ⚠️ 影子工作树仍无法分类 symlink 后路径，将保守跳过。" >&2
+    fi
+fi
+
+TOTAL_SKIPPED=$(wc -l < "$SKIPPED_PATHS")
+if (( TOTAL_SKIPPED > 0 )); then
+    mapfile -t SKIPPED_PATHS_LINES < "$SKIPPED_PATHS"
+    echo "  ⚠️ 跳过 ${TOTAL_SKIPPED} 个穿过当前软链接的历史路径（无法安全分类）:"
+    printf '    %s\n' "${SKIPPED_PATHS_LINES[@]:0:20}"
+    if (( TOTAL_SKIPPED > 20 )); then
+        echo "    ... (还有 $(( TOTAL_SKIPPED - 20 )) 个)"
+    fi
+fi
+
 # 解析 -v 输出：<source>:<lineno>:<pattern>\t<pathname>
 # 否定规则（!pattern）表示路径最终未被忽略，不能传给 filter-repo。
-# 安全阀：永不删除 .gitignore 自身（即便规则匹配到它）
+# 安全阀：永不删除历史 symlink、任意层级 data 目录及其祖先前缀，以及 .gitignore 自身。
 mapfile -t TO_DELETE < <(
-    awk -F'\t' '
+    awk -F'\t' -v protected_file="$PROTECTED_PATHS" '
+        BEGIN {
+            while ((getline path < protected_file) > 0) protected[path] = 1
+            close(protected_file)
+        }
         NF >= 2 && !seen[$2]++ {
+            path = $2
+            if (path in protected) next
             pattern = $1
             sub(/^.*:[0-9]+:/, "", pattern)
             if (pattern ~ /^!/) next
-            n = split($2, a, "/")
-            if (a[n] != ".gitignore") print $2
+            n = split(path, a, "/")
+            if (a[n] != ".gitignore") print path
         }
     ' "$MATCHES_FILE"
 )
@@ -187,15 +336,36 @@ if (( DO_PUSH == 1 )); then
     fi
 fi
 
-# ===== 写入待删除路径 =====
-printf '%s\n' "${TO_DELETE[@]}" > "$PATHS_FILE"
+# ===== 写入待删除路径与字面量过滤器 =====
+# --paths-from-file 会解释 literal:/glob:/regex:/==>/#，不能承载任意文件名。
+# 通过 NUL 列表和 filename callback 逐项匹配，避免文件名变成 filter-repo 指令。
+printf '%s\0' "${TO_DELETE[@]}" > "$DELETE_PATHS_FILE"
+cat > "$FILENAME_CALLBACK_FILE" <<'PY'
+global _grm_ignore_delete_paths
+if "_grm_ignore_delete_paths" not in globals():
+    with open(os.environ["GRM_IGNORE_DELETE_PATHS_FILE"], "rb") as handle:
+        _grm_ignore_delete_paths = {
+            path for path in handle.read().split(b"\0") if path
+        }
+
+path = filename
+while True:
+    if path in _grm_ignore_delete_paths:
+        return None
+    slash = path.rfind(b"/")
+    if slash < 0:
+        break
+    path = path[:slash]
+return filename
+PY
 
 # ===== [3/6] 历史重写 =====
-echo "[3/6] git filter-repo 重写历史（--invert-paths 表示移除匹配项）..."
+echo "[3/6] git filter-repo 重写历史（filename callback 移除匹配项）..."
 # filter-repo 默认处理 refs/heads/、refs/tags/、refs/remotes/ 下的所有 refs
 # 因此无需额外 --refs；如遇旧版本 bug 或需扩展范围，可追加：
 #   --refs 'refs/heads/*' 'refs/tags/*' 'refs/remotes/*'
-git filter-repo --force --invert-paths --paths-from-file "$PATHS_FILE"
+GRM_IGNORE_DELETE_PATHS_FILE="$DELETE_PATHS_FILE" \
+    git filter-repo --force --filename-callback "$FILENAME_CALLBACK_FILE"
 
 # ===== [4/6] 恢复远程 =====
 if [[ -n "$REMOTE_URL" ]]; then
