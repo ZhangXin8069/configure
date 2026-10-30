@@ -41,6 +41,7 @@ _make_fixture() {
     printf 'protected data\n' > "${repo}/data/secret.cache"
     mkdir -p "${repo}/literal:data"
     printf 'literal directive filename\n' > "${repo}/literal:data/secret.cache"
+    printf 'literal symlink directive filename\n' > "${repo}/literal:tracked-link"
     printf 'glob directive filename\n' > "${repo}/glob:*"
     printf 'regex directive filename\n' > "${repo}/regex:.*"
     printf 'rename directive filename\n' > "${repo}/victim==>renamed"
@@ -126,13 +127,9 @@ _test_dry_run_selects_only_ignored_paths() {
         cat "${output}" >&2
         _fail "dry-run 将已从当前树删除的历史软链接列为删除候选"
     }
-    ! grep -Fxq '  data/runtime-cache' "${output}" || {
+    grep -Fxq '  data/runtime-cache' "${output}" || {
         cat "${output}" >&2
-        _fail "dry-run 未跳过根级 data 目录"
-    }
-    ! grep -Fxq '  nested/data/runtime-cache' "${output}" || {
-        cat "${output}" >&2
-        _fail "dry-run 未跳过嵌套 data 目录"
+        _fail "dry-run 未匹配被忽略的根级 data 文件"
     }
     ! grep -Fxq '  transition' "${output}" || {
         cat "${output}" >&2
@@ -141,10 +138,6 @@ _test_dry_run_selects_only_ignored_paths() {
     ! grep -Fxq '  transition/link' "${output}" || {
         cat "${output}" >&2
         _fail "dry-run 将路径类型转换后的软链接列为删除候选"
-    }
-    ! grep -Fxq '  transition/data/runtime-cache' "${output}" || {
-        cat "${output}" >&2
-        _fail "dry-run 未跳过路径类型转换后的 data 目录"
     }
     grep -Fxq '  database/runtime-cache' "${output}" || {
         cat "${output}" >&2
@@ -194,12 +187,15 @@ _test_rewrite_removes_ignored_history() {
         cat "${output}" >&2
         _fail "重写后未保留历史软链接 tracked-link"
     }
-    git -C "${repo}" cat-file -e HEAD:data/runtime-cache 2>/dev/null \
-        || _fail "重写后未保留根级 data 目录中的文件"
-    git -C "${repo}" cat-file -e HEAD:nested/data/runtime-cache 2>/dev/null \
-        || _fail "重写后未保留嵌套 data 目录中的文件"
-    git -C "${repo}" cat-file -e HEAD:data/secret.cache 2>/dev/null \
-        || _fail "paths-from-file 指令语法绕过 data 保护"
+    if git -C "${repo}" cat-file -e HEAD:data/runtime-cache 2>/dev/null; then
+        _fail "重写后仍保留根级 data 目录中的被忽略文件"
+    fi
+    if git -C "${repo}" cat-file -e HEAD:nested/data/runtime-cache 2>/dev/null; then
+        _fail "重写后仍保留嵌套 data 目录中的被忽略文件"
+    fi
+    if git -C "${repo}" cat-file -e HEAD:data/secret.cache 2>/dev/null; then
+        _fail "重写后仍保留 data 目录中的被忽略文件"
+    fi
     git -C "${repo}" cat-file -e HEAD:victim.txt 2>/dev/null \
         || _fail "paths-from-file 重命名指令被当作字面文件名处理"
     if git -C "${repo}" cat-file -e HEAD:renamed.txt 2>/dev/null; then
@@ -207,6 +203,9 @@ _test_rewrite_removes_ignored_history() {
     fi
     if git -C "${repo}" cat-file -e 'HEAD:literal:data/secret.cache' 2>/dev/null; then
         _fail "literal: 特殊文件未被作为普通忽略文件删除"
+    fi
+    if git -C "${repo}" cat-file -e 'HEAD:literal:tracked-link' 2>/dev/null; then
+        _fail "literal: 特殊文件未被作为普通忽略文件删除（protected symlink 场景）"
     fi
     if git -C "${repo}" cat-file -e 'HEAD:glob:*' 2>/dev/null; then
         _fail "glob: 特殊文件未被作为普通忽略文件删除"
@@ -227,8 +226,9 @@ _test_rewrite_removes_ignored_history() {
     git -C "${repo}" log --all --raw --no-renames --format= -- transition \
         | grep -Eq '^:000000 100644 ' \
         || _fail "重写后未保留路径类型转换前的普通文件历史"
-    git -C "${repo}" cat-file -e HEAD:transition/data/runtime-cache 2>/dev/null \
-        || _fail "重写后未保留路径类型转换后的 data 目录文件"
+    if git -C "${repo}" cat-file -e HEAD:transition/data/runtime-cache 2>/dev/null; then
+        _fail "重写后仍保留路径类型转换后的 data 目录文件"
+    fi
     if git -C "${repo}" cat-file -e HEAD:database/runtime-cache 2>/dev/null; then
         _fail "重写后未清除 database 目录中的被忽略文件"
     fi

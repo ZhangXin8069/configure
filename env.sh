@@ -240,3 +240,153 @@ get_soft_links() {
         printf '\n' >&2
     fi
 }
+
+# ===== get_git_large_files: 审计当前 Git 仓库历史中的大文件 =====
+# 用法: get_git_large_files
+# 范围: 当前仓库所有 ref 可达提交中的文件版本（含已删除文件）
+# 着色: (1, 5] MiB 蓝色；(5, 10] MiB 黄色；> 10 MiB 红色
+# GET_GIT_LARGE_FILES_COLOR=auto|always|never，默认 auto
+get_git_large_files() (
+    local temp_dir=''
+    trap '[[ -z "${temp_dir:-}" ]] || rm -rf -- "$temp_dir"' EXIT
+    trap 'exit 129' HUP
+    trap 'exit 130' INT
+    trap 'exit 143' TERM
+
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        printf 'get_git_large_files: 当前目录不在 Git 仓库中\n' >&2
+        return 1
+    fi
+
+    local repo_root
+    repo_root=$(git rev-parse --show-toplevel 2>/dev/null) ||
+        repo_root=$(git rev-parse --git-dir 2>/dev/null)
+
+    local use_color=0 color_mode=${GET_GIT_LARGE_FILES_COLOR:-auto}
+    case "$color_mode" in
+        always) use_color=1 ;;
+        never)  use_color=0 ;;
+        auto)   [[ -t 1 ]] && use_color=1 ;;
+        *)
+            printf 'get_git_large_files: 未知颜色模式 %s（应为 auto/always/never）\n' \
+                "$color_mode" >&2
+            return 1
+            ;;
+    esac
+    [[ -z "${NO_COLOR:-}" || "$color_mode" == always ]] || use_color=0
+
+    if [[ -z "$(git for-each-ref --format='%(objectname)' refs 2>/dev/null | head -n 1)" ]]; then
+        printf 'Git 仓库: %s\n' "$repo_root"
+        printf '未发现历史大文件：仓库中没有可用 ref 或提交。\n'
+        return 0
+    fi
+
+    temp_dir=$(mktemp -d "${TMPDIR:-/tmp}/configure-git-large-files.XXXXXX") || {
+        printf 'get_git_large_files: 无法创建临时目录\n' >&2
+        return 1
+    }
+    local history_file=$temp_dir/history.bin
+    local occurrences_file=$temp_dir/occurrences.tsv
+    local unique_file=$temp_dir/occurrences-unique.tsv
+    local objects_file=$temp_dir/objects.tsv
+    local sized_file=$temp_dir/sized.tsv
+    local sorted_file=$temp_dir/sorted.tsv
+
+    if ! LC_ALL=C git log --all --raw --root -m --no-renames --no-abbrev -z \
+        --format='C%H%x00' >"$history_file"; then
+        printf 'get_git_large_files: 读取 Git 历史失败\n' >&2
+        return 1
+    fi
+
+    local current_commit='' token file_path meta
+    local old_mode new_mode old_oid new_oid change_status
+    while IFS= read -r -d '' token; do
+        token=${token#$'\n'}
+        case "$token" in
+            C*)
+                current_commit=${token#C}
+                ;;
+            :*)
+                IFS= read -r -d '' file_path || break
+                meta=${token#:}
+                read -r old_mode new_mode old_oid new_oid change_status <<<"$meta"
+                [[ -n "$new_oid" && "$new_oid" == *[!0]* ]] || continue
+                printf '%s\t%s\t%s\n' "$new_oid" "$current_commit" "$file_path"
+                ;;
+        esac
+    done <"$history_file" >"$occurrences_file"
+
+    if ! LC_ALL=C sort -u "$occurrences_file" >"$unique_file"; then
+        printf 'get_git_large_files: 去重历史文件版本失败\n' >&2
+        return 1
+    fi
+
+    local cat_format=$'%(objectname)\t%(objecttype)\t%(objectsize)\t%(rest)'
+    if ! git cat-file --batch-check="$cat_format" <"$unique_file" >"$objects_file"; then
+        printf 'get_git_large_files: 读取 Git 对象信息失败\n' >&2
+        return 1
+    fi
+
+    local one_mib=1048576 five_mib=5242880 ten_mib=10485760
+    local oid object_type object_size rest commit
+    while IFS=$'\t' read -r oid object_type object_size rest; do
+        [[ "$object_type" == blob ]] || continue
+        (( object_size > one_mib )) || continue
+        commit=${rest%%$'\t'*}
+        file_path=${rest#*$'\t'}
+        printf '%s\t%s\t%s\t%s\n' "$file_path" "$oid" "$object_size" "$commit"
+    done <"$objects_file" >"$sized_file"
+
+    if ! LC_ALL=C sort -u -t $'\t' -k1,1 -k3,3nr -k4,4 \
+        "$sized_file" >"$sorted_file"; then
+        printf 'get_git_large_files: 排序历史文件版本失败\n' >&2
+        return 1
+    fi
+
+    local C_BLUE='' C_YELLOW='' C_RED='' C_RESET=''
+    if (( use_color )); then
+        C_BLUE=$'\033[34m'
+        C_YELLOW=$'\033[33m'
+        C_RED=$'\033[31m'
+        C_RESET=$'\033[0m'
+    fi
+
+    printf 'Git 仓库: %s\n' "$repo_root"
+    printf '历史大文件（1 MiB = 1048576 字节）\n'
+    printf '大小标记: >1–5 MiB 蓝色 | >5–10 MiB 黄色 | >10 MiB 红色\n'
+
+    local branch_names tag_names filename human_size
+    local size_color='' count=0
+    while IFS=$'\t' read -r file_path oid object_size commit; do
+        branch_names=$(LC_ALL=C git for-each-ref --contains "$commit" \
+            --format='%(refname:short)' refs/heads refs/remotes 2>/dev/null |
+            awk '$0 !~ /\/HEAD$/ { printf "%s%s", separator, $0; separator="," }')
+        tag_names=$(LC_ALL=C git tag --contains "$commit" 2>/dev/null |
+            awk '{ printf "%s%s", separator, $0; separator="," }')
+        [[ -n "$branch_names" ]] || branch_names='-'
+        [[ -n "$tag_names" ]] || tag_names='-'
+
+        filename=${file_path##*/}
+        human_size=$(printf '%d.%02d MiB (%d bytes)' \
+            "$((object_size / one_mib))" \
+            "$(((object_size % one_mib) * 100 / one_mib))" \
+            "$object_size")
+
+        size_color=$C_RED
+        (( object_size > ten_mib )) || {
+            size_color=$C_YELLOW
+            (( object_size > five_mib )) || size_color=$C_BLUE
+        }
+
+        printf '分支=[%s] 标签=[%s] 提交=[%s] 路径=[%s] 文件名=[%s] 大小=[%s%s%s] 哈希=[%s]\n' \
+            "$branch_names" "$tag_names" "$commit" "$file_path" "$filename" \
+            "$size_color" "$human_size" "$C_RESET" "$oid"
+        count=$((count + 1))
+    done <"$sorted_file"
+
+    if (( count == 0 )); then
+        printf '未发现大于 1 MiB 的历史文件版本。\n'
+    else
+        printf '共 %d 个历史大文件版本（> 1 MiB）。\n' "$count"
+    fi
+)

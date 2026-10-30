@@ -1,0 +1,72 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 02:31:24 +0800
+批次: bin-give-git-ignore-docs-sub-20261031
+主任务: 为 give_git_ignore 添加 docs 规则与 -sub 子目录模式
+触发原因: 任务完成
+摘要: docs/.gitignore 固定为 **/，-sub 仅写 data/logs/docs 子目录规则
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — docs 子目录规则
+- 目标：让 `give_git_ignore.sh` 为当前 Git 仓库根的 `docs/` 创建 `.gitignore`，内容精确为 `**/`。
+- 实现：新增 `apply_docs_ignore()`，复用现有 `write_sub_ignore` 的 dry-run、备份和强制覆盖逻辑。
+- 测试：隔离仓库验证 dry-run 不落盘、实际写入内容字节一致，并覆盖目录不存在时复用既有 skip 行为。
+
+### S2 — -sub 子目录模式
+- 目标：新增 `-sub`，只写 Git 仓库子目录的 `.gitignore`，不修改根 `.gitignore`。
+- 实现：新增 `SUB_ONLY` 开关，同时支持 `-sub` 与 `--sub-only`；跳过根 `.gitignore` 的备份和生成，仍处理 `data/`、`logs/`、`docs/`。
+- 测试：根 `.gitignore` sentinel 保持不变，data/logs/docs 三个子目录 `.gitignore` 均按预期写入；帮助文本包含选项且不泄露 `set -euo pipefail`。
+
+## 验证与证据
+- `bash -n bin/*.sh`：全部通过。
+- `bash bin/give_git_ignore.test.sh`：通过。
+- `give_git_ignore.sh -h`：包含 `-sub`，不再打印实现语句。
+- `form-data-tracking-check.sh --root /root/configure --quiet`：通过。
+- 目标文件 `git diff --check`：通过。
+- `form-audit.sh --strict --quiet`：仍因既有 `.opencode/**`、日志和快照规则失败，与本次改动无关。
+- 临时夹具已清理，无 `.give-git-ignore-test.*` 残留。
+
+## 变更与产物
+- 修改：`bin/give_git_ignore.sh`
+- 新增：`bin/give_git_ignore.test.sh`（可执行）
+- 本 agent 未暂存、提交或推送。
+- 日志：本文件。
+
+## 风险、限制与下一步
+- `-sub` 与 `-o` 同时使用时，`-o` 不影响子目录模式；本次未增加额外参数冲突报错，以免扩大需求范围。
+- `docs/.gitignore` 按用户要求严格为单行 `**/`，只忽略 docs 下目录。
+- 若需要同步提交，由用户另行授权。
+
+## 用户输入指令
+```text
+修改give_git_ignore.sh:为当前git库的docs文件夹也添加.gitignore,内容为'**/'
+```
+```text
+并且添加-sub指令,即只添加git库子目录下的.gitignore
+```
+
+## Agent 全文报告
+--- report begin ---
+**状态：finished**
+
+已完成 `give_git_ignore.sh` 的两项修改。
+
+**改动内容**
+- [give_git_ignore.sh](/root/configure/bin/give_git_ignore.sh:122) 新增 `docs/.gitignore` 生成逻辑，内容严格为 `**/`。
+- [give_git_ignore.sh](/root/configure/bin/give_git_ignore.sh:37) 新增 `-sub`/`--sub-only`，只处理 `data/`、`logs/`、`docs/` 子目录，不修改根 `.gitignore`。
+- [give_git_ignore.test.sh](/root/configure/bin/give_git_ignore.test.sh:30) 新增 docs 内容、`-sub` 根文件保护和帮助文本回归。
+
+**验证结果**
+- `bash -n bin/*.sh`：通过。
+- `give_git_ignore.test.sh`：通过。
+- dry-run：不创建 `docs/.gitignore`。
+- 实际写入：`docs/.gitignore` 与 `**/\n` 字节一致。
+- `-sub -f`：根 `.gitignore` 保持不变，三个子目录规则均写入。
+- `form-data-tracking-check`、目标 `git diff --check`：通过。
+- `form-audit --strict` 仍因既有 `.opencode/**`、日志与快照规则失败，与本次改动无关。
+
+**交付状态**
+- 未暂存、提交或推送。
+- 新增测试文件已设置可执行位。
+--- report end ---

@@ -1,0 +1,79 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 02:20:04 +0800
+批次: bin-grm-ignore-symlink-pathspec-20261031
+主任务: 修复 grm-ignore 遇到 symlink 后历史路径时退出 128
+触发原因: 任务完成
+摘要: 递归隔离 symlink pathspec fatal，并用仅含 .gitignore 的影子工作树恢复准确分类
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 真实仓库复现
+- 目标：修复 `/root/PyQCU` 中 `git check-ignore --no-index` 因历史路径穿过当前 symlink 而退出 128。
+- 命令：`grm-ignore.sh -r origin`
+- 关键输出：`fatal: pathspec 'refer/git-rep/PyQUDA/pyquda_plugins/pycparser/pycparser/__init__.py' is beyond a symbolic link`
+- 证据：该路径在历史中存在，但当前父组件 `pycparser` 是 symlink；`--no-index` 开关不影响该 fatal。
+
+### S2 — RED/GREEN
+- 隔离夹具新增“历史普通目录后来变成 symlink”的场景。
+- RED：原实现 dry-run 退出 128，与 PyQCU 一致。
+- GREEN：先在真实工作树批量匹配，仅在明确遇到 `is beyond a symbolic link` 时递归二分；再用仅复制 `.gitignore` 规则、不复制业务文件且跳过 `data/` 的影子工作树重新分类。
+- 影子分类成功的路径正常进入删除集；影子仍失败时才保守跳过并显式告警。
+
+## 验证与证据
+- `bash -n bin/grm-ignore.sh bin/grm-ignore.test.sh`：通过。
+- `bash bin/grm-ignore.test.sh`：通过，包含实际 filter-repo 隔离重写。
+- `/root/PyQCU` dry-run：退出 0；8585 个历史路径、15 个历史 symlink、1929 个保护前缀、2589 个删除候选；无 symlink 分类告警。
+- `/root/configure` dry-run：退出 0；63 个历史 symlink、109 个保护前缀，无匹配项。
+- `form-data-tracking-check`、目标提交 `git diff --check`：通过。
+- `form-audit --strict` 与 snapshot 校验仍因既有 `.opencode/**`、日志与快照 symlink 清单问题失败，与本次改动无关。
+
+## 变更与产物
+- 修改：`bin/grm-ignore.sh`
+- 修改：`bin/grm-ignore.test.sh`
+- 外部动作已将当前内容包含在提交 `3db67e5112407b133f55afa022ddbf86c2050e20`，本地 `origin/main` 跟踪引用指向同一提交。
+- 本 agent 未暂存、提交、推送，也未对 PyQCU 执行真实历史重写。
+- 日志：本文件。
+
+## 风险、限制与下一步
+- 影子树只复制 Git 可见的 `.gitignore`，不复制业务文件，不读取 `data/`；极少数仅存在于被忽略目录中的 untracked `.gitignore` 不参与分类。
+- 既有 TAB/换行路径支持、`.git/info/exclude`、`--no-push` 保留 origin、macOS Bash 3.2 `mapfile` 等限制不在本次范围内。
+- 观察到另一个终端中 `/root/PyQCD` 的 `grm-ignore.sh -r origin` 正在执行破坏性重写/推送；本 agent 未干预该外部进程。
+
+## 用户输入指令
+```text
+➜ /root/PyQCU git:(main) grm-ignore.sh -r origin
+...
+fatal: pathspec 'refer/git-rep/PyQUDA/pyquda_plugins/pycparser/pycparser/__init__.py' is beyond a symbolic link
+ERROR: git check-ignore 失败（退出码 128）
+```
+
+## Agent 全文报告
+--- report begin ---
+**状态：finished**
+
+已修复 `grm-ignore.sh` 在历史路径穿过当前符号链接时被 `git check-ignore` 整体中止的问题。
+
+**改动内容**
+- [grm-ignore.sh](/root/configure/bin/grm-ignore.sh:160) 对 `check-ignore` 的 symlink pathspec fatal 做递归二分，只隔离真正无法分类的路径，不掩盖其他错误。
+- [grm-ignore.sh](/root/configure/bin/grm-ignore.sh:192) 构建无 symlink 的影子工作树，仅复制 Git 可见的 `.gitignore` 规则，并明确跳过任意 `data/` 规则。
+- [grm-ignore.test.sh](/root/configure/bin/grm-ignore.test.sh:32) 新增“历史普通目录后来变成 symlink”的 RED/GREEN 夹具，并在真实重写后验证目标历史被正确删除。
+
+**推理依据**
+- `git check-ignore` 无论是否使用 `--no-index` 都会拒绝遍历当前 symlink 之后的历史路径。
+- 直接全局跳过 symlink 后路径会漏删可分类历史；影子工作树保留 ignore 规则语义，可准确恢复分类。
+- 只有影子分类仍失败时才保守跳过，避免误删。
+
+**验证结果**
+- `bash -n`：通过。
+- `grm-ignore.test.sh`：通过，包含真实隔离重写。
+- `/root/PyQCU` 原始场景 dry-run：退出 0；8585 个历史路径、15 个历史 symlink、1929 个保护前缀、2589 个删除候选，无 symlink 分类告警。
+- `/root/configure` dry-run：退出 0，无匹配项。
+- `form-data-tracking-check`、目标提交 `git diff --check`：通过。
+- `form-audit --strict`、snapshot 校验仍因既有 `.opencode/**`、日志与快照 symlink 清单问题失败，与本次改动无关。
+
+**后续步骤**
+- 本次未执行 PyQCU 真实历史重写、暂存、提交或推送。
+- 当前两文件已被外部动作包含在提交 `3db67e5`，工作树干净。
+- 观察到另一个 `/root/PyQCD` 的 `grm-ignore.sh -r origin` 进程正在执行破坏性重写/推送，本 agent 未干预。
+--- report end ---

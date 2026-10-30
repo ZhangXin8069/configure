@@ -763,3 +763,39 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## bin-grm-ignore-symlink-pathspec-20261031 - final - 2026-10-31 02:20:04 +0800
+- 主任务: 修复 grm-ignore 遇到 symlink 后历史路径时退出 128
+- 日志文件: logs/v2026103102-2.txt
+- 文件大小: 5021 bytes
+- 触发原因: 任务完成
+- 关键内容: 递归隔离 symlink pathspec fatal，并用仅含 .gitignore 的影子工作树恢复准确分类
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## bin-give-git-ignore-docs-sub-20261031 - final - 2026-10-31 02:31:24 +0800
+- 主任务: 为 give_git_ignore 添加 docs 规则与 -sub 子目录模式
+- 日志文件: logs/v2026103102-3.txt
+- 文件大小: 3572 bytes
+- 触发原因: 任务完成
+- 关键内容: docs/.gitignore 固定为 **/，-sub 仅写 data/logs/docs 子目录规则
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## env-git-large-files - final - 2026-10-31 02:55:36 +0800
+- 主任务: 在 env.sh 中实现 Git 历史大文件审计函数
+- 日志文件: logs/v2026103102-4.txt
+- 文件大小: 5804 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 get_git_large_files，输出历史大文件的分支、标签、提交、路径、文件名、大小与哈希，并验证三档颜色。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## bin-grm-ignore-data-match-20261031 - final - 2026-10-31 03:00:26 +0800
+- 主任务: 修复 grm-ignore 对 data 历史文件的漏匹配
+- 日志文件: logs/v2026103103.txt
+- 文件大小: 3969 bytes
+- 触发原因: 任务完成
+- 关键内容: 移除 data 全局保护，1369 个 data 历史路径恢复匹配，symlink 保护保持不变
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

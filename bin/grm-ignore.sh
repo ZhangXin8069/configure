@@ -126,17 +126,14 @@ TOTAL_SYMLINKS=$(wc -l < "$SYMLINKS_ALL")
 echo "  历史中曾为软链接的唯一路径: ${TOTAL_SYMLINKS}（始终保护）"
 
 # filter-repo 的 --path 会同时匹配其子路径。若旧提交中某路径是普通文件，
-# 后又变成目录，必须连同它的祖先前缀一起保护。
-{
-    cat "$SYMLINKS_ALL"
-    awk '/(^|\/)data(\/|$)/' "$PATHS_ALL"
-} | awk '
+# 后又变成包含 symlink 的目录，必须连同它的祖先前缀一起保护。
+awk '
         NF {
             path = $0
             print path
             while (sub(/\/[^/]+$/, "", path)) print path
         }
-    ' \
+    ' "$SYMLINKS_ALL" \
   | sort -u > "$PROTECTED_PATHS"
 TOTAL_PROTECTED=$(wc -l < "$PROTECTED_PATHS")
 echo "  受保护路径及祖先前缀: ${TOTAL_PROTECTED}"
@@ -255,7 +252,7 @@ fi
 
 # 解析 -v 输出：<source>:<lineno>:<pattern>\t<pathname>
 # 否定规则（!pattern）表示路径最终未被忽略，不能传给 filter-repo。
-# 安全阀：永不删除历史 symlink、任意层级 data 目录及其祖先前缀，以及 .gitignore 自身。
+# 安全阀：永不删除历史 symlink 及其祖先前缀，以及 .gitignore 自身。
 mapfile -t TO_DELETE < <(
     awk -F'\t' -v protected_file="$PROTECTED_PATHS" '
         BEGIN {

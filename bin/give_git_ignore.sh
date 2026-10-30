@@ -2,14 +2,15 @@
 # 依据 git 工作区现有文件的后缀生成 .gitignore：
 # 仅保留这些后缀 + keep 清单，其余全部忽略。
 # 若已存在 .gitignore，会先重命名为 .gitignore.<YYYY-MM-DD-HH-MM-SS>.bak
-# 同时为 data/ 和 logs/ 子目录按固定内容生成 .gitignore（目录不存在则跳过）
+# 同时为 data/、logs/ 和 docs/ 子目录按固定内容生成 .gitignore（目录不存在则跳过）
 #
-# 用法: give_git_ignore.sh [-f] [-n] [-o OUT] [-k PATTERN]... [--no-default-keep]
+# 用法: give_git_ignore.sh [-f] [-n] [-o OUT] [-k PATTERN]... [--no-default-keep] [-sub]
 #   -f               跳过备份，直接覆盖已存在的 .gitignore
 #   -n, --dry-run    只打印，不写入、不备份
 #   -o OUT           输出路径（默认 <repo>/.gitignore）
 #   -k PATTERN       追加保留项（可多次）
 #   --no-default-keep 丢弃内建默认 keep 清单
+#   -sub             只写 data/、logs/、docs/ 子目录的 .gitignore
 set -euo pipefail
 
 # ---- 默认保留: 无后缀 / 特殊情况但值得纳入版本控制的文件 ----
@@ -24,7 +25,7 @@ DEFAULT_KEEP=(
   '.env.example' '.env.sample' '.keep'
 )
 
-FORCE=0; DRY=0; OUT=""; NO_DEFAULT=0
+FORCE=0; DRY=0; OUT=""; NO_DEFAULT=0; SUB_ONLY=0
 EXTRA_KEEP=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -33,8 +34,9 @@ while [[ $# -gt 0 ]]; do
         -o|--output)          OUT="${2:?}"; shift 2 ;;
         -k|--keep)            EXTRA_KEEP+=("${2:?}"); shift 2 ;;
         --no-default-keep)    NO_DEFAULT=1; shift ;;
+        -sub|--sub-only)      SUB_ONLY=1; shift ;;
         -h|--help)
-            sed -n '2,14p' "$0"; exit 0 ;;
+            sed -n '2,13p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -117,15 +119,27 @@ apply_logs_ignore() {
         '!.txt'
 }
 
+# docs/: 忽略 docs 下所有目录
+apply_docs_ignore() {
+    if [[ ! -d docs ]]; then
+        echo "skip: docs 目录不存在"
+        return 0
+    fi
+    write_sub_ignore "docs/.gitignore" \
+        '**/'
+}
+
 # ---- 备份主 .gitignore ----
-if [[ -e "$OUT" ]]; then
-    if (( FORCE == 1 )); then
-        :
-    elif (( DRY == 1 )); then
-        echo "[dry-run] would back up: $OUT -> ${OUT}.<ts>.bak" >&2
-    else
-        bak=$(backup_existing "$OUT")
-        echo "backed up: $OUT -> $bak"
+if (( SUB_ONLY == 0 )); then
+    if [[ -e "$OUT" ]]; then
+        if (( FORCE == 1 )); then
+            :
+        elif (( DRY == 1 )); then
+            echo "[dry-run] would back up: $OUT -> ${OUT}.<ts>.bak" >&2
+        else
+            bak=$(backup_existing "$OUT")
+            echo "backed up: $OUT -> $bak"
+        fi
     fi
 fi
 
@@ -181,15 +195,17 @@ gen() {
 }
 
 # ---- 主 .gitignore ----
-if (( DRY == 1 )); then
-    gen
-else
-    gen > "$OUT"
-    echo "written: $OUT"
-    echo "kept extensions (${#exts[@]}):"
-    if (( ${#exts[@]} )); then printf '  .%s\n' "${exts[@]}"; fi
-    echo "kept special files (${#uniq_keep[@]}):"
-    if (( ${#uniq_keep[@]} )); then printf '  %s\n' "${uniq_keep[@]}"; fi
+if (( SUB_ONLY == 0 )); then
+    if (( DRY == 1 )); then
+        gen
+    else
+        gen > "$OUT"
+        echo "written: $OUT"
+        echo "kept extensions (${#exts[@]}):"
+        if (( ${#exts[@]} )); then printf '  .%s\n' "${exts[@]}"; fi
+        echo "kept special files (${#uniq_keep[@]}):"
+        if (( ${#uniq_keep[@]} )); then printf '  %s\n' "${uniq_keep[@]}"; fi
+    fi
 fi
 
 # ---- 子目录 .gitignore ----
@@ -197,6 +213,7 @@ echo
 echo "# === 子目录 .gitignore ==="
 apply_data_ignore
 apply_logs_ignore
+apply_docs_ignore
 
 # ---- 汇总 ----
 echo

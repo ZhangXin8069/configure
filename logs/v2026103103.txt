@@ -1,0 +1,74 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 03:00:26 +0800
+批次: bin-grm-ignore-data-match-20261031
+主任务: 修复 grm-ignore 对 data 历史文件的漏匹配
+触发原因: 任务完成
+摘要: 移除 data 全局保护，1369 个 data 历史路径恢复匹配，symlink 保护保持不变
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — PyQCU 漏匹配复现
+- 用户命令：`grm-ignore.sh -r oringin`；脚本报告 `无匹配 .gitignore 的历史文件`。
+- 本地可达历史仍包含 5409 个唯一路径和 15 个历史 symlink。
+- 从历史提取 1369 个 `data/` 路径，直接执行 `git check-ignore --no-index` 时 1369/1369 全部命中。
+- 证据表明 Gitee `test34` 是标签而非未拉取分支，本地已有 `refs/tags/test34`，且 `--all` 已覆盖其历史。
+
+### S2 — 根因与修复
+- 根因：上一版把所有路径组件为 `data` 的历史路径加入无条件保护集，导致它们在进入 `.gitignore` 匹配前就被删除候选集合排除。
+- 修复：`data/` 不再全局保护；`data/.gitignore` 等实际 ignore 规则重新参与匹配。历史 symlink 及其祖先前缀仍受保护。
+- 回归：更新隔离测试，要求根级、嵌套及路径类型转换后的 data 文件在真实 filter-repo 重写后被删除，同时 symlink 保持。
+
+## 验证与证据
+- `bash -n bin/grm-ignore.sh bin/grm-ignore.test.sh`：通过。
+- `bash bin/grm-ignore.test.sh`：通过，包含真实隔离历史重写。
+- PyQCU dry-run：退出 0；5409 个历史路径、15 个历史 symlink、29 个保护前缀、1534 个删除候选。
+- 示例 `data/dev87_quda_large_c64_g2_c03_sm60.json` 已出现在候选预览。
+- configure 仓库 dry-run：退出 0，无匹配项。
+- `form-data-tracking-check`、目标 `git diff --check`：通过。
+- 未执行 PyQCU 历史重写、GC、push 或 remote 修改。
+
+## 变更与产物
+- 修改：`bin/grm-ignore.sh`
+- 修改：`bin/grm-ignore.test.sh`
+- 日志：本文件。
+
+## 风险、限制与下一步
+- 用户命令中的 `-r oringin` 是拼写错误，且当前 PyQCU 没有 `origin` remote；若后续需要推送，应先正确恢复 remote。
+- 远程 `test34` 经 `git ls-remote` 确认为标签，本地已包含，不需额外 fetch 分支。
+- 历史 symlink 仍按前序要求保护，其中包括 data 路径下的 symlink。
+- 工作区还有用户既有的其他改动，未覆盖。
+
+## 用户输入指令
+```text
+grm-ignore.sh  -r oringin
+...
+无匹配 .gitignore 的历史文件，无需重写。
+...,grm-ignore.sh相当部分本该排除的文件匹配失败,例如https://gitee.com/zhangxin8069/PyQCU/tree/test34/data
+```
+
+## Agent 全文报告
+--- report begin ---
+**状态：finished**
+
+已修复 `grm-ignore.sh` 对 `data/` 历史文件的漏匹配。
+
+**根因**
+- 上一版将所有路径组件为 `data` 的历史路径无条件加入保护集，导致这些路径在 `git check-ignore` 前就被排除。
+- PyQCU 本地历史中的 1369 个 `data/` 路径实际全部可被 `.gitignore` 命中。
+- Gitee `test34` 是标签而非未拉取分支，本地 `refs/tags/test34` 已包含在 `git log --all` 中。
+
+**改动内容**
+- [grm-ignore.sh](/root/configure/bin/grm-ignore.sh:128) 保护集只由历史 symlink 及其祖先前缀构成，不再全局跳过 data 路径。
+- [grm-ignore.test.sh](/root/configure/bin/grm-ignore.test.sh:130) 改为要求被忽略的根级、嵌套及类型转换后的 data 文件进入删除集，同时继续保护 symlink。
+
+**验证结果**
+- 完整 `grm-ignore.test.sh`：通过。
+- PyQCU dry-run：退出 0，删除候选从 0 恢复到 1534；示例 data 文件已命中。
+- configure dry-run：退出 0，无匹配项。
+- `form-data-tracking-check`、目标 `git diff --check`：通过。
+- 未执行历史重写、GC、push 或 remote 修改。
+
+**注意事项**
+- 命令中的 `-r oringin` 是拼写错误，且 PyQCU 当前没有 `origin` remote。
+--- report end ---

@@ -1,0 +1,85 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 02:55:36 +0800
+批次: env-git-large-files
+主任务: 在 env.sh 中实现 Git 历史大文件审计函数
+触发原因: 任务完成
+摘要: 新增 get_git_large_files，输出历史大文件的分支、标签、提交、路径、文件名、大小与哈希，并验证三档颜色。
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 需求与实现
+- 目标: 在 `env.sh` 中新增 `get_git_large_files`，审计当前 Git 仓库所有 ref 可达历史中的大文件。
+- 命令/操作: 使用 `git log --all --raw --root -m --no-renames -z` 枚举文件版本，使用 `git cat-file --batch-check` 读取 blob 大小和类型。
+- 关键输出: 过滤大于 `1048576` 字节的 blob，输出去重后的路径/blob/引入提交版本。
+- 退出码: 实现后测试退出码 0。
+- 证据与判断: 同一 blob 位于不同路径时分别输出；已从当前分支删除但仍在历史或标签中的文件也会输出。
+
+### S2 — 元数据与颜色
+- 目标: 标注分支、标签、提交、路径、文件名、大小和 blob 哈希。
+- 命令/操作: 通过 `git for-each-ref --contains` 与 `git tag --contains` 计算包含引入提交的 refs。
+- 关键输出: `(1, 5] MiB` 为蓝色，`(5, 10] MiB` 为黄色，`> 10 MiB` 为红色；支持 `GET_GIT_LARGE_FILES_COLOR=auto|always|never`。
+- 退出码: 0。
+- 证据与判断: 测试覆盖 1 MiB 排除、5/10 MiB 边界、同一 blob 多路径、附注标签和删除历史。
+
+### S3 — 真实仓库验证
+- 目标: 验证当前 `/root/configure` 仓库的实际输出与 bash/zsh 一致性。
+- 命令/操作: 分别用 bash 与 zsh source `env.sh` 后调用 `get_git_large_files`。
+- 关键输出: 两种 shell 均输出 41 个历史大文件版本，标准错误为 0 字节，输出 SHA-256 完全一致。
+- 退出码: 均为 0。
+- 证据与判断: bash 耗时约 2 秒，zsh 约 3 秒；输出包含本地/远程分支、标签、完整提交、路径、文件名、MiB/字节数与 blob 哈希。
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh env.test.sh`，退出码 0。
+- 测试/检查: `zsh -n env.sh env.test.sh`，退出码 0。
+- 测试/检查: `TMPDIR=/root/configure/data/cache timeout 120s bash env.test.sh`，退出码 0。
+- 测试结果: bash/zsh 均通过历史大文件、三档颜色、5/10 MiB 边界、同 blob 多路径、删除历史、空格路径、空仓库和非 Git 目录用例。
+- 测试/检查: 真实仓库 bash/zsh 输出各 41 行版本记录，`cmp` 判定逐字节相同。
+- 测试/检查: `git diff --check`，退出码 0。
+- 测试/检查: `form-data-tracking-check.sh --root . --quiet`，退出码 0。
+- 测试/检查: `form-audit.sh --root . --strict --quiet` 退出码 1，命中既有 `.opencode` 快照命名/路径告警及 `logs/.gitignore` 扩展名告警。
+- 测试/检查: `form-snapshot-verify.sh --quiet` 退出码 1，报告 `configure-main symlink inventory mismatch`。
+- 未验证项: 含制表符或换行符的极端 Git 路径未单独自动化；常规空格路径已覆盖。
+
+## 变更与产物
+- 文件: `env.sh`，新增 `get_git_large_files`。
+- 文件: `env.test.sh`，扩展历史大文件回归测试。
+- 产物: `data/cache/get-git-large-files-check/` 保存本次真实仓库验证输出，属于已忽略运行时数据。
+- 未改动范围: 未暂存、提交或推送；工作树已有的 `bin/give_git_ignore*` 与 `logs/*` 改动未触碰。
+
+## 风险、限制与下一步
+- 风险: 大型仓库扫描时间取决于提交历史和 ref 数量；当前仓库实测 2 至 3 秒。
+- 限制: 输出一行对应一个历史文件版本；同一路径的后续未变化提交不会重复输出。
+- 阻塞: 对本次功能无阻塞。
+- 下一步: 如需入库，由用户明确授权后只暂存 `env.sh` 与 `env.test.sh` 并重新执行交付门禁。
+
+## 用户输入指令
+在 `env.sh` 编写 `get_git_large_files` 函数：终端输出当前 Git 库的文件树（包括历史）中大于 1MB 的文件，标明分支、标签、comm、路径、文件名、文件大小与哈希值；1MB-5MB 标记蓝色，5MB-10MB 标记黄色，大于 10MB 标记红色。
+
+## Agent 全文报告
+--- report begin ---
+已在 `env.sh` 新增 `get_git_large_files`。
+
+改动内容:
+- 枚举当前仓库所有 ref 可达提交中的文件版本，包括已删除历史文件和同一 blob 的多个路径。
+- 每个版本输出分支、标签、引入该版本的提交、路径、文件名、MiB/字节数以及 blob 哈希。
+- 大小着色为 `(1, 5] MiB` 蓝色、`(5, 10] MiB` 黄色、`>10 MiB` 红色。
+- 支持 `GET_GIT_LARGE_FILES_COLOR=auto|always|never`，默认仅在 TTY 输出颜色。
+- 临时文件在函数子 shell 内创建，并在退出、中断或错误时清理。
+
+推理依据:
+- `git log --all --raw --root -m --no-renames -z` 能保留历史路径和删除记录，并用 NUL 安全读取路径。
+- `git cat-file --batch-check` 只读取对象大小，不解包大文件内容。
+- 分支与标签通过包含该历史提交的 refs 计算，因此已删除文件仍能关联到仍包含其历史的 refs。
+
+验证结果:
+- bash/zsh 语法检查通过。
+- `bash env.test.sh` 在 bash/zsh 下全部通过，覆盖颜色边界、删除历史、空格路径、附注标签、同 blob 多路径、空仓库和非 Git 目录。
+- 当前仓库两种 shell 均输出 41 个历史大文件版本，输出逐字节一致，标准错误为空。
+- `git diff --check` 与 `data/` 跟踪边界检查通过。
+- 严格格式审计和快照校验仍因既有 `.opencode`/`logs` 问题失败，未指向本次文件。
+
+后续步骤:
+- 本次未暂存、提交或推送。若需入库，请明确授权后只处理 `env.sh` 与 `env.test.sh`。
+--- report end ---
