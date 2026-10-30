@@ -30,7 +30,6 @@
 !*.png
 !*.ps1
 !*.py
-!*.pyc
 !*.rb
 !*.refer
 !*.rst
