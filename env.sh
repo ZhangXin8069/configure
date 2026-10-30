@@ -117,3 +117,9 @@ _nnvtop_restart() {
 }
 alias nnvtop='_nnvtop_restart'
 alias get_files_types="find . -type f -printf '%f\n' | sed -n 's/.*\.\([^.]*\)$/\1/p' | sort -u"
+get_git_files_types() {
+  while IFS= read -r -d '' f; do
+    b=${f##*/}
+    [[ $b == *.* && $b != .* ]] && printf '%s\n' "${b##*.}"
+  done < <(git ls-files -co --exclude-standard -z) | sort -u
+}
