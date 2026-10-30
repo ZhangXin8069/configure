@@ -116,3 +116,4 @@ _nnvtop_restart() {
     done
 }
 alias nnvtop='_nnvtop_restart'
+alias get_files_types="find . -type f -printf '%f\n' | sed -n 's/.*\.\([^.]*\)$/\1/p' | sort -u"
