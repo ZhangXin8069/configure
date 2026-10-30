@@ -289,6 +289,11 @@ if (( hook_status != 0 )); then
 fi
 
 if ! event_timeout=$(remaining_hook_timeout); then
+    if [[ -s "$tmp_output" ]]; then
+        cat -- "$tmp_output" >&2
+    fi
+    printf 'agent-hook.sh: 事件 %s 超过 %ss 硬超时，事件写入未启动\n' \
+        "$canonical_event" "$requested_timeout" >&2
     exit 124
 fi
 set +e
