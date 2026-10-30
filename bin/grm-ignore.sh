@@ -83,7 +83,7 @@ echo "[1/6] 遍历历史，提取所有文件路径..."
 # 已知限制：路径含换行符时会被错误拆分（Git 允许但极罕见）
 git -C "$REPO_ROOT" log --all --pretty=format: --name-only --no-renames -z \
   | tr '\0' '\n' \
-  | awk 'NF' \
+  | awk 'length($0) > 0' \
   | sort -u > "$PATHS_ALL"
 
 TOTAL=$(wc -l < "$PATHS_ALL")
