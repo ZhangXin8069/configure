@@ -1,0 +1,63 @@
+{
+  "skill_name": "conf-refer-skill",
+  "evals": [
+    {
+      "id": "explicit-external-code-review",
+      "should_trigger": true,
+      "prompt": "使用 refer/git-rep 中 mattpocock-skills 的 engineering/code-review 技能审查 skills/conf-refer-skill/scripts/find-refer-skills.py。请先说明选择来源，再按该技能的两轴流程给出只读审查结果。",
+      "expected_output": "选择 refer/git-rep/mattpocock-skills/skills/engineering/code-review/SKILL.md，完整读取后按 Standards 与 Spec 两轴报告，不复制或修改外部技能。",
+      "baseline_expectation": "无技能基线也必须找到正确显式路径；有技能结果还应显示原地调用、最小适配和本地安全门禁。",
+      "assertions": [
+        "输出包含外部 code-review 技能的绝对路径或可唯一识别的来源",
+        "输出明确区分 Standards 与 Spec",
+        "输出说明没有复制或安装外部技能"
+      ]
+    },
+    {
+      "id": "implicit-reference-gap",
+      "should_trigger": true,
+      "prompt": "当前本库没有单细胞 RNA 分析流程。请检查 CONFIGURE_ROOT/refer/git-rep 下是否有合适技能；如果有，选择最匹配的一个并说明原样调用时需要适配什么，不要实际运行实验。",
+      "expected_output": "调用 conf-refer-skill 的发现流程，给出一个与单细胞 RNA 分析匹配的外部技能路径、选择理由和最小适配清单。",
+      "baseline_expectation": "无技能基线可能建议复制外部目录；有技能结果必须坚持原地调用、相对资源解析和本地权限边界。",
+      "assertions": [
+        "输出给出 refer/git-rep 下具体的 SKILL.md 路径",
+        "输出解释场景匹配理由",
+        "输出包含至少一项调用适配说明"
+      ]
+    },
+    {
+      "id": "implicit-domain-inventory",
+      "should_trigger": true,
+      "prompt": "列出能用于 CUDA 的 skill",
+      "expected_output": "调用 conf-refer-skill 的 discover 模式，同时检索当前本地技能与 refer/git-rep，列出 CUDA 相关的本地和外部候选并标明来源、路径和用途，不执行任何外部技能。",
+      "baseline_expectation": "无技能基线可能只列本地技能；有技能结果必须披露双域检索范围，并包含 cuda-skills 等外部来源或明确说明该来源不可用。",
+      "assertions": [
+        "输出说明检索了本地技能和 refer/git-rep",
+        "输出包含至少一个外部 CUDA 技能路径或明确的外部零匹配证据",
+        "输出标明未执行外部技能"
+      ]
+    },
+    {
+      "id": "negative-local-review",
+      "should_trigger": false,
+      "prompt": "使用本库 review 技能只读审查 skills/conf-refer-skill/scripts/find-refer-skills.py 的当前 diff，不要使用 refer/git-rep 中的外部技能。",
+      "expected_output": "保持本地 review 流程，不使用 conf-refer-skill 或外部参考技能。",
+      "baseline_expectation": "有/无技能都应保持本地流程；若出现外部技能选择即为误触发。",
+      "assertions": [
+        "输出不选择 refer/git-rep 外部技能",
+        "输出按本库 review 的审查方式给出结果或明确无 finding"
+      ]
+    },
+    {
+      "id": "negative-gap-without-consent",
+      "should_trigger": false,
+      "prompt": "本库现在没有单细胞 RNA 分析流程。直接分析这份数据，不要询问是否使用外部参考技能。",
+      "expected_output": "保持当前可用流程或报告能力缺口，不擅自调用 refer/git-rep 外部技能。",
+      "baseline_expectation": "有/无技能都不应把能力缺口当成默认外部调用授权。",
+      "assertions": [
+        "输出不选择 refer/git-rep 外部技能",
+        "输出明确说明能力缺口或请求显式授权"
+      ]
+    }
+  ]
+}

@@ -1,64 +1,119 @@
 #!/usr/bin/env bash
-# grm-ignore — 重写 Git 历史，永久删除当前 .gitignore 中匹配的所有文件，
-#              并强制推送所有分支/标签到远程，最后执行 GC 释放空间。
+# grm-ignore — 依据当前仓库内所有 .gitignore 规则，从全部 Git 历史中永久删除匹配的文件，
+#              强制推送覆盖远程所有分支/标签，并执行 GC 回收本地空间。
 #
-# ⚠️ 破坏性操作：会重写全部历史，远程协作者必须重新克隆。
-# 建议在全新克隆的仓库副本中执行。
+# ⚠️ 破坏性操作：
+#   - 重写所有分支、标签、远程跟踪分支的提交历史（commit id 全部改变）
+#   - 强制覆盖远程仓库（协作者必须重新 clone，不能 pull）
 #
-# 用法: grm-ignore.sh [-n|--dry-run] [-y|--yes] [--keep-backup]
-#   -n, --dry-run   仅显示将被删除的文件，不执行重写
-#   -y, --yes       跳过交互确认（危险）
-#   --keep-backup   重写前自动打包备份到 backup.bundle
+# 强烈建议：在全新 clone 的副本中执行，并先 -n 预览。
+# 依赖：git-filter-repo（pip install git-filter-repo / brew install git-filter-repo）
+#
+# 用法: grm-ignore.sh [-n] [-y] [--keep-backup] [-r REMOTE] [--no-push] [--no-gc]
+#   -n, --dry-run   仅列出将被删除的文件，不做任何修改
+#   -y, --yes       跳过交互确认（不建议）
+#   --keep-backup   重写前打包备份到 backup.<ts>.bundle
+#   -r, --remote    指定远程名（默认 origin；不存在则跳过推送）
+#   --no-push       完成本地重写与 GC 后停止，不推送远程
+#   --no-gc         跳过本地 GC（调试用；不会释放磁盘空间）
 set -euo pipefail
 
+# ===== 脚本位置 =====
 _SRC=${BASH_SOURCE[0]:-${0}}
 case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
 if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
-# ---- 依赖检查 ----
+# ===== 依赖检查 =====
 command -v git >/dev/null || { echo "ERROR: git 未安装"; exit 1; }
 command -v git-filter-repo >/dev/null || {
-    echo "ERROR: 未找到 git-filter-repo。请先安装: pip install git-filter-repo"
+    echo "ERROR: 未找到 git-filter-repo。安装方式："
+    echo "  pip install git-filter-repo"
+    echo "  或 brew install git-filter-repo"
     exit 1
 }
 
-# ---- 仓库根 ----
+# ===== 仓库根 =====
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
     echo "ERROR: 不在 git 仓库内"; exit 1; }
 cd "$REPO_ROOT"
 echo "Repo: ${REPO_ROOT}"
 
-GITIGNORE="${REPO_ROOT}/.gitignore"
-[ -f "$GITIGNORE" ] || { echo "ERROR: 当前目录没有 .gitignore"; exit 1; }
-
-# ---- 参数解析 ----
-DRY=0; YES=0; KEEP_BACKUP=0
+# ===== 参数解析 =====
+DRY=0; YES=0; KEEP_BACKUP=0; DO_PUSH=1; DO_GC=1; REMOTE_NAME="origin"
 while [[ $# -gt 0 ]]; do
     case "$1" in
-        -n|--dry-run)    DRY=1; shift ;;
-        -y|--yes)        YES=1; shift ;;
-        --keep-backup)   KEEP_BACKUP=1; shift ;;
-        -h|--help)       sed -n '2,12p' "$0"; exit 0 ;;
+        -n|--dry-run)  DRY=1; shift ;;
+        -y|--yes)      YES=1; shift ;;
+        --keep-backup) KEEP_BACKUP=1; shift ;;
+        --no-push)     DO_PUSH=0; shift ;;
+        --no-gc)       DO_GC=0; shift ;;
+        -r|--remote)
+            # 不能用 ${2:?}：set -u 下无自定义消息，报错指向变量名 "2"
+            if [[ -z "${2:-}" || "$2" == -* ]]; then
+                echo "ERROR: -r/--remote 需要指定远程名，例如：-r origin" >&2
+                exit 1
+            fi
+            REMOTE_NAME="$2"; shift 2 ;;
+        -h|--help)     sed -n '2,25p' "$0"; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
 
-# ---- 提取历史中所有曾被 .gitignore 匹配的文件路径 ----
-# 思路: 遍历所有提交过的文件，用临时隔离仓库的 check-ignore 判定。
-TMP_REPO=$(mktemp -d)
-trap 'rm -rf "$TMP_REPO"' EXIT
-git init -q "$TMP_REPO"
+# ===== 工作区状态提示 =====
+if [[ -n "$(git status --porcelain)" ]]; then
+    echo "⚠️  工作区有未提交改动，建议先 commit 或 stash。"
+    if (( YES == 0 && DRY == 0 )); then
+        read -r -p "继续？[y/N] " ans
+        [[ "$ans" =~ ^[Yy]$ ]] || { echo "已取消。"; exit 1; }
+    fi
+fi
 
-echo "[1/6] 提取历史中所有文件并与 .gitignore 匹配..."
+# ===== 临时文件 =====
+PATHS_ALL=$(mktemp)
+PATHS_FILE=$(mktemp)
+trap 'rm -f "$PATHS_ALL" "$PATHS_FILE"' EXIT
+
+# ===== [1/6] 遍历历史，提取所有文件路径 =====
+echo "[1/6] 遍历历史，提取所有文件路径..."
+# rev-list --objects：遍历所有引用（heads/tags/remotes）的可达对象
+# cat-file --batch-check：标注类型，只保留 blob（文件）；子模块 gitlink 是 commit 类型，自然排除
+# 已知限制：路径含换行符时会被错误拆分（Git 允许但极罕见）
+git -C "$REPO_ROOT" rev-list --all --objects \
+  | git -C "$REPO_ROOT" cat-file --batch-check='%(objecttype) %(rest)' \
+  | awk '$1 == "blob" { sub(/^[^ ]+ /, ""); print }' \
+  | sort -u > "$PATHS_ALL"
+
+TOTAL=$(wc -l < "$PATHS_ALL")
+echo "  历史中唯一文件路径: ${TOTAL}"
+if (( TOTAL == 0 )); then
+    echo "仓库历史为空，无需处理。"
+    echo "###${_NAME} done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+    exit 0
+fi
+
+# ===== [1/6] 用仓库内所有 .gitignore 规则匹配 =====
+# 关键：在真实仓库中运行 check-ignore
+#   - Git 会自动读取每一层的 .gitignore，规则相对其所在目录生效（data/.gitignore 的 * 只作用于 data/）
+#   - -c core.excludesFile=/dev/null：排除 ~/.config/git/ignore 等全局规则干扰
+#   - --no-index：即使文件已被跟踪也判定
+echo "[1/6] 用仓库内所有 .gitignore 规则匹配历史路径..."
+set +e
+MATCHES=$(git -C "$REPO_ROOT" -c core.excludesFile=/dev/null \
+    check-ignore --no-index --stdin -v < "$PATHS_ALL" 2>/dev/null)
+set -e
+
+# 解析 -v 输出：<source>:<lineno>:<pattern>\t<pathname>
+# 安全阀：永不删除 .gitignore 自身（即便规则匹配到它）
 mapfile -t TO_DELETE < <(
-    # 历史上出现过的所有唯一路径
-    git log --all --pretty=format: --name-only --diff-filter=A -z |
-    tr -d '\0' | sort -u |
-    git -C "$TMP_REPO" -c core.excludesFile="$GITIGNORE" \
-        check-ignore --no-index --stdin -v 2>/dev/null |
-    awk -F'\t' '!seen[$2]++ {print $2}'
+    [[ -n "$MATCHES" ]] || exit 0
+    printf '%s\n' "$MATCHES" | awk -F'\t' '
+        NF >= 2 && !seen[$2]++ {
+            n = split($2, a, "/")
+            if (a[n] != ".gitignore") print $2
+        }
+    '
 )
 
 if (( ${#TO_DELETE[@]} == 0 )); then
@@ -67,78 +122,116 @@ if (( ${#TO_DELETE[@]} == 0 )); then
     exit 0
 fi
 
-echo "匹配 ${#TO_DELETE[@]} 个历史文件将被永久移除:"
-printf '  %s\n' "${TO_DELETE[@]}" | head -200
-(( ${#TO_DELETE[@]} > 200 )) && echo "  ... (还有 $(( ${#TO_DELETE[@]} - 200 )) 个)"
+echo "匹配 ${#TO_DELETE[@]} 个历史文件将被永久移除："
+printf '  %s\n' "${TO_DELETE[@]}" | head -300
+if (( ${#TO_DELETE[@]} > 300 )); then
+    echo "  ... (还有 $(( ${#TO_DELETE[@]} - 300 )) 个)"
+fi
 
-if [ "$DRY" -eq 1 ]; then
+# ===== dry-run 出口 =====
+if (( DRY == 1 )); then
     echo "dry-run: 未执行历史重写、推送或 GC。"
     echo "###${_NAME} done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
     exit 0
 fi
 
-# ---- 二次确认 ----
-if [ "$YES" -ne 1 ]; then
+# ===== 二次确认 =====
+if (( YES == 0 )); then
     echo
-    echo "⚠️  即将重写全部 Git 历史并强制覆盖远程仓库。"
-    echo "    所有协作者必须重新克隆，本地未推送的工作将无法恢复。"
-    read -r -p "确认继续? 输入 'rewrite' 继续，其他任意键取消: " ans
+    echo "⚠️  即将："
+    echo "    1) 重写所有分支、标签、远程跟踪分支的提交历史"
+    if (( DO_PUSH == 1 )); then
+        echo "    2) 强制推送覆盖远程 '${REMOTE_NAME}'（含标签）"
+    else
+        echo "    2) 不推送（--no-push）"
+    fi
+    if (( DO_GC == 1 )); then
+        echo "    3) 执行 reflog expire + gc"
+    fi
+    echo "    完成后协作者必须重新 clone，不能 pull。"
+    read -r -p "确认继续？输入 'rewrite' 继续，其他键取消: " ans
     [ "$ans" = "rewrite" ] || { echo "已取消。"; exit 1; }
 fi
 
-# ---- 可选备份 ----
-if [ "$KEEP_BACKUP" -eq 1 ]; then
+# ===== .git 体积（用于最后对比） =====
+SIZE_BEFORE=$(du -sh "$REPO_ROOT/.git" 2>/dev/null | awk '{print $1}')
+echo "  .git 当前体积: ${SIZE_BEFORE:-unknown}"
+
+# ===== [2/6] 可选备份 =====
+if (( KEEP_BACKUP == 1 )); then
     bak="backup.$(date '+%Y%m%d-%H%M%S').bundle"
     echo "[2/6] 备份全部引用到 ${bak} ..."
     git bundle create "$bak" --all
-    echo "备份完成: ${bak}"
+    echo "  备份完成: ${bak} ($(du -h "$bak" 2>/dev/null | cut -f1))"
 else
-    echo "[2/6] 跳过备份 (--keep-backup 可开启)"
+    echo "[2/6] 跳过备份（--keep-backup 可开启）"
 fi
 
-# ---- 写入待删除路径文件，供 filter-repo 使用 ----
-PATHS_FILE=$(mktemp)
-trap 'rm -rf "$TMP_REPO" "$PATHS_FILE"' EXIT
+# ===== 记录远程信息（filter-repo 会自动移除 remote） =====
+REMOTE_URL=""
+if (( DO_PUSH == 1 )); then
+    REMOTE_URL=$(git remote get-url "$REMOTE_NAME" 2>/dev/null || true)
+    if [[ -n "$REMOTE_URL" ]]; then
+        echo "  记录远程 ${REMOTE_NAME}: ${REMOTE_URL}"
+    else
+        echo "  ⚠️ 未找到远程 '${REMOTE_NAME}'，将跳过推送"
+    fi
+fi
+
+# ===== 写入待删除路径 =====
 printf '%s\n' "${TO_DELETE[@]}" > "$PATHS_FILE"
 
-# ---- 记录远程 URL (filter-repo 会自动移除 origin) ----
-ORIGIN_URL=$(git remote get-url origin 2>/dev/null || true)
+# ===== [3/6] 历史重写 =====
+echo "[3/6] git filter-repo 重写历史（--invert-paths 表示移除匹配项）..."
+# filter-repo 默认处理 refs/heads/、refs/tags/、refs/remotes/ 下的所有 refs
+# 因此无需额外 --refs；如遇旧版本 bug 或需扩展范围，可追加：
+#   --refs 'refs/heads/*' 'refs/tags/*' 'refs/remotes/*'
+git filter-repo --force --invert-paths --paths-from-file "$PATHS_FILE"
 
-# ---- 执行历史重写 ----
-echo "[3/6] 运行 git filter-repo 重写历史..."
-# --force: 允许在非全新克隆中运行（谨慎）
-# --invert-paths: 移除匹配路径，而非保留
-git filter-repo --force \
-    --invert-paths \
-    --paths-from-file "$PATHS_FILE"
-
-# ---- 恢复远程 ----
-if [ -n "$ORIGIN_URL" ]; then
-    echo "[4/6] 恢复远程 origin: ${ORIGIN_URL}"
-    git remote add origin "$ORIGIN_URL" 2>/dev/null || git remote set-url origin "$ORIGIN_URL"
+# ===== [4/6] 恢复远程 =====
+if [[ -n "$REMOTE_URL" ]]; then
+    echo "[4/6] 恢复远程 ${REMOTE_NAME}: ${REMOTE_URL}"
+    if git remote get-url "$REMOTE_NAME" >/dev/null 2>&1; then
+        git remote set-url "$REMOTE_NAME" "$REMOTE_URL"
+    else
+        git remote add "$REMOTE_NAME" "$REMOTE_URL"
+    fi
 else
-    echo "[4/6] 未检测到远程 origin，跳过推送。"
+    echo "[4/6] 无远程可恢复，跳过"
 fi
 
-# ---- 强制推送所有分支和标签 ----
-if [ -n "$ORIGIN_URL" ]; then
-    echo "[5/6] 强制推送所有分支和标签到远程..."
-    # --force: 覆盖远程历史
-    # --all:   所有分支
-    # --tags:  所有标签
-    # --prune: 删除远程已不存在的分支
-    git push --force --all origin
-    git push --force --tags origin
-    git push --force --prune origin 2>/dev/null || true
+# ===== [5/6] 强制推送 =====
+if (( DO_PUSH == 1 )) && [[ -n "$REMOTE_URL" ]]; then
+    echo "[5/6] 强制推送所有分支与标签到 ${REMOTE_NAME} ..."
+    git push --force "$REMOTE_NAME" --all
+    git push --force "$REMOTE_NAME" --tags
+    echo "  提示：远端仍存在的旧分支/标签（本地已无同名者）不会被自动删除。"
+    echo "        如需清理: git push --force --prune ${REMOTE_NAME}"
+elif (( DO_PUSH == 1 )); then
+    echo "[5/6] 无远程可推送，跳过"
+else
+    echo "[5/6] --no-push：跳过推送"
+    echo "  本地已重写完成。之后手动推送时请用 --force："
+    echo "    git push --force <remote> --all && git push --force <remote> --tags"
 fi
 
-# ---- 本地 GC ----
-echo "[6/6] 本地 GC 回收空间..."
-git reflog expire --expire=now --all
-git gc --prune=now --aggressive
+# ===== [6/6] 本地 GC =====
+if (( DO_GC == 1 )); then
+    echo "[6/6] 本地 GC 回收空间..."
+    git reflog expire --expire=now --all
+    git gc --prune=now --aggressive
+    SIZE_AFTER=$(du -sh "$REPO_ROOT/.git" 2>/dev/null | awk '{print $1}')
+    echo "  .git 体积: ${SIZE_BEFORE:-?} -> ${SIZE_AFTER:-?}"
+else
+    echo "[6/6] --no-gc：跳过 GC"
+fi
 
+# ===== 完成 =====
 echo
-echo "完成。本地仓库已瘦身。"
-echo "注意: 远程仓库的 GC 通常由托管平台(如 GitHub/GitLab)在其后台自动触发，"
-echo "      执行强制推送后，平台可能需要一段时间才会实际释放磁盘空间。"
+echo "完成。"
+echo "注意:"
+echo "  - 本地仓库已瘦身。"
+echo "  - 远程仓库的 GC 由托管平台后台调度，磁盘空间可能几分钟~几小时后才真正释放。"
+echo "  - 所有协作者必须重新 clone，不能 pull。"
+echo "  - 子模块历史未被处理；如需清理子模块，cd 进子模块后单独执行本脚本。"
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

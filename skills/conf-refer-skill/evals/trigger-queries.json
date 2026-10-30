@@ -1,0 +1,29 @@
+{
+  "skill_name": "conf-refer-skill",
+  "positive_queries": [
+    "用 refer/git-rep 里 oh-my-codex 的 code-review 技能审查当前改动",
+    "调用 mattpocock-skills 的 plan 技能拆解这个重构",
+    "使用 llm-skills 的 advisor-orchestrator-worker 编排三个独立调查",
+    "用 external reference 的 scanpy 技能分析这份单细胞数据",
+    "调用 scientific-agent-skills 的 paper-lookup 查找相关论文",
+    "使用 refer/git-rep 的 autopilot 技能无人值守推进任务",
+    "用外部 qiskit 技能验证这段量子线路实现",
+    "本库没有等价能力，我同意从 refer/git-rep 选择合适技能完成这个任务",
+    "先检查参考技能库，再用最匹配的外部 skill 完成代码审查",
+    "用 refer/git-rep 的 qutip 技能推导并验证这个开放量子系统",
+    "列出能用于 CUDA 的 skill"
+  ],
+  "negative_queries": [
+    "用本库 review 技能审查当前 diff",
+    "用本库 plan 技能拆分实现步骤",
+    "调试这个失败的 shell 测试",
+    "帮我写一篇关于拓扑绝缘体的论文",
+    "用本库 get-paper 技能查找文献",
+    "解释 refer/git-rep 目录是什么",
+    "只阅读一个外部 SKILL.md 并概括它的标题，不执行技能",
+    "按本库 rule 检查长任务资源",
+    "实现一个兼容 Bash 3.2 的参数解析函数",
+    "列出当前仓库 skills 目录中的全部本地技能",
+    "只列出当前仓库 skills 目录中的本地技能，不要检索外部库"
+  ]
+}
