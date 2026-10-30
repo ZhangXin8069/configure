@@ -77,7 +77,7 @@
 > 本节由 form 技能同步维护；本文件其他原有约定与本节冲突时，以其他原有约定为准，
 > 用户明确指令优先于两者。
 
-- 库类型：simple；主导语言：bash，辅助语言为 python/json/other。
+- 库类型：simple；主导语言：bash，辅助语言：python/json/other。
 - 文件名：代码文件全小写；多词命令用 `-` 连接，内部函数脚本用 `_`，测试用
   `*.test.sh`；不得重新引入大小写混排的文件名。
 - 函数名：`snake_case`；脚本内部函数使用 `_snake_case`；入口函数使用 `main`。
@@ -86,24 +86,30 @@
 - 命名质量：所有名称必须清晰、无歧义，在简短的同时承载最大实际意义；不得使用标签名替代业务语义。
 - Agent 规则文件：所有目录统一使用 `AGENTS.md`；`AGENT.md` 是历史输入错误，不是兼容别名。
   同目录两者并存时，以 `AGENTS.md` 为主文件合并双方有效内容并去重，确认后再删除单数文件。
-- 目录：顶层白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`；
+- 业务目录：顶层白名单为 `bin/data/docs/hooks/lib/logs/plugins/refer/skills/tools`；
   功能输入不得放入 `docs/`，包依赖清单存放在 `lib/requirements/`。
-- 文档：`docs/` 只放当前任务文档和图片，允许 `md/tex/pdf/png/jpg/jpeg/gif/svg/webp`。
-- 日志与数据：日志放 `logs/`；agent 日志使用 `vYYYYMMDD[HH[MM[SS]]].txt` 或对应连字符
-  格式，批次索引为 `logs/AGENTS.md`；数据放 `data/`，仅跟踪 `.gitignore`、`AGENTS.md`、
-  `README.md`。
+- Agent 镜像：`.opencode/skills/` 是 `skills/` 的受控加载镜像，不是独立业务源；form 审计跳过
+  其重复副本，`tools/configure-check.sh` 逐项核对普通文件内容与软链接目标。
+- 文档与日志：`docs/` 允许 Markdown、TeX、PDF、图片及生成的 `docs/.gitignore` 控制文件；
+  `logs/` 允许 `AGENTS.md`、生成的 `logs/.gitignore` 和 `log/json/tsv/csv/txt`，agent 日志使用
+  `vYYYYMMDD[HH[MM[SS]]].txt` 或对应连字符格式。
+- 数据：`data/` 仅跟踪 `.gitignore`、`AGENTS.md`、`README.md`；根与本地双层忽略必须有效，
+  `data/cache/**` 零例外。
+- 固定快照：`skills/form/references/source-snapshots/**` 保留上游名称、权限、blob 和软链接；
+  `bin/give_git_ignore.sh` 必须精确保留其中的无后缀参考入口。
 - 测试与验收：shell 至少执行 `bash -n`；结构检查运行
   `skills/form/scripts/form-audit.sh --root . --strict --quiet`；快照检查运行
-  `skills/form/scripts/form-snapshot-verify.sh --quiet`。
-- Git 收尾：普通改动执行 `git diff --check`，未获明确授权不暂存、提交、推送或打标；
-  完整 `~form` 交付流程可按其 Step 8 执行提交、推送和 `dev` 标签。
-- Git 大文件：除用户明确要求外，禁止提交单个大于 `10,000,000` 字节的文件；每批暂存后
-  运行 `skills/form/scripts/form-large-files-check.sh --root .`，命中时立即停止该批提交
-  与推送并提醒用户。5 分钟无回复时只继续推进不依赖超限文件的工作，静默不授权覆盖限制。
-- 例外：`refer/**`、`skills/form/references/source-snapshots/**`、vendored/generated
-  文件保留上游名称；本库自身新增文件不得据此随意申请例外。
+  `skills/form/scripts/form-snapshot-verify.sh --quiet`；镜像与技能结构运行
+  `tools/configure-check.sh`，提交前另运行 `form-data-tracking-check.sh --root . --quiet`。
+- Git 收尾：普通改动执行 `git diff --check`；完整 `~form` 交付流程可按其 Step 8 执行提交、
+  推送和 `dev` tag；禁止 force push、改写已推送标签及 `git add -A`/`git add .`。
+- Git 大文件：除用户明确要求外，禁止提交单个大于 `10,000,000` 字节的文件；每批暂存后运行
+  `skills/form/scripts/form-large-files-check.sh --root .`，命中时立即停止该批提交和推送。
+- 本地例外：`refer/**`、`.opencode/skills/**`、`skills/form/references/source-snapshots/**`、
+  vendored/generated 文件保留上游或镜像名称；`docs/.gitignore` 与 `logs/.gitignore` 是
+  `give_git_ignore.sh` 维护的目录契约文件。本库自身新增业务文件不得据此随意申请例外。
 - 标签名只用于版本定位，可在更新说明、提交说明、注释和日志中作为版本引用，但不得进入
-  文件、目录、对象、函数、变量等名称；发现违规时由 form 整批纠正全部受影响引用。
+  文件、目录、对象、函数、变量等名称。发现违规时由 form 整批纠正全部受影响引用。
 <!-- form-skill:end -->
 
 ## 命令

@@ -14,6 +14,7 @@
 - `julab_settings.md` — Jupyter Lab 配置指南（中文语言包、LSP、Cling C++ 内核、远程连接）
 - `openmc_settings.md` — OpenMC（蒙特卡洛中子输运）在 WSL2/Ubuntu 上的安装指南（清华/中科大镜像、源码编译、截面数据）
 - `form_remediation_20260928.md` — configure 仓库 form 合规整改记录、映射与验证证据
+- `form_configure_20261031.md` — form 审计、快照/镜像修复、验证证据与恢复方式
 
 ## 图片素材
 

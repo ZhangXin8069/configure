@@ -84,8 +84,9 @@ done
 printf '' >"$simple/bin/agent-dispatch.sh"
 printf '' >"$simple/bin/agent.test.sh"
 printf '' >"$simple/lib/env.sh"
-mkdir -p "$simple/logs" \
+mkdir -p "$simple/docs" "$simple/logs" \
   "$simple/.opencode/skills/form/references/source-snapshots/configure-main/bin"
+printf '**/\n' >"$simple/docs/.gitignore"
 printf '*\n' >"$simple/logs/.gitignore"
 printf '' >"$simple/.opencode/skills/form/references/source-snapshots/configure-main/bin/gzBad.sh"
 cat >"$simple/data/.gitignore" <<'EOF'

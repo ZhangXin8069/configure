@@ -40,9 +40,9 @@ metadata:
   `refer/git-rep/docs/`，来源与致谢写入 `refer/git-rep/README.md`。存量普通拷贝按
   Step 5 的参考子库流程迁移。
 - 包依赖清单位于 `lib/requirements/{apt,pip}.txt`，由 `bin/{apt,pip}_install.sh` 消费。
-- `docs/` 只允许 `md/tex/pdf` 和图片；`logs/` 允许 `AGENTS.md` 索引、
-  `give_git_ignore.sh` 生成的 `.gitignore` 以及 `log/json/tsv/csv/txt`，agent 日志按 `log`
-  技能的三态时间戳命名。
+- `docs/` 只允许 `md/tex/pdf`、图片及其生成的 `.gitignore` 控制文件；`logs/` 允许
+  `AGENTS.md` 索引、`give_git_ignore.sh` 生成的 `.gitignore` 以及 `log/json/tsv/csv/txt`，
+  agent 日志按 `log` 技能的三态时间戳命名。
 - 本库缺少独立构建系统时，验证入口为 `bash -n bin/*.sh`、
   `scripts/form-audit.sh --root /root/configure --strict --quiet` 和
   `scripts/form-snapshot-verify.sh --quiet`；涉及 Git 提交时另运行

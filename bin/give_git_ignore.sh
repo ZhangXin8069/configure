@@ -133,7 +133,7 @@ apply_logs_ignore() {
         '!.gitignore' \
         '!AGENTS.md' \
         '!README.md' \
-        '!.txt'
+        '!*.txt'
 }
 
 # docs/: 忽略 docs 下所有目录

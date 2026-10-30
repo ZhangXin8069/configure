@@ -250,6 +250,7 @@ while IFS= read -r -d '' path; do
   fi
 
   case "$path" in
+    docs/.gitignore) ;;
     docs/*)
       case "$ext" in
         tex|pdf|md|png|jpg|jpeg|gif|svg|webp) ;;

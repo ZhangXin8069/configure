@@ -81,9 +81,13 @@ _test_sub_only_preserves_root_ignore() {
     cmp -s <(printf '*\n!.gitignore\n!AGENTS.md\n!README.md\n') \
         "${repo}/data/.gitignore" \
         || _fail "-sub 未写入 data/.gitignore"
-    cmp -s <(printf '*\n*\n!.gitignore\n!AGENTS.md\n!README.md\n!.txt\n') \
+    cmp -s <(printf '*\n*\n!.gitignore\n!AGENTS.md\n!README.md\n!*.txt\n') \
         "${repo}/logs/.gitignore" \
         || _fail "-sub 未写入 logs/.gitignore"
+    printf 'log\n' > "${repo}/logs/v20261031000000.txt"
+    if git -C "${repo}" check-ignore --no-index -q -- logs/v20261031000000.txt; then
+        _fail "-sub 生成的 logs/.gitignore 忽略了普通 .txt 日志"
+    fi
 }
 
 _test_form_snapshot_symlinks_are_kept() {
