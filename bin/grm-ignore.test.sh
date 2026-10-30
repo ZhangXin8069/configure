@@ -27,6 +27,7 @@ _make_fixture() {
     git -C "${repo}" checkout -q -b main
 
     printf 'keep\n' > "${repo}/keep.txt"
+    printf 'ignored unicode\n' > "${repo}/ignored 中文.log"
     for index in $(seq -w 1 301); do
         printf 'ignored\n' > "${repo}/ignored-${index}.log"
     done
@@ -69,7 +70,7 @@ _test_dry_run_selects_only_ignored_paths() {
         cat "${output}" >&2
         _fail "dry-run 未列出被忽略文件"
     }
-    grep -Fxq '  ... (还有 1 个)' "${output}" || {
+    grep -Eq '^  \.\.\. \(还有 [1-9][0-9]* 个\)$' "${output}" || {
         cat "${output}" >&2
         _fail "dry-run 未正确截断长列表"
     }
@@ -96,6 +97,16 @@ _test_rewrite_removes_ignored_history() {
         || _fail "重写后未保留未忽略文件"
     if git -C "${repo}" cat-file -e HEAD:ignored-001.log 2>/dev/null; then
         _fail "重写后仍保留被忽略文件"
+    fi
+    if git -C "${repo}" cat-file -e HEAD:ignored-301.log 2>/dev/null; then
+        _fail "重写后仍保留内容相同的后续被忽略文件"
+    fi
+    if git -C "${repo}" cat-file -e 'HEAD:ignored 中文.log' 2>/dev/null; then
+        _fail "重写后仍保留含中文的被忽略文件"
+    fi
+    if git -C "${repo}" log --all --pretty=format: --name-only --no-renames \
+        | grep -Eq '^ignored.*\.log$'; then
+        _fail "重写后历史中仍有被忽略文件"
     fi
     git -C "${repo}" cat-file -e HEAD:.gitignore 2>/dev/null \
         || _fail "重写后误删 .gitignore"

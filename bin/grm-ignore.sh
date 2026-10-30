@@ -101,7 +101,7 @@ fi
 #   - --no-index：即使文件已被跟踪也判定
 echo "[1/6] 用仓库内所有 .gitignore 规则匹配历史路径..."
 set +e
-git -C "$REPO_ROOT" -c core.excludesFile=/dev/null \
+git -C "$REPO_ROOT" -c core.excludesFile=/dev/null -c core.quotePath=false \
     check-ignore --no-index --stdin -v < "$PATHS_ALL" > "$MATCHES_FILE"
 CHECK_IGNORE_STATUS=$?
 set -e
