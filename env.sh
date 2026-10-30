@@ -123,3 +123,72 @@ get_git_files_types() {
     [[ $b == *.* && $b != .* ]] && printf '%s\n' "${b##*.}"
   done < <(git ls-files -co --exclude-standard -z) | sort -u
 }
+# ===== get_soft_links: 递归列出软链接（带指向与高亮） =====
+# 用法: get_soft_links [路径]        # 默认 .
+# 配色参考 fd -t l：链接青色加粗；目标黄色；断链红色
+# 兼容 bash 4+ / zsh 5+；非 TTY 自动关闭颜色
+get_soft_links() {
+    local path="${1:-.}"
+    if [[ ! -d "$path" ]]; then
+        printf 'get_soft_links: not a directory: %s\n' "$path" >&2
+        return 1
+    fi
+
+    # ---- 颜色：仅 TTY 启用 ----
+    local use_color=0
+    [[ -t 1 ]] && use_color=1
+
+    local C_LINK='' C_ARROW='' C_TARGET='' C_BROKEN='' C_RESET=''
+    if (( use_color )); then
+        if command -v tput >/dev/null 2>&1; then
+            C_LINK=$(tput setaf 6; tput bold)   # 青 + 粗体（fd symlink 默认）
+            C_ARROW=$(tput setaf 7)             # 白
+            C_TARGET=$(tput setaf 3)            # 黄
+            C_BROKEN=$(tput setaf 1; tput bold) # 红 + 粗体
+            C_RESET=$(tput sgr0)
+        else
+            C_LINK=$'\033[1;36m'
+            C_ARROW=$'\033[0;37m'
+            C_TARGET=$'\033[0;33m'
+            C_BROKEN=$'\033[1;31m'
+            C_RESET=$'\033[0m'
+        fi
+    fi
+
+    # ---- 遍历 ----
+    local count=0 broken=0 link target
+    while IFS= read -r -d '' link; do
+        target=$(readlink "$link" 2>/dev/null) || target='?'
+        if [[ -e "$link" ]]; then
+            printf '%s%s%s %s->%s %s%s%s\n' \
+                "$C_LINK"   "$link"  "$C_RESET" \
+                "$C_ARROW"  "$C_RESET" \
+                "$C_TARGET" "$target" "$C_RESET"
+        else
+            printf '%s%s%s %s->%s %s%s%s %s[broken]%s\n' \
+                "$C_LINK"   "$link"   "$C_RESET" \
+                "$C_ARROW"  "$C_RESET" \
+                "$C_BROKEN" "$target" "$C_RESET" \
+                "$C_BROKEN" "$C_RESET"
+            broken=$((broken + 1))
+        fi
+        count=$((count + 1))
+    done < <(
+        find "$path" \
+            -type d \( -name .git -o -name node_modules \) -prune \
+            -o -type l -print0 2>/dev/null
+    )
+
+    # ---- 汇总（走 stderr，不污染可解析的 stdout） ----
+    if (( use_color )); then
+        printf '%s%d%s symlink(s)' "$C_LINK" "$count" "$C_RESET" >&2
+        if (( broken > 0 )); then
+            printf ', %s%d broken%s' "$C_BROKEN" "$broken" "$C_RESET" >&2
+        fi
+        printf '\n' >&2
+    else
+        printf '%d symlink(s)' "$count" >&2
+        (( broken > 0 )) && printf ', %d broken' "$broken" >&2
+        printf '\n' >&2
+    fi
+}
