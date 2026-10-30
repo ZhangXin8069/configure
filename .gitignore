@@ -429,10 +429,12 @@ _minted*/
 .optim.*
 .tag.*
 .agent-runtime/
-data/runs/
-data/hooks/
-data/form-source-cache/
-data/context-*.txt
+# data/ 是 agent 原始运行时边界；仅保留目录契约文件，其他内容一律本地化。
+# 该总规则与 data/.gitignore 构成双层防护，禁止用 git add -f 绕过。
+data/*
+!data/.gitignore
+!data/AGENTS.md
+!data/README.md
 .pdfcheck.*
 # ZhangXin
 *.VSCodeCounter

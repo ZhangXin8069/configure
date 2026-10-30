@@ -14,6 +14,20 @@ echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
 
+# Fail closed whenever the repository uses the configure data/ boundary.
+if [[ -d "$REPO_ROOT/data" ]]; then
+    _SELF_DIR=$(cd "$(dirname "$_SRC")" && pwd -P)
+    _DATA_TRACKING_CHECK="$_SELF_DIR/../skills/form/scripts/form-data-tracking-check.sh"
+    if [[ ! -x "$_DATA_TRACKING_CHECK" ]]; then
+        echo "ERROR: data tracking guard is missing: $_DATA_TRACKING_CHECK"
+        exit 1
+    fi
+    if ! "$_DATA_TRACKING_CHECK" --root "$REPO_ROOT" --quiet; then
+        echo "ERROR: data/ tracking guard failed; gpush stopped before staging, committing, or pushing."
+        exit 1
+    fi
+fi
+
 # Stage everything (including deletions) from repo root
 git add -A
 

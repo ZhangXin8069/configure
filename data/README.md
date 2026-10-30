@@ -26,7 +26,13 @@ Unix 会原子回收确认 owner 已退出的旧锁，Windows 使用独占文件
 默认写入 `hooks/events.jsonl`；路径可用 `CODEX_HOOK_DATA_DIR` 或
 `CODEX_HOOK_EVENT_FILE` 覆盖。运行日志、状态和 hook 事件均不应提交到 Git。
 
-## 报告
+## 缓存与隔离 HOME
 
-本目录可以保存可审计的对比报告和测试证据；报告源文件与人工整理的结果可以入库，
-运行时目录由仓库根 `.gitignore` 忽略。
+`cache/` 可能包含 Codex/OpenCode 隔离 HOME、模型目录、会话 rollout、SQLite/WAL、历史记录、
+shell 快照及其他测试探针产物。这些文件可能同时包含 API 密钥、会话标识和隐私内容，必须始终留在本地。
+
+## Git 边界
+
+本目录只跟踪 `.gitignore`、`AGENTS.md` 和 `README.md`。需要入库的对比报告或测试证据应先脱敏，
+再写入 `docs/` 或 `logs/`，不得把 `data/` 当作公开附件目录。发现泄露时先吊销/轮换凭据，再处理当前树和
+远端历史。

@@ -43,7 +43,8 @@ metadata:
   `log/json/tsv/csv/txt`，agent 日志按 `log` 技能的三态时间戳命名。
 - 本库缺少独立构建系统时，验证入口为 `bash -n bin/*.sh`、
   `scripts/form-audit.sh --root /root/configure --strict --quiet` 和
-  `scripts/form-snapshot-verify.sh --quiet`。
+  `scripts/form-snapshot-verify.sh --quiet`；涉及 Git 提交时另运行
+  `scripts/form-data-tracking-check.sh --root /root/configure --quiet`。
 
 ## 核心原则
 
@@ -113,11 +114,13 @@ metadata:
 - `references/git-artifacts-and-workflow.md`：目录职责、参考子库交付、清理边界、提交消息、
   验收和本地特化模板。
 - `scripts/form-audit.sh`：只读检查已跟踪路径的顶层目录、代码文件名、docs/logs/data、测试位置
-  和 `refer/git-rep` 子库/README/docs 基线。
+  `env.sh` URL 凭据和 `refer/git-rep` 子库/README/docs 基线。
 - `scripts/form-agents-sync.sh`：把与目标库相关的 form 规则写入根 `AGENTS.md`
   的标记块；只更新标记块，保留块外全部本地约定。
 - `scripts/form-large-files-check.sh`：只读检查暂存的新增、修改、复制或重命名文件，
   默认阻止单个索引 blob 超过 `10,000,000` 字节。
+- `scripts/form-data-tracking-check.sh`：只读检查 `data/` 跟踪白名单和 cache 忽略盾，
+  供 `gpush.sh` 在暂存前失败关闭。
 - `scripts/form-snapshot-verify.sh`：离线校验快照哈希、manifest、二进制排除项和符号链接。
 
 执行命名或目录审计前读取第一个和第二个；需要核对参考原义、提交或例外证据时读取第三个。
@@ -256,8 +259,9 @@ rg -n --hidden --glob '!.git/**' '旧名称|OldName|old_name'
 2. `logs/` 仅保留 `AGENTS.md`、任务需求单、agent 三态日志、用户自定义历史日志，以及
    `log/json/tsv/csv/txt`；agent 日志必须符合 `vYYYYMMDD[HH[MM[SS]]].txt`、
    对应连字符格式或冲突后缀。清理前列出候选并检查是否被源码或脚本引用。
-3. `data/` 汇集历史数据文件；通过 `.gitignore` 排除内容，仅保留 `.gitignore`、
-   `AGENTS.md` 和 `README.md`。
+3. `data/` 汇集本地运行时数据；根 `.gitignore` 与 `data/.gitignore` 必须双重排除内容，仅保留
+   `.gitignore`、`AGENTS.md` 和 `README.md`。`data/cache/**` 零例外，禁止 `git add -f`，也不得以
+   `--exclude '^data/'` 隐藏审计错误。
 4. 复杂库测试归入小写库名下的 `testing/`，简单库测试可保留在功能目录并采用
    `*.test.sh` 一类“小写点划分”入口；合并后的通用测试必须附可直接调用的脚本。
 5. 测试入口应具备完整默认值，优先无参数即可运行；参数只用于覆盖默认行为。
@@ -454,7 +458,8 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 - 标签名可作为更新说明、注释和日志中的版本引用，但不能替代名称本身应表达的业务语义。
 - 目录白名单之外的名称只有用户明确批准或目标库特化规则明确登记后才能保留。
 - 清理不等于删除历史；需要回顾旧文件时使用 `git show <revision>:<path>`。
-- `data/` 中的历史数据默认不作为提交对象，文档和日志不得混入数据目录。
+- `data/` 中的运行时数据默认不作为提交对象，cache、会话、数据库、shell 快照和凭据零例外；
+  文档、日志和需入库报告不得混入数据目录。
 - 根规则同步只更新标记块；本库特有规则和例外写在块外或纳入下一次待同步内容，不能依赖
   人工覆盖整份 `AGENTS.md`。
 - 大文件闸门只报告并阻止提交，不自动删除、移动或取消暂存用户文件；处理方式由用户决定。

@@ -6,6 +6,7 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)
 AUDIT="$SCRIPT_DIR/form-audit.sh"
 AGENTS_SYNC="$SCRIPT_DIR/form-agents-sync.sh"
 LARGE_FILES="$SCRIPT_DIR/form-large-files-check.sh"
+DATA_TRACKING="$SCRIPT_DIR/form-data-tracking-check.sh"
 TMP_ROOT=$(mktemp -d "${TMPDIR:-/tmp}/form-audit-test.XXXXXX")
 trap 'rm -rf "$TMP_ROOT"' EXIT
 
@@ -83,7 +84,12 @@ done
 printf '' >"$simple/bin/agent-dispatch.sh"
 printf '' >"$simple/bin/agent.test.sh"
 printf '' >"$simple/lib/env.sh"
-printf '' >"$simple/data/.gitignore"
+cat >"$simple/data/.gitignore" <<'EOF'
+*
+!.gitignore
+!AGENTS.md
+!README.md
+EOF
 printf '' >"$simple/data/AGENTS.md"
 printf '' >"$simple/data/README.md"
 printf '' >"$simple/docs/task.md"
@@ -107,6 +113,67 @@ git -C "$simple" add -f .
 
 simple_output=$("$AUDIT" --root "$simple" --strict 2>/dev/null)
 [[ -z "$simple_output" ]] || fail "simple fixture should pass audit"
+"$DATA_TRACKING" --root "$simple" --quiet ||
+  fail "data tracking guard should pass the clean fixture"
+
+data_repo="$TMP_ROOT/data-tracking-repo"
+make_repo "$data_repo"
+mkdir -p "$data_repo/data/cache"
+cat >"$data_repo/data/.gitignore" <<'EOF'
+*
+!.gitignore
+!AGENTS.md
+!README.md
+EOF
+printf '' >"$data_repo/data/AGENTS.md"
+printf '' >"$data_repo/data/README.md"
+printf 'must-not-be-tracked\n' >"$data_repo/data/cache/runtime.env"
+git -C "$data_repo" add -f data
+set +e
+data_output=$("$AUDIT" --root "$data_repo" --strict 2>/dev/null)
+data_status=$?
+set -e
+[[ "$data_status" -eq 1 ]] || fail "tracked data runtime should fail strict audit"
+grep -q $'^ERROR\tTRACKED_DATA_CONTENT\tdata/cache/runtime.env\t' <<<"$data_output" ||
+  fail "missing TRACKED_DATA_CONTENT finding"
+set +e
+data_guard_output=$("$DATA_TRACKING" --root "$data_repo" 2>/dev/null)
+data_guard_status=$?
+set -e
+[[ "$data_guard_status" -eq 1 ]] || fail "data tracking guard should reject tracked cache"
+grep -q $'TRACKED_DATA_CONTENT\tdata/cache/runtime.env\t' <<<"$data_guard_output" ||
+  fail "data tracking guard should report tracked cache"
+
+bypass_repo="$TMP_ROOT/data-ignore-bypass-repo"
+make_repo "$bypass_repo"
+mkdir -p "$bypass_repo/data"
+printf '' >"$bypass_repo/data/.gitignore"
+printf '' >"$bypass_repo/data/AGENTS.md"
+printf '' >"$bypass_repo/data/README.md"
+git -C "$bypass_repo" add data
+set +e
+bypass_output=$("$AUDIT" --root "$bypass_repo" --strict 2>/dev/null)
+bypass_status=$?
+set -e
+[[ "$bypass_status" -eq 1 ]] || fail "ineffective data ignore rules should fail strict audit"
+grep -q $'^ERROR\tDATA_IGNORE_BYPASS\tdata/cache/form-audit-probe\t' <<<"$bypass_output" ||
+  fail "missing DATA_IGNORE_BYPASS finding"
+grep -q $'^ERROR\tDATA_IGNORE_PATTERN\tdata/.gitignore\t' <<<"$bypass_output" ||
+  fail "missing DATA_IGNORE_PATTERN finding"
+
+credential_repo="$TMP_ROOT/inline-url-credential-repo"
+make_repo "$credential_repo"
+mkdir -p "$credential_repo/lib/example"
+printf 'export http_proxy=https://user:password@example.invalid:8080\n' \
+  >"$credential_repo/lib/example/env.sh"
+git -C "$credential_repo" add lib/example/env.sh
+set +e
+credential_output=$("$AUDIT" --root "$credential_repo" --strict 2>/dev/null)
+credential_status=$?
+set -e
+[[ "$credential_status" -eq 1 ]] || fail "inline URL userinfo should fail strict audit"
+grep -q $'^ERROR\tINLINE_URL_CREDENTIALS\tlib/example/env.sh\t' <<<"$credential_output" ||
+  fail "missing INLINE_URL_CREDENTIALS finding"
 
 reference_repo="$TMP_ROOT/reference-repo"
 make_repo "$reference_repo"
@@ -319,6 +386,7 @@ set -e
 "$AUDIT" --help >/dev/null
 "$AGENTS_SYNC" --help >/dev/null
 "$LARGE_FILES" --help >/dev/null
+"$DATA_TRACKING" --help >/dev/null
 
 mkdir -p "$TMP_ROOT/empty-snapshots"
 set +e

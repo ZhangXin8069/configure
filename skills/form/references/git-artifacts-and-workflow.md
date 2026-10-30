@@ -20,6 +20,11 @@
 !README.md
 ```
 
+该规则必须同时存在于根 `.gitignore` 和 `data/.gitignore`，形成双层防护。`data/cache/**` 没有
+例外：cache 可能保存隔离 agent HOME、会话、SQLite/WAL、shell 快照和凭据；禁止 `git add -f`，
+禁止从审计中用 `--exclude '^data/'` 隐藏 `TRACKED_DATA_CONTENT`。发现泄露时先吊销/轮换凭据，
+再移除索引并处理远端历史；历史改写不能替代轮换。
+
 ### 1.1 参考子库交付
 
 参考 Git 库统一以 submodule 放在 `refer/git-rep/<name>`，来源和致谢写入

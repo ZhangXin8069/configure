@@ -334,6 +334,46 @@ while IFS= read -r -d '' path; do
   esac
 done < <(git -C "$ROOT" ls-files -z -- data)
 
+if [[ -d "$ROOT/data" ]]; then
+  if [[ ! -f "$ROOT/data/.gitignore" ]]; then
+    report ERROR DATA_IGNORE_MISSING "data/.gitignore" \
+      "data/.gitignore is required when data/ exists"
+  else
+    for ignore_entry in '*' '!.gitignore' '!AGENTS.md' '!README.md'; do
+      if ! grep -Fqx -- "$ignore_entry" "$ROOT/data/.gitignore"; then
+        report ERROR DATA_IGNORE_PATTERN "data/.gitignore" \
+          "data/.gitignore is missing required rule: $ignore_entry"
+      fi
+    done
+    if ! git -C "$ROOT" check-ignore --no-index -q data/cache/form-audit-probe; then
+      report ERROR DATA_IGNORE_BYPASS "data/cache/form-audit-probe" \
+        "data/.gitignore must ignore cache and all runtime content"
+    fi
+    for contract_path in data/AGENTS.md data/README.md; do
+      if git -C "$ROOT" check-ignore --no-index -q "$contract_path"; then
+        report ERROR DATA_CONTRACT_IGNORED "$contract_path" \
+          "data contract files must remain explicitly unignored"
+      fi
+    done
+  fi
+fi
+
+while IFS= read -r -d '' path; do
+  case "$path" in
+    data/*|refer/*|lib/_oh-my-zsh/*|lib/_vim/*|\
+    skills/form/references/source-snapshots/*|*.test.sh)
+      continue
+      ;;
+    */env.sh|*.env|*.env.sh) ;;
+    *) continue ;;
+  esac
+  [[ -f "$ROOT/$path" ]] || continue
+  if grep -Eqi 'https?://[^/[:space:]@]+:[^/[:space:]@]+@' "$ROOT/$path"; then
+    report ERROR INLINE_URL_CREDENTIALS "$path" \
+      "env configuration embeds URL userinfo; read credentials outside Git"
+  fi
+done < <(git -C "$ROOT" ls-files -z)
+
 REF_ROOT_REL=refer/git-rep
 REF_README_REL=$REF_ROOT_REL/README.md
 REF_HAS_ENTRY=0

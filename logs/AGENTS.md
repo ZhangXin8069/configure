@@ -700,3 +700,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 20261030 - final - 2026-10-30 20:26:27 +0800
+- 主任务: 处置 configure 公开仓库 data/cache 密钥与隐私泄露并建立防复发规则
+- 日志文件: logs/v2026103020.txt
+- 文件大小: 8729 bytes
+- 触发原因: 任务完成
+- 关键内容: 移除 482 个 cache 跟踪项，建立双层忽略、gpush 失败关闭、form 审计回归与泄露响应规范；远端历史清理待轮换和破坏性授权
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## 20261030 - general - 2026-10-30 20:46:36 +0800
+- 主任务: 补充 data/cache 泄露历史扫描与版本化代理凭据整改
+- 日志文件: logs/v20261030204636.txt
+- 文件大小: 3697 bytes
+- 触发原因: 一般记录
+- 关键内容: 8,329 个历史 blob 扫描完成；cache 密钥命中均属已知泄露，另发现并当前树脱敏 1 组历史代理凭据；新增 env URL 凭据审计
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
