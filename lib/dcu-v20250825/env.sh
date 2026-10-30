@@ -13,8 +13,11 @@ module purge
 module load sghpc-mpi-gcc/25.6
 module list
 # EXPORT
-export http_proxy=http://b09r1n17:Bo9r1ni1@172.16.0.19:3128
-export https_proxy=http://b09r1n17:Bo9r1ni1@172.16.0.19:3128
+# Proxy credentials are local-only. Set the full URL outside Git before sourcing.
+if [ -n "${DCU_HTTP_PROXY:-}" ]; then
+    export http_proxy="$DCU_HTTP_PROXY"
+    export https_proxy="$DCU_HTTP_PROXY"
+fi
 export PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/bin:$PATH
 export LD_LIBRARY_PATH=/public/home/zhangxin80699/hdf5-hdf5-1_12_2/build/hdf5-mpi/lib:$LD_LIBRARY_PATH
 export PYTHONPATH=/public/home/zhangxin80699/PyQCU:${PYTHONPATH}

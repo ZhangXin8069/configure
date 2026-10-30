@@ -26,7 +26,7 @@
 | `docs/` | 参考文档、分析资料、图片素材；功能输入不放此目录 |
 | `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENTS.md` 批次索引 |
 | `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
-| `data/` | agent 运行时本地数据：runs manifest/state/events/context/log/inputs，`cache/` 为 Codex 模型元数据目录缓存；默认不入库 |
+| `data/` | agent 运行时本地数据：runs、hooks、cache、会话/日志/数据库、shell 快照与模型目录缓存；仅目录契约文件可入库 |
 | `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；普通 TUI 由 `tools/agent-tui-watch.py` 对意外中断做原地恢复，进程退出后的 `agent-resume` 作为 headless/兜底路径并默认无限重试；不会自动修改 agent 配置或 `core.hooksPath` |
 | `plugins/` | Codex 插件推荐索引与显式安装器；支持固定 ref、只读状态和安装前 plugin/hook/MCP 静态审计；不自动安装第三方插件 |
 | `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 按 10 秒间隔恢复意外中断 run，`agent-resources.py` 提供脱敏资源快照，`plugin-audit.py` 静态审计 plugin/hook/MCP manifest |
@@ -54,6 +54,22 @@
   条件式授权允许自动本地提交、正常 push 和创建非破坏性标签，无需再次请求确认。
 - force push、删除/改写已推送标签、破坏性清理、系统配置、凭据操作、仓库外写入和用户明确禁止的动作不在
   自动授权范围内。
+
+## 数据、缓存与凭据安全红线
+
+- `data/` 是原始运行时数据边界，Git 仅允许跟踪 `data/.gitignore`、`data/AGENTS.md` 和
+  `data/README.md`。`data/cache/**`、`data/runs/**`、`data/hooks/**`、会话/SQLite/WAL、
+  shell 快照、环境导出和任意新增运行时文件一律不得提交、推送、打包或粘贴到公开渠道。
+- 禁止用 `git add -f`、`git add -A` 后的强制索引操作或审计排除项绕过上述边界；`gpush.sh`
+  在任何包含 `data/` 的仓库中必须先通过
+  `skills/form/scripts/form-data-tracking-check.sh`，失败即停止暂存、提交和推送。
+- 版本化 `env.sh`、代理/数据库 URL、测试夹具和文档示例同样不得包含真实密钥、密码或 URL userinfo；
+  运行时凭据只能从 Git 外环境或本地覆盖文件读取。
+- 发现密钥、密码、Cookie、OAuth/API 令牌、私钥或隐私数据进入 Git 后，立即停止后续交付并先轮换/吊销
+  已暴露凭据；随后才移除索引、提交当前树修复，并在获得破坏性授权后清理远端历史。删文件或改写历史不能
+  替代凭据轮换。
+- 泄露取证、日志和报告只记录路径、变量名、类型、数量与时间，不记录敏感值；提交前至少运行
+  `git ls-files -- data` 白名单检查和 `form-audit --strict --quiet`，不得以 `data/**` 排除掩盖违规。
 
 <!-- form-skill:start -->
 ## form 格式约定
@@ -95,5 +111,8 @@
 - 无统一构建/lint 框架；仓库工具脚本以 shell 和 Python 为主，shell 用 `bash -n <script>`，Python 用 `python3 -m py_compile <script>`
 - 修改 `skills/conf-refer-skill/scripts/` 后运行 `bash skills/conf-refer-skill/scripts/find-refer-skills.test.sh`
 - 修改 `skills/rule/scripts/` 后运行 `bash skills/rule/scripts/run-guarded.test.sh`
+- 修改 `skills/form/scripts/` 后运行 `bash skills/form/scripts/form-scripts.test.sh`
+- 提交前运行 `bash skills/form/scripts/form-data-tracking-check.sh --root . --quiet`；
+  该检查只允许 `data/` 的三个契约文件，并要求 `data/cache/**` 始终被忽略
 - 仓库未安装自动 Git hook；任何 agent 提交前都必须执行上述大文件闸门；
   `.agent.*.log` 为 opencode/Codex 运行日志，不入库
