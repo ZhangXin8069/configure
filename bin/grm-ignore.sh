@@ -81,11 +81,12 @@ SKIPPED_PATHS=$(mktemp)
 CHECK_INPUT=$(mktemp)
 CHECK_OUTPUT=$(mktemp)
 CHECK_ERROR=$(mktemp)
+ARRAY_TMP_FILE=$(mktemp)
 IGNORE_SHADOW_DIR=""
 _cleanup() {
     rm -f -- "$PATHS_ALL" "$DELETE_PATHS_FILE" "$MATCHES_FILE" "$SYMLINKS_ALL" \
         "$PROTECTED_PATHS" "$FILENAME_CALLBACK_FILE" "$SKIPPED_PATHS" \
-        "$CHECK_INPUT" "$CHECK_OUTPUT" "$CHECK_ERROR"
+        "$CHECK_INPUT" "$CHECK_OUTPUT" "$CHECK_ERROR" "$ARRAY_TMP_FILE"
     [[ -z "$IGNORE_SHADOW_DIR" ]] || rm -rf -- "$IGNORE_SHADOW_DIR"
 }
 trap _cleanup EXIT
@@ -144,15 +145,19 @@ echo "  受保护路径及祖先前缀: ${TOTAL_PROTECTED}"
 #   - -c core.excludesFile=/dev/null：排除 ~/.config/git/ignore 等全局规则干扰
 #   - --no-index：即使文件已被跟踪也判定
 echo "[1/6] 用仓库内所有 .gitignore 规则匹配历史路径..."
-mapfile -t CHECK_PATHS < <(
-    awk -v protected_file="$PROTECTED_PATHS" '
-        BEGIN {
-            while ((getline path < protected_file) > 0) protected[path] = 1
-            close(protected_file)
-        }
-        !($0 in protected)
-    ' "$PATHS_ALL"
-)
+# 兼容 macOS 自带的 Bash 3.2：通过临时文件和 read 填充数组。
+awk -v protected_file="$PROTECTED_PATHS" '
+    BEGIN {
+        while ((getline path < protected_file) > 0) protected[path] = 1
+        close(protected_file)
+    }
+    !($0 in protected)
+' "$PATHS_ALL" > "$ARRAY_TMP_FILE"
+
+CHECK_PATHS=()
+while IFS= read -r path || [[ -n "$path" ]]; do
+    CHECK_PATHS[${#CHECK_PATHS[@]}]="$path"
+done < "$ARRAY_TMP_FILE"
 
 _check_ignore_range() {
     local start=$1 count=$2 rc midpoint
@@ -242,7 +247,10 @@ fi
 
 TOTAL_SKIPPED=$(wc -l < "$SKIPPED_PATHS")
 if (( TOTAL_SKIPPED > 0 )); then
-    mapfile -t SKIPPED_PATHS_LINES < "$SKIPPED_PATHS"
+    SKIPPED_PATHS_LINES=()
+    while IFS= read -r path || [[ -n "$path" ]]; do
+        SKIPPED_PATHS_LINES[${#SKIPPED_PATHS_LINES[@]}]="$path"
+    done < "$SKIPPED_PATHS"
     echo "  ⚠️ 跳过 ${TOTAL_SKIPPED} 个穿过当前软链接的历史路径（无法安全分类）:"
     printf '    %s\n' "${SKIPPED_PATHS_LINES[@]:0:20}"
     if (( TOTAL_SKIPPED > 20 )); then
@@ -253,23 +261,26 @@ fi
 # 解析 -v 输出：<source>:<lineno>:<pattern>\t<pathname>
 # 否定规则（!pattern）表示路径最终未被忽略，不能传给 filter-repo。
 # 安全阀：永不删除历史 symlink 及其祖先前缀，以及 .gitignore 自身。
-mapfile -t TO_DELETE < <(
-    awk -F'\t' -v protected_file="$PROTECTED_PATHS" '
-        BEGIN {
-            while ((getline path < protected_file) > 0) protected[path] = 1
-            close(protected_file)
-        }
-        NF >= 2 && !seen[$2]++ {
-            path = $2
-            if (path in protected) next
-            pattern = $1
-            sub(/^.*:[0-9]+:/, "", pattern)
-            if (pattern ~ /^!/) next
-            n = split(path, a, "/")
-            if (a[n] != ".gitignore") print path
-        }
-    ' "$MATCHES_FILE"
-)
+awk -F'\t' -v protected_file="$PROTECTED_PATHS" '
+    BEGIN {
+        while ((getline path < protected_file) > 0) protected[path] = 1
+        close(protected_file)
+    }
+    NF >= 2 && !seen[$2]++ {
+        path = $2
+        if (path in protected) next
+        pattern = $1
+        sub(/^.*:[0-9]+:/, "", pattern)
+        if (pattern ~ /^!/) next
+        n = split(path, a, "/")
+        if (a[n] != ".gitignore") print path
+    }
+' "$MATCHES_FILE" > "$ARRAY_TMP_FILE"
+
+TO_DELETE=()
+while IFS= read -r path || [[ -n "$path" ]]; do
+    TO_DELETE[${#TO_DELETE[@]}]="$path"
+done < "$ARRAY_TMP_FILE"
 
 if (( ${#TO_DELETE[@]} == 0 )); then
     echo "无匹配 .gitignore 的历史文件，无需重写。"
