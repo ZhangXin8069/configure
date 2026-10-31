@@ -131,7 +131,7 @@ awk '
         NF {
             path = $0
             print path
-            while (sub(/\/[^/]+$/, "", path)) print path
+            while (sub("/[^/]+$", "", path)) print path
         }
     ' "$SYMLINKS_ALL" \
   | sort -u > "$PROTECTED_PATHS"
@@ -411,3 +411,4 @@ echo "  - 远程仓库的 GC 由托管平台后台调度，磁盘空间可能几
 echo "  - 所有协作者必须重新 clone，不能 pull。"
 echo "  - 子模块历史未被处理；如需清理子模块，cd 进子模块后单独执行本脚本。"
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
+
