@@ -1,0 +1,94 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 22:56:12 +0800
+批次: gback-unregistered-gitlink
+主任务: 修复 gback 在存在未注册 gitlink 时误判子模块脏状态的问题
+触发原因: 任务完成
+摘要: 改为仅检查 .gitmodules 注册子模块，并用 scoped update 跳过未注册 gitlink；9 个场景回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与根因
+- 目标: 修复 `gback.sh` 将未注册 gitlink 的 submodule 配置错误误判为“子模块内部脏”。
+- 命令/操作: 检查 `.gitmodules`、索引 gitlink 与 `git submodule status --recursive`。
+- 关键输出: `lib/_clash/clash-for-linux` 是索引中的 `160000` gitlink，但 `.gitmodules` 没有对应 URL；全局 status 返回 `fatal: no submodule mapping found`，退出码 128。
+- 证据与判断: 旧的 `git submodule foreach` 将所有非零退出都解释为脏状态，因此该未注册 gitlink 阻断 gback，即使其对应目录并未初始化。
+
+### S2 — 隔离验证
+- 目标: 验证未注册 gitlink 与已注册子模块共存时的安全更新方式。
+- 命令/操作: 在临时父子仓库中加入正常注册的 `child` 和未注册的 `orphan` gitlink，分别执行全局 status 与 scoped update。
+- 关键输出: 全局 status 退出码 128；`git submodule update --recursive --checkout -- child` 退出码 0，未注册 orphan 未被处理。
+- 证据与判断: 通过限定 `.gitmodules` 注册路径可以同时更新已初始化子模块并跳过未注册 gitlink。
+
+### S3 — 实现与回归
+- 目标: 消除全局 submodule 遍历依赖并保留数据安全边界。
+- 命令/操作: 修改 `bin/gback.sh`，使用 NUL 安全配置解析读取注册路径；用 raw diff 检测 gitlink 状态；只检查已初始化注册子模块；重置后只 scoped update 这些路径。修改 `bin/gback.test.sh` 和 `bin/AGENTS.md`。
+- 关键输出: 新增“仅有未注册 gitlink”和“注册子模块 + 未注册 gitlink”测试覆盖；测试函数总数为 9。
+- 退出码: 相关测试均为 0。
+- 证据与判断: 未注册 gitlink 不再参与遍历，已注册子模块的脏状态保护和 scoped 更新仍有效。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gback.sh bin/gback.test.sh`，退出码 0。
+- 测试/检查: `timeout 180s bash bin/gback.test.sh`，退出码 0，9 个场景全部通过。
+- 测试/检查: 当前 `.gitmodules` 的 8 个已初始化子模块状态检查，`checked=8 dirty=0`。
+- 测试/检查: `form-audit.sh --root . --strict --quiet`，退出码 0。
+- 测试/检查: `form-data-tracking-check.sh --root . --quiet`，退出码 0。
+- 测试/检查: `git diff --check`，退出码 0。
+- 未验证项: 未在真实工作区执行修复后的 `gback.sh`，因为该命令会按设计 stash 并删除当前 ignored 数据，包括活动 agent 的 `data/runs` 运行文件。
+
+## 变更与产物
+- 文件: `bin/gback.sh`，移除对未注册 gitlink 的全局 submodule 遍历，新增注册路径解析、raw gitlink 检测和 scoped submodule update。
+- 文件: `bin/gback.test.sh`，新增未注册 gitlink 独立夹具及与注册子模块共存的测试。
+- 文件: `bin/AGENTS.md`，同步 gback 的未注册 gitlink 行为。
+- 产物: 无缓存、数据或二进制产物。
+- 未改动范围: 未执行真实 reset、未修改子模块、未暂存、未提交、未推送。
+
+## 风险、限制与下一步
+- 风险: 未注册 gitlink 按设计保持原样，不检查其目录内部内容；这是避免全局 submodule 命令失败的明确边界。
+- 阻塞: 无。
+- 下一步: 可重新运行 `gback.sh`。它会按现有语义 stash 当前 ignored 数据并对齐 upstream。
+
+## 用户输入指令
+用户提供的运行输出摘要如下，运行时数据路径已省略：
+
+```text
+gback.sh
+Fetching origin
+Upstream: origin/main (fa2c693)
+本地提交均已包含于 origin/main。
+将 stash 的工作区状态（含 staged/untracked/ignored）：
+!! data/cache/... （多条运行时缓存，已省略）
+!! data/runs/... （多条运行时日志与状态，已省略）
+fatal: No url found for submodule path 'lib/_clash/clash-for-linux' in .gitmodules
+ERROR: 已初始化子模块内部存在未提交状态；为避免 reset 丢数据，gback 已中止。
+```
+
+## Agent 全文报告
+--- report begin ---
+# gback 未注册 gitlink 修复
+
+## 根因
+`lib/_clash/clash-for-linux` 是父仓库索引中的 `160000` gitlink，但 `.gitmodules` 没有对应 URL。旧实现调用全局 `git submodule foreach/status`，Git 对未注册 gitlink 直接返回 128；gback 将该错误误判为“已初始化子模块内部脏”，所以在 stash 之前错误中止。
+
+## 改动内容
+- `bin/gback.sh` 不再使用全局 submodule 遍历。
+- 从 `.gitmodules` 中 NUL 安全地读取注册路径，只检查其中已初始化的子模块。
+- 通过 raw diff 检测工作区或索引中的 gitlink 状态，避免全局 `submodule status` 配置错误。
+- reset 后仅对已初始化的注册路径执行 scoped `git submodule update --recursive --checkout`，未注册 gitlink 保持原样。
+- `bin/gback.test.sh` 增加未注册 gitlink 独立场景，并让注册子模块测试同时包含一个未注册 gitlink。
+- `bin/AGENTS.md` 同步行为说明。
+
+## 验证结果
+- `bash -n bin/gback.sh bin/gback.test.sh`：通过。
+- `bin/gback.test.sh`：9 个场景全部通过。
+- 当前 8 个已注册且已初始化子模块：`checked=8 dirty=0`。
+- `form-audit --strict --quiet`：通过。
+- `form-data-tracking-check --quiet`：通过。
+- `git diff --check`：通过。
+
+## 限制
+未注册 gitlink 不参与遍历，也不检查其目录内部状态。该行为避免 Git 全局 submodule 命令的致命错误，同时保持其父仓库 gitlink 原样。
+
+## 后续步骤
+重新运行 `gback.sh`。当前 ignored 数据会按脚本原语义进入 stash，之后工作区对齐 upstream；本轮没有直接在真实工作区执行该重置命令。
+--- report end ---

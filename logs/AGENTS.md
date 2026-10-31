@@ -835,3 +835,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## gback-unregistered-gitlink - final - 2026-10-31 22:56:12 +0800
+- 主任务: 修复 gback 在存在未注册 gitlink 时误判子模块脏状态的问题
+- 日志文件: logs/v2026103122-2.txt
+- 文件大小: 6031 bytes
+- 触发原因: 任务完成
+- 关键内容: 改为仅检查 .gitmodules 注册子模块，并用 scoped update 跳过未注册 gitlink；9 个场景回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

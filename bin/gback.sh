@@ -2,6 +2,7 @@
 # gback — 先 stash 本地全部分叉，再将当前分支强制对齐最新 upstream
 #   · 当前分支提交、索引、工作区和 ignored 文件全部进入 stash
 #   · 子模块指针差异会进入 stash；子模块内部有未提交状态时安全中止
+#   · 未在 .gitmodules 注册的 gitlink 不参与遍历，保持原样
 #   · stash 成功后清空工作区，不自动 pop，不影响对齐后的当前分支
 #   · 其他本地分支与标签保持不变
 
@@ -91,16 +92,61 @@ _stash_worktree() {
     _run_with_backup_identity git stash save --quiet --all "${message}"
 }
 
+# 全局 submodule 命令会拒绝未注册 gitlink，因此只遍历 .gitmodules 中的显式路径。
+_registered_submodule_paths() {
+    local gitmodules=$1
+    local record
+    local path
+
+    [[ -f "${gitmodules}" ]] || return 0
+    while IFS= read -r -d '' record; do
+        path=${record#*$'\n'}
+        [[ -n "${path}" ]] && printf '%s\0' "${path}"
+    done < <(git config --file "${gitmodules}" --get-regexp --null \
+        '^submodule\..*\.path$' 2>/dev/null)
+}
+
 _initialized_submodules_are_clean() {
-    git submodule foreach --quiet --recursive \
-        'test -z "$(git status --porcelain --untracked-files=all --ignored --ignore-submodules=none)"'
+    local path
+
+    while IFS= read -r -d '' path; do
+        [[ -e "${path}/.git" ]] || continue
+        [[ -z "$(git -C "${path}" status --porcelain --untracked-files=all --ignored \
+            --ignore-submodules=none)" ]] || return 1
+    done < <(_registered_submodule_paths ".gitmodules")
+}
+
+_diff_has_gitlink_state() {
+    local header
+    local path
+    local old_mode
+    local new_mode
+    local old_sha
+    local new_sha
+    local status
+
+    while IFS= read -r -d '' header; do
+        IFS= read -r -d '' path || return 1
+        read -r old_mode new_mode old_sha new_sha status <<<"${header#:}"
+        [[ "${old_mode}" == 160000 || "${new_mode}" == 160000 ]] && return 0
+    done < <("$@")
+    return 1
 }
 
 _submodule_pointer_has_state() {
-    local submodule_status
+    _diff_has_gitlink_state git diff --raw --no-renames -z --ignore-submodules=none \
+        || _diff_has_gitlink_state git diff --cached --raw --no-renames -z \
+            --ignore-submodules=none
+}
 
-    submodule_status=$(git submodule status --recursive 2>/dev/null) || return 1
-    grep -Eq '^[+U]' <<<"${submodule_status}"
+_update_initialized_submodules() {
+    local -a paths=()
+    local path
+
+    while IFS= read -r -d '' path; do
+        [[ -e "${path}/.git" ]] && paths+=("${path}")
+    done < <(_registered_submodule_paths ".gitmodules")
+    (( ${#paths[@]} == 0 )) || git submodule update --recursive --checkout -- "${paths[@]}"
 }
 
 _store_stash_anchor() {
@@ -233,7 +279,7 @@ git reset --hard "${UPSTREAM_COMMIT}" || {
     echo "ERROR: 无法将当前分支重置到 ${UPSTREAM}。" >&2
     exit 1
 }
-git submodule update --recursive --checkout || {
+_update_initialized_submodules || {
     echo "ERROR: 无法将已初始化子模块切换到上游记录的提交。" >&2
     exit 1
 }

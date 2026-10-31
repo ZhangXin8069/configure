@@ -56,6 +56,7 @@ _make_fixture() {
 
 _make_submodule_fixture() {
     local name=$1
+    local orphan_commit
     SUBMODULE_REMOTE="${TEST_DIR}/${name}-submodule-remote.git"
     SUBMODULE_SEED="${TEST_DIR}/${name}-submodule-seed"
     SUPER_REMOTE="${TEST_DIR}/${name}-super-remote.git"
@@ -83,6 +84,9 @@ _make_submodule_fixture() {
     git -C "${SUPER_SEED}" add tracked.txt .gitignore
     git -C "${SUPER_SEED}" -c protocol.file.allow=always \
         submodule add -q "${SUBMODULE_REMOTE}" child
+    orphan_commit=$(git -C "${SUBMODULE_SEED}" rev-parse HEAD)
+    git -C "${SUPER_SEED}" update-index --add \
+        --cacheinfo "160000,${orphan_commit},orphan"
     git -C "${SUPER_SEED}" commit -q -m super-initial
     git -C "${SUPER_SEED}" remote add origin "${SUPER_REMOTE}"
     git -C "${SUPER_SEED}" push -q -u origin main
@@ -91,6 +95,37 @@ _make_submodule_fixture() {
     _configure_identity "${SUPER_WORK}"
     git -C "${SUPER_WORK}" -c protocol.file.allow=always \
         submodule update -q --init --recursive --checkout -- child
+    mkdir -p "${SUPER_WORK}/orphan"
+}
+
+_make_unregistered_gitlink_fixture() {
+    local name=$1
+    local gitlink_commit
+    FIXTURE_REMOTE="${TEST_DIR}/${name}-remote.git"
+    FIXTURE_SEED="${TEST_DIR}/${name}-seed"
+    FIXTURE_WORK="${TEST_DIR}/${name}-work"
+
+    git init -q --bare "${FIXTURE_REMOTE}"
+    git -C "${FIXTURE_REMOTE}" symbolic-ref HEAD refs/heads/main
+    git init -q "${FIXTURE_SEED}"
+    _configure_identity "${FIXTURE_SEED}"
+    git -C "${FIXTURE_SEED}" checkout -q -b main
+    printf 'base\n' > "${FIXTURE_SEED}/tracked.txt"
+    git -C "${FIXTURE_SEED}" add tracked.txt
+    git -C "${FIXTURE_SEED}" commit -q -m initial
+
+    gitlink_commit=$(git -C "${FIXTURE_SEED}" rev-parse HEAD)
+    git -C "${FIXTURE_SEED}" update-index --add \
+        --cacheinfo "160000,${gitlink_commit},orphan"
+    printf 'ignored.txt\n' > "${FIXTURE_SEED}/.gitignore"
+    git -C "${FIXTURE_SEED}" add .gitignore
+    git -C "${FIXTURE_SEED}" commit -q -m unregistered-gitlink
+    git -C "${FIXTURE_SEED}" remote add origin "${FIXTURE_REMOTE}"
+    git -C "${FIXTURE_SEED}" push -q -u origin main
+
+    git clone -q "${FIXTURE_REMOTE}" "${FIXTURE_WORK}"
+    _configure_identity "${FIXTURE_WORK}"
+    mkdir -p "${FIXTURE_WORK}/orphan"
 }
 
 _clear_local_identity() {
@@ -274,6 +309,29 @@ _test_dirty_submodule_aborts_without_reset() {
         || _fail "子模块安全检查失败时不应覆盖未提交内容"
 }
 
+_test_unregistered_gitlink_with_ignored_state_is_stashed() {
+    _make_unregistered_gitlink_fixture unregistered-gitlink
+    local repo="${FIXTURE_WORK}"
+
+    printf 'ignored local\n' > "${repo}/ignored.txt"
+    (
+        cd "${repo}"
+        bash "${_PATH}/gback.sh"
+    ) > "${TEST_DIR}/unregistered-gitlink.log" 2>&1 || {
+        cat "${TEST_DIR}/unregistered-gitlink.log" >&2
+        _fail "未注册 gitlink 不应阻断普通工作区 stash"
+    }
+
+    [[ "$(git -C "${repo}" rev-parse HEAD)" == "$(git -C "${repo}" rev-parse origin/main)" ]] \
+        || _fail "未注册 gitlink 场景未对齐 origin/main"
+    [[ -z "$(git -C "${repo}" status --porcelain --ignored --ignore-submodules=none)" ]] \
+        || _fail "未注册 gitlink 场景 stash 后工作区不干净"
+    git -C "${repo}" ls-files -s -- orphan | grep -Fq '160000' \
+        || _fail "gback 不应删除未注册 gitlink"
+    git -C "${repo}" stash list | grep -Fq 'gback backup' \
+        || _fail "未注册 gitlink 场景缺少 stash"
+}
+
 _test_submodule_pointer_with_worktree_state_is_stashed() {
     _make_submodule_fixture submodule-worktree
     local repo="${SUPER_WORK}"
@@ -426,6 +484,7 @@ main() {
     _test_worktree_state_is_stashed
     _test_submodule_pointer_is_stashed
     _test_dirty_submodule_aborts_without_reset
+    _test_unregistered_gitlink_with_ignored_state_is_stashed
     _test_submodule_pointer_with_worktree_state_is_stashed
     _test_stash_failure_aborts_reset
     _test_legacy_stash_fallback
