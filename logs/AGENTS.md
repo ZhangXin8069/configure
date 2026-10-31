@@ -826,3 +826,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: in-progress
 
+## gback-submodule-stash - final - 2026-10-31 22:49:34 +0800
+- 主任务: 修复 bin/gback.sh 仅子模块状态变化时 stash 创建失败
+- 日志文件: logs/v2026103122.txt
+- 文件大小: 5991 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 gback 子模块指针快照修复，新增 8 个场景回归并验证通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

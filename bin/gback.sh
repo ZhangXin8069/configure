@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # gback — 先 stash 本地全部分叉，再将当前分支强制对齐最新 upstream
 #   · 当前分支提交、索引、工作区和 ignored 文件全部进入 stash
+#   · 子模块指针差异会进入 stash；子模块内部有未提交状态时安全中止
 #   · stash 成功后清空工作区，不自动 pop，不影响对齐后的当前分支
 #   · 其他本地分支与标签保持不变
 
@@ -74,8 +75,8 @@ _run_with_backup_identity() {
 }
 
 _worktree_has_state() {
-    ! git diff --quiet \
-        || ! git diff --cached --quiet \
+    ! git diff --quiet --ignore-submodules=none \
+        || ! git diff --cached --quiet --ignore-submodules=none \
         || [[ -n "$(git ls-files --others --exclude-standard)" ]] \
         || [[ -n "$(git ls-files --others --ignored --exclude-standard)" ]]
 }
@@ -90,20 +91,69 @@ _stash_worktree() {
     _run_with_backup_identity git stash save --quiet --all "${message}"
 }
 
-_create_head_anchor_stash() {
+_initialized_submodules_are_clean() {
+    git submodule foreach --quiet --recursive \
+        'test -z "$(git status --porcelain --untracked-files=all --ignored --ignore-submodules=none)"'
+}
+
+_submodule_pointer_has_state() {
+    local submodule_status
+
+    submodule_status=$(git submodule status --recursive 2>/dev/null) || return 1
+    grep -Eq '^[+U]' <<<"${submodule_status}"
+}
+
+_store_stash_anchor() {
     local message=$1
-    local tree
+    local anchor=$2
+
+    _run_with_backup_identity git update-ref --create-reflog \
+        -m "${message}" refs/stash "${anchor}"
+}
+
+_create_anchor_stash() {
+    local message=$1
+    local worktree_tree=$2
+    local index_tree
     local index_anchor
     local anchor
 
-    tree=$(git rev-parse "${ORIGINAL_HEAD}^{tree}") || return 1
+    index_tree=$(git write-tree) || return 1
     index_anchor=$(printf '%s\n' "${message} index" | _run_with_backup_identity \
-        git commit-tree "${tree}" -p "${ORIGINAL_HEAD}") || return 1
+        git commit-tree "${index_tree}" -p "${ORIGINAL_HEAD}") || return 1
     anchor=$(printf '%s\n' "${message}" | _run_with_backup_identity \
-        git commit-tree "${tree}" -p "${ORIGINAL_HEAD}" -p "${index_anchor}") || return 1
-    if ! git stash store --message "${message}" "${anchor}"; then
-        git update-ref -m "${message}" refs/stash "${anchor}" || return 1
+        git commit-tree "${worktree_tree}" -p "${ORIGINAL_HEAD}" -p "${index_anchor}") || return 1
+    _store_stash_anchor "${message}" "${anchor}"
+}
+
+_create_head_anchor_stash() {
+    local message=$1
+    local tree
+
+    tree=$(git rev-parse "${ORIGINAL_HEAD}^{tree}") || return 1
+    _create_anchor_stash "${message}" "${tree}"
+}
+
+_create_worktree_anchor_stash() {
+    local message=$1
+    local git_dir
+    local temp_index
+    local worktree_tree
+
+    git_dir=$(git rev-parse --git-dir) || return 1
+    temp_index=$(mktemp "${git_dir}/gback-index.XXXXXX") || return 1
+    rm -f -- "${temp_index}" || return 1
+    if ! GIT_INDEX_FILE="${temp_index}" git read-tree "${ORIGINAL_HEAD}" \
+        || ! GIT_INDEX_FILE="${temp_index}" git add --all --force; then
+        rm -f -- "${temp_index}"
+        return 1
     fi
+    worktree_tree=$(GIT_INDEX_FILE="${temp_index}" git write-tree) || {
+        rm -f -- "${temp_index}"
+        return 1
+    }
+    rm -f -- "${temp_index}"
+    _create_anchor_stash "${message}" "${worktree_tree}"
 }
 
 N_STASH=$(git stash list 2>/dev/null | wc -l)
@@ -127,17 +177,30 @@ fi
 
 if _worktree_has_state; then
     echo "将 stash 的工作区状态（含 staged/untracked/ignored）："
-    git status --short --untracked-files=all --ignored | head -20 || true
+    git status --short --untracked-files=all --ignored --ignore-submodules=none | head -20 || true
 else
     echo "工作区无本地改动。"
 fi
 
 STASH_MESSAGE="gback backup $(date "+%Y-%m-%d-%H-%M-%S") ${BRANCH} before ${UPSTREAM}"
 STASH_CREATED=0
+SUBMODULE_SNAPSHOT=0
 if _worktree_has_state; then
-    if ! _stash_worktree "${STASH_MESSAGE}"; then
-        echo "ERROR: 无法 stash 本地工作区，gback 已中止，未执行 reset。" >&2
+    if ! _initialized_submodules_are_clean; then
+        echo "ERROR: 已初始化子模块内部存在未提交状态；为避免 reset 丢数据，gback 已中止。" >&2
         exit 1
+    fi
+    if _submodule_pointer_has_state; then
+        if ! _create_worktree_anchor_stash "${STASH_MESSAGE}"; then
+            echo "ERROR: 无法保存含子模块指针的工作区快照，gback 已中止，未执行 reset。" >&2
+            exit 1
+        fi
+        SUBMODULE_SNAPSHOT=1
+    else
+        if ! _stash_worktree "${STASH_MESSAGE}"; then
+            echo "ERROR: 无法 stash 本地工作区，gback 已中止，未执行 reset。" >&2
+            exit 1
+        fi
     fi
     STASH_CREATED=1
 fi
@@ -156,24 +219,42 @@ if (( STASH_CREATED )) && [[ "${NEW_STASH}" == "${OLD_STASH}" ]]; then
     exit 1
 fi
 
-STILL_DIRTY=$(git status --porcelain --ignored)
-if [[ -n "${STILL_DIRTY}" ]]; then
-    echo "ERROR: stash 后工作区仍不干净，gback 已中止，未执行 reset：" >&2
-    echo "${STILL_DIRTY}" | head -20 >&2
-    exit 1
+if (( SUBMODULE_SNAPSHOT == 0 )); then
+    STILL_DIRTY=$(git status --porcelain --ignored --ignore-submodules=none)
+    if [[ -n "${STILL_DIRTY}" ]]; then
+        echo "ERROR: stash 后工作区仍不干净，gback 已中止，未执行 reset：" >&2
+        echo "${STILL_DIRTY}" | head -20 >&2
+        exit 1
+    fi
 fi
 
 # stash 已确认成功，强制当前分支与最新 upstream 完全一致。
-git reset --hard "${UPSTREAM_COMMIT}"
-git clean -fdx
+git reset --hard "${UPSTREAM_COMMIT}" || {
+    echo "ERROR: 无法将当前分支重置到 ${UPSTREAM}。" >&2
+    exit 1
+}
+git submodule update --recursive --checkout || {
+    echo "ERROR: 无法将已初始化子模块切换到上游记录的提交。" >&2
+    exit 1
+}
+git clean -fdx || {
+    echo "ERROR: 无法清理当前工作区。" >&2
+    exit 1
+}
 
 if (( STASH_CREATED )); then
     echo "Stash:   stash@{0} (${STASH_MESSAGE})"
     echo "恢复查看: git stash list"
     echo "恢复分支: git stash branch <new-branch> stash@{0}"
+    if (( SUBMODULE_SNAPSHOT )); then
+        echo "注意:     git stash branch 不会切换子模块；若需恢复子模块指针，请改用："
+        echo "          git stash apply stash@{0}"
+        echo "          git checkout stash@{0} -- <子模块路径>"
+        echo "          git submodule update --init --recursive --checkout <子模块路径>"
+    fi
 fi
 
-STILL_DIRTY=$(git status --porcelain --ignored)
+STILL_DIRTY=$(git status --porcelain --ignored --ignore-submodules=none)
 if [[ -z "${STILL_DIRTY}" ]]; then
     echo "OK: 工作区干净，包含 ignored 文件在内均与 ${UPSTREAM} 一致"
 else

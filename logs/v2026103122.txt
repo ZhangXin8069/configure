@@ -1,0 +1,91 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 22:49:34 +0800
+批次: gback-submodule-stash
+主任务: 修复 bin/gback.sh 仅子模块状态变化时 stash 创建失败
+触发原因: 任务完成
+摘要: 完成 gback 子模块指针快照修复，新增 8 个场景回归并验证通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与根因
+- 目标: 解释并修复 `/root/configure/bin/gback.sh` 在仅子模块状态变化时报告“未能创建新的 stash”。
+- 命令/操作: 在 `bin/` 下创建隔离父子仓库夹具；将父仓库记录的子模块提交推进到远端新提交；执行 `git stash push --all`。
+- 关键输出: `stash_exit=0`，stdout 为 `No local changes to save`，`stash_ref=<none>`，父仓库状态仍为 ` M child`。
+- 退出码: 0。
+- 证据与判断: Git 2.34.1 的普通 stash 不记录仅 gitlink 变化且静默成功；`gback.sh` 随后看到 `refs/stash` 未变化并中止，因此根因确定。
+
+### S2 — 实现
+- 目标: 让子模块指针差异可备份、可恢复，同时避免递归重置覆盖子模块内部未提交数据。
+- 命令/操作: 修改 `bin/gback.sh`，检测已初始化子模块是否干净和 gitlink 是否变化；对 gitlink 状态使用临时索引生成完整工作树快照；通过 `git update-ref --create-reflog` 写入 `refs/stash`；重置父仓库后更新已初始化子模块。
+- 关键输出: 合成 stash 保存变化后的子模块提交，普通 tracked/staged/untracked/ignored 状态也进入同一快照。
+- 退出码: 不适用。
+- 证据与判断: 子模块内部不干净时明确拒绝且不 reset；变化后的子模块指针可从 stash 恢复。
+
+### S3 — 回归测试
+- 目标: 覆盖原故障、组合状态、配置干扰和安全边界。
+- 命令/操作: `bash -n bin/gback.sh bin/gback.test.sh`；`timeout 180s bash bin/gback.test.sh`。
+- 关键输出: 两个命令均无错误输出，测试脚本正常结束。
+- 退出码: 0。
+- 证据与判断: 8 个测试函数全部通过，包括仅 gitlink 变化、gitlink 与普通工作区组合状态、`diff.ignoreSubmodules=all`、子模块内部脏状态拒绝 reset、stash 失败不 reset、旧版 stash 回退和 detached HEAD 拒绝。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gback.sh bin/gback.test.sh`，退出码 0。
+- 测试/检查: `timeout 180s bash bin/gback.test.sh`，退出码 0，8 个场景通过。
+- 测试/检查: `bash skills/form/scripts/form-audit.sh --root . --strict --quiet`，退出码 0。
+- 测试/检查: `bash skills/form/scripts/form-data-tracking-check.sh --root . --quiet`，退出码 0。
+- 测试/检查: `git diff --check -- bin/gback.sh bin/gback.test.sh bin/AGENTS.md`，退出码 0。
+- 未验证项: 未在真实 `/root/configure` 工作区执行修复后的 `gback.sh`，因为该命令会按设计 stash 并重置当前 `refer/git-rep/oh-my-codex` gitlink；原故障已由等价隔离夹具完整覆盖。
+
+## 变更与产物
+- 文件: `bin/gback.sh`，新增子模块指针检测、工作树快照 stash、reflog 创建、子模块安全检查和恢复提示。
+- 文件: `bin/gback.test.sh`，新增父子仓库夹具与相关回归场景，测试函数共 8 个。
+- 文件: `bin/AGENTS.md`，同步说明子模块指针备份与内部脏状态中止行为。
+- 产物: 无二进制、缓存或运行时数据产物。
+- 未改动范围: 未执行真实 reset、未修改 `refer/git-rep/oh-my-codex`、未暂存、未提交、未推送。
+
+## 风险、限制与下一步
+- 风险: `gback` 仍不会递归 stash 子模块内部未提交文件；检测到该状态时会安全中止，这是为避免数据丢失的明确边界。
+- 阻塞: 无。
+- 下一步: 可直接重新运行 `gback.sh`；它会把当前 gitlink 差异保存到 `stash@{0}` 并把工作区对齐 upstream。
+
+## 用户输入指令
+用户提供的运行输出：
+
+```text
+➜ /root/configure git:(main) ✗ gback.sh
+Fetching origin
+Upstream: origin/main (4f02540)
+本地提交均已包含于 origin/main。
+将 stash 的工作区状态（含 staged/untracked/ignored）：
+ M refer/git-rep/oh-my-codex
+ERROR: 未能创建新的 stash，gback 已中止，未执行 reset。
+```
+
+## Agent 全文报告
+--- report begin ---
+# gback 子模块状态修复
+
+## 根因
+当前 Git 2.34.1 在父仓库仅存在子模块指针变化时，`git stash push --all` 会以退出码 0 返回，但输出 `No local changes to save` 且不创建 `refs/stash`。`gback.sh` 因此进入“stash 未创建”的保护分支并中止。
+
+## 改动
+- `bin/gback.sh` 检测到 gitlink 变化时，使用临时索引合成完整工作树快照，不再依赖普通 stash 对子模块指针的忽略行为。
+- 使用带 reflog 的 `refs/stash` 写入方式，确保首次创建和后续 stash 都有可用的 `stash@{0}`。
+- 重置前检查已初始化子模块内部是否干净；若存在未提交内容则安全中止，避免 reset 丢数据。
+- reset 后使用 `git submodule update --recursive --checkout` 将已初始化子模块对齐到父仓库记录的提交，并提供子模块指针恢复命令。
+- `bin/gback.test.sh` 新增父子仓库回归夹具和组合状态测试；`bin/AGENTS.md` 同步行为说明。
+
+## 验证结果
+- `bash -n bin/gback.sh bin/gback.test.sh`：通过。
+- `bash bin/gback.test.sh`：8 个场景全部通过。
+- `form-audit --strict --quiet`：通过。
+- `form-data-tracking-check --quiet`：通过。
+- `git diff --check`：通过。
+
+## 限制
+子模块内部的 tracked/untracked/ignored 修改不会被本脚本递归 stash；遇到这种状态会明确中止，而不是执行可能丢数据的 reset。
+
+## 后续步骤
+重新运行 `gback.sh`。当前 `refer/git-rep/oh-my-codex` 的 gitlink 差异会进入 stash，工作区随后对齐 upstream；若之后需要恢复该子模块指针，按脚本输出的 `stash apply`、`checkout stash@{0} -- <子模块路径>`、`submodule update` 三步执行。
+--- report end ---
