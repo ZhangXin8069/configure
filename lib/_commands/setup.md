@@ -10,7 +10,7 @@
 | 环境恢复 | `lib/set-env.sh` | 见 `../_env/setup.md`，必须 source |
 | Vim 部署 | `vim_init.sh` | 见 `../_vim/setup.md` |
 | Git 初始化 | `git_init.sh` | 见 `../_git/setup.md` 与 `../_ssh/setup.md` |
-| Git 同步 | `gpull.sh`、`gpush.sh`、`gback.sh` | 见 `../_git/setup.md`；`gback.sh` 会先 stash 当前分支全部分叉，再强制对齐最新 upstream |
+| Git 同步 | `gpull.sh`、`gpush.sh`、`gback.sh` | 见 `../_git/setup.md`；`gback.sh` 会先 stash 当前分支与已注册子模块指针，再强制对齐最新 upstream |
 | SSH | `ss.sh`、`ssnsc.sh`、`ssjtu.sh`、`xx99.sh` | 见 `../_ssh/setup.md` |
 | Slurm | `ddub.sh`、`ssub.sh`、`ssrun.sh`、`ssqueue.sh`、`zsqueue.sh`、`sstop.sh` | 见 `../_slurm/setup.md` |
 | Docker | `ddocker.sh`、`ddocker.bat` | 见 `../_docker/setup.md` |
@@ -24,14 +24,16 @@
 
 ```bash
 gls.sh [路径]
-grm-cache.sh --dry-run
+give_git_ignore.sh -n
+grm-ignore.sh -n
 dgtag.sh
 ```
 
 | 命令 | 行为 | 风险 |
 |---|---|---|
 | `gls.sh` | 统计当前仓库跟踪文件总行数 | 参数直接交给 `git ls-files` |
-| `grm-cache.sh` | 按 `_gitignore` 将已跟踪文件执行 `git rm --cached` | 先使用 `--dry-run`，确认索引变更 |
+| `give_git_ignore.sh` | 按当前工作区生成根、`data/`、`logs/`、`docs/` 忽略规则 | 默认备份；`-f` 直接覆盖；先用 `-n` 审查生成结果 |
+| `grm-ignore.sh` | 依据全部忽略规则从 Git 历史永久删除匹配文件，默认 force push 并 GC | 破坏性历史重写；必须使用全新 clone、先执行 `-n` 并取得明确授权 |
 | `dgtag.sh` | 删除当前仓库全部本地标签 | 不会删除远程标签，但本地标签全部丢失 |
 
 `dgtag.sh` 不应与“清理一个旧标签”混用。删除前记录：
@@ -41,7 +43,8 @@ git tag --list
 git show-ref --tags
 ```
 
-`grm-cache.sh` 当前把规则源固定为 `$HOME/configure/lib/_gitignore`，因此只适用于该部署路径。移动仓库后应先调整调用方式或改用标准 `git rm --cached`。
+`grm-ignore.sh` 不是 `git rm --cached` 的替代品：它会改变全部提交 ID，并要求协作者重新 clone。
+该命令依赖 `git-filter-repo`，只用于明确要求清除历史内容的场景。
 
 ## 文件与目录
 
@@ -171,8 +174,8 @@ ZG_GIT_PROTOCOL=ssh zg-all-pull.sh
 | 命令 | 说明 |
 |---|---|
 | `save-env.sh` | 导出当前环境快照，可能含凭据，见 `../_shell/setup.md` |
-| `gadd-ignore.sh` | 将 `_gitignore` 模板逐行补入当前仓库 |
-| `grm-cache.sh` | 按模板将匹配的已跟踪文件移出索引，先使用 `--dry-run` |
+| `give_git_ignore.sh` | 按当前工作区生成根和子目录忽略规则，见 `../_git/setup.md` |
+| `grm-ignore.sh` | 从全部 Git 历史删除被忽略内容，默认 force push；先执行 `-n` |
 | `swap.sh` | 关闭全部 Swap 后重建 64 GiB `/var/swapfile` |
 | `cpupower.sh` 及其调用名链接 | 修改 CPU 调频和 C-state |
 | `poweroff.sh` / `reboot.sh` | 立即关机或重启 |

@@ -115,9 +115,11 @@
 !*.zunit
 
 # ==================================================
-# 4. Ignore hidden files and directories
+# 4. Ignore hidden files and cache directories
 # ==================================================
 .*
+.cache/
+__pycache__/
 
 # ==================================================
 # 5. Keep common files and directories

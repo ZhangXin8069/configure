@@ -1,0 +1,80 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-10-31 23:11:43 +0800
+批次: tag-dev44-stale-content
+主任务: 根据上个 tag 到当前的变更更新陈旧内容并同步 form 技能
+触发原因: 任务完成
+摘要: 以 dev44 树为基线完成 form、Git 命令、缓存忽略与相关回归的时效更新
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 基线判定
+- 目标: 确定“上个 tag 到现在”的有效比较范围。
+- 命令/操作: 检查 tag 创建时间、祖先关系和树差异。
+- 关键输出: 最后创建的 tag 为 `dev44`，但它与重写后的 `main` 不共享直接祖先链；`git diff --shortstat dev44 HEAD` 为 76 files, +4602/-694。
+- 证据与判断: 采用标签树到当前 HEAD 的内容差异作为时效基线；`stab0` 是 2024 年历史标签，不作为本轮基线。
+
+### S2 — 陈旧内容审计
+- 目标: 找出 tag 后行为变化但仍保留旧说明或旧测试的位置。
+- 命令/操作: 对 `dev44..HEAD` 的文档、AGENTS、form 与 Git 工具变更做定向 diff，并执行旧命令引用扫描。
+- 关键输出: `gadd-ignore.sh`、`grm-cache.sh` 已被 `give_git_ignore.sh`、`grm-ignore.sh` 替代；form 仍把 `data/` 描述为历史科学数据，交付流程缺少 data 闸门；`give_git_ignore` 测试仍期待旧版 `logs` 规则、旧帮助文本和缺失的 cache 规则。
+- 证据与判断: 上述内容均来自 tag 后新增/替换脚本与数据边界规则，属于明确的陈旧说明或陈旧断言。
+
+### S3 — 更新与回归
+- 目标: 同步技能、参考文档、用户手册、生成器和测试，并保持固定快照不变。
+- 命令/操作: 更新 `skills/form/SKILL.md`、form references/AGENTS、`lib/_commands/setup.md`、`lib/_git/setup.md`、form 治理文档；修复 `give_git_ignore.sh` 的 shebang、帮助截取和 cache 硬忽略规则；同步根 `.gitignore` 与测试期望。
+- 关键输出: form 数据闸门、目录职责、旧命令替换和 `grm-ignore` 历史重写风险均已明确；生成器与当前根 `.gitignore` 内容一致。
+- 退出码: 相关测试均为 0。
+- 证据与判断: 固定 `source-snapshots/` 未改写；`.opencode/skills/` 不存在，因此未创建空镜像。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/give_git_ignore.sh bin/give_git_ignore.test.sh bin/grm-ignore.sh`，退出码 0。
+- 测试/检查: `bash bin/give_git_ignore.test.sh`，退出码 0。
+- 测试/检查: `bash bin/grm-ignore.test.sh`，退出码 0。
+- 测试/检查: `bash skills/form/scripts/form-scripts.test.sh`，输出 `form script tests: PASS`。
+- 测试/检查: `form-snapshot-verify.sh --quiet`、`form-audit.sh --strict --quiet`、`form-data-tracking-check.sh --quiet`，退出码 0。
+- 测试/检查: `tools/configure-check.test.sh` 全部 PASS；`tools/configure-check.sh` 为 0 errors、1 个既有插件索引 warning。
+- 测试/检查: 生成器 dry-run 根规则与工作区 `.gitignore` 一致。
+- 测试/检查: 旧命令扫描无当前业务文档引用；`git diff --check` 通过。
+- 未验证项: 未执行提交、推送或标签操作，用户未明确要求交付同步。
+
+## 变更与产物
+- 文件: `skills/form/SKILL.md`，补齐 data 边界闸门和验收矩阵。
+- 文件: `skills/form/references/naming-and-layout.md`、`skills/form/references/git-artifacts-and-workflow.md`，更新运行时 data、生成控制文件、镜像与交付职责。
+- 文件: `skills/form/AGENTS.md`，同步 data 闸门说明。
+- 文件: `lib/_commands/setup.md`、`lib/_git/setup.md`，替换已删除命令并明确不可逆历史重写风险。
+- 文件: `bin/give_git_ignore.sh`、`bin/give_git_ignore.test.sh`、`.gitignore`，修复 shebang、帮助、cache 忽略和过期期望。
+- 文件: `docs/form_configure_20261031.md`，补充标签后时效复核与交付状态。
+- 未改动范围: 固定 source snapshots、`refer/**`、运行时 data 内容。
+
+## 风险、限制与下一步
+- 风险: `grm-ignore.sh` 会重写全部提交并由默认流程 force push；文档已将其与普通索引清理严格区分。
+- 限制: `configure-check.sh` 仍报告 `plugins/` 无本地可加载 manifest 的预期 warning，不影响该技能。
+- 下一步: 审阅当前 10 个文件的工作区 diff；如需要再执行显式 Git 提交/推送。
+
+## 用户输入指令
+根据上个tag到现在更改的内容,更新旧内容,例如form-skill
+
+## Agent 全文报告
+--- report begin ---
+# 上个 tag 后的内容时效更新
+
+## 改动内容
+- 更新 `skills/form/SKILL.md`：在 Git 检查和 Step 8 中加入 `form-data-tracking-check.sh`，验收矩阵新增 data 边界项。
+- 更新 form references：`data/` 改为运行时数据边界，`docs/.gitignore`、`logs/.gitignore` 登记为生成控制文件，并明确 `.opencode/skills/` 只是镜像。
+- 更新 `lib/_commands/setup.md`、`lib/_git/setup.md`：用 `give_git_ignore.sh`、`grm-ignore.sh` 替换已删除的旧命令，明确后者会重写全部历史和默认 force push。
+- 修复 `give_git_ignore.sh`：shebang 位于首行，帮助截取不再泄露实现行，`.cache/` 与 `__pycache__/` 成为硬忽略规则；同步根 `.gitignore` 和过期测试。
+- 更新 form 治理文档：记录以最后创建标签 `dev44` 到当前 HEAD 的 76 文件树差异及本轮同步项。
+
+## 推理依据
+`dev44` 是最后创建的标签，但当前 `main` 经过公开历史安全清理，不能直接用 tag 祖先链描述当前版本；因此使用 `dev44` 树到当前 HEAD 的内容差异。固定 `source-snapshots/` 保留上游原文，不随当前实现改写。
+
+## 验证结果
+- `give_git_ignore` 与 `grm-ignore` 回归通过。
+- form 脚本测试、快照校验、严格结构审计和 data 边界检查通过。
+- `configure-check` 为 0 errors；仅保留插件目录无本地 manifest 的既有 warning。
+- 生成器 dry-run 与当前根 `.gitignore` 一致；旧命令引用扫描无业务文档残留；`git diff --check` 通过。
+
+## 后续步骤
+当前改动尚未提交或推送。确认 diff 后，可显式执行 Git 交付；`.opencode/skills/` 当前不存在，因此无需同步镜像。
+--- report end ---

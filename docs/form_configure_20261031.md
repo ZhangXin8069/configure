@@ -70,7 +70,22 @@ git diff --check
   与回归测试共同保证。
 - 文档与日志均为普通 Git 文件，可通过验收提交或 `git show <revision>:<path>` 恢复。
 
-## 后续阶段
+## 交付状态
 
-第二次 `~diff` 与 `~debug` 已完成；本记录完成后继续归档 `~log`、fast-forward push 和
-`dev` 注释标签交付。最终提交、推送与回读结果以任务终态报告为准。
+本记录所述整改已完成并随当前 `main` 推送；截至本次时效复核，`main` 与 `origin/main`
+均指向 `cd55db4`。因仓库执行过公开历史安全清理，标签链和旧 SHA 不能按未重写仓库的方式推断，
+版本定位以当前远端 refs、`logs/AGENTS.md` 和最终任务日志为准。
+
+## 标签后时效复核
+
+以最后创建的 `dev44` 标签树为基线、当前 `HEAD` 为目标，树差异共涉及 76 个文件。复核确认以下
+旧说明已与实际实现脱节并完成同步：
+
+- form 参考文档仍把 `data/` 描述为历史科学数据，现改为运行时 runs/hooks/cache，并明确只跟踪三个契约文件。
+- form 交付流程只登记大文件闸门，现补入 `form-data-tracking-check.sh` 的双层忽略和数据白名单检查。
+- `docs/.gitignore`、`logs/.gitignore` 已作为生成控制文件写入目录职责。
+- `lib/_commands/setup.md` 与 `lib/_git/setup.md` 已用 `give_git_ignore.sh`、`grm-ignore.sh` 替换已删除的旧命令，并区分规则生成与不可逆历史重写风险。
+- `give_git_ignore.sh` 补齐首行 shebang、帮助截取、`.cache/` 与 `__pycache__/` 硬忽略规则；对应过期测试期望同步更新。
+
+固定 `source-snapshots/` 保留上游历史原文，不按当前实现改写；`.opencode/skills/` 当前不存在，
+因此本轮以 `skills/` 为唯一权威源，不创建空镜像。

@@ -81,7 +81,7 @@ _test_sub_only_preserves_root_ignore() {
     cmp -s <(printf '*\n!.gitignore\n!AGENTS.md\n!README.md\n') \
         "${repo}/data/.gitignore" \
         || _fail "-sub 未写入 data/.gitignore"
-    cmp -s <(printf '*\n*\n!.gitignore\n!AGENTS.md\n!README.md\n!*.txt\n') \
+    cmp -s <(printf '*\n*/\n!.gitignore\n!AGENTS.md\n!README.md\n!*.txt\n') \
         "${repo}/logs/.gitignore" \
         || _fail "-sub 未写入 logs/.gitignore"
     printf 'log\n' > "${repo}/logs/v20261031000000.txt"
@@ -159,9 +159,9 @@ _test_help_documents_sub_only() {
     local output="${TEST_DIR}/help.log"
 
     bash "${_PATH}/give_git_ignore.sh" -h > "${output}"
-    grep -Fq -- '-sub             只写 data/、logs/、docs/ 子目录的 .gitignore' "${output}" \
+    grep -Fq -- '-sub, --sub-only     只写 data/、logs/、docs/ 子目录的 .gitignore' "${output}" \
         || _fail "帮助文本未说明 -sub"
-    ! grep -Fxq -- 'set -euo pipefail' "${output}" \
+    ! grep -Fxq -- 'set -eu' "${output}" \
         || _fail "帮助文本泄露实现语句"
 }
 

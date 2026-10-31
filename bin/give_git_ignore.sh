@@ -1,4 +1,3 @@
-
 #!/bin/sh
 #
 # give_git_ignore.sh
@@ -11,7 +10,7 @@
 #   2. 开放普通目录，允许 Git 递归遍历。
 #   3. 保留工作区已有的无后缀文件（包括软链接）。
 #   4. 放行工作区已有的文件后缀。
-#   5. 忽略所有隐藏文件和隐藏目录。
+#   5. 忽略隐藏文件、隐藏目录和工具缓存目录。
 #   6. 放行常用配置文件、配置目录和用户自定义规则。
 #
 # 子目录策略:
@@ -28,7 +27,7 @@
 #   -o, --output OUT     指定主 .gitignore 输出位置
 #   -k, --keep PATTERN   添加保留规则，可重复
 #   --no-default-keep    禁用默认保留清单
-#   -sub, --sub-only     只生成子目录 .gitignore
+#   -sub, --sub-only     只写 data/、logs/、docs/ 子目录的 .gitignore
 #   -h, --help           显示帮助
 #
 # 注意:
@@ -115,7 +114,7 @@ while [ "$#" -gt 0 ]; do
             ;;
 
         -h|--help)
-            sed -n '2,39p' "$0"
+            sed -n '2,/^$/p' "$0"
             exit 0
             ;;
 
@@ -458,14 +457,16 @@ generate_main() {
     echo
 
     # --------------------------------------------------------
-    # 4. 忽略所有隐藏文件和隐藏目录
+    # 4. 忽略隐藏文件和缓存目录
     # --------------------------------------------------------
 
     echo "# =================================================="
-    echo "# 4. Ignore hidden files and directories"
+    echo "# 4. Ignore hidden files and cache directories"
     echo "# =================================================="
 
     echo '.*'
+    echo '.cache/'
+    echo '__pycache__/'
 
     echo
 
@@ -574,4 +575,3 @@ apply_docs_ignore
 
 echo
 echo "done."
-

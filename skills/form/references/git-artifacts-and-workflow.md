@@ -4,9 +4,9 @@
 
 | 目录 | 允许内容 | 清理规则 |
 |---|---|---|
-| `docs/` | 本次任务 TeX、PDF、Markdown、图片附件 | 不保留旧任务临时文档；历史需要时用 Git 回溯 |
-| `logs/` | `AGENTS.md` 索引、任务需求单、agent 三态时间戳日志、`log/json/tsv/csv/txt` 工具/历史日志 | 检查 `vYYYYMMDD[HH[MM[SS]]].txt` 命名；清理候选先查引用，保留用户历史日志 |
-| `data/` | 历史任务 `h5/hdf5/pt/npy/npz/lime` 等数据 | `.gitignore` 排除内容，只跟踪说明和忽略文件 |
+| `docs/` | 本次任务 TeX、PDF、Markdown、图片附件与生成的 `.gitignore` | 不保留旧任务临时文档；历史需要时用 Git 回溯 |
+| `logs/` | `AGENTS.md` 索引、生成的 `.gitignore`、任务需求单、agent 三态时间戳日志、`log/json/tsv/csv/txt` 工具/历史日志 | 检查 `vYYYYMMDD[HH[MM[SS]]].txt` 命名；清理候选先查引用，保留用户历史日志 |
+| `data/` | 本地运行时 runs、hooks、cache、会话/数据库、shell 快照与模型缓存 | Git 仅跟踪 `.gitignore`、`AGENTS.md`、`README.md`；其余内容由双层忽略规则排除 |
 | `refer/git-rep/` | Git 参考子库（submodule）、`README.md` 来源/致谢、`docs/` 本库分析文档 | 子库工作树保持上游状态；普通拷贝先迁移 docs 再重建为 submodule |
 | `<lowercase-repo>/testing/` | 复杂库测试代码与调用脚本 | 按功能组织；通用测试合并后保留默认可运行入口 |
 | 简单库功能目录 | `*.test.sh` 与简单 smoke 测试 | 清理失败实验与重复脚本，保留可复用回归 |
@@ -114,15 +114,18 @@ git show HEAD:<path> >/dev/null
 
 1. 每批开始前保存功能基线，批次结束后运行最小相关验证。
 2. 只暂存本任务文件；禁止 `git add -A` 和 `git add .`。
-3. 每批暂存后运行 `scripts/form-large-files-check.sh --root "$REPO_ROOT"`。默认禁止
+3. 仓库包含 `data/` 时，在暂存、提交和推送前运行
+   `scripts/form-data-tracking-check.sh --root "$REPO_ROOT" --quiet`。发现白名单外跟踪项、
+   cache 忽略失效或 `.gitignore` 契约文件被忽略时立即停止；不得用 `git add -f` 或审计排除绕过。
+4. 每批暂存后运行 `scripts/form-large-files-check.sh --root "$REPO_ROOT"`。默认禁止
    单个索引 blob 超过 `10,000,000` 字节；命中时该批次不得提交或推送。
-4. 超限提醒后等待 5 分钟；无回复时继续不依赖该文件的工作，但静默不构成提交授权。
+5. 超限提醒后等待 5 分钟；无回复时继续不依赖该文件的工作，但静默不构成提交授权。
    只有用户明确要求覆盖阈值时，才可使用 `--max-bytes` 或
    `FORM_MAX_COMMIT_FILE_BYTES` 继续该超限批次。
-5. 每个批次保持可构建、可回退；大范围重命名不能拆成“先全部移动、后全部修引用”。
-6. 推送前检查远端漂移；普通快进失败先取回并分析，禁止 force push。
-7. 最终功能复现通过后才创建或推送最终标签。
-8. 参考子库批次同时暂存 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`；子库工作树
+6. 每个批次保持可构建、可回退；大范围重命名不能拆成“先全部移动、后全部修引用”。
+7. 推送前检查远端漂移；普通快进失败先取回并分析，禁止 force push。
+8. 最终功能复现通过后才创建或推送最终标签。
+9. 参考子库批次同时暂存 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`；子库工作树
    内容不进入主库索引。
 
 ## 5. 结束流程
@@ -170,7 +173,7 @@ form 审计与整改（含 refer/git-rep 参考子库）
 - 顶层目录白名单: <本库允许集合及职责>。
 - 测试入口: `<可直接执行的命令>`。
 - 功能复现: `<构建、测试、主入口冒烟命令>`。
-- 文档/日志/数据: `<docs/>` 职责；`logs/AGENTS.md` 索引与 `vYYYYMMDD[HH[MM[SS]]].txt` 日志命名；`data/` 忽略与保留规则。
+- 文档/日志/数据: `docs/` 职责与生成的 `.gitignore`；`logs/AGENTS.md` 索引、生成的 `.gitignore` 与 `vYYYYMMDD[HH[MM[SS]]].txt` 日志命名；`data/` 仅跟踪契约文件并运行 `scripts/form-data-tracking-check.sh`。
 - 参考 Git 库: 统一以 submodule 放在 `refer/git-rep/<name>`；`refer/git-rep/README.md` 记录来源与致谢；本库分析文档放 `refer/git-rep/docs/`，子库工作树只读。
 - Git 交付: <提交、推送、标签流程；禁止强推>。
 - Git 大文件: 除用户明确要求外，禁止提交单个大于 `10,000,000` 字节的文件；每批暂存后运行 `scripts/form-large-files-check.sh`，命中时停止提交并提醒。

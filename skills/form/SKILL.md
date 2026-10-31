@@ -87,7 +87,8 @@ metadata:
 有 Git 且本次产生文件改动时，执行 `git diff --check` 和定向复查。参考子库变更时同时检查
 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`，不暂存子库工作树内容。只读审计不提交；
 完整 `~form` 流程按 Step 8 使用较高权限完成提交、推送和最终标签。任何提交前都运行
-`scripts/form-large-files-check.sh`；命中超限暂存文件时该闸门优先于 `~form` 的常规较高权限。
+`scripts/form-data-tracking-check.sh` 和 `scripts/form-large-files-check.sh`；数据边界或超限文件
+命中时，该闸门优先于 `~form` 的常规较高权限。
 无 Git 或无本次改动时立即跳过。
 
 ## 触发时机
@@ -389,7 +390,16 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 
 1. 调用 `~diff` 审计全部本次改动；不得使用 `git add -A` 或 `git add .`，只逐个暂存本任务文件。
    参考子库变更同时暂存 `.gitmodules`、gitlink 和 `refer/git-rep/README.md`，不暂存子库工作树内容。
-2. 每批暂存后、提交前运行大文件闸门：
+2. 仓库包含 `data/` 时，在暂存、提交和推送前运行数据边界闸门：
+
+```bash
+FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
+"$FORM_SKILL_DIR/scripts/form-data-tracking-check.sh" --root "$REPO_ROOT" --quiet
+```
+
+白名单外 `data/` 跟踪项、cache 忽略失效或契约文件被忽略时立即停止该批交付；不得使用
+`git add -f` 或审计排除绕过。
+3. 每批暂存后、提交前运行大文件闸门：
 
 ```bash
 FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
@@ -400,14 +410,14 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 `FORM_MAX_COMMIT_FILE_BYTES` 显式覆盖。检查非零退出时立即停止该批次提交和推送，明确列出
 超限路径与字节数并提醒用户。等待 5 分钟后仍无回复时，只继续推进不依赖超限文件的工作；
 静默不构成提交超限文件的授权，覆盖阈值必须由用户明确要求。
-3. 每个独立整改批次生成详实提交消息，结构见
+4. 每个独立整改批次生成详实提交消息，结构见
    `references/git-artifacts-and-workflow.md`；参考子库批次在消息中写明新增/迁移/重建
    submodule 及 README/docs 变化。提交后推送当前分支，禁止 force push。
-4. 调用 `~init` 同步 AGENTS.md 和 agent 配置归档；随后调用 `~tag(dev)` 保存开发快照。
-5. 在 `docs/` 写入该技术任务的 Markdown 文档，记录目标、冲突表摘要、改动、验证证据、
+5. 调用 `~init` 同步 AGENTS.md 和 agent 配置归档；随后调用 `~tag(dev)` 保存开发快照。
+6. 在 `docs/` 写入该技术任务的 Markdown 文档，记录目标、冲突表摘要、改动、验证证据、
    未决项和恢复方法；参考子库的分析文档写入 `refer/git-rep/docs/`，不要混入顶层
    `docs/`。文档纳入最终提交与推送。
-6. 最终确认本地分支、远程分支和 `dev` 标签指向同一验收提交，并确认标签已推送；
+7. 最终确认本地分支、远程分支和 `dev` 标签指向同一验收提交，并确认标签已推送；
    有漂移时停止并报告，不猜测远程状态。
 
 ## 验收矩阵
@@ -424,6 +434,7 @@ FORM_SKILL_DIR=${FORM_SKILL_DIR:-skills/form}
 | 参考子库 | `git ls-files -s`、`.gitmodules`、`git submodule status`、README、`refer/git-rep/docs` | 每个参考目录为 `160000` gitlink；README 有来源/致谢；本库分析文档只在 `refer/git-rep/docs/`；无普通拷贝残留 |
 | 根规则同步 | `form-agents-sync.sh --check`、根规则文件 diff | 标记块存在且为当前版本；块外本地约定逐字保留；冲突项以本地原约定为准 |
 | 功能复现 | 构建、测试、主入口冒烟命令与退出码 | 整改前后同一验证集通过；缺口明确写出 |
+| 数据边界 | `form-data-tracking-check.sh` 输出与退出码 | `data/` 仅跟踪三个契约文件，`data/cache/**` 始终被忽略 |
 | 大文件闸门 | `form-large-files-check.sh` 输出与退出码 | 暂存新增、修改、复制或重命名文件均不超过 `10,000,000` 字节；命中时本批次未提交 |
 | Git 收尾 | diff、init、dev tag、远程对象 | 提交消息有意义，分支与标签指向验收提交 |
 
