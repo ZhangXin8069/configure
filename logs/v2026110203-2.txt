@@ -1,0 +1,48 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 03:20:14 +0800
+批次: agent-cpa-base-url-v1
+主任务: 将 CLIProxyAPI cpa 的 base_url 修正为 /v1
+触发原因: 任务完成
+摘要: cpa base_url 更新为 http://192.168.188.20:8317/v1；models_url 保持不变；JSON/TOML、Unix/Windows 静态与 agent 全回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 修正 CLIProxyAPI base_url
+- 目标: 将 `cpa` 的 `base_url` 从根地址改为 `/v1`。
+- 命令/操作: 更新 `bin/agent-config.json`、`lib/_codex/config.toml`、`bin/agent.test.sh`、`bin/AGENTS.md` 与 `lib/_agent/setup.md`。
+- 关键输出: `base_url=http://192.168.188.20:8317/v1`，`models_url` 保持 `http://192.168.188.20:8317/v1/models`。
+- 退出码: 0。
+- 证据与判断: JSON 与 TOML 契约断言均确认新 base URL；OpenCode V1/V2 测试确认注入值同步。
+
+## 验证与证据
+- 测试/检查: `bash bin/agent.test.sh`。
+- 结果: 全部 PASS，覆盖 cpa/gpt、V1/V2 provider 配置和完整 launcher 回归。
+- 测试/检查: `bash bin/agent-windows.test.sh`。
+- 结果: Windows 静态契约通过；无 PowerShell Parser，真实 PowerShell 解析未执行。
+- 测试/检查: JSON/TOML 解析与 base URL 契约。
+- 结果: 通过。
+- 测试/检查: source `~/env-key.sh` 后探测 `http://192.168.188.20:8317/v1/models`。
+- 结果: HTTP 200。
+- 测试/检查: 严格 form 审计、data 跟踪、`git diff --check`。
+- 结果: 全部退出码 0。
+
+## 变更与产物
+- 文件: `bin/agent-config.json`、`lib/_codex/config.toml`、`bin/agent.test.sh`、`bin/AGENTS.md`、`lib/_agent/setup.md`。
+- 产物: 本最终日志及 `logs/AGENTS.md` 索引。
+- 未改动范围: `models_url`、供应商名、密钥变量、模型列表和其他 provider。
+
+## 风险、限制与下一步
+- 风险: 未发送真实模型补全请求；只读模型列表端点与注入契约已验证。
+- 阻塞: 无。
+- 下一步: 如需可执行 `op cpa --once` 做一次最小真实补全验证。
+
+## 用户输入指令
+1. base_url 改为 http://192.168.188.20:8317/v1
+
+## Agent 全文报告
+--- report begin ---
+finished：CLIProxyAPI 供应商标识 `cpa` 的 `base_url` 已改为 `http://192.168.188.20:8317/v1`，模型发现地址继续使用 `http://192.168.188.20:8317/v1/models`。
+
+JSON、Codex TOML、OpenCode V1/V2 配置注入、测试和文档已同步。完整 `agent.test.sh`、Windows 静态契约、配置契约、严格 form 审计、data 边界和 `git diff --check` 均通过；使用 `CLI_PROXY_API_KEY` 对 `/v1/models` 的只读探测返回 HTTP 200。当前环境没有 PowerShell Parser，因此 Windows 仅完成静态验证。
+--- report end ---

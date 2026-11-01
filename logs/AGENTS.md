@@ -907,3 +907,48 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## ssh-screen-all-entrypoints - final - 2026-11-02 02:01:52 +0800
+- 主任务: 为全部 SSH 入口增加 screen 持久会话、安装使用告警和 env.sh 别名
+- 日志文件: logs/v2026110202.txt
+- 文件大小: 6426 bytes
+- 触发原因: 任务完成
+- 关键内容: 统一 8 个 SSH 入口的 screen 创建/重连、<pid>.<sockname> 标题、缺失安装使用指南和 env.sh 三个别名；静态与 fake-screen 回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## env-screen-alias-conflict-guard - final - 2026-11-02 02:36:09 +0800
+- 主任务: 将 screen 别名缩短为 scn/scl/scr，并为 env.sh 增加加载前冲突闸门与导出式 source 幂等标记
+- 日志文件: logs/v2026110202-2.txt
+- 文件大小: 6171 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 env.sh 加载前 alias/function/executable/变量冲突预检与失败关闭，导出加载路径标记保证同 Shell 幂等并在新 Shell 重载，screen 别名缩短为 scn/scl/scr；bash/zsh 与 SSH 回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## env-conflict-warning-paused - final - 2026-11-02 02:52:08 +0800
+- 主任务: 暂停 env.sh 大规模冲突预检告警并恢复实际 zsh 加载
+- 日志文件: logs/v2026110202-3.txt
+- 文件大小: 4749 bytes
+- 触发原因: 任务完成
+- 关键内容: 注释停用冲突预检调用与告警，保留检测实现；实际 zsh 恢复 marker、scn 和 screen 函数，bash/zsh、SSH、格式与安全检查全部通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-provider-cpa-rename - final - 2026-11-02 03:11:23 +0800
+- 主任务: 将 agent custom-gpt 供应商改名为 cpa/CLIProxyAPI 并更新密钥与代理地址
+- 日志文件: logs/v2026110203.txt
+- 文件大小: 5159 bytes
+- 触发原因: 任务完成
+- 关键内容: cpa/CLIProxyAPI 贯通 Unix/Windows、OpenCode V1/V2 与 Codex；密钥改为 CLI_PROXY_API_KEY，base_url 与 /v1/models 更新，新旧入口和迁移测试通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-cpa-base-url-v1 - final - 2026-11-02 03:20:14 +0800
+- 主任务: 将 CLIProxyAPI cpa 的 base_url 修正为 /v1
+- 日志文件: logs/v2026110203-2.txt
+- 文件大小: 2697 bytes
+- 触发原因: 任务完成
+- 关键内容: cpa base_url 更新为 http://192.168.188.20:8317/v1；models_url 保持不变；JSON/TOML、Unix/Windows 静态与 agent 全回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -31,6 +31,23 @@ _assert_contains() {
     [[ $output == *"$expected"* ]] || _fail "输出缺少内容：$expected"
 }
 
+_clean_env_shell() {
+    local shell_path=$1
+    local path_value=$2
+    shift 2
+    local -a shell_flags=()
+
+    case "${shell_path##*/}" in
+        zsh) shell_flags=(-f) ;;
+        *) shell_flags=(--noprofile --norc) ;;
+    esac
+
+    command env -i \
+        HOME="$test_root/home" USER=configure-test LOGNAME=configure-test \
+        SHELL="$shell_path" TERM=dumb LANG=C.UTF-8 PATH="$path_value" \
+        "$shell_path" "${shell_flags[@]}" "$@"
+}
+
 _run_case() {
     local shell_path=$1
     local fixture=$2
@@ -219,6 +236,147 @@ _check_git_large_files_edge_cases() {
     _assert_contains "$output" '当前目录不在 Git 仓库中'
 }
 
+_check_screen_helpers() {
+    local shell_path=$1
+    local fake_screen=$2
+    local output
+    local status
+
+    output=$("$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        alias scn
+        alias scl
+        alias scr
+    ' configure-env-test "$env_file")
+    _assert_contains "$output" 'scn'
+    _assert_contains "$output" '_screen_new'
+    _assert_contains "$output" 'scl'
+    _assert_contains "$output" '_screen_list'
+    _assert_contains "$output" 'scr'
+    _assert_contains "$output" '_screen_resume'
+
+    output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='' SSH_SCREEN_NAME='' \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            _screen_new explicit-name
+        ' configure-env-test "$env_file")
+    _assert_contains "$output" '-t explicit-name -S explicit-name sh -c '
+
+    output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='203.0.113.9 5555 22' SSH_SCREEN_NAME='' \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            _screen_new
+        ' configure-env-test "$env_file")
+    _assert_contains "$output" '-t 203.0.113.9 -S 203.0.113.9 sh -c '
+
+    output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='' SSH_SCREEN_NAME='manual-name' \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            _screen_resume
+        ' configure-env-test "$env_file")
+    _assert_line "$output" '-t manual-name -dr manual-name'
+
+    output=$(SCREEN_BIN="$fake_screen" \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            _screen_list
+        ' configure-env-test "$env_file")
+    _assert_line "$output" '-ls'
+
+    set +e
+    output=$(SCREEN_BIN="$test_root/missing-screen" \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            _SCREEN_GUIDE_PATH="$2"
+            _screen_list
+        ' configure-env-test "$env_file" "$test_root/missing-screen-guide.txt" 2>&1)
+    status=$?
+    set -e
+    (( status == 127 )) || _fail "$shell_path 在 screen 缺失时应返回 127，实际为 $status"
+    _assert_contains "$output" 'Debian/Ubuntu: sudo apt update && sudo apt install screen'
+    _assert_contains "$output" 'RHEL/CentOS/Fedora: sudo dnf install screen'
+    _assert_contains "$output" 'Arch/Manjaro: sudo pacman -S screen'
+    _assert_contains "$output" 'openSUSE: sudo zypper install screen'
+    _assert_contains "$output" 'Alpine: sudo apk add screen'
+    _assert_contains "$output" 'FreeBSD: sudo pkg install screen'
+    _assert_contains "$output" 'macOS: brew install screen'
+    _assert_contains "$output" 'Ctrl+a d'
+    _assert_contains "$output" 'screen -dr <名字>'
+}
+
+_check_env_loading_guard() {
+    local shell_path=$1
+    local clean_bin=$2
+    local conflict_bin=$3
+    local child_driver=$4
+    local stderr_file=$test_root/conflict-guard.err
+    local output
+    local child_output
+
+    output=$(_clean_env_shell "$shell_path" "$clean_bin:/usr/bin:/bin" -c '
+        . "$1" 2>"$2" || exit $?
+        first_path=$PATH
+        alias scn >/dev/null 2>&1 || exit 11
+        alias scl >/dev/null 2>&1 || exit 12
+        alias scr >/dev/null 2>&1 || exit 13
+        type _screen_new >/dev/null 2>&1 || exit 14
+        alias screen-new >/dev/null 2>&1 && exit 15
+        alias screen-list >/dev/null 2>&1 && exit 16
+        alias screen-resume >/dev/null 2>&1 && exit 17
+        env | grep -Fqx "_CONFIGURE_ENV_LOADED_PATH=$1" || exit 18
+        . "$1" 2>>"$2" || exit $?
+        [[ "$PATH" == "$first_path" ]] || exit 19
+        printf "loaded\n"
+    ' configure-env-clean "$env_file" "$stderr_file") ||
+        _fail "$shell_path 无冲突时应加载 env.sh，实际输出：$output"
+    _assert_line "$output" 'loaded'
+    [[ ! -s "$stderr_file" ]] || _fail "$shell_path 无冲突加载产生告警：$(<"$stderr_file")"
+
+    case "${shell_path##*/}" in
+        zsh)
+            child_output=$(_clean_env_shell "$shell_path" "$clean_bin:/usr/bin:/bin" -c '
+                . "$1" 2>>"$2" || exit $?
+                actual=$(zsh -f "$3" "$1") || exit 61
+                [[ "$actual" == *"marker=$1"* ]] || exit 62
+                [[ "$actual" == *"path=$PATH"* ]] || exit 63
+                printf "child-skipped\n"
+            ' configure-env-clean "$env_file" "$stderr_file" "$child_driver") ||
+                _fail "$shell_path 新 Shell 未重新加载 env.sh，实际输出：$child_output"
+            ;;
+        *)
+            child_output=$(_clean_env_shell "$shell_path" "$clean_bin:/usr/bin:/bin" -c '
+                . "$1" 2>>"$2" || exit $?
+                actual=$("$BASH" --noprofile --norc "$3" "$1") || exit 61
+                [[ "$actual" == *"marker=$1"* ]] || exit 62
+                [[ "$actual" == *"path=$PATH"* ]] || exit 63
+                printf "child-skipped\n"
+            ' configure-env-clean "$env_file" "$stderr_file" "$child_driver") ||
+                _fail "$shell_path 新 Shell 未重新加载 env.sh，实际输出：$child_output"
+            ;;
+    esac
+    _assert_line "$child_output" 'child-skipped'
+    [[ ! -s "$stderr_file" ]] || _fail "$shell_path 子 shell 跳过时产生告警：$(<"$stderr_file")"
+
+    output=$(_clean_env_shell "$shell_path" "$conflict_bin:/usr/bin:/bin" -c '
+        alias scn=false
+        git_current_branch() { :; }
+        _SCREEN_GUIDE_PATH=/tmp/foreign-screen-guide
+        export _SCREEN_GUIDE_PATH
+        before_path=$PATH
+        . "$1" 2>"$2" || exit 31
+        [[ "$PATH" != "$before_path" ]] || exit 32
+        alias scn | grep -Fq _screen_new || exit 33
+        type _screen_new >/dev/null 2>&1 || exit 34
+        [[ "$_SCREEN_GUIDE_PATH" == "${1%/*}/bin/_screen-guide.txt" ]] || exit 35
+        [[ "$_CONFIGURE_ENV_LOADED_PATH" == "$1" ]] || exit 36
+        printf "conflicts-ignored\n"
+    ' configure-env-clean "$env_file" "$stderr_file") ||
+        _fail "$shell_path 冲突告警暂停后未继续加载 env.sh，实际输出：$output"
+    _assert_line "$output" 'conflicts-ignored'
+    [[ ! -s "$stderr_file" ]] || _fail "$shell_path 冲突告警暂停后仍产生告警：$(<"$stderr_file")"
+
+}
+
 main() {
     local fixture=$test_root/fixtures/path\ with\ spaces
     local readlink_failure=$test_root/failing-readlink
@@ -236,6 +394,10 @@ main() {
     local empty_repo=$test_root/empty-repo
     local non_repo=$test_root/non-repo
     local large_files_output
+    local fake_screen=$test_root/screen-bin/screen
+    local clean_bin=$test_root/clean-bin
+    local conflict_bin=$test_root/conflict-bin
+    local child_driver=$test_root/child-env-driver.sh
 
     mkdir -p "$fixture/nested" "$fixture/dir target" \
         "$fixture/.git" "$fixture/node_modules" \
@@ -275,8 +437,22 @@ main() {
     _create_large_files_repo "$large_files_repo"
     mkdir -p "$empty_repo" "$non_repo"
     git -C "$empty_repo" init -q -b main
+    mkdir -p "${fake_screen%/*}"
+    mkdir -p "$test_root/home" "$clean_bin" "$conflict_bin"
+    printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$*"' >"$fake_screen"
+    printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$conflict_bin/cl"
+    printf '%s\n' \
+        '. "$1" || exit $?' \
+        'printf "marker=%s path=%s\\n" "${_CONFIGURE_ENV_LOADED_PATH:-}" "$PATH"' >"$child_driver"
+    chmod +x "$fake_screen" "$conflict_bin/cl" "$child_driver"
 
     for shell_path in "${shell_paths[@]}"; do
+        _check_env_loading_guard "$shell_path" "$clean_bin" "$conflict_bin" "$child_driver"
+        printf '通过：%s 的 marker 幂等与冲突告警暂停加载\n' "$shell_path"
+
+        _check_screen_helpers "$shell_path" "$fake_screen"
+        printf '通过：%s 的 screen 别名、标题、重连与缺失降级\n' "$shell_path"
+
         output=$(_run_case "$shell_path" "$fixture") ||
             _fail "$shell_path 的原生读取器链失败"
         _check_output "$shell_path" "$output" "$fixture"

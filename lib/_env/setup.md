@@ -4,7 +4,7 @@
 
 | 层级 | 文件 | 职责 |
 |---|---|---|
-| 仓库通用入口 | `env.sh` | PATH、库路径、locale、Git 别名、通用别名 |
+| 仓库通用入口 | `env.sh` | 冲突预检（当前暂停）、PATH、库路径、locale、Git 别名、通用别名 |
 | 机器版本快照 | `lib/<name>-vYYYYMMDD>/env.sh` | module、conda、编译器、工具链和机器专属路径 |
 | 用户本机覆盖 | `~/env-key.sh`、`~/env.sh` | 密钥、登录令牌和不在仓库中维护的本机参数 |
 
@@ -27,7 +27,24 @@ printf '%s\n' "$PATH"
 printf '%s\n' "$LD_LIBRARY_PATH"
 ```
 
-`env.sh` 通过自身位置解析仓库根，适合部署在 `$HOME/configure` 之外。它会避免重复加入仓库 `bin/` 和 `lib/`，但不能阻止机器 `env.sh` 自己重复追加路径。
+`env.sh` 通过自身位置解析仓库根，适合部署在 `$HOME/configure` 之外。大规模冲突预检当前按用户要求
+注释暂停，其余 PATH、locale、alias 和 function 继续加载；成功后导出
+`_CONFIGURE_ENV_LOADED_PATH`。当前 Shell 或子 Shell 再次 source 且路径完全匹配时直接幂等返回。
+它会避免重复加入仓库 `bin/` 和 `lib/`，但不能阻止机器 `env.sh` 自己重复追加路径。
+
+## 加载前冲突闸门（暂停）
+
+`lib/_env_conflicts.sh` 保留以下检查能力，但 `env.sh` 中的调用与告警已注释暂停：
+
+- 与仓库 alias 同名的现有 alias。
+- 与仓库公开 function 同名的现有 function，包括 `git_current_branch` 等条件兜底函数。
+- 与仓库 `bin/` 中可执行文件同名，且已由原 PATH、alias 或 function 占用的命令名。
+- 指向其他指南的 `_SCREEN_GUIDE_PATH`。
+
+导出的 `_CONFIGURE_ENV_LOADED_PATH` 用于同一路径的重复加载判断；路径完全一致即跳过。
+
+恢复时取消 `env.sh` 中 `@CONFLICT_GUARD_PAUSED@` 标记后的整段注释。恢复后命中任一冲突会返回非零、
+列出冲突项，并且不修改 PATH、`LD_LIBRARY_PATH`、locale、alias 或 function。
 
 检查多次 source 是否稳定：
 

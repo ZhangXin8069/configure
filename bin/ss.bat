@@ -20,6 +20,7 @@ if not exist "%_PATH%ss.ps1" (
 set "_SHORT=%~1"
 if not defined _SHORT set "_SHORT=k"
 set "SS_SHORT=%_SHORT%"
+if not defined SSH_SCREEN_NAME set "SSH_SCREEN_NAME=%~n0"
 
 powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%_PATH%ss.ps1"
 set "_RC=%errorlevel%"

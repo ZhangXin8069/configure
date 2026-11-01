@@ -1,0 +1,14 @@
+[WARN] screen 不可用，已跳过持久会话，继续执行原 SSH 连接。
+安装 screen：
+  Debian/Ubuntu: sudo apt update && sudo apt install screen
+  RHEL/CentOS/Fedora: sudo dnf install screen（旧版 RHEL/CentOS 使用 sudo yum install screen）
+  Arch/Manjaro: sudo pacman -S screen
+  openSUSE: sudo zypper install screen
+  Alpine: sudo apk add screen
+  FreeBSD: sudo pkg install screen
+  macOS: brew install screen（或 sudo port install screen）
+使用：
+  screen -t <名字> -S <名字>  # 新建（窗口标题为 <pid>.<sockname>）
+  Ctrl+a d                # 脱离
+  screen -ls              # 查看
+  screen -dr <名字>       # 重连并踢掉旧连接

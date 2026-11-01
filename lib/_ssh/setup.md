@@ -182,6 +182,26 @@ xx99.sh -n
 `ServerAliveCountMax=3`。客户端每 30 秒发送一次加密保活探测，连续 3 次无响应才判定失联；
 这主要用于避免空闲连接被 NAT、防火墙或服务端的无流量超时提前回收。
 
+## screen 持久会话
+
+仓库内 8 个交互式 SSH 入口会在 screen 可用时自动创建或重连持久会话。会话名默认取 SSH
+客户端脚本名（如 `ss.sh`、`ssnsc.bat`），可用 `SSH_SCREEN_NAME` 覆盖；窗口标题 `-t`
+先与 sockname 同名，screen 启动后再按会话内的 `$STY` 更新为完整的
+`<pid>.<sockname>`。已存在同名会话时使用 `-d -R` 重连并踢掉旧连接。
+
+重新加载环境后可直接使用：
+
+```bash
+source ~/configure/env.sh
+scn [名字]       # 新建；名字默认取 SSH_CLIENT 的客户端地址
+scl              # 查看
+scr [名字]       # 重连并踢掉旧连接
+```
+
+新建 session 后按 `Ctrl+a d` 脱离。screen 缺失时，入口会列出 Debian/Ubuntu、RHEL 系、
+Arch 系、openSUSE、Alpine、FreeBSD 与 macOS 的安装命令，以及上述使用方式，然后跳过持久化
+并继续原 SSH 连接。
+
 ## 排障顺序
 
 ```bash

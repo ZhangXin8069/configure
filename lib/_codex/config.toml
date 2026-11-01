@@ -8,11 +8,11 @@ model_auto_compact_token_limit = 900000
 personality = "pragmatic"
 approvals_reviewer = "auto_review"
 service_tier = "fast"
-[model_providers.lqcd]
-name = "lqcd"
-base_url ="http://nat200.natappvip.cc/v1"
+[model_providers.cpa]
+name = "CLIProxyAPI"
+base_url = "http://192.168.188.20:8317/v1"
+env_key = "CLI_PROXY_API_KEY"
 wire_api = "responses"
-experimental_bearer_token = "sk-***"
 supports_websockets = true
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "hostname", "branch-changes", "run-state", "permissions", "approval-mode", "context-used", "context-window-size", "weekly-limit", "estimated-thread-cost", "thread-id", "fast-mode", "task-progress"]

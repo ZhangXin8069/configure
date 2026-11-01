@@ -293,11 +293,12 @@ function Get-OpenCodeKeyMode {
 }
 
 # 旧 key 环境变量名过渡：新名缺失而旧名存在时写入新名（并告警提示迁移）
-#   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY；LQCD_API_KEY → CUSTOM_GPT_API_KEY
+#   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY；CUSTOM_GPT_API_KEY/LQCD_API_KEY → CLI_PROXY_API_KEY
 function Invoke-LegacyKeyMigration {
     foreach ($pair in @(
         @('DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'),
-        @('CUSTOM_GPT_API_KEY', 'LQCD_API_KEY')
+        @('CLI_PROXY_API_KEY', 'CUSTOM_GPT_API_KEY'),
+        @('CLI_PROXY_API_KEY', 'LQCD_API_KEY')
     )) {
         $newName = $pair[0]
         $oldName = $pair[1]
@@ -347,7 +348,7 @@ function Get-ConfigEnvironmentValue {
     return $value
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go、zen→opencode-zen、gpt→custom-gpt；完整途径名原样返回
+# 供应商快捷词：pay→deepseek-pay、go→opencode-go、zen→opencode-zen、gpt→cpa；完整途径名原样返回
 function Resolve-ProviderAlias {
     param([string]$Value)
 
@@ -355,7 +356,7 @@ function Resolve-ProviderAlias {
         'pay' { return 'deepseek-pay' }
         'go' { return 'opencode-go' }
         'zen' { return 'opencode-zen' }
-        'gpt' { return 'custom-gpt' }
+        'gpt' { return 'cpa' }
         default { return $Value }
     }
 }
@@ -1048,7 +1049,7 @@ function Resolve-AgentModelSelection {
     }
 }
 
-# OpenCode provider 注入块：仅注入 key 环境变量存在的途径；custom-gpt 额外注册端点与模型
+# OpenCode provider 注入块：仅注入 key 环境变量存在的途径；cpa 额外注册 CLIProxyAPI 端点与模型
 function Get-OpenCodeProviderConfig {
     $result = [ordered]@{}
     $agentConfig = $script:AgentConfig.agents.opencode
@@ -1061,7 +1062,7 @@ function Get-OpenCodeProviderConfig {
         if ([string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $envKey))) { continue }
         $providerId = [string]$provider.opencode_provider_id
         if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$name }
-        if ($name -eq 'custom-gpt') {
+        if ($name -eq 'cpa') {
             $baseUrl = [string]$provider.base_url
             if ([string]::IsNullOrWhiteSpace($baseUrl)) { continue }
             $models = [ordered]@{}
@@ -1096,7 +1097,7 @@ function ConvertTo-OpenCodeV2Package {
     }
 }
 
-# OpenCode V2 provider 配置：内置途径使用运行时环境，仅自定义 custom-gpt 注册包、端点和模型。
+# OpenCode V2 provider 配置：内置途径使用运行时环境，仅 cpa/CLIProxyAPI 注册包、端点和模型。
 function Get-OpenCodeProviderConfigV2 {
     $result = [ordered]@{}
     $agentConfig = $script:AgentConfig.agents.opencode
@@ -1109,7 +1110,7 @@ function Get-OpenCodeProviderConfigV2 {
         if ([string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $envKey))) { continue }
         $providerId = [string]$provider.opencode_provider_id
         if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$name }
-        if ($name -eq 'custom-gpt' -and $providerId -eq 'custom-gpt') {
+        if ($name -eq 'cpa' -and $providerId -eq 'cpa') {
             $baseUrl = [string]$provider.base_url
             if ([string]::IsNullOrWhiteSpace($baseUrl)) { continue }
             $meta = $provider.opencode
@@ -1847,8 +1848,8 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
-    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=custom-gpt（如 cl.bat zen）。'
+    Write-Host "用法：$($script:LauncherName) [pay|go|zen|gpt|cpa] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=cpa(CLIProxyAPI)（如 cl.bat zen）。'
     Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
     Write-Host '模型：显式指定途径时（快捷词 pay|go|zen|gpt 或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
@@ -2987,7 +2988,7 @@ function Parse-Arguments {
     $errorMessage = ''
     for ($i = 0; $i -lt $cliArgs.Count; $i++) {
         $option = [string]$cliArgs[$i]
-        if ($option -in @('pay', 'go', 'zen', 'gpt', 'deepseek-pay', 'opencode-go', 'opencode-zen', 'custom-gpt')) {
+        if ($option -in @('pay', 'go', 'zen', 'gpt', 'cpa', 'deepseek-pay', 'opencode-go', 'opencode-zen')) {
             $providerOverride = Resolve-ProviderAlias $option
             continue
         }
@@ -3266,7 +3267,7 @@ function Parse-Arguments {
             'deepseek-pay' { 'pay' }
             'opencode-go' { 'go' }
             'opencode-zen' { 'zen' }
-            'custom-gpt' { 'gpt' }
+            'cpa' { 'gpt' }
             default { $providerForModel }
         }
         Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Codex Responses 协议：$($selection.CodexUnsupportedReason)###"
@@ -3279,7 +3280,7 @@ function Parse-Arguments {
             'deepseek-pay' { 'pay' }
             'opencode-go' { 'go' }
             'opencode-zen' { 'zen' }
-            'custom-gpt' { 'gpt' }
+            'cpa' { 'gpt' }
             default { $providerForModel }
         }
         Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Claude 的 Anthropic Messages 协议：$($selection.ClaudeUnsupportedReason)###"

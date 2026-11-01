@@ -1,0 +1,71 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 02:01:52 +0800
+批次: ssh-screen-all-entrypoints
+主任务: 为全部 SSH 入口增加 screen 持久会话、安装使用告警和 env.sh 别名
+触发原因: 任务完成
+摘要: 统一 8 个 SSH 入口的 screen 创建/重连、<pid>.<sockname> 标题、缺失安装使用指南和 env.sh 三个别名；静态与 fake-screen 回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 盘点 SSH 入口
+- 目标: 找出仓库内实际创建交互式 SSH 会话的全部入口，排除 Git SSH URL、密钥生成与文档示例。
+- 命令/操作: 定向搜索 shell、PowerShell、批处理中的 ssh 调用，并读取 `bin/ss.sh`、Windows 包装器、`lib/_ssh/setup.md` 与上次 SSH 保活日志。
+- 关键输出: 确认 8 个入口：`ss.sh`、`ss.ps1`、`ssnsc.sh`、`ssnsc.bat`、`ssjtu.sh`、`xx99.sh`、`llingsheng.bat`、`kkunshan.bat`。
+- 退出码: 0。
+- 证据与判断: Git 远端协议、`ssh-keygen`、`ssh-add` 和连通性验证不属于可持久化的交互式会话。
+### S2 — 实现共享 screen 层
+- 目标: screen 可用时创建或重连同名 session，并让窗口标题匹配完整 `<pid>.<sockname>`；不可用时告警后继续 SSH。
+- 命令/操作: 新增 `lib/_screen.sh`、`bin/_ssh_screen.sh`、`bin/_screen-guide.txt` 与 `bin/_screen-warning.bat`；4 个 Unix 入口统一调用 `_ssh_screen`，4 个 Windows 入口增加检测、降级和同名 `-t`/`-S`。
+- 关键输出: SSH 自动路径使用 `screen -t name -S name -d -R`，启动后通过 `$STY` 更新窗口标题；screen 缺失时输出 Debian/Ubuntu、RHEL 系、Arch 系、openSUSE、Alpine、FreeBSD、macOS 安装指南及新建/脱离/查看/重连用法。
+- 退出码: 0。
+- 证据与判断: 公共层避免 8 个入口各自维护检测和降级逻辑；screen 已存在但执行失败时保留其退出码，不误降级为第二次 SSH。
+### S3 — env.sh screen 别名
+- 目标: 在 shell 环境入口提供可直接使用的 screen 操作。
+- 命令/操作: `env.sh` source 共享库并定义 `screen-new`、`screen-list`、`screen-resume`；默认名依次取参数、`SSH_SCREEN_NAME`、`SSH_CLIENT` 客户端地址、`local`。
+- 关键输出: `screen-new` 使用 `-t name -S name`；`screen-resume` 使用 `-t name -dr name`；`Ctrl+a d` 在指南中明确为脱离操作。
+- 退出码: 0。
+- 证据与判断: bash/zsh 均能加载别名和辅助函数，显式名字与 SSH 客户端地址默认值均通过 fake screen 验证。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/*.sh`、`zsh -n env.sh env.test.sh`。
+- 结果: 通过，退出码 0。
+- 测试/检查: `bash env.test.sh`。
+- 结果: 通过；bash 与 zsh 均覆盖 screen 别名、`-t`/sockname、`SSH_CLIENT` 默认名、重连、缺失告警和完整安装指南。
+- 测试/检查: `bash bin/ss.test.sh`。
+- 结果: 通过；覆盖目标映射、8 个入口接入、screen 成功/失败/缺失、`SSH_SCREEN_NAME` 覆盖和退出码透传。
+- 测试/检查: `form-audit.sh --root . --strict --quiet`、`form-data-tracking-check.sh --root . --quiet`、`git diff --check`。
+- 结果: 全部通过，退出码 0。
+- 未验证项: 当前 agent shell 的 `command -v screen`、`/usr/bin/screen`、`/usr/local/bin/screen` 均不存在，`dpkg-query` 也未查得 screen 包；因此未执行真实 screen 会话。实现已通过受控 fake screen 和静态参数契约验证。
+
+## 变更与产物
+- 文件: `lib/_screen.sh`、`bin/_ssh_screen.sh`、`bin/_screen-guide.txt`、`bin/_screen-warning.bat`。
+- 文件: `env.sh`、`env.test.sh`、`bin/ss.test.sh`。
+- 文件: `bin/ss.sh`、`bin/ss.ps1`、`bin/ss.bat`、`bin/ssnsc.sh`、`bin/ssnsc.bat`、`bin/ssjtu.sh`、`bin/xx99.sh`、`bin/llingsheng.bat`、`bin/kkunshan.bat`。
+- 文件: `AGENTS.md`、`bin/AGENTS.md`、`lib/AGENTS.md`、`lib/_commands/setup.md`、`lib/_ssh/AGENTS.md`、`lib/_ssh/setup.md`。
+- 产物: 本最终日志及 `logs/AGENTS.md` 索引。
+- 未改动范围: Git SSH 远端协议、密钥生成/加载、SSH 目标映射和保活参数。
+
+## 风险、限制与下一步
+- 风险: 同名客户端入口默认复用同一 session；连接不同目标时可用 `SSH_SCREEN_NAME` 显式区分。
+- 风险: Windows 仅在检测到兼容 screen 时进入持久会话分支，否则按设计输出指南并直接 SSH。
+- 阻塞: 无代码阻塞。
+- 下一步: 在可解析 `screen` 的登录 shell 中执行一次真实 `screen -ls` 与 Ctrl+a d / screen-resume 冒烟，确认本机终端标题渲染。
+
+## 用户输入指令
+1. 为本库所有 SSH 相关的功能添加 `screen` 作为辅助，不支持则警告并跳过。
+2. 在 `env.sh` 中添加 screen 新建、脱离、列表、重连等指令的别名，名字默认为 SSH 客户端名。
+3. 警告中需包含安装与使用指南，覆盖各版本类 Unix。
+4. 本环境 screen 已安装。
+5. 更正也默认设置 `-t title`，窗口标题与 `<pid>.sockname` 保持一致。
+
+## Agent 全文报告
+--- report begin ---
+finished：仓库内 8 个实际建立交互式 SSH 会话的入口已统一接入 screen 辅助，并新增 `screen-new`、`screen-list`、`screen-resume` 三个 `env.sh` 别名。
+
+实现内容：Unix 入口统一调用 `_ssh_screen`，以客户端脚本名为默认 session 名并使用 `screen -t name -S name -d -R` 创建或重连；screen 启动后通过 `$STY` 把窗口标题更新为完整 `<pid>.<sockname>`。`SSH_SCREEN_NAME` 可覆盖默认名。Windows 的 `ss.ps1`、`ssnsc.bat`、`llingsheng.bat`、`kkunshan.bat` 也加入检测；缺失 screen 时统一输出 Debian/Ubuntu、RHEL/CentOS/Fedora、Arch/Manjaro、openSUSE、Alpine、FreeBSD 和 macOS 的安装命令，以及新建、Ctrl+a d 脱离、列表、重连用法，然后继续原始 SSH。
+
+验证证据：`bash -n bin/*.sh`、`zsh -n env.sh env.test.sh`、`bash env.test.sh`、`bash bin/ss.test.sh`、严格 form 审计、data 边界检查和 `git diff --check` 全部通过。测试覆盖 screen 成功、执行失败、缺失降级、标题/session 同名、名称覆盖和 SSH 退出码透传。
+
+限制：当前 agent 容器仍无法解析 `screen`，包数据库也未查得该包，因此未执行真实 screen 会话冒烟；这与会话侧声称已安装可能存在环境差异。下一步应在可执行 screen 的终端验证一次 Ctrl+a d 脱离和 screen-resume 重连。
+--- report end ---

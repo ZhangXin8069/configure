@@ -1,13 +1,52 @@
 #!/usr/bin/env bash
 # 环境主入口: 被 ~/.zshrc / ~/.bashrc source (不可直接执行)
-# 职责: PATH/LD_LIBRARY_PATH/locale/git 别名/通用别名
+# 职责: PATH/LD_LIBRARY_PATH/locale/git 别名/screen 会话别名/通用别名
 # @INIT@
-_SRC=${BASH_SOURCE[0]:-${0}}
-case "${_SRC}" in
-    */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/" ;;
-    *) _DIR=. ;;
+_configure_env_source=${BASH_SOURCE[0]:-${0}}
+case "${_configure_env_source}" in
+    */*) _configure_env_root=${_configure_env_source%/*}; [ -z "${_configure_env_root}" ] && _configure_env_root="/" ;;
+    *) _configure_env_root=. ;;
 esac
-if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
+_configure_env_name=${_configure_env_source##*/}
+_configure_env_root=$(CDPATH= cd -P -- "${_configure_env_root}" && pwd -P)
+_configure_env_self="${_configure_env_root%/}/${_configure_env_name}"
+unset _configure_env_source _configure_env_name
+
+if [ "${_CONFIGURE_ENV_PROBE:-}" != "${_configure_env_self}" ]; then
+    if [ "${_CONFIGURE_ENV_LOADED_PATH:-}" = "${_configure_env_self}" ]; then
+        unset _configure_env_self _configure_env_root
+        return 0
+    fi
+    # @CONFLICT_GUARD_PAUSED@
+    # 用户要求暂时停用大规模 alias/function/executable 冲突告警；恢复时取消以下注释。
+    # if [ -n "${_SCREEN_GUIDE_PATH:-}" ] &&
+    #     [ "${_SCREEN_GUIDE_PATH}" != "${_configure_env_root}/bin/_screen-guide.txt" ]; then
+    #     printf '[WARN] env.sh 未加载：变量 _SCREEN_GUIDE_PATH 已被定义为 %s。\n' \
+    #         "${_SCREEN_GUIDE_PATH}" >&2
+    #     unset _configure_env_self _configure_env_root
+    #     return 1
+    # fi
+    #
+    # if [ ! -r "${_configure_env_root}/lib/_env_conflicts.sh" ]; then
+    #     printf '[WARN] env.sh 未加载：缺少冲突预检文件 %s。\n' \
+    #         "${_configure_env_root}/lib/_env_conflicts.sh" >&2
+    #     unset _configure_env_self _configure_env_root
+    #     return 1
+    # fi
+    # if (
+    #     . "${_configure_env_root}/lib/_env_conflicts.sh"
+    #     _env_conflicts_preflight "${_configure_env_root}" "${_configure_env_self}"
+    # ); then
+    #     _configure_env_preflight_status=0
+    # else
+    #     _configure_env_preflight_status=$?
+    # fi
+    # if [ "${_configure_env_preflight_status}" -ne 0 ]; then
+    #     unset _configure_env_preflight_status _configure_env_self _configure_env_root
+    #     return 1
+    # fi
+    # unset _configure_env_preflight_status
+fi
 # @EXPORT@
 # export TERM=xterm
 # export TERM=xterm-256color
@@ -38,14 +77,14 @@ esac
 # @@PATH@@
 # 防重复: 已含仓库 bin 前缀则跳过（env.sh 可能被多次 source，避免 PATH 无限拼接）
 case ":${PATH}:" in
-*":${_PATH}/bin:"*) : ;;
-*) export PATH=${_PATH}/bin:${HOME}/.local/bin:${HOME}/sbin:${HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH} ;;
+*":${_configure_env_root}/bin:"*) : ;;
+*) export PATH=${_configure_env_root}/bin:${HOME}/.local/bin:${HOME}/sbin:${HOME}/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:${PATH} ;;
 esac
 # @@LD_LIBRARY_PATH@@
 # 防重复: 已含仓库 lib 前缀则跳过
 case ":${LD_LIBRARY_PATH}:" in
-*":${_PATH}/lib:"*) : ;;
-*) export LD_LIBRARY_PATH=${_PATH}/lib:${HOME}/.local/lib:${HOME}/slib:${HOME}/lib:/usr/local/lib:/usr/lib:/usr/lib64:/usr/libx32:/usr/lib32:/lib:/lib64:/libx32:/lib32:${LD_LIBRARY_PATH} ;;
+*":${_configure_env_root}/lib:"*) : ;;
+*) export LD_LIBRARY_PATH=${_configure_env_root}/lib:${HOME}/.local/lib:${HOME}/slib:${HOME}/lib:/usr/local/lib:/usr/lib:/usr/lib64:/usr/libx32:/usr/lib32:/lib:/lib64:/libx32:/lib32:${LD_LIBRARY_PATH} ;;
 esac
 # @ALIAS@
 alias ...=../..
@@ -66,7 +105,13 @@ alias egrep='grep -E --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.t
 alias fgrep='grep -F --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 alias grep='grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 # @GIT_ALIASES@
-source "${_PATH}/lib/_git_aliases.sh"
+source "${_configure_env_root}/lib/_git_aliases.sh"
+_SCREEN_GUIDE_PATH="${_configure_env_root}/bin/_screen-guide.txt"
+source "${_configure_env_root}/lib/_screen.sh"
+# screen 会话: 默认取 SSH_CLIENT 客户端地址，也可用 SSH_SCREEN_NAME 或参数覆盖
+alias scn='_screen_new'
+alias scl='_screen_list'
+alias scr='_screen_resume'
 # ls 系（修正原 --color=tty 非法选项为 --color=auto; 两 shell 通用）
 alias ls='ls --color=auto'
 alias l='ls -lah'
@@ -92,10 +137,9 @@ alias gback-tag='git fetch origin --tags --force'
 alias his='history | tail'
 alias ohmyzsh='${EDITOR:-vim} ~/.oh-my-zsh'
 alias zshconfig='${EDITOR:-vim} ~/.zshrc'
-# zsh/oh-my-zsh 专有（bash 下不定义, 避免覆盖内置 history/whence 语义）
+# zsh/oh-my-zsh 专有（bash 下不定义, 避免覆盖内置 history 语义；which-command 保留 zsh 默认）
 if [ -n "${ZSH_VERSION}" ]; then
     alias history='omz_history'
-    alias which-command='whence'
 fi
 # @@ZHANGXIN@@
 # alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
@@ -390,3 +434,23 @@ get_git_large_files() (
         printf '共 %d 个历史大文件版本（> 1 MiB）。\n' "$count"
     fi
 )
+
+if [ "${_CONFIGURE_ENV_PROBE:-}" = "${_configure_env_self}" ]; then
+    printf '%s\n' '@@CONFIGURE_ENV_ALIASES@@'
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        printf '%s\n' ${(ok)aliases}
+    else
+        compgen -a 2>/dev/null | sort
+    fi
+    printf '%s\n' '@@CONFIGURE_ENV_FUNCTIONS@@'
+    if [ -n "${ZSH_VERSION:-}" ]; then
+        printf '%s\n' ${(ok)functions}
+    else
+        compgen -A function 2>/dev/null | sort
+    fi
+    unset _configure_env_self _configure_env_root
+    return 0
+fi
+
+export _CONFIGURE_ENV_LOADED_PATH="${_configure_env_self}"
+unset _configure_env_self _configure_env_root

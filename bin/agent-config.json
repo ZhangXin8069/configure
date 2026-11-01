@@ -174,15 +174,15 @@
         "big-pickle": { "endpoint": "chat/completions", "npm": "@ai-sdk/openai-compatible" }
       }
     },
-    "custom-gpt": {
-      "label": "自定义 GPT 兼容端点",
-      "env_key": "CUSTOM_GPT_API_KEY",
-      "base_url": "http://nat200.natappvip.cc/v1",
+    "cpa": {
+      "label": "CLIProxyAPI",
+      "env_key": "CLI_PROXY_API_KEY",
+      "base_url": "http://192.168.188.20:8317/v1",
       "anthropic_base_url": "",
       "wire_api": "responses",
       "supports_websockets": true,
-      "opencode_provider_id": "custom-gpt",
-      "models_url": "http://nat200.natappvip.cc/v1/models",
+      "opencode_provider_id": "cpa",
+      "models_url": "http://192.168.188.20:8317/v1/models",
       "models_auth": "bearer",
       "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
       "opencode": {
@@ -213,7 +213,7 @@
         "deepseek-pay",
         "opencode-go",
         "opencode-zen",
-        "custom-gpt"
+        "cpa"
       ]
     },
     "codex": {

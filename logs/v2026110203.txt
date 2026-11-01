@@ -1,0 +1,70 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 03:11:23 +0800
+批次: agent-provider-cpa-rename
+主任务: 将 agent custom-gpt 供应商改名为 cpa/CLIProxyAPI 并更新密钥与代理地址
+触发原因: 任务完成
+摘要: cpa/CLIProxyAPI 贯通 Unix/Windows、OpenCode V1/V2 与 Codex；密钥改为 CLI_PROXY_API_KEY，base_url 与 /v1/models 更新，新旧入口和迁移测试通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 供应商配置改名
+- 目标: 将 agent 第三供应商 `custom-gpt` 改名为 `cpa`，全称 CLIProxyAPI。
+- 命令/操作: 更新 `agent-config.json`、`agent-custom.json.refer` 和 `lib/_codex/config.toml`。
+- 关键输出: provider key、OpenCode provider id、默认模型前缀均为 `cpa`；`gpt` 快捷词继续保留并映射到 `cpa`。
+- 退出码: 0。
+- 证据与判断: JSON/TOML 契约断言确认 `cpa` 全称、模型前缀和 key provider 列表一致。
+### S2 — 密钥与端点更新
+- 目标: 使用新的 `CLI_PROXY_API_KEY` 和本地 CLIProxyAPI 地址。
+- 命令/操作: 将 `env_key` 改为 `CLI_PROXY_API_KEY`，`base_url` 改为 `http://192.168.188.20:8317/`，模型发现地址改为 `http://192.168.188.20:8317/v1/models`；Codex TOML 用 `env_key` 替代明文占位 token。
+- 关键输出: `/models` 返回 404，`/v1/models` 返回 200。
+- 退出码: 0。
+- 证据与判断: 隔离 source `~/env-key.sh` 后 `CLI_PROXY_API_KEY=set`，且模型列表端点可达。
+### S3 — 启动器与兼容迁移
+- 目标: 同步 Unix/Windows 参数解析、帮助、provider 注入和旧 key 回退。
+- 命令/操作: 更新 `agent.sh`、`agent-runtime.ps1`；`gpt→cpa`，接受完整名 `cpa`；旧 `CUSTOM_GPT_API_KEY`、`LQCD_API_KEY` 在新 key 缺失时回退。
+- 关键输出: `op gpt`、`op cpa` 均使用 `cpa/gpt-5.6-luna` 和 `{env:CLI_PROXY_API_KEY}`；Windows 静态契约通过。
+- 退出码: 0。
+- 证据与判断: 新旧入口和 Windows 静态实现行为一致；用户当前环境无 PowerShell，未执行真实 Parser。
+
+## 验证与证据
+- 测试/检查: `bash bin/agent.test.sh`。
+- 结果: 通过；覆盖 `gpt→cpa`、完整 `cpa`、新 key 注入、V2 provider 配置、旧 `CUSTOM_GPT_API_KEY` 迁移及完整 launcher 回归。
+- 测试/检查: `bash bin/agent-windows.test.sh`。
+- 结果: 静态契约通过；PowerShell Parser 因环境缺失跳过。
+- 测试/检查: `bash bin/agent-dispatch.test.sh`、`bash bin/agent-goal.test.sh`、`python3 bin/agent-protocol-bridge.test.py`。
+- 结果: 全部通过。
+- 测试/检查: shell/Python 语法、JSON、TOML 解析、form 审计、data 跟踪、`git diff --check`。
+- 结果: 全部通过。
+- 测试/检查: 旧 `nat200.natappvip.cc` 与 `custom-gpt/` 前缀扫描。
+- 结果: 当前代码、配置和文档无残留；旧 key/provider 名仅作为兼容迁移说明保留。
+- 未验证项: 未使用真实 agent 发起模型补全请求；已只读验证 `/v1/models` 返回 200。
+
+## 变更与产物
+- 核心配置: `bin/agent-config.json`、`bin/agent-custom.json.refer`、`lib/_codex/config.toml`。
+- 启动器: `bin/agent.sh`、`bin/agent-runtime.ps1`。
+- 测试: `bin/agent.test.sh`、`bin/agent-windows.test.sh`。
+- 文档: `AGENTS.md`、`bin/AGENTS.md`、`lib/_agent/setup.md`。
+- 产物: 本最终日志及 `logs/AGENTS.md` 索引。
+- 未改动范围: agent 二进制安装、认证登录流程、其他三个 provider 的模型策略。
+
+## 风险、限制与下一步
+- 风险: `base_url` 严格按用户指定使用根路径；模型发现单独使用 `/v1/models`。若代理实际补全端点也要求 `/v1`，需按服务端路由复核。
+- 风险: `supports_websockets` 沿用旧端点设置，当前只读探测未验证 WebSocket。
+- 阻塞: 无。
+- 下一步: 可用 `source ~/env-key.sh` 后执行最小真实 `op cpa --once` 请求验证补全端点。
+
+## 用户输入指令
+1. 改名本库 agent 三个供应商之一的 `custom` 为 `cpa`。
+2. 验证密钥改为 `CLI_PROXY_API_KEY`，base_url 改为 `http://192.168.188.20:8317/`。
+3. 重新 source `~/env-key.sh` 激活密钥。
+4. `cpa` 的全称为 `CLIProxyAPI`。
+
+## Agent 全文报告
+--- report begin ---
+finished：agent 供应商已从 `custom-gpt` 统一改名为 `cpa`，展示全称为 `CLIProxyAPI`。
+
+`cpa` 使用 `CLI_PROXY_API_KEY`，`base_url` 为 `http://192.168.188.20:8317/`，模型发现地址为 `http://192.168.188.20:8317/v1/models`。`gpt` 快捷词继续映射到 `cpa`，完整名 `op cpa` 也可直接使用。Unix/Windows 启动器、OpenCode V1/V2 provider 注入、Codex TOML、参考默认模型、帮助文本和文档均已同步。旧 `CUSTOM_GPT_API_KEY`、`LQCD_API_KEY` 在新 key 缺失时仍可回退迁移。
+
+验证证据：`agent.test.sh`、Windows 静态契约、dispatch、goal、协议桥、shell/Python 语法、JSON/TOML 解析、严格 form 审计、data 边界和 `git diff --check` 均通过。隔离 source `~/env-key.sh` 后确认 `CLI_PROXY_API_KEY` 已设置；`/v1/models` 只读探测返回 200。当前环境没有 PowerShell 和真实 PowerShell Parser，因此 Windows 仅完成静态验证。
+--- report end ---

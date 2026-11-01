@@ -81,11 +81,32 @@ if ($null -eq $ssh) {
     exit 127
 }
 
+$screen = Get-Command screen -CommandType Application -ErrorAction SilentlyContinue |
+    Select-Object -First 1
+$screenSession = $env:SSH_SCREEN_NAME
+if ([string]::IsNullOrWhiteSpace($screenSession)) {
+    $screenSession = 'ss'
+}
+
 $sshArguments = @(
     '-o', 'ServerAliveInterval=30',
     '-o', 'ServerAliveCountMax=3',
     '-l', $target[0],
     ('192.168.188.' + $ipSuffix)
 )
-& $ssh.Source @sshArguments
+
+if ($null -eq $screen) {
+    $screenGuide = Join-Path $PSScriptRoot '_screen-guide.txt'
+    if (Test-Path -LiteralPath $screenGuide -PathType Leaf) {
+        Get-Content -LiteralPath $screenGuide -Encoding UTF8 |
+            ForEach-Object { [Console]::Error.WriteLine($_) }
+    }
+    else {
+        [Console]::Error.WriteLine('[WARN] screen is unavailable; continuing without a persistent session.')
+    }
+    & $ssh.Source @sshArguments
+}
+else {
+    & $screen.Source -t $screenSession -S $screenSession -d -R $ssh.Source @sshArguments
+}
 exit $LASTEXITCODE

@@ -10,7 +10,11 @@
 2. 设置 `LD_LIBRARY_PATH`（仓库 `lib/` 优先，防重复规则同 PATH）
 3. 检测 UTF-8 locale：`LANG` 已是 UTF-8 时跳过；否则单 `grep -im1` 查 `C.UTF-8`/`en_US.UTF-8`
 4. source `lib/_git_aliases.sh`（git 别名；zsh 专有别名 `gk/gke/globurl/gtl/gup*` 按 `$ZSH_VERSION` 分支定义，bash 下自动补 `git_current_branch`/`git_main_branch`/`git_develop_branch` 与 `ggu` 函数兜底）
-5. 定义两 shell 通用别名（导航/grep/ls 系/常用工具；`history=omz_history`、`which-command=whence` 仅 zsh 下定义，按 `$ZSH_VERSION` 分支）
+5. 定义两 shell 通用别名（导航/grep/ls 系/常用工具；screen 会话 `scn`、`scl`、`scr` 使用 `SSH_SCREEN_NAME` 或 `SSH_CLIENT` 客户端地址；`history=omz_history` 仅 zsh 下定义，`which-command` 保留 zsh 默认）
+
+`env.sh` 的大规模 alias/function/executable 冲突预检与告警当前按用户要求注释暂停；预检实现保留在
+`lib/_env_conflicts.sh`，恢复时取消 `env.sh` 中 `@CONFLICT_GUARD_PAUSED@` 块的注释。成功加载后导出
+`_CONFIGURE_ENV_LOADED_PATH`；同一 Shell 或子 Shell 再次 source 且路径完全匹配时直接幂等返回。
 
 点文件部署：`bin/sh_init.sh [-b|-z|-a]`——`-b` 仅部署 bashrc；`-z` 部署 zshrc 与 oh-my-zsh（默认）；`-a` 全部；旧文件备份带时间戳。
 
@@ -19,7 +23,7 @@
 | 路径 | 用途 |
 |---|---|
 | `env.sh` | 环境主入口（shell 启动时被 source）：PATH/LD_LIBRARY_PATH（防重复）、locale、git 别名、两 shell 通用别名 |
-| `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用；统一启动器 `agent.sh`（软链接 cl/op/co/ops/cos 分发，Windows 版 `agent.bat` 按 `%~nx0` 分发）支持 cl（Claude Code）/op（OpenCode）/co（Codex）三系无人值守驱动模式，供应商快捷词包含 `pay/go/zen/gpt`，模型途径与各供应商/各 agent 默认模型/强度见 `bin/agent-config.json` 与 `bin/agent-custom.json.refer`（用户 `bin/agent-custom.json` 优先）；`bin/agent-dispatch.sh` 提供默认继承父 agent 设置的一次任务 JSON 派发接口，并对子 agent 的意外中断执行持续恢复；模型目录自动刷新、模糊匹配与强度顺延由 `bin/agent-model-catalog.py` 及 Windows runtime 对应实现，Chat-only 模型的 Responses/Messages 协议转换由 Unix `bin/agent-protocol-bridge.py` 提供，Codex 原生 goal 的预算查看与修复由 `bin/agent-goal.sh` 提供，详见 `bin/AGENTS.md` |
+| `bin/` | 工具脚本，`env.sh` 将其加入 PATH 后直接按名调用；统一启动器 `agent.sh`（软链接 cl/op/co/ops/cos 分发，Windows 版 `agent.bat` 按 `%~nx0` 分发）支持 cl（Claude Code）/op（OpenCode）/co（Codex）三系无人值守驱动模式，供应商快捷词包含 `pay/go/zen/gpt`，其中 `gpt` 映射完整途径名 `cpa`（CLIProxyAPI），模型途径与各供应商/各 agent 默认模型/强度见 `bin/agent-config.json` 与 `bin/agent-custom.json.refer`（用户 `bin/agent-custom.json` 优先）；`bin/agent-dispatch.sh` 提供默认继承父 agent 设置的一次任务 JSON 派发接口，并对子 agent 的意外中断执行持续恢复；模型目录自动刷新、模糊匹配与强度顺延由 `bin/agent-model-catalog.py` 及 Windows runtime 对应实现，Chat-only 模型的 Responses/Messages 协议转换由 Unix `bin/agent-protocol-bridge.py` 提供，Codex 原生 goal 的预算查看与修复由 `bin/agent-goal.sh` 提供，详见 `bin/AGENTS.md` |
 | `lib/` | 版本化环境配置与基础模板；`lib/requirements/` 保存 APT/PIP 功能依赖清单 |
 | `lib/{name}-v{YYYYMMDD}/` | 带版本日期的环境配置 |
 | `skills/` | agent 技能（init、tag、debug、doctor、optim、phys-model、diff、analy、pure、report、research-notes、log、rule、test、make、plan、review、skill-creator、conf-refer-skill、tdd、up、brainstorm、form、auto、all、dispatch、team、fast、go-on、follow-up、md-tex-sync、get-paper、absorb），`{~skill-name}` 触发；具体索引与公共契约见 `skills/AGENTS.md` |

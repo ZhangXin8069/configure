@@ -1,0 +1,68 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 02:36:09 +0800
+批次: env-screen-alias-conflict-guard
+主任务: 将 screen 别名缩短为 scn/scl/scr，并为 env.sh 增加加载前冲突闸门与导出式 source 幂等标记
+触发原因: 任务完成
+摘要: 新增 env.sh 加载前 alias/function/executable/变量冲突预检与失败关闭，导出加载路径标记保证同 Shell 幂等并在新 Shell 重载，screen 别名缩短为 scn/scl/scr；bash/zsh 与 SSH 回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 缩短 screen 别名并同步文档
+- 目标: 将 `screen-new/screen-list/screen-resume` 缩短为 `scn/scl/scr`，删除旧别名。
+- 命令/操作: 更新 `env.sh`、`env.test.sh`、根 `AGENTS.md`、`lib/_ssh`、`lib/_env` 与命令索引。
+- 关键输出: 仅保留 `alias scn='_screen_new'`、`alias scl='_screen_list'`、`alias scr='_screen_resume'`；旧长别名只出现在“必须不存在”的测试断言中。
+- 退出码: 0。
+- 证据与判断: `rg` 扫描确认旧别名无现行引用残留，bash/zsh 均可查询新别名。
+### S2 — env.sh 加载前冲突闸门
+- 目标: 在 PATH、locale、alias、function 被修改前，检测原 Shell 与仓库公开名称的冲突。
+- 命令/操作: 新增 `lib/_env_conflicts.sh`；在隔离的同类 Shell 中清空默认 alias 后加载 env 内容，提取本库 alias/function；原 Shell 检查同名 alias/function，并扫描 `bin/` 可执行文件是否已被原 PATH、alias 或 function 占用。
+- 关键输出: 命中时输出类型与名称并返回非零，PATH、`LD_LIBRARY_PATH`、locale、alias、function 均保持不变；`_SCREEN_GUIDE_PATH` 指向其他路径也触发跳过。
+- 退出码: 0。
+- 证据与判断: bash/zsh 均覆盖同名 alias、function、外部 executable、alias 占用 executable 名称和受管变量冲突。
+### S3 — 导出加载标记与幂等
+- 目标: 记录本库 env.sh 是否已在当前 Shell 完成加载，同时保证新 Shell 能恢复不会被环境继承的 alias/function。
+- 命令/操作: 成功加载后导出 `_CONFIGURE_ENV_LOADED_PATH`；重复 source 时要求路径匹配、`scn` alias 存在且 `_screen_new` 为当前 Shell 函数。
+- 关键输出: 同一 Shell 二次 source 不再执行冲突检查或追加 PATH；新 Shell 虽继承导出路径，但缺少本地定义时会重新加载。
+- 退出码: 0。
+- 证据与判断: 子 Shell 测试验证导出标记存在、alias 重新定义且 PATH 不重复；冲突失败时标记不会设置。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/*.sh lib/*.sh`、`zsh -n env.sh env.test.sh lib/_env_conflicts.sh lib/_screen.sh`。
+- 结果: 全部通过，退出码 0。
+- 测试/检查: `bash env.test.sh`。
+- 结果: 通过；bash/zsh 覆盖加载前 alias/function/executable/变量冲突、失败不改状态、导出标记、重复 source、新 Shell 重载、旧别名不存在及 screen 行为。
+- 测试/检查: `bash bin/ss.test.sh`。
+- 结果: 通过；8 个 SSH 入口的 screen 契约未回归。
+- 测试/检查: `form-audit.sh --root . --strict --quiet`、`form-data-tracking-check.sh --root . --quiet`、`git diff --check`。
+- 结果: 全部通过，退出码 0。
+- 测试/检查: 现行文件旧别名扫描。
+- 结果: 旧长别名只存在于 `env.test.sh` 的否定断言，其他现行代码与文档无残留。
+- 未验证项: 当前 agent 容器仍无真实 screen 可执行文件，screen 路径继续使用 fake 与静态契约测试。
+
+## 变更与产物
+- 核心: `env.sh`、`lib/_env_conflicts.sh`、`env.test.sh`。
+- 文档: `AGENTS.md`、`lib/AGENTS.md`、`lib/_env/AGENTS.md`、`lib/_env/setup.md`、`lib/_ssh/AGENTS.md`、`lib/_ssh/setup.md`、`lib/_commands/setup.md`。
+- 既有 screen 改动保留：`lib/_screen.sh`、`bin/_ssh_screen.sh`、`bin/_screen-guide.txt`、`bin/_screen-warning.bat` 与 8 个 SSH 入口。
+- 产物: 本最终日志及 `logs/AGENTS.md` 索引。
+- 未改动范围: 实际 SSH 目标、保活参数、密钥和远程协议配置。
+
+## 风险、限制与下一步
+- 风险: 冲突策略为失败关闭；rc/plugin 若在 env.sh 前定义同名 alias/function，会导致本次 env.sh 跳过，应按文档调整 source 顺序或删除重复定义。
+- 风险: 新 Shell 会重新加载 env.sh 以恢复 alias/function；这是 shell 定义不会随环境变量自动继承所要求的正确行为。
+- 阻塞: 无代码阻塞。
+- 下一步: 在实际交互式 bash/zsh 中重载 rc，确认 `scn/scl/scr` 可用且无冲突告警。
+
+## 用户输入指令
+1. 将 `screen-new`、`screen-list`、`screen-resume` 重命名为 `scn`、`scl`、`scr`。
+2. 明确：如果 source 本库 env.sh 之前的原始环境存在与本库 alias、function、可执行文件等内容重名，则警告并跳过整份加载。
+3. 如果是本库 env.sh 已经被 `.bashrc` 等 source 过，则跳过 source，通过导出环境变量记录 source 状态。
+
+## Agent 全文报告
+--- report begin ---
+finished：screen 别名已缩短为 `scn/scl/scr`，`env.sh` 已加入加载前冲突闸门与导出式幂等标记。
+
+实现内容：`lib/_env_conflicts.sh` 在同类型隔离 Shell 中提取本库实际 alias/function，并与原 Shell 的同名定义比较；同时扫描仓库 `bin/` 可执行文件是否已被原 PATH、alias 或 function 占用。发现冲突时输出类型和名称，返回非零，并保持 PATH、`LD_LIBRARY_PATH`、locale、alias、function 不变。成功加载后导出 `_CONFIGURE_ENV_LOADED_PATH`；只有路径匹配且当前 Shell 确实已有 `scn` alias 与 `_screen_new` 函数时才跳过重复 source，新 Shell 会重新加载以恢复不会自动继承的 shell 定义。
+
+验证证据：bash/zsh 中 `env.test.sh` 全部通过，覆盖 alias、function、可执行文件、变量冲突，失败时状态不变，导出标记，重复 source，新 Shell 重载和旧别名移除；`bin/ss.test.sh`、全量 shell 语法、严格 form 审计、data 边界和 `git diff --check` 均通过。当前 agent 容器没有真实 screen 可执行文件，screen 分支继续由 fake screen 验证。
+--- report end ---

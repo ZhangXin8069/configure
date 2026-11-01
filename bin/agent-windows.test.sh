@@ -96,7 +96,8 @@ assert_contains "$runtime" 'function New-ClaudeSettingsFile'
 assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
 assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$script:Model, \$prompt"
 assert_contains "$runtime" 'Resolve-ProviderAlias'
-assert_contains "$runtime" "'pay', 'go', 'zen', 'gpt', 'deepseek-pay', 'opencode-go', 'opencode-zen', 'custom-gpt'"
+assert_contains "$runtime" "'pay', 'go', 'zen', 'gpt', 'cpa', 'deepseek-pay', 'opencode-go', 'opencode-zen'"
+assert_contains "$runtime" "'gpt' { return 'cpa' }"
 assert_contains "$runtime" "'zen' { return 'opencode-zen' }"
 assert_contains "$runtime" 'Get-AgentProtocolCompatibility'
 assert_contains "$runtime" 'CodexWireApi'
@@ -127,7 +128,8 @@ assert_not_contains "$runtime" 'IsNullOrWhiteSpace($providerStrength)) { $provid
 assert_not_contains "$runtime" "'-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h'"
 assert_contains "$runtime" 'Invoke-LegacyKeyMigration'
 assert_contains "$runtime" "'DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'"
-assert_contains "$runtime" "'CUSTOM_GPT_API_KEY', 'LQCD_API_KEY'"
+assert_contains "$runtime" "'CLI_PROXY_API_KEY', 'CUSTOM_GPT_API_KEY'"
+assert_contains "$runtime" "'CLI_PROXY_API_KEY', 'LQCD_API_KEY'"
 assert_contains "$runtime" "'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_GO_API_KEY'"
 assert_contains "$runtime" 'OPENCODE_API_KEY/OPENCODE_ZEN_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按'
 assert_contains "$runtime" "'OPENCODE_GO_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY'"
