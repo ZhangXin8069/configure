@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gpush — Stage all changes, commit, and push from anywhere inside a repo
+# gpush — Stage all changes, commit, and push only the current repository
 
 _SRC=${BASH_SOURCE[0]:-${0}}
 _NAME=${_SRC##*/}
@@ -42,13 +42,13 @@ fi
 # Push current branch to its upstream (or origin)
 BRANCH=$(git rev-parse --abbrev-ref HEAD)
 PUSH_FAILED=0
-if ! git push origin "$BRANCH"; then
+if ! git push --recurse-submodules=no origin "$BRANCH"; then
     echo "ERROR: branch push failed: $BRANCH" >&2
     PUSH_FAILED=1
 fi
 
 # Push tags
-if ! git push origin --tags; then
+if ! git push --recurse-submodules=no origin --tags; then
     echo "ERROR: tag push failed" >&2
     PUSH_FAILED=1
 fi

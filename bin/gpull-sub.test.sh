@@ -243,7 +243,7 @@ _test_stale_index_lock_is_recovered() {
     lock=$(git -C "${submodule}" rev-parse --git-path index.lock)
     [[ "${lock}" == /* ]] || lock="${submodule}/${lock}"
     : > "${lock}"
-    touch -d '2 hours ago' "${lock}"
+    sleep 2
 
     GIT_INDEX_LOCK_STALE_SECONDS=1 \
         _run_gpull_sub "${super}" "${TEST_DIR}/stale-lock.log" --path refer/lock-sub \

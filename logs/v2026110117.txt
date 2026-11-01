@@ -1,0 +1,153 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-01 17:24:42 +0800
+批次: bin-git-submodule-isolation
+主任务: 修复聚合 push/pull 意外递归子模块
+触发原因: 任务完成
+摘要: gpull/gpush 显式禁用子模块递归并新增真实本地 Git 回归；相关测试与仓库检查通过
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 根因复现
+- 目标: 确认 gz-all-push.sh 与 zg-all-pull.sh 所依赖的 gpush.sh/gpull.sh 是否继承用户 Git 配置并触碰子模块。
+- 命令/操作: 在仓库临时目录创建裸远端、父仓库和子模块，分别设置 submodule.recurse=true、fetch.recurseSubmodules=true、push.recurseSubmodules=on-demand 后运行脚本。
+- 关键输出: 修复前 gpush 回归退出 1，提示“gpush 不应在 push.recurseSubmodules=on-demand 时推送子模块提交”；gpull 回归退出 1，提示“gpull 不应在 submodule.recurse=true 时切换子模块 HEAD”。
+- 证据与判断: gpush 的 git push 与 gpull 的 fetch/checkout/pull/stash 未显式覆盖递归配置，导致聚合命令间接触及子模块。
+
+### S2 — 最小修复
+- 目标: 让顶层 gpush/gpull 只处理当前父仓库，子模块仅由 *-sub 脚本显式处理。
+- 命令/操作: gpush 的分支和标签 push 增加 --recurse-submodules=no；gpull 的 fetch 增加 --no-recurse-submodules，checkout/pull/stash 使用 submodule.recurse=false 或显式 no-recurse 参数。
+- 关键输出: 新增真实本地 Git 子模块回归后，gpush.test.sh、gpull.test.sh 均退出 0。
+- 证据与判断: 显式命令行参数优先于用户配置，修复点覆盖 fetch、pull、detached HEAD checkout 和 push。
+
+### S3 — 综合回归
+- 目标: 验证核心脚本、聚合脚本与专用子模块路径互不回归。
+- 命令/操作: bash -n 后依次运行 gpush.test.sh、gpull.test.sh、gz-all-push.test.sh、zg-all-pull.test.sh、gpull-sub.test.sh。
+- 关键输出: 五个测试脚本全部退出 0；聚合脚本保持父仓库行为，gpull-sub.sh 仍可显式更新子模块。
+- 证据与判断: 顶层聚合与专用子模块入口职责隔离。
+
+## 验证与证据
+- 测试/检查: bash -n gpull.sh gpush.sh gpull.test.sh gpush.test.sh gpull-sub.test.sh，以及上述五个功能测试。
+- 结果: 全部通过，退出码 0。
+- 测试/检查: skills/form/scripts/form-audit.sh --root . --strict --quiet。
+- 结果: 通过，无输出。
+- 测试/检查: skills/form/scripts/form-snapshot-verify.sh --quiet。
+- 结果: 通过，无输出。
+- 测试/检查: tools/configure-check.sh。
+- 结果: errors=0、warnings=1；唯一警告为 plugins/ 当前没有可直接加载的 .codex-plugin/plugin.json，与本改动无关。
+- 测试/检查: form-data-tracking-check.sh、form-large-files-check.sh、git diff --check。
+- 结果: 全部通过。
+- 未验证项: shellcheck 未安装；未对真实 PyQCD/PyQCU 或任何远端执行 push/pull，以避免网络副作用。
+
+## 变更与产物
+- 文件: bin/gpush.sh
+- 文件: bin/gpull.sh
+- 文件: bin/gpush.test.sh
+- 文件: bin/gpull.test.sh
+- 文件: bin/gpull-sub.test.sh
+- 产物: 无二进制或外部数据产物；测试夹具均由各自 trap 清理。
+- 未改动范围: 未暂存、未提交、未推送、未创建标签，未修改实际子模块仓库。
+
+## 风险、限制与下一步
+- 风险: 顶层 gpush 仍会把父仓库可见的子模块指针差异视为父仓库改动并按既有 git add -A 语义提交，但不会递归推送子模块远端；子模块内容变更应使用显式专用流程。
+- 阻塞: 无。
+- 下一步: 如用户明确授权交付，再按仓库流程暂存上述五个文件及本日志、复查并提交。
+
+## 用户输入指令
+```text
+"remote: Set trace flag 4b4ce5ba
+To gitee.com:zhangxin8069/PyQCD.git
+   6e9871f..d725dad  main -> main
+Everything up-to-date
+###gpush.sh is done......:2026-11-01-17-15-30###
+~
+###gz-pyqcd-push.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-30###
+OK: gz-pyqcd-push.sh
+### Series: gz-pyqcu-push.sh ###
+###gz-pyqcu-push.sh in /Users/zhangxin/configure/bin is running...:2026-11-01-17-15-30###
+~/PyQCU ~
+###gpush.sh is running...:2026-11-01-17-15-30###
+Repo:    /Users/zhangxin/PyQCU
+Nothing to commit.
+Everything up-to-date
+Everything up-to-date
+###gpush.sh is done......:2026-11-01-17-15-34###
+~
+###gz-pyqcu-push.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-34###
+OK: gz-pyqcu-push.sh
+Summary: failed=0
+###gz-all-push.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-34###
+(qcu) zhangxin@ZhangXin-MacBook
+2026/11/01 Sunday 17:15:34
+➜ /Users/zhangxin zg-all-pull.sh
+###zg-all-pull.sh in /Users/zhangxin/configure/bin is running...:2026-11-01-17-15-36###
+Matched: zg-*-pull.sh (4 scripts)
+### Series: zg-configure-pull.sh ###
+###zg-configure-pull.sh in /Users/zhangxin/configure/bin is running...:2026-11-01-17-15-37###
+###gpull.sh is running...:2026-11-01-17-15-37###
+Repo:    /Users/zhangxin/configure
+Remote:  origin (ssh)
+Branch:  main
+Already up to date.
+###gpull.sh is done......:2026-11-01-17-15-38###
+###zg-configure-pull.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-38###
+OK: zg-configure-pull.sh
+### Series: zg-myqcd-pull.sh ###
+###zg-myqcd-pull.sh in /Users/zhangxin/configure/bin is running...:2026-11-01-17-15-38###
+###gpull.sh is running...:2026-11-01-17-15-38###
+Repo:    /Users/zhangxin/MyQCD
+Remote:  origin (ssh)
+Branch:  main
+Already up to date.
+###gpull.sh is done......:2026-11-01-17-15-39###
+###zg-myqcd-pull.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-39###
+OK: zg-myqcd-pull.sh
+### Series: zg-pyqcd-pull.sh ###
+###zg-pyqcd-pull.sh in /Users/zhangxin/configure/bin is running...:2026-11-01-17-15-39###
+###gpull.sh is running...:2026-11-01-17-15-39###
+Repo:    /Users/zhangxin/PyQCD
+Remote:  origin (ssh)
+Branch:  main
+Already up to date.
+###gpull.sh is done......:2026-11-01-17-15-41###
+###zg-pyqcd-pull.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-41###
+OK: zg-pyqcd-pull.sh
+### Series: zg-pyqcu-pull.sh ###
+###zg-pyqcu-pull.sh in /Users/zhangxin/configure/bin is running...:2026-11-01-17-15-41###
+###gpull.sh is running...:2026-11-01-17-15-41###
+Repo:    /Users/zhangxin/PyQCU
+Remote:  origin (ssh)
+Branch:  main
+Already up to date.
+###gpull.sh is done......:2026-11-01-17-15-42###
+###zg-pyqcu-pull.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-42###
+OK: zg-pyqcu-pull.sh
+Summary: clone_failed=0 child_failed=0
+###zg-all-pull.sh in /Users/zhangxin/configure/bin is done......:2026-11-01-17-15-42###
+(qcu) zhangxin@ZhangXin-MacBook
+2026/11/01 Sunday 17:15:42",上述命令本不应改动子模块
+```
+
+## Agent 全文报告
+--- report begin ---
+任务：修复 `gz-all-push.sh` 与 `zg-all-pull.sh` 经由共享脚本意外递归子模块的问题。
+
+根因：`gpush.sh` 和 `gpull.sh` 没有显式覆盖 `push.recurseSubmodules`、`submodule.recurse`、`fetch.recurseSubmodules` 等用户配置。真实本地 Git 夹具在修复前可稳定复现：`gpull.sh` 会在父仓库快进时切换子模块 HEAD，`gpush.sh` 会递归推送未发布的子模块提交。
+
+改动：
+- `bin/gpush.sh:45,51`：分支与标签 push 均使用 `--recurse-submodules=no`。
+- `bin/gpull.sh:59`：fetch 禁用子模块递归。
+- `bin/gpull.sh:136-148,172-191,256`：detached HEAD checkout、stash 回退和 pull 均覆盖递归配置。
+- `bin/gpush.test.sh:54-117`：验证 push 参数并新增 on-demand 子模块远端回归。
+- `bin/gpull.test.sh:354-437`：新增 `submodule.recurse=true` 时子模块 HEAD 与工作树保持不动的回归。
+- `bin/gpull-sub.test.sh:246`：将 GNU 专用 `touch -d` 改为可移植的短暂等待，保证 macOS 回归可执行。
+
+验证：
+- `gpush.test.sh`、`gpull.test.sh`、`gz-all-push.test.sh`、`zg-all-pull.test.sh`、`gpull-sub.test.sh` 全部退出 0。
+- `bash -n`、`form-audit --strict --quiet`、快照校验、数据边界检查、大文件检查、`git diff --check` 全部通过。
+- `tools/configure-check.sh` 为 errors=0、warnings=1；警告仅涉及现有插件目录没有可加载 manifest。
+- `shellcheck` 未安装，未执行。
+- 未对真实 PyQCD/PyQCU 或远端执行 push/pull；未暂存、提交、推送或创建标签。
+
+结论：`finished`。顶层聚合命令现在不会递归更新或推送子模块；子模块操作继续由 `*-sub` 脚本显式承担。
+--- report end ---

@@ -300,7 +300,7 @@ _test_stale_index_lock_recovery() {
     lock=$(git -C "${work}" rev-parse --git-path index.lock)
     [[ "${lock}" == /* ]] || lock="${work}/${lock}"
     : > "${lock}"
-    touch -d '2 hours ago' "${lock}"
+    sleep 2
 
     (
         cd "${work}"
@@ -351,6 +351,81 @@ _test_fresh_index_lock_is_not_removed() {
         || _fail "缺少新锁等待失败提示"
 }
 
+_test_submodule_recurse_config_is_ignored() {
+    local root="${TEST_DIR}/submodule-recurse"
+    local sub_remote="${root}/sub-remote.git"
+    local super_remote="${root}/super-remote.git"
+    local sub_seed="${root}/sub-seed"
+    local super_seed="${root}/super-seed"
+    local work="${root}/super-work"
+    local sub_one
+    local sub_two
+    local parent_one
+    local parent_two
+    local sub_before
+    local sub_after
+
+    mkdir -p "${root}"
+    git init -q --bare "${sub_remote}"
+    git -C "${sub_remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${sub_seed}"
+    _configure_identity "${sub_seed}"
+    printf 'one\n' > "${sub_seed}/value.txt"
+    git -C "${sub_seed}" add value.txt
+    git -C "${sub_seed}" commit -q -m sub-one
+    git -C "${sub_seed}" remote add origin "${sub_remote}"
+    git -C "${sub_seed}" push -q -u origin main
+    sub_one=$(git -C "${sub_seed}" rev-parse HEAD)
+
+    git init -q --bare "${super_remote}"
+    git -C "${super_remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${super_seed}"
+    _configure_identity "${super_seed}"
+    git -C "${super_seed}" -c protocol.file.allow=always \
+        submodule add -q "${sub_remote}" child
+    git -C "${super_seed}" commit -q -m parent-one
+    git -C "${super_seed}" remote add origin "${super_remote}"
+    git -C "${super_seed}" push -q -u origin main
+    parent_one=$(git -C "${super_seed}" rev-parse HEAD)
+
+    git clone -q "${super_remote}" "${work}"
+    _configure_identity "${work}"
+    git -C "${work}" -c protocol.file.allow=always \
+        submodule update -q --init --checkout
+    git -C "${work}" config submodule.recurse true
+    git -C "${work}" config fetch.recurseSubmodules true
+
+    printf 'two\n' > "${sub_seed}/value.txt"
+    git -C "${sub_seed}" commit -q -am sub-two
+    git -C "${sub_seed}" push -q
+    sub_two=$(git -C "${sub_seed}" rev-parse HEAD)
+    git -C "${super_seed}/child" fetch -q origin main
+    git -C "${super_seed}/child" checkout -q "${sub_two}"
+    git -C "${super_seed}" add child
+    git -C "${super_seed}" commit -q -m parent-two
+    git -C "${super_seed}" push -q
+    parent_two=$(git -C "${super_seed}" rev-parse HEAD)
+
+    sub_before=$(git -C "${work}/child" rev-parse HEAD)
+    (
+        cd "${work}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/submodule-recurse.log" 2>&1
+    sub_after=$(git -C "${work}/child" rev-parse HEAD)
+
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${parent_two}" ]] \
+        || _fail "未拉取父仓库更新"
+    [[ "${sub_before}" == "${sub_one}" ]] || _fail "测试夹具初始子模块提交错误"
+    [[ "${sub_after}" == "${sub_one}" ]] \
+        || _fail "gpull 不应在 submodule.recurse=true 时切换子模块 HEAD"
+    grep -Fqx 'one' "${work}/child/value.txt" \
+        || _fail "gpull 不应更新子模块工作树"
+    [[ "$(git -C "${work}" status --porcelain --ignore-submodules=none -- child)" == ' M child' ]] \
+        || _fail "父仓库应保留待显式处理的子模块指针差异"
+    [[ "$(git -C "${super_seed}" rev-parse HEAD^)" == "${parent_one}" ]] \
+        || _fail "父仓库测试提交链错误"
+}
+
 main() {
     _test_pull_preserves_changes
     _test_detached_head_recovery
@@ -359,6 +434,7 @@ main() {
     _test_fetch_failure_propagates
     _test_stale_index_lock_recovery
     _test_fresh_index_lock_is_not_removed
+    _test_submodule_recurse_config_is_ignored
 }
 
 main "$@"

@@ -880,3 +880,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## bin-git-submodule-isolation - final - 2026-11-01 17:24:42 +0800
+- 主任务: 修复聚合 push/pull 意外递归子模块
+- 日志文件: logs/v2026110117.txt
+- 文件大小: 8462 bytes
+- 触发原因: 任务完成
+- 关键内容: gpull/gpush 显式禁用子模块递归并新增真实本地 Git 回归；相关测试与仓库检查通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

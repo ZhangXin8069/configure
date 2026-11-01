@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# gpull — Safely fast-forward a repository from either HTTPS or SSH origin
+# gpull — Safely fast-forward a parent repository without updating submodules
 
 set -o pipefail
 
@@ -56,7 +56,7 @@ else
 fi
 
 # Fetch all remotes
-if ! git fetch --all --prune; then
+if ! git fetch --all --prune --no-recurse-submodules; then
     echo "ERROR: git fetch failed; pull aborted." >&2
     exit 1
 fi
@@ -133,7 +133,8 @@ _restore_detached_branch() {
             echo "BACKUP: preserved local branch ${branch} as ${branch_backup_ref}."
         fi
         echo "NOTICE: Restoring ${branch} from ${remote_ref} and overriding the detached worktree."
-        git checkout -B "${branch}" --track "${remote_ref}" || return 1
+        git -c submodule.recurse=false checkout --no-recurse-submodules \
+            -B "${branch}" --track "${remote_ref}" || return 1
         BRANCH=${branch}
         echo "Branch:  ${BRANCH}"
         return 0
@@ -141,9 +142,10 @@ _restore_detached_branch() {
 
     echo "NOTICE: Restoring tracking branch ${branch} from ${remote_ref}."
     if git show-ref --verify --quiet "refs/heads/${branch}"; then
-        git checkout "${branch}" || return 1
+        git -c submodule.recurse=false checkout --no-recurse-submodules "${branch}" || return 1
     else
-        git checkout -b "${branch}" --track "${remote_ref}" || return 1
+        git -c submodule.recurse=false checkout --no-recurse-submodules \
+            -b "${branch}" --track "${remote_ref}" || return 1
     fi
 
     BRANCH=${branch}
@@ -167,9 +169,9 @@ _pull_with_manual_stash() {
 
     if _has_local_changes; then
         # Git < 2.13 lacks `stash push`; Git >= 2.13 accepts the modern form.
-        if git stash push --quiet --message "$message" >/dev/null 2>&1; then
+        if git -c submodule.recurse=false stash push --quiet --message "$message" >/dev/null 2>&1; then
             stash_created=1
-        elif git stash save --quiet "$message"; then
+        elif git -c submodule.recurse=false stash save --quiet "$message"; then
             stash_created=1
         else
             echo "ERROR: Unable to stash local tracked changes; pull aborted." >&2
@@ -177,7 +179,8 @@ _pull_with_manual_stash() {
         fi
     fi
 
-    git pull "$@" origin "$branch" || pull_status=$?
+    git -c submodule.recurse=false pull --no-recurse-submodules "$@" origin "$branch" \
+        || pull_status=$?
     if ((pull_status != 0)); then
         if ((stash_created)); then
             echo "WARN: Pull failed; local changes remain in git stash." >&2
@@ -185,7 +188,7 @@ _pull_with_manual_stash() {
         return "$pull_status"
     fi
 
-    if ((stash_created)) && ! git stash pop --quiet; then
+    if ((stash_created)) && ! git -c submodule.recurse=false stash pop --quiet; then
         echo "ERROR: Pull succeeded, but restoring local changes conflicted." >&2
         echo "Resolve the conflict, then run: git stash pop" >&2
         return 1
@@ -250,7 +253,8 @@ esac
 _PULL_STATUS=0
 _PULL_HELP=$(git pull -h 2>&1 || true)
 if [[ "${_PULL_HELP}" == *"--autostash"* ]]; then
-    git pull --ff-only --no-rebase --autostash origin "$BRANCH" || _PULL_STATUS=$?
+    git pull --ff-only --no-rebase --autostash --no-recurse-submodules \
+        origin "$BRANCH" || _PULL_STATUS=$?
 else
     echo "Notice: Git lacks pull --autostash; using the manual stash fallback."
     _pull_with_manual_stash "$BRANCH" --ff-only --no-rebase || _PULL_STATUS=$?
