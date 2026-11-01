@@ -81,5 +81,11 @@ if ($null -eq $ssh) {
     exit 127
 }
 
-& $ssh.Source ('192.168.188.' + $ipSuffix) -l $target[0]
+$sshArguments = @(
+    '-o', 'ServerAliveInterval=30',
+    '-o', 'ServerAliveCountMax=3',
+    '-l', $target[0],
+    ('192.168.188.' + $ipSuffix)
+)
+& $ssh.Source @sshArguments
 exit $LASTEXITCODE

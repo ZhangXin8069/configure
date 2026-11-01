@@ -105,13 +105,15 @@ echo ""
 if [[ "${NO_DDOCKER}" == true ]]; then
     echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST}（跳过 ddocker）"
     echo ""
-    ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}"
+    ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}"
 else
     echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST} → ddocker.bat"
     echo ""
     # -t 强制分配 TTY（docker exec -it 需要）; 远程执行 ddocker.bat
     # ddocker.bat 退出后（成功退出容器或登入失败），始终退回 x99 SSH 终端，避免直接断开连接
-    ssh -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" \
+    ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" \
         "ddocker.bat; echo ''; echo '[INFO] 已退出 ddocker，回到 x99 终端'; exec bash -l"
 fi
 

@@ -862,3 +862,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## ssh-windows-reset-diagnosis - stage - 2026-11-01 16:42:42 +0800
+- 主任务: 诊断 Windows SSH 快捷脚本 Connection reset
+- 日志文件: logs/v202611011642.txt
+- 文件大小: 3307 bytes
+- 触发原因: 阶段成果
+- 关键内容: 确认 ss.bat/ss.ps1 正常转发 ssh.exe，断连文本来自 OpenSSH/网络层；等待复现时机与退出码证据
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## ssh-keepalive-all-entrypoints - final - 2026-11-01 16:47:57 +0800
+- 主任务: 为仓库 SSH 快捷入口统一添加空闲保活机制
+- 日志文件: logs/v2026110116.txt
+- 文件大小: 5131 bytes
+- 触发原因: 任务完成
+- 关键内容: 统一 8 个交互式 SSH 入口的 30 秒保活与 3 次失联阈值，补充回归与文档；本地静态和脚本测试通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -1,0 +1,47 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-01 16:42:42 +0800
+批次: ssh-windows-reset-diagnosis
+主任务: 诊断 Windows SSH 快捷脚本 Connection reset
+触发原因: 阶段成果
+摘要: 确认 ss.bat/ss.ps1 正常转发 ssh.exe，断连文本来自 OpenSSH/网络层；等待复现时机与退出码证据
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位入口与调用链
+- 目标: 检查 `client_loop: send disconnect: Connection reset` 是否由 `bin/ss.bat` 参数或编码逻辑导致。
+- 命令/操作: 读取 `bin/ss.bat`、`bin/ss.ps1`、`bin/ss.sh`、`bin/ss.test.sh`、`lib/_ssh/setup.md` 和相关 Git 历史。
+- 关键输出: `ss.bat` 是 ASCII+CRLF 包装器；其通过 `powershell.exe -File` 调用 `ss.ps1`；`ss.ps1` 解析目标后直接调用 `ssh.exe` 并把 `$LASTEXITCODE` 返回。
+- 退出码: 读取命令均为 0。
+- 证据与判断: 报错文本不是批处理生成，也不是目标地址拼接错误；它发生在 Windows OpenSSH 的断连阶段。
+
+### S2 — 回归与格式验证
+- 目标: 验证仓库内可本地检查的 SSH 快捷入口契约。
+- 命令/操作: `bash bin/ss.test.sh`；`bash -n bin/ss.sh bin/ss.test.sh`；`file bin/ss.bat bin/ss.ps1`；`git check-attr`。
+- 关键输出: 测试与语法检查退出码均为 0；`ss.bat` 为 ASCII、CRLF；测试覆盖目标映射及 `-File` 调用。
+- 退出码: 0。
+- 证据与判断: 未发现可支持“包装器导致断连”的本地证据。
+
+## 验证与证据
+- 测试/检查: `bash bin/ss.test.sh`、`bash -n bin/ss.sh bin/ss.test.sh`、文件格式检查。
+- 结果: 全部通过。
+- 未验证项: 当前 Linux 工作区无法运行 Windows OpenSSH，也无法复现用户所在局域网与远端会话；尚缺断连时机、目标参数和 `ssh.exe` 退出码。
+
+## 变更与产物
+- 文件: 本次未修改代码。
+- 产物: 本阶段诊断日志。
+- 未改动范围: `bin/ss.bat`、`bin/ss.ps1` 及相关测试保持原状。
+
+## 风险、限制与下一步
+- 风险: `client_loop` 行可能来自远端、VPN、Wi-Fi、防火墙、休眠恢复或服务器主动关闭连接；仅凭当前文本不能把根因归到脚本。
+- 阻塞: 缺少用户侧可观测证据，暂不应添加 keepalive 或其他修复。
+- 下一步: 使用直接 `ssh -vvv` 和显式退出码区分“正常退出后的告警”与“会话中真实断连”。
+
+## Agent 全文报告
+--- report begin ---
+已确认本库 Windows SSH 入口的调用链为 `ss.bat → ss.ps1 → ssh.exe`，参数与退出码传播逻辑正常。`client_loop: send disconnect: Connection reset` 是 OpenSSH 在关闭会话时发现 TCP 连接已被对端重置的输出，不能据此判定批处理脚本有缺陷。
+
+本地回归 `bash bin/ss.test.sh` 与 `bash -n bin/ss.sh bin/ss.test.sh` 均通过，`ss.bat` 的 ASCII+CRLF 格式正确。当前缺少 Windows 端目标参数、断连发生时机和退出码，因此尚未修改脚本。
+
+下一步应在 Windows PowerShell 用等价的直接 `ssh -vvv` 命令复现，并记录 `$LASTEXITCODE`：若只在输入 `exit` 后出现且退出码为 0，通常是无实际影响的关闭告警；若会话使用中突然断连或退出码为 255，再根据详细日志判断是远端、网络还是客户端问题。
+--- report end ---

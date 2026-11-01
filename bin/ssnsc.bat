@@ -7,6 +7,6 @@ echo   SNSC Connect
 echo ============================================================
 echo.
 
-ssh 222.200.137.16 -p 10023 -l zhangxin %*
+ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -p 10023 -l zhangxin 222.200.137.16 %*
 
 exit /b %errorlevel%

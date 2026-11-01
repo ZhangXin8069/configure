@@ -1,0 +1,74 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-01 16:47:57 +0800
+批次: ssh-keepalive-all-entrypoints
+主任务: 为仓库 SSH 快捷入口统一添加空闲保活机制
+触发原因: 任务完成
+摘要: 统一 8 个交互式 SSH 入口的 30 秒保活与 3 次失联阈值，补充回归与文档；本地静态和脚本测试通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位 SSH 调用链
+- 目标: 判断 `client_loop: send disconnect: Connection reset` 是否由 `ss.bat` 参数或编码问题导致。
+- 命令/操作: 读取 `ss.bat`、`ss.ps1`、`ss.sh`、SSH 配置文档与相关 Git 历史。
+- 关键输出: Windows 入口为 `ss.bat → powershell.exe -File ss.ps1 → ssh.exe`；`ss.ps1` 原样传播 `$LASTEXITCODE`。
+- 退出码: 0。
+- 证据与判断: 未发现批处理参数或换行导致的断连证据；用户将空闲超时确定为主要假设。
+
+### S2 — 盘点全部交互式 SSH 入口
+- 目标: 找出仓库内实际启动交互式 SSH 会话的脚本。
+- 命令/操作: 定向搜索 shell、PowerShell 与批处理中的 `ssh` 调用。
+- 关键输出: `ss.sh`、`ss.ps1`、`ssnsc.sh`、`ssnsc.bat`、`ssjtu.sh`、`xx99.sh`、`llingsheng.bat`、`kkunshan.bat`。
+- 退出码: 0。
+- 证据与判断: Git 远端协议、密钥生成和非交互 SSH URL 不属于交互式入口，未纳入本次参数改动。
+
+### S3 — 统一保活实现
+- 目标: 防止空闲连接被 NAT、防火墙或服务端无流量超时提前回收。
+- 命令/操作: 为 8 个入口统一加入 `ServerAliveInterval=30` 与 `ServerAliveCountMax=3`，并将 SSH 选项置于目标主机前。
+- 关键输出: `ss.ps1` 通过参数数组传递选项；Unix 与批处理入口使用等价参数。
+- 退出码: 0。
+- 证据与判断: 客户端每 30 秒发送加密保活探测，连续 3 次无响应才判定失联。
+
+### S4 — 回归、格式与初始化检查
+- 目标: 验证调用参数、语法、仓库结构、数据边界和标签链。
+- 命令/操作: `bash -n`、`bash bin/ss.test.sh`、`form-audit.sh --strict --quiet`、`form-data-tracking-check.sh --quiet`、`git diff --check`、`tag-chain.sh --check --remote origin`。
+- 关键输出: 全部退出码为 0；标签链检查覆盖 139 个受管标签并通过；`bin/`、`lib/_ssh/`、`logs/` 的 `AGENTS.md` 已同步。
+- 退出码: 0。
+- 证据与判断: 仓库级静态验证通过；当前 Linux 环境无 `pwsh`，Windows OpenSSH 的真实空闲会话需在目标机器复测。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/ss.sh bin/ss.test.sh bin/ssnsc.sh bin/ssjtu.sh bin/xx99.sh`。
+- 结果: 通过。
+- 测试/检查: `bash bin/ss.test.sh`。
+- 结果: 目标映射和 8 个入口保活断言通过。
+- 测试/检查: `form-audit.sh --strict --quiet`、`form-data-tracking-check.sh --quiet`。
+- 结果: 通过。
+- 未验证项: Windows PowerShell 解析器不可用；未在当前 Linux 环境建立真实 Windows SSH 空闲会话。
+
+## 变更与产物
+- 文件: `bin/ss.sh`、`bin/ss.ps1`、`bin/ssnsc.sh`、`bin/ssnsc.bat`、`bin/ssjtu.sh`、`bin/xx99.sh`、`bin/llingsheng.bat`、`bin/kkunshan.bat`。
+- 文件: `bin/ss.test.sh`、`bin/AGENTS.md`、`lib/_ssh/AGENTS.md`、`lib/_ssh/setup.md`。
+- 产物: 本最终日志及 `logs/AGENTS.md` 索引。
+- 未改动范围: Git SSH 远端协议、密钥生成与认证逻辑。
+
+## 风险、限制与下一步
+- 风险: 保活不能修复中途断网、设备休眠或远端 sshd 主动终止；它只消除长时间无流量导致的空闲回收。
+- 阻塞: 无本地阻塞。
+- 下一步: 同步代码和标签后，在 Windows 上保持会话空闲超过原超时阈值进行实测；若仍断连，用 `ssh -vvv` 区分网络、休眠和远端问题。
+
+## 用户输入指令
+1. 运行本库 ssh 相关脚本时出现 `client_loop: send disconnect: Connection reset`，并返回 PowerShell 提示符。
+2. 初步认为是 SSH 连接空闲超时。
+3. 为本库所有相关的 SSH 功能添加保活机制。
+4. 收尾时执行 `~diff`、`~init`、`push`、`~tag`。
+
+## Agent 全文报告
+--- report begin ---
+finished：仓库内 8 个实际建立交互式 SSH 会话的入口已统一加入空闲保活参数：`ServerAliveInterval=30` 和 `ServerAliveCountMax=3`。覆盖 `ss` 的 Unix/Windows 实现、SNSC 的 Unix/Windows 实现、SJTU、X99、Lingsheng 与 Kunshan。
+
+推理依据：当前报错发生在 OpenSSH 断连阶段，包装脚本正常转发参数和退出码；在“空闲超时”假设下，30 秒保活可阻止 NAT、防火墙或服务端的无流量回收，同时连续 3 次无响应才判定失联，不会掩盖真实断网。
+
+验证证据：shell 语法检查、`bin/ss.test.sh`、仓库严格格式审计、data 跟踪检查、`git diff --check` 和全历史标签链检查均通过。当前工作区没有 `pwsh`，因此未执行 Windows PowerShell 解析和真实 SSH 空闲会话测试。
+
+后续：按用户要求完成本任务文件的定向提交、`main` 推送和 `bug3` 注释标签；目标 Windows 机器应在同步后保持会话空闲超过原超时阈值复测。
+--- report end ---

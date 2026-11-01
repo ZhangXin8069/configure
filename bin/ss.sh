@@ -77,7 +77,8 @@ main() {
         esac
     fi
 
-    ssh "192.168.188.${ip}" -l "${user}"
+    ssh -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
+        -l "${user}" "192.168.188.${ip}"
     rc=$?
     _finish "${rc}"
 }
