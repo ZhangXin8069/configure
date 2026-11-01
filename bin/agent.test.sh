@@ -15,7 +15,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 # 屏蔽宿主环境导出的真实 key/模型变量，保证断言确定性（测试内显式前缀赋值仍可覆盖）
-unset DEEPSEEK_PAY_API_KEY OPENCODE_GO_API_KEY OPENCODE_API_KEY OPENCODE_ZEN_API_KEY CLI_PROXY_API_KEY CUSTOM_GPT_API_KEY DEEPSEEK_API_KEY LQCD_API_KEY \
+unset DEEPSEEK_PAY_API_KEY OPENCODE_GO_API_KEY OPENCODE_API_KEY DEEPSEEK_API_KEY \
       ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
       ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL \
       CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL CLAUDE_MODEL OPENCODE_MODEL OPENCODE_VARIANT \
@@ -110,8 +110,8 @@ fi
 case "$(basename -- "$0")" in
     fake-codex.sh)
         printf 'codex-session-header %s\n' "${CODEX_OPENCODE_SESSION:-}" >> "$FAKE_CALL_LOG"
-        printf 'codex-opencode-keys go=%s zen=%s api=%s\n' \
-            "${OPENCODE_GO_API_KEY:-}" "${OPENCODE_ZEN_API_KEY:-}" "${OPENCODE_API_KEY:-}" >> "$FAKE_CALL_LOG"
+        printf 'codex-opencode-keys go=%s api=%s\n' \
+            "${OPENCODE_GO_API_KEY:-}" "${OPENCODE_API_KEY:-}" >> "$FAKE_CALL_LOG"
         printf 'parent-context launcher=%s agent=%s provider=%s model=%s strength=%s secure=%s\n' \
             "${AGENT_PARENT_LAUNCHER:-}" "${AGENT_PARENT_AGENT:-}" "${AGENT_PARENT_PROVIDER:-}" \
             "${AGENT_PARENT_MODEL:-}" "${AGENT_PARENT_STRENGTH:-}" "${AGENT_PARENT_SECURE:-}" >> "$FAKE_CALL_LOG"
@@ -189,6 +189,22 @@ fake_opencode=$(make_fake fake-opencode)
 fake_opencode_v2=$(make_fake fake-opencode-v2)
 fake_claude=$(make_fake fake-claude)
 
+python3 - "$script_dir/agent-config.json" "$script_dir/agent-custom.json.refer" <<'PY' \
+    || fail 'agent 配置仍包含 pay/go 之外的供应商'
+import json
+import sys
+
+expected = {'deepseek-pay', 'opencode-go'}
+for path in sys.argv[1:]:
+    with open(path, encoding='utf-8') as handle:
+        config = json.load(handle)
+    assert set(config['providers']) == expected, (path, sorted(config['providers']))
+with open(sys.argv[1], encoding='utf-8') as handle:
+    base = json.load(handle)
+assert set(base['agents']['opencode']['key_providers']) == expected
+PY
+printf 'PASS: agent 供应商集合仅保留 deepseek-pay/opencode-go\n'
+
 if ! python3 "$script_dir/agent-protocol-bridge.test.py" >/dev/null 2>&1; then
     fail 'agent-protocol-bridge.py 协议测试失败（单独运行该测试查看详情）'
 fi
@@ -247,11 +263,8 @@ run_launcher() {
             CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-}" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
-            OPENCODE_ZEN_API_KEY="${OPENCODE_ZEN_API_KEY:-}" \
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
-            CLI_PROXY_API_KEY="${CLI_PROXY_API_KEY:-}" \
-            CUSTOM_GPT_API_KEY="${CUSTOM_GPT_API_KEY:-}" \
-            DEEPSEEK_API_KEY= LQCD_API_KEY= \
+            DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
         op) (cd "$repo/nested" && \
             AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
@@ -264,11 +277,8 @@ run_launcher() {
             OPENCODE_BIN="$binary" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
-            OPENCODE_ZEN_API_KEY="${OPENCODE_ZEN_API_KEY:-}" \
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
-            CLI_PROXY_API_KEY="${CLI_PROXY_API_KEY:-}" \
-            CUSTOM_GPT_API_KEY="${CUSTOM_GPT_API_KEY:-}" \
-            DEEPSEEK_API_KEY= LQCD_API_KEY= \
+            DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
         cl) (cd "$repo/nested" && \
             AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
@@ -285,12 +295,9 @@ run_launcher() {
             ANTHROPIC_DEFAULT_HAIKU_MODEL=external-haiku CLAUDE_CODE_SUBAGENT_MODEL=external-subagent \
             CLAUDE_CODE_EFFORT_LEVEL=low CLAUDE_CODE_AUTO_COMPACT_WINDOW=123 \
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-test-deepseek-key}" \
-            CLI_PROXY_API_KEY="${CLI_PROXY_API_KEY:-}" \
-            CUSTOM_GPT_API_KEY="${CUSTOM_GPT_API_KEY:-}" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
-            OPENCODE_ZEN_API_KEY="${OPENCODE_ZEN_API_KEY:-}" \
-            DEEPSEEK_API_KEY= LQCD_API_KEY= \
+            DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
         *) fail "未知测试 launcher：$name" ;;
     esac
@@ -327,7 +334,7 @@ default_key_status=$?
 set -e
 (( default_key_status == 0 )) || fail "默认 go 基础设置使用 OPENCODE_API_KEY 失败：$default_key_output"
 default_key_new=$(tail -n +$((default_key_before + 1)) "$call_log")
-assert_contains "$default_key_new" 'codex-opencode-keys go=test-default-key zen=test-default-key api=test-default-key'
+assert_contains "$default_key_new" 'codex-opencode-keys go=test-default-key api=test-default-key'
 printf 'PASS: 未指定方案时优先 OPENCODE_API_KEY 并沿用 go 基础设置\n'
 
 set +e
@@ -475,7 +482,7 @@ assert_contains "$workspace_mismatch_output" 'workspace_root='
 printf 'PASS: 不同 workspace 的恢复请求被拒绝\n'
 
 set +e
-op_output=$(OPENCODE_GO_API_KEY=test-go-key DEEPSEEK_PAY_API_KEY=test-deepseek-key CLI_PROXY_API_KEY=test-cpa-key \
+op_output=$(OPENCODE_GO_API_KEY=test-go-key DEEPSEEK_PAY_API_KEY=test-deepseek-key \
     run_launcher op "$fake_opencode" --once --file "$repo/first.txt" --time 1s 2>&1)
 op_status=$?
 set -e
@@ -489,8 +496,6 @@ assert_file_contains "$op_run/inputs.txt" ''
 assert_file_contains "$call_log" 'first instruction'
 assert_file_contains "$call_log" '"apiKey":"{env:DEEPSEEK_PAY_API_KEY}"'
 assert_file_contains "$call_log" '"apiKey":"{env:OPENCODE_GO_API_KEY}"'
-assert_file_contains "$call_log" '"apiKey":"{env:CLI_PROXY_API_KEY}"'
-assert_file_contains "$call_log" '"baseURL":"http://192.168.188.20:8317/v1"'
 assert_file_contains "$call_log" '"model":"opencode-go/deepseek-v4.1-flash","variant":"max"'
 assert_file_contains "$call_log" '"autoupdate":false'
 assert_file_contains "$call_log" "### 全局 Agent 配置目录（按需读取） ###"
@@ -498,12 +503,12 @@ assert_file_contains "$call_log" '### configure Agent Runtime Contract v1 ###'
 op_config_json=$(sed -n 's/^opencode-config: //p' "$call_log" | tail -1)
 printf '%s' "$op_config_json" | python3 -c 'import json,sys; json.load(sys.stdin)' \
     || fail "OPENCODE_CONFIG_CONTENT 不是合法 JSON：$op_config_json"
-printf 'PASS: OpenCode --once、三途径 key 注入、cpa 注册、数据目录隔离\n'
+printf 'PASS: OpenCode --once、双途径 key 注入与数据目录隔离\n'
 
 # ---- OpenCode V2：原生配置、隔离 server、JSON 会话解析与无 --agent TUI ----
 v2_op_before=$(wc -l < "$call_log")
 set +e
-v2_op_output=$(OPENCODE_GO_API_KEY=test-go-key DEEPSEEK_PAY_API_KEY=test-deepseek-key CLI_PROXY_API_KEY=test-cpa-key \
+v2_op_output=$(OPENCODE_GO_API_KEY=test-go-key DEEPSEEK_PAY_API_KEY=test-deepseek-key \
     run_launcher op "$fake_opencode_v2" --once --file "$repo/first.txt" 2>&1)
 v2_op_status=$?
 set -e
@@ -524,9 +529,7 @@ assert c["default_agent"]=="build"
 assert c["update"]=="disable"
 assert c["model"]=="opencode-go/deepseek-v4.1-flash"
 assert c["agents"]["build"]["model"]=="opencode-go/deepseek-v4.1-flash#max"
-assert "opencode-go" not in c["providers"]
-assert c["providers"]["cpa"]["settings"]["baseURL"]=="http://192.168.188.20:8317/v1"
-assert c["providers"]["cpa"]["models"]["gpt-5.6-luna"]["variants"]
+assert c["providers"]=={}
 ' || fail "OpenCode V2 原生配置不正确：$v2_config_json"
 
 v2_tui_before=$(wc -l < "$call_log")
@@ -832,9 +835,9 @@ set -e
 (( custom_op_status == 0 )) || fail "custom 覆盖 op 失败：$custom_op_output"
 custom_op_new=$(tail -n +$((custom_op_before + 1)) "$call_log")
 assert_contains "$custom_op_new" '"model":"opencode-go/custom-op-model","variant":"low"'
-assert_contains "$custom_op_new" '"opencode-go":{"options":{"apiKey":"{env:OPENCODE_GO_API_KEY}"}}'
+assert_contains "$custom_op_new" '"opencode-go":{"options":{"apiKey":"{env:OPENCODE_GO_API_KEY}"}'
 case "$custom_op_new" in
-    *DEEPSEEK_PAY_API_KEY*|*CLI_PROXY_API_KEY*) fail 'custom op 不应注入 key 缺失的途径' ;;
+    *DEEPSEEK_PAY_API_KEY*) fail 'custom op 不应注入 key 缺失的途径' ;;
 esac
 printf 'PASS: 个性化 op 覆盖模型，未显式选途径时旧键 variant 优先于途径默认强度，缺 key 途径不注入\n'
 
@@ -876,9 +879,9 @@ cat > "$alt2_dir/agent-custom.json" <<'EOF'
         "codex": "low"
       }
     },
-    "cpa": {
+    "opencode-go": {
       "default_models": {
-        "codex": "provider-gpt-codex-model"
+        "codex": "provider-go-codex-model"
       },
       "default_strengths": {
         "codex": "medium"
@@ -944,17 +947,17 @@ printf 'PASS: 未显式选途径时 co 取 agent 层默认模型/强度（优先
 
 alt2_co_switch_before=$(wc -l < "$call_log")
 set +e
-alt2_co_switch_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" CLI_PROXY_API_KEY=test-cpa-key \
-    run_launcher co "$fake_codex" gpt --once 2>&1)
+alt2_co_switch_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher co "$fake_codex" go --once 2>&1)
 alt2_co_switch_status=$?
 set -e
 (( alt2_co_switch_status == 0 )) || fail "agent 层 co 显式切途径失败：$alt2_co_switch_output"
 alt2_co_switch_new=$(tail -n +$((alt2_co_switch_before + 1)) "$call_log")
-# 显式选途径（快捷词 gpt）→ providers 层优先于 agent 层，强度同序
-assert_contains "$alt2_co_switch_new" '--model provider-gpt-codex-model'
-assert_contains "$alt2_co_switch_new" 'model_provider="cpa"'
+# 显式选途径（快捷词 go）→ providers 层优先于 agent 层，强度同序
+assert_contains "$alt2_co_switch_new" '--model provider-go-codex-model'
+assert_contains "$alt2_co_switch_new" 'model_provider="opencode-go"'
 assert_contains "$alt2_co_switch_new" 'model_reasoning_effort="medium"'
-printf 'PASS: 显式切途径（co gpt）时 providers 层默认模型/强度优先于 agent 层\n'
+printf 'PASS: 显式切途径（co go）时 providers 层默认模型/强度优先于 agent 层\n'
 
 alt2_co_override_before=$(wc -l < "$call_log")
 set +e
@@ -995,16 +998,16 @@ alt2_op_env_new=$(tail -n +$((alt2_op_env_before + 1)) "$call_log")
 assert_contains "$alt2_op_env_new" '"model":"deepseek/provider-op-model","variant":"low"'
 printf 'PASS: OPENCODE_PROVIDER=pay 显式选途径时取 providers 层模型与强度\n'
 
-# ---- 显式选途径但该途径未配置此 agent：回退 agent 层（cpa 只配了 codex） ----
-alt2_op_gpt_before=$(wc -l < "$call_log")
+# ---- 显式选途径但该途径未配置此 agent：回退 agent 层（go 只配了 codex） ----
+alt2_op_go_before=$(wc -l < "$call_log")
 set +e
-alt2_op_gpt_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" CLI_PROXY_API_KEY=test-cpa-key \
-    run_launcher op "$fake_opencode" gpt --once 2>&1)
-alt2_op_gpt_status=$?
+alt2_op_go_output=$(AGENT_TEST_SCRIPT_DIR="$alt2_dir" OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher op "$fake_opencode" go --once 2>&1)
+alt2_op_go_status=$?
 set -e
-(( alt2_op_gpt_status == 0 )) || fail "显式途径缺该 agent 默认值、回退 agent 层失败：$alt2_op_gpt_output"
-alt2_op_gpt_new=$(tail -n +$((alt2_op_gpt_before + 1)) "$call_log")
-assert_contains "$alt2_op_gpt_new" '"model":"cpa/agent-op-model","variant":"xhigh"'
+(( alt2_op_go_status == 0 )) || fail "显式途径缺该 agent 默认值、回退 agent 层失败：$alt2_op_go_output"
+alt2_op_go_new=$(tail -n +$((alt2_op_go_before + 1)) "$call_log")
+assert_contains "$alt2_op_go_new" '"model":"opencode-go/agent-op-model","variant":"xhigh"'
 printf 'PASS: 显式途径未给该 agent 配 default_models/default_strengths 时回退 agent 层\n'
 
 # ---- 两层皆空：明确报错退出 64 ----
@@ -1036,7 +1039,7 @@ set -e
 assert_contains "$empty_cl_output" "途径 'deepseek-pay' 未定义 claude 默认模型"
 printf 'PASS: providers 层与 agent 层皆未配置模型时单一报错退出 64\n'
 
-# ---- 供应商快捷词：cl go / op gpt / op pay / co pay ----
+# ---- 供应商快捷词：cl go / op pay / co pay / co go ----
 switch_cl_before=$(wc -l < "$call_log")
 set +e
 switch_cl_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher cl "$fake_claude" go --once 2>&1)
@@ -1052,27 +1055,6 @@ assert_contains "$switch_cl_new" 'ANTHROPIC_MODEL=deepseek-v4.1-flash'
 assert_contains "$switch_cl_new" 'ANTHROPIC_API_KEY=test-go-key'
 assert_contains "$switch_cl_new" '--model deepseek-v4.1-flash'
 printf 'PASS: 快捷词 cl go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash，x-api-key 认证）\n'
-
-switch_op_before=$(wc -l < "$call_log")
-set +e
-switch_op_output=$(CLI_PROXY_API_KEY=test-cpa-key run_launcher op "$fake_opencode" gpt --once 2>&1)
-switch_op_status=$?
-set -e
-(( switch_op_status == 0 )) || fail "op gpt 失败：$switch_op_output"
-switch_op_new=$(tail -n +$((switch_op_before + 1)) "$call_log")
-assert_contains "$switch_op_new" '"model":"cpa/gpt-5.6-luna"'
-assert_contains "$switch_op_new" '"apiKey":"{env:CLI_PROXY_API_KEY}"'
-printf 'PASS: 快捷词 op gpt 切换 cpa 途径并使用默认模型\n'
-
-switch_op_cpa_before=$(wc -l < "$call_log")
-set +e
-switch_op_cpa_output=$(CLI_PROXY_API_KEY=test-cpa-key run_launcher op "$fake_opencode" cpa --once 2>&1)
-switch_op_cpa_status=$?
-set -e
-(( switch_op_cpa_status == 0 )) || fail "op cpa 失败：$switch_op_cpa_output"
-switch_op_cpa_new=$(tail -n +$((switch_op_cpa_before + 1)) "$call_log")
-assert_contains "$switch_op_cpa_new" '"model":"cpa/gpt-5.6-luna"'
-printf 'PASS: 完整途径名 op cpa 使用 CLIProxyAPI 默认模型\n'
 
 switch_op_pay_before=$(wc -l < "$call_log")
 set +e
@@ -1112,32 +1094,9 @@ assert_contains "$switch_co_go_new" 'model_providers.opencode-go.base_url="http:
 assert_contains "$switch_co_go_output" 'bridge: Responses -> chat_completions'
 assert_contains "$switch_co_go_new" 'model_providers.opencode-go.wire_api="responses"'
 assert_contains "$switch_co_go_new" 'supports_websockets=false'
-assert_file_contains "$call_log" 'codex-opencode-keys go=test-go-key zen=test-go-key api=test-go-key'
+assert_file_contains "$call_log" 'codex-opencode-keys go=test-go-key api=test-go-key'
 assert_file_contains "$call_log" 'parent-context launcher=co agent=codex provider=opencode-go model=deepseek-v4.1-flash strength=max secure=0'
 printf 'PASS: 快捷词 co go 切换 opencode-go 途径（Codex 原生会话头）\n'
-
-switch_cl_zen_before=$(wc -l < "$call_log")
-set +e
-switch_cl_zen_output=$(OPENCODE_GO_API_KEY=test-zen-key run_launcher cl "$fake_claude" zen --once 2>&1)
-switch_cl_zen_status=$?
-set -e
-(( switch_cl_zen_status == 0 )) || fail "cl zen 失败：$switch_cl_zen_output"
-switch_cl_zen_new=$(tail -n +$((switch_cl_zen_before + 1)) "$call_log")
-assert_contains "$switch_cl_zen_new" 'ANTHROPIC_BASE_URL=https://opencode.ai/zen'
-assert_contains "$switch_cl_zen_new" 'ANTHROPIC_MODEL=claude-sonnet-5'
-assert_contains "$switch_cl_zen_new" 'ANTHROPIC_API_KEY=test-zen-key'
-printf 'PASS: 快捷词 cl zen 切换 OpenCode Zen 并使用 Claude 默认模型\n'
-
-switch_op_zen_before=$(wc -l < "$call_log")
-set +e
-switch_op_zen_output=$(OPENCODE_ZEN_API_KEY=test-zen-key run_launcher op "$fake_opencode" zen --once 2>&1)
-switch_op_zen_status=$?
-set -e
-(( switch_op_zen_status == 0 )) || fail "op zen 失败：$switch_op_zen_output"
-switch_op_zen_new=$(tail -n +$((switch_op_zen_before + 1)) "$call_log")
-assert_contains "$switch_op_zen_new" '"model":"opencode/gpt-5.6-luna","variant":"max"'
-assert_contains "$switch_op_zen_new" '"apiKey":"{env:OPENCODE_ZEN_API_KEY}"'
-printf 'PASS: 快捷词 op zen 注册 OpenCode Zen 并使用默认模型\n'
 
 switch_op_go_glm_before=$(wc -l < "$call_log")
 set +e
@@ -1147,46 +1106,13 @@ set -e
 (( switch_op_go_glm_status == 0 )) || fail "op go GLM 失败：$switch_op_go_glm_output"
 switch_op_go_glm_new=$(tail -n +$((switch_op_go_glm_before + 1)) "$call_log")
 assert_contains "$switch_op_go_glm_new" '"model":"opencode-go/glm-5.3-flash"'
+printf 'PASS: op go 模型 ID 使用 opencode-go/ 前缀\n'
 
-switch_op_zen_glm_before=$(wc -l < "$call_log")
-set +e
-switch_op_zen_glm_output=$(OPENCODE_ZEN_API_KEY=test-zen-key run_launcher op "$fake_opencode" zen glm5.3-flash --once 2>&1)
-switch_op_zen_glm_status=$?
-set -e
-(( switch_op_zen_glm_status == 0 )) || fail "op zen GLM 失败：$switch_op_zen_glm_output"
-switch_op_zen_glm_new=$(tail -n +$((switch_op_zen_glm_before + 1)) "$call_log")
-assert_contains "$switch_op_zen_glm_new" '"model":"opencode/glm-5.3-flash"'
-printf 'PASS: op go/zen 模型 ID 分别使用 opencode-go/ 与 opencode/ 前缀\n'
-
-switch_co_zen_before=$(wc -l < "$call_log")
-set +e
-switch_co_zen_output=$(OPENCODE_ZEN_API_KEY=test-zen-key run_launcher co "$fake_codex" zen --once 2>&1)
-switch_co_zen_status=$?
-set -e
-(( switch_co_zen_status == 0 )) || fail "co zen 失败：$switch_co_zen_output"
-switch_co_zen_new=$(tail -n +$((switch_co_zen_before + 1)) "$call_log")
-assert_contains "$switch_co_zen_new" '--model gpt-5.6-luna'
-assert_contains "$switch_co_zen_new" 'model_provider="opencode-zen"'
-assert_contains "$switch_co_zen_new" 'model_providers.opencode-zen.base_url="https://opencode.ai/zen/v1"'
-assert_contains "$switch_co_zen_new" 'model_providers.opencode-zen.env_key="OPENCODE_ZEN_API_KEY"'
-assert_contains "$switch_co_zen_new" 'model_providers.opencode-zen.wire_api="responses"'
-printf 'PASS: 快捷词 co zen 切换 OpenCode Zen 并使用 Responses 默认模型\n'
-
-go_key_precedence_output=$(OPENCODE_GO_API_KEY=go-first OPENCODE_ZEN_API_KEY=zen-second OPENCODE_API_KEY=api-third \
+go_key_precedence_output=$(OPENCODE_GO_API_KEY=go-first OPENCODE_API_KEY=api-third \
     run_launcher co "$fake_codex" go --once 2>&1)
-assert_contains "$go_key_precedence_output" '值不一致，已按 go 方案统一'
-assert_file_contains "$call_log" 'codex-opencode-keys go=go-first zen=go-first api=go-first'
-
-zen_key_precedence_output=$(OPENCODE_GO_API_KEY=go-first OPENCODE_ZEN_API_KEY=zen-second OPENCODE_API_KEY=api-third \
-    run_launcher co "$fake_codex" zen --once 2>&1)
-assert_contains "$zen_key_precedence_output" '值不一致，已按 zen 方案统一'
-assert_file_contains "$call_log" 'codex-opencode-keys go=zen-second zen=zen-second api=zen-second'
-
-default_key_precedence_output=$(OPENCODE_GO_API_KEY=go-first OPENCODE_ZEN_API_KEY=zen-second OPENCODE_API_KEY=api-third \
-    run_launcher co "$fake_codex" --once 2>&1)
-assert_contains "$default_key_precedence_output" '值不一致，已按 default 方案统一'
-assert_file_contains "$call_log" 'codex-opencode-keys go=api-third zen=api-third api=api-third'
-printf 'PASS: go/zen/默认方案的 OpenCode key 优先级正确\n'
+assert_contains "$go_key_precedence_output" '值不一致，已按 GO>API 统一'
+assert_file_contains "$call_log" 'codex-opencode-keys go=go-first api=go-first'
+printf 'PASS: OPENCODE_GO_API_KEY 优先于兼容别名 OPENCODE_API_KEY\n'
 
 bridge_co_before=$(call_count)
 set +e
@@ -1209,17 +1135,7 @@ case "$cl_bridge_output" in
 esac
 (( $(call_count) == bridge_cl_before + 1 )) || fail 'cl go 应调用一次 Claude 可执行文件'
 
-set +e
-co_zen_bridge_output=$(OPENCODE_ZEN_API_KEY=test-zen-key run_launcher co "$fake_codex" zen glm-5.3-flash --once 2>&1)
-co_zen_bridge_status=$?
-cl_zen_bridge_output=$(OPENCODE_ZEN_API_KEY=test-zen-key run_launcher cl "$fake_claude" zen glm-5.3-flash --once 2>&1)
-cl_zen_bridge_status=$?
-set -e
-(( co_zen_bridge_status == 0 )) || fail "co zen GLM 协议桥失败：${co_zen_bridge_output}"
-(( cl_zen_bridge_status == 0 )) || fail "cl zen GLM 协议桥失败：${cl_zen_bridge_output}"
-assert_contains "$co_zen_bridge_output" 'provider: opencode-zen'
-assert_contains "$cl_zen_bridge_output" 'provider=opencode-zen'
-printf 'PASS: co go / cl·co zen 自动启用协议桥，cl go 保持原生直连\n'
+printf 'PASS: co go 自动启用协议桥，cl go 保持原生直连\n'
 
 # ---- Codex 模型元数据目录：内置目录之外的模型自动补齐（消除 metadata 告警） ----
 catalog_path=$(printf '%s\n' "$switch_co_go_new" | sed -n 's/.*model_catalog_json="\([^"]*\)".*/\1/p' | head -1)
@@ -1247,15 +1163,15 @@ printf 'PASS: co 为内置目录外模型注入模型元数据目录（保留内
 
 builtin_before=$(wc -l < "$call_log")
 set +e
-builtin_output=$(CLI_PROXY_API_KEY=test-cpa-key run_launcher co "$fake_codex" gpt --model gpt-6-astra --once 2>&1)
+builtin_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher co "$fake_codex" go --model gpt-5.4-mini --once 2>&1)
 builtin_status=$?
 set -e
-(( builtin_status == 0 )) || fail "co gpt 失败：$builtin_output"
+(( builtin_status == 0 )) || fail "co go 内置模型失败：$builtin_output"
 builtin_new=$(tail -n +$((builtin_before + 1)) "$call_log")
 case "$builtin_new" in
     *model_catalog_json*) fail '内置目录中的模型不应注入 model_catalog_json' ;;
 esac
-printf 'PASS: co 内置模型（gpt-6-astra）不注入模型目录\n'
+printf 'PASS: co go 内置模型（gpt-5.4-mini）不注入模型目录\n'
 
 cache_files_before=$(find "$data/cache" -type f | wc -l)
 go_reuse_before=$(wc -l < "$call_log")
@@ -1308,12 +1224,12 @@ printf 'PASS: 模型目录自检拒绝时告警且不注入（保留 fallback �
 
 switch_explicit_before=$(wc -l < "$call_log")
 set +e
-switch_explicit_output=$(CLI_PROXY_API_KEY=test-cpa-key run_launcher op "$fake_opencode" gpt --model cpa/gpt-5.6-luna --once 2>&1)
+switch_explicit_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher op "$fake_opencode" go --model opencode-go/glm-5.3-flash --once 2>&1)
 switch_explicit_status=$?
 set -e
-(( switch_explicit_status == 0 )) || fail "op gpt --model 失败：$switch_explicit_output"
+(( switch_explicit_status == 0 )) || fail "op go --model 失败：$switch_explicit_output"
 switch_explicit_new=$(tail -n +$((switch_explicit_before + 1)) "$call_log")
-assert_contains "$switch_explicit_new" '"model":"cpa/gpt-5.6-luna"'
+assert_contains "$switch_explicit_new" '"model":"opencode-go/glm-5.3-flash"'
 printf 'PASS: 快捷词与 --model 共存时显式模型优先\n'
 
 # ---- 在线/本地模型目录：不完整模型名、模型强度顺延、[1m] 后缀与失败回退 ----
@@ -1326,9 +1242,7 @@ ln -sf "$script_dir/agent-prompt.txt" "$modelbin/agent-prompt.txt"
 cp -- "$script_dir/agent-config.json" "$modelbin/agent-config.json"
 model_list_file="$test_root/models.json"
 model_metadata_file="$test_root/metadata.json"
-custom_models_file="$test_root/custom-models.json"
-printf '%s\n' '{"data":[{"id":"deepseek-v4-pro"},{"id":"glm-5.3-flash"}]}' > "$model_list_file"
-printf '%s\n' '{"data":[{"id":"dynamic-gpt"}]}' > "$custom_models_file"
+printf '%s\n' '{"data":[{"id":"deepseek-v4-pro"},{"id":"glm-5.3-flash"},{"id":"dynamic-gpt"}]}' > "$model_list_file"
 printf '%s\n' '{"opencode-go":{"models":{"deepseek-v4-pro":{"reasoning_options":[{"type":"effort","values":["high","max"]}]},"glm-5.3-flash":{"reasoning_options":[{"type":"effort","values":["low","high","max"]}]}}},"deepseek":{"models":{"deepseek-v4-pro":{"reasoning_options":[{"type":"effort","values":["high","max"]}]}}}}' > "$model_metadata_file"
 cat > "$modelbin/agent-custom.json" <<EOF
 {
@@ -1351,12 +1265,6 @@ cat > "$modelbin/agent-custom.json" <<EOF
       "models_metadata_provider": "deepseek",
       "default_models": { "claude": "deepseek-pro[1m]" },
       "default_strengths": { "claude": "max" }
-    },
-    "cpa": {
-      "models_url": "file://$custom_models_file",
-      "models_auth": "none",
-      "default_models": { "opencode": "cpa/dynamic-gpt" },
-      "default_strengths": { "opencode": "max" }
     }
   },
   "agents": {
@@ -1401,11 +1309,11 @@ assert_contains "$discovery_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=max'
 
 set +e
 discovery_op_output=$(AGENT_TEST_SCRIPT_DIR="$modelbin" AGENT_TEST_DATA_DIR="$discovery_data" \
-    AGENT_MODEL_DISCOVERY=1 CLI_PROXY_API_KEY=test-cpa-key run_launcher op "$fake_opencode" gpt dynamic-gpt --once 2>&1)
+    AGENT_MODEL_DISCOVERY=1 OPENCODE_GO_API_KEY=test-go-key run_launcher op "$fake_opencode" go dynamic-gpt --once 2>&1)
 discovery_op_status=$?
 set -e
-(( discovery_op_status == 0 )) || fail "动态 cpa 模型注入失败：$discovery_op_output"
-assert_file_contains "$call_log" '"model":"cpa/dynamic-gpt"'
+(( discovery_op_status == 0 )) || fail "动态 go 模型注入失败：$discovery_op_output"
+assert_file_contains "$call_log" '"model":"opencode-go/dynamic-gpt"'
 assert_file_contains "$call_log" '"dynamic-gpt":{}'
 printf 'PASS: 模型目录在线刷新、元数据回退、不完整模型名、[1m] 后缀与强度顺延\n'
 
@@ -1431,7 +1339,7 @@ printf 'PASS: agent-statusline.sh 按通用 segments 渲染官方字段且无数
 # ---- 旧 key 环境变量名回退 ----
 legacy_before=$(wc -l < "$call_log")
 set +e
-legacy_output=$(cd "$repo/nested" && env -u DEEPSEEK_PAY_API_KEY -u CLI_PROXY_API_KEY \
+legacy_output=$(cd "$repo/nested" && env -u DEEPSEEK_PAY_API_KEY \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
     CLAUDE_BIN="$fake_claude" DEEPSEEK_API_KEY=legacy-key-xyz \
     "$test_root/cl" pay --once 2>&1)
@@ -1443,37 +1351,11 @@ legacy_new=$(tail -n +$((legacy_before + 1)) "$call_log")
 assert_contains "$legacy_new" 'ANTHROPIC_AUTH_TOKEN=legacy-key-xyz'
 printf 'PASS: 旧 key 环境变量名自动回退（cl pay 显式走 deepseek-pay）\n'
 
-legacy_cpa_before=$(wc -l < "$call_log")
-set +e
-legacy_cpa_output=$(cd "$repo/nested" && env -u CLI_PROXY_API_KEY -u LQCD_API_KEY \
-    AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
-    OPENCODE_BIN="$fake_opencode" CUSTOM_GPT_API_KEY=legacy-cpa-key \
-    "$test_root/op" gpt --once 2>&1)
-legacy_cpa_status=$?
-set -e
-(( legacy_cpa_status == 0 )) || fail "旧 CLIProxyAPI key 回退失败：$legacy_cpa_output"
-assert_contains "$legacy_cpa_output" '回退使用旧变量 CUSTOM_GPT_API_KEY'
-legacy_cpa_new=$(tail -n +$((legacy_cpa_before + 1)) "$call_log")
-assert_contains "$legacy_cpa_new" '"apiKey":"{env:CLI_PROXY_API_KEY}"'
-printf 'PASS: CUSTOM_GPT_API_KEY 自动回退到 CLI_PROXY_API_KEY\n'
-
-# ---- cl 快捷词切到无 Anthropic 端点的途径：单一明确报错 ----
-set +e
-cl_gpt_output=$(run_launcher cl "$fake_claude" gpt 2>&1)
-cl_gpt_status=$?
-set -e
-(( cl_gpt_status == 64 )) || fail "cl gpt 应返回 64，实际 ${cl_gpt_status}：$cl_gpt_output"
-assert_contains "$cl_gpt_output" "途径 'cpa' 未定义 anthropic_base_url"
-case "$cl_gpt_output" in
-    *'未定义 claude 默认模型'*) fail 'cl gpt 不应先打印默认模型警告' ;;
-esac
-printf 'PASS: cl 切到无 Anthropic 端点途径时单一明确报错\n'
-
 # ---- 缺 key 时横幅提示与空 token 覆盖（避免用户级 settings 旧 token 混淆 401） ----
 missing_cl_before=$(wc -l < "$call_log")
 set +e
-missing_cl_output=$(cd "$repo/nested" && env -u OPENCODE_GO_API_KEY -u DEEPSEEK_PAY_API_KEY -u CLI_PROXY_API_KEY \
-    -u DEEPSEEK_API_KEY -u LQCD_API_KEY \
+missing_cl_output=$(cd "$repo/nested" && env -u OPENCODE_GO_API_KEY -u DEEPSEEK_PAY_API_KEY \
+    -u DEEPSEEK_API_KEY \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
     CLAUDE_BIN="$fake_claude" "$test_root/cl" go --once 2>&1)
 missing_cl_status=$?
@@ -1486,7 +1368,7 @@ printf 'PASS: 缺 key 时横幅提示且 settings 显式空 token\n'
 
 missing_co_before=$(wc -l < "$call_log")
 set +e
-missing_co_output=$(cd "$repo/nested" && env -u CLI_PROXY_API_KEY -u LQCD_API_KEY \
+missing_co_output=$(cd "$repo/nested" && env -u OPENCODE_GO_API_KEY -u OPENCODE_API_KEY \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
     CODEX_BIN="$fake_codex" "$test_root/co" go --once 2>&1)
 missing_co_status=$?
@@ -1539,7 +1421,7 @@ set +e
 cos_secure_output=$(cd "$repo/nested" && env -u CODEX_BIN \
     HOME="$secure_home" PATH="$secure_src_dir:$PATH" \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
-    CLI_PROXY_API_KEY=test-cpa-key \
+    OPENCODE_GO_API_KEY=test-go-key \
     "$test_root/cos" --once 2>&1)
 cos_secure_status=$?
 set -e
@@ -1554,7 +1436,7 @@ set +e
 cos_secure_again=$(cd "$repo/nested" && env -u CODEX_BIN \
     HOME="$secure_home" PATH="$secure_src_dir:$PATH" \
     AGENT_DATA_DIR="$data" AGENT_SCRIPT_DIR="$script_dir" FAKE_CALL_LOG="$call_log" \
-    CLI_PROXY_API_KEY=test-cpa-key \
+    OPENCODE_GO_API_KEY=test-go-key \
     "$test_root/cos" --once 2>&1)
 cos_secure_again_status=$?
 set -e
@@ -1615,7 +1497,7 @@ run_deploy() { # launcher 名 + 额外 env 赋值（HOME 由调用方给）
     (cd "$repo/nested" && env -u AGENT_DATA_DIR -u CONFIGURE_AGENT_DATA_DIR \
         -u AGENT_SCRIPT_DIR -u AGENT_CONFIGURE_ROOT "$@" \
         FAKE_CALL_LOG="$deploy_call_log" CODEX_BIN="$fake_codex" \
-        DEEPSEEK_API_KEY= LQCD_API_KEY= \
+        DEEPSEEK_API_KEY= \
         "$deploy_root/bin/$name" --once 2>&1)
 }
 
@@ -1646,7 +1528,7 @@ ln -sf "$deploy_root/bin/agent.sh" "$test_root/pathtools/cl"
 set +e
 shim_out=$(cd "$repo/nested" && env -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR -u AGENT_CONFIGURE_ROOT \
     HOME="$deploy_home" FAKE_CALL_LOG="$deploy_call_log" CLAUDE_BIN="$fake_claude" \
-    DEEPSEEK_PAY_API_KEY=test-deepseek-key DEEPSEEK_API_KEY= LQCD_API_KEY= \
+    DEEPSEEK_PAY_API_KEY=test-deepseek-key DEEPSEEK_API_KEY= \
     "$test_root/pathtools/cl" --once 2>&1)
 shim_rc=$?
 set -e
@@ -1659,7 +1541,7 @@ printf 'PASS: 跨目录软链接调用解析到真实部署（agent-runtime/conf
 set +e
 nohome_out=$(cd "$repo/nested" && env -u HOME -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR \
     -u AGENT_CONFIGURE_ROOT FAKE_CALL_LOG="$deploy_call_log" CODEX_BIN="$fake_codex" \
-    DEEPSEEK_API_KEY= LQCD_API_KEY= \
+    DEEPSEEK_API_KEY= \
     "$deploy_root/bin/co" --once 2>&1)
 nohome_rc=$?
 set -e
@@ -1713,7 +1595,7 @@ mkdir -p "$deploy_home/configure/data"
 set +e
 fallback_out=$(cd "$repo/nested" && env -u AGENT_DATA_DIR -u AGENT_SCRIPT_DIR \
     -u AGENT_CONFIGURE_ROOT HOME="$deploy_home" FAKE_CALL_LOG="$deploy_call_log" \
-    CODEX_BIN="$fake_codex" DEEPSEEK_API_KEY= LQCD_API_KEY= \
+    CODEX_BIN="$fake_codex" DEEPSEEK_API_KEY= \
     "$deploy2_root/bin/co" --once 2>&1)
 fallback_rc=$?
 set -e
@@ -1808,7 +1690,7 @@ run_ai() { # 启动器名 + 额外 env 赋值
     : > "$ai_install_log"
     (cd "$repo/nested" && env -i PATH="$min_path" HOME="$ai_home" \
         FAKE_CALL_LOG="$ai_call_log" FAKE_INSTALL_LOG="$ai_install_log" \
-        DEEPSEEK_API_KEY= LQCD_API_KEY= DEEPSEEK_PAY_API_KEY= CLI_PROXY_API_KEY= \
+        DEEPSEEK_API_KEY= DEEPSEEK_PAY_API_KEY= OPENCODE_GO_API_KEY= OPENCODE_API_KEY= \
         "$@" "$ai_root/bin/$name" --once 2>&1)
 }
 
@@ -1898,7 +1780,7 @@ ai_secure_cos="$ai_secure_home/$ai_secure_rel/output_result_debug_Stable-4fe60c8
 set +e
 ai_secure_out=$(cd "$repo/nested" && env -i PATH="$min_path" HOME="$ai_secure_home" \
     FAKE_CALL_LOG="$ai_call_log" FAKE_INSTALL_LOG="$ai_install_log" \
-    DEEPSEEK_API_KEY= LQCD_API_KEY= CLI_PROXY_API_KEY=test-cpa-key \
+    DEEPSEEK_API_KEY= OPENCODE_GO_API_KEY=test-go-key \
     "$ai_root/bin/cos" --once 2>&1)
 ai_secure_rc=$?
 set -e

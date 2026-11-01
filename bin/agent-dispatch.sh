@@ -11,7 +11,7 @@ _usage() {
   --task TEXT             子任务正文（必填，除非使用 --task-file）
   --task-file PATH        从文件读取子任务正文
   --agent co|cl|op        默认继承父 agent；无父上下文时默认 co
-  --provider NAME         默认继承父 provider；可传 pay/go/zen/gpt 或完整名
+  --provider NAME         默认继承父 provider；可传 pay/go 或完整名
   --model MODEL           默认继承父最终模型
   --strength LEVEL        默认继承父最终强度
   --cwd DIR               默认继承父工作目录

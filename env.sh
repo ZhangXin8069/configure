@@ -12,13 +12,8 @@ _configure_env_root=$(CDPATH= cd -P -- "${_configure_env_root}" && pwd -P)
 _configure_env_self="${_configure_env_root%/}/${_configure_env_name}"
 unset _configure_env_source _configure_env_name
 
-if [ "${_CONFIGURE_ENV_PROBE:-}" != "${_configure_env_self}" ]; then
-    if [ "${_CONFIGURE_ENV_LOADED_PATH:-}" = "${_configure_env_self}" ]; then
-        unset _configure_env_self _configure_env_root
-        return 0
-    fi
-    # @CONFLICT_GUARD_PAUSED@
-    # 用户要求暂时停用大规模 alias/function/executable 冲突告警；恢复时取消以下注释。
+# @CONFLICT_GUARD_PAUSED@
+# 用户要求暂时停用大规模 alias/function/executable 冲突告警；恢复时取消以下注释。
     # if [ -n "${_SCREEN_GUIDE_PATH:-}" ] &&
     #     [ "${_SCREEN_GUIDE_PATH}" != "${_configure_env_root}/bin/_screen-guide.txt" ]; then
     #     printf '[WARN] env.sh 未加载：变量 _SCREEN_GUIDE_PATH 已被定义为 %s。\n' \
@@ -46,7 +41,6 @@ if [ "${_CONFIGURE_ENV_PROBE:-}" != "${_configure_env_self}" ]; then
     #     return 1
     # fi
     # unset _configure_env_preflight_status
-fi
 # @EXPORT@
 # export TERM=xterm
 # export TERM=xterm-256color
@@ -452,5 +446,4 @@ if [ "${_CONFIGURE_ENV_PROBE:-}" = "${_configure_env_self}" ]; then
     return 0
 fi
 
-export _CONFIGURE_ENV_LOADED_PATH="${_configure_env_self}"
 unset _configure_env_self _configure_env_root

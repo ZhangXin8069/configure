@@ -952,3 +952,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-provider-cleanup - stage - 2026-11-02 04:55:14 +0800
+- 主任务: agent 途径收敛与 env.sh source marker 回滚
+- 日志文件: logs/v202611020455.txt
+- 文件大小: 4492 bytes
+- 触发原因: 阶段成果
+- 关键内容: 仅保留 pay/go；撤销 env.sh 导出式 marker 并保留 screen；完整测试与 form 门禁通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+

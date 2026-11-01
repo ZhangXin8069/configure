@@ -1,19 +1,19 @@
-model_provider = "lqcd"
+model_provider = "opencode-go"
 preferred_auth_method = "apikey"
 forced_login_method = "api"
-model = "gpt-5.5"
+model = "deepseek-v4.1-flash"
 model_reasoning_effort = "xhigh"
 model_context_window = 1000000
 model_auto_compact_token_limit = 900000
 personality = "pragmatic"
 approvals_reviewer = "auto_review"
 service_tier = "fast"
-[model_providers.cpa]
-name = "CLIProxyAPI"
-base_url = "http://192.168.188.20:8317/v1"
-env_key = "CLI_PROXY_API_KEY"
+[model_providers.opencode-go]
+name = "OpenCode Go"
+base_url = "https://opencode.ai/zen/go/v1"
+env_key = "OPENCODE_GO_API_KEY"
 wire_api = "responses"
-supports_websockets = true
+supports_websockets = false
 [tui]
 status_line = ["model-with-reasoning", "current-dir", "hostname", "branch-changes", "run-state", "permissions", "approval-mode", "context-used", "context-window-size", "weekly-limit", "estimated-thread-cost", "thread-id", "fast-mode", "task-progress"]
 status_line_use_colors = true

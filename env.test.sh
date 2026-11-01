@@ -308,10 +308,8 @@ _check_env_loading_guard() {
     local shell_path=$1
     local clean_bin=$2
     local conflict_bin=$3
-    local child_driver=$4
     local stderr_file=$test_root/conflict-guard.err
     local output
-    local child_output
 
     output=$(_clean_env_shell "$shell_path" "$clean_bin:/usr/bin:/bin" -c '
         . "$1" 2>"$2" || exit $?
@@ -323,7 +321,7 @@ _check_env_loading_guard() {
         alias screen-new >/dev/null 2>&1 && exit 15
         alias screen-list >/dev/null 2>&1 && exit 16
         alias screen-resume >/dev/null 2>&1 && exit 17
-        env | grep -Fqx "_CONFIGURE_ENV_LOADED_PATH=$1" || exit 18
+        env | grep -Fq "_CONFIGURE_ENV_LOADED_PATH=" && exit 18
         . "$1" 2>>"$2" || exit $?
         [[ "$PATH" == "$first_path" ]] || exit 19
         printf "loaded\n"
@@ -331,31 +329,6 @@ _check_env_loading_guard() {
         _fail "$shell_path 无冲突时应加载 env.sh，实际输出：$output"
     _assert_line "$output" 'loaded'
     [[ ! -s "$stderr_file" ]] || _fail "$shell_path 无冲突加载产生告警：$(<"$stderr_file")"
-
-    case "${shell_path##*/}" in
-        zsh)
-            child_output=$(_clean_env_shell "$shell_path" "$clean_bin:/usr/bin:/bin" -c '
-                . "$1" 2>>"$2" || exit $?
-                actual=$(zsh -f "$3" "$1") || exit 61
-                [[ "$actual" == *"marker=$1"* ]] || exit 62
-                [[ "$actual" == *"path=$PATH"* ]] || exit 63
-                printf "child-skipped\n"
-            ' configure-env-clean "$env_file" "$stderr_file" "$child_driver") ||
-                _fail "$shell_path 新 Shell 未重新加载 env.sh，实际输出：$child_output"
-            ;;
-        *)
-            child_output=$(_clean_env_shell "$shell_path" "$clean_bin:/usr/bin:/bin" -c '
-                . "$1" 2>>"$2" || exit $?
-                actual=$("$BASH" --noprofile --norc "$3" "$1") || exit 61
-                [[ "$actual" == *"marker=$1"* ]] || exit 62
-                [[ "$actual" == *"path=$PATH"* ]] || exit 63
-                printf "child-skipped\n"
-            ' configure-env-clean "$env_file" "$stderr_file" "$child_driver") ||
-                _fail "$shell_path 新 Shell 未重新加载 env.sh，实际输出：$child_output"
-            ;;
-    esac
-    _assert_line "$child_output" 'child-skipped'
-    [[ ! -s "$stderr_file" ]] || _fail "$shell_path 子 shell 跳过时产生告警：$(<"$stderr_file")"
 
     output=$(_clean_env_shell "$shell_path" "$conflict_bin:/usr/bin:/bin" -c '
         alias scn=false
@@ -368,7 +341,7 @@ _check_env_loading_guard() {
         alias scn | grep -Fq _screen_new || exit 33
         type _screen_new >/dev/null 2>&1 || exit 34
         [[ "$_SCREEN_GUIDE_PATH" == "${1%/*}/bin/_screen-guide.txt" ]] || exit 35
-        [[ "$_CONFIGURE_ENV_LOADED_PATH" == "$1" ]] || exit 36
+        env | grep -Fq "_CONFIGURE_ENV_LOADED_PATH=" && exit 36
         printf "conflicts-ignored\n"
     ' configure-env-clean "$env_file" "$stderr_file") ||
         _fail "$shell_path 冲突告警暂停后未继续加载 env.sh，实际输出：$output"
@@ -397,7 +370,6 @@ main() {
     local fake_screen=$test_root/screen-bin/screen
     local clean_bin=$test_root/clean-bin
     local conflict_bin=$test_root/conflict-bin
-    local child_driver=$test_root/child-env-driver.sh
 
     mkdir -p "$fixture/nested" "$fixture/dir target" \
         "$fixture/.git" "$fixture/node_modules" \
@@ -441,14 +413,11 @@ main() {
     mkdir -p "$test_root/home" "$clean_bin" "$conflict_bin"
     printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$*"' >"$fake_screen"
     printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$conflict_bin/cl"
-    printf '%s\n' \
-        '. "$1" || exit $?' \
-        'printf "marker=%s path=%s\\n" "${_CONFIGURE_ENV_LOADED_PATH:-}" "$PATH"' >"$child_driver"
-    chmod +x "$fake_screen" "$conflict_bin/cl" "$child_driver"
+    chmod +x "$fake_screen" "$conflict_bin/cl"
 
     for shell_path in "${shell_paths[@]}"; do
-        _check_env_loading_guard "$shell_path" "$clean_bin" "$conflict_bin" "$child_driver"
-        printf '通过：%s 的 marker 幂等与冲突告警暂停加载\n' "$shell_path"
+        _check_env_loading_guard "$shell_path" "$clean_bin" "$conflict_bin"
+        printf '通过：%s 的重复 source、marker 撤销与冲突告警暂停加载\n' "$shell_path"
 
         _check_screen_helpers "$shell_path" "$fake_screen"
         printf '通过：%s 的 screen 别名、标题、重连与缺失降级\n' "$shell_path"

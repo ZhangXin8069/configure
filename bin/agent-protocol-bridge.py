@@ -808,7 +808,7 @@ def fetch_chat(args, payload, incoming_headers, converter):
     if session_id:
         headers["x-opencode-session"] = session_id
 
-    # OpenCode Go/Zen 的 /chat/completions 只接受 Bearer，部分 OpenAI 兼容端点只接受
+    # OpenCode Go 的 /chat/completions 只接受 Bearer，部分 OpenAI 兼容端点只接受
     # x-api-key。按配置头尝试一次；仅在 401 且 key 已设置时用另一认证头重试一次。
     auth_modes = [args.auth_mode]
     if api_key:

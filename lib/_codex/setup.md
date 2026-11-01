@@ -85,12 +85,11 @@ bash lib/_codex/config.sh \
 
 上面的示例故意使用无效地址，只用于展示 `NAME=base_url=ENV_KEY=wire_api` 格式。真实端点、认证方式和模型支持范围必须按供应商文档确认。
 
-对于仓库已有的 DeepSeek、OpenCode Go/Zen 等路由，优先使用统一启动器：
+对于仓库已有的 DeepSeek、OpenCode Go 路由，优先使用统一启动器：
 
 ```bash
 co pay
 co go
-co zen
 ```
 
 启动器会选择合适的端点、模型和必要的本地协议桥，避免手工维护重复 TOML。

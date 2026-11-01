@@ -733,7 +733,9 @@ def provider_json(config, base_json, provider_name, cache_path):
     if not models:
         models.update(static_model_entries(provider))
     block = base.get(provider_id)
-    if isinstance(block, dict) and isinstance(block.get("models"), dict):
+    if isinstance(block, dict):
+        if not isinstance(block.get("models"), dict):
+            block["models"] = {}
         for model_id in sorted(models):
             current = block["models"].get(model_id)
             if not isinstance(current, dict):

@@ -59,24 +59,12 @@ chmod 600 ~/env-key.sh
 ```bash
 export DEEPSEEK_PAY_API_KEY='<真实密钥>'
 export OPENCODE_GO_API_KEY='<真实密钥>'
-export OPENCODE_ZEN_API_KEY='<真实密钥>'
-export CLI_PROXY_API_KEY='<真实密钥>'
 ```
 
 不要把真实值写入 `agent-config.json`、`agent-custom.json`、Markdown 或 Git 提交。
 
-`cpa` 是 CLIProxyAPI 的供应商标识，代理地址为 `http://192.168.188.20:8317/v1`，模型发现地址为
-`http://192.168.188.20:8317/v1/models`，认证变量为 `CLI_PROXY_API_KEY`。快捷词 `gpt` 等价于完整途径名 `cpa`：
-
-```bash
-op cpa
-op gpt
-co cpa gpt-5.6-luna max
-```
-
-旧 `CUSTOM_GPT_API_KEY` 与 `LQCD_API_KEY` 仅在 `CLI_PROXY_API_KEY` 缺失时作为迁移回退，不应继续用于新配置。
-
-`OPENCODE_API_KEY`、`OPENCODE_ZEN_API_KEY` 和 `OPENCODE_GO_API_KEY` 是兼容入口，但不同途径有不同优先级。需要可预测行为时直接设置目标途径的专名变量。
+`OPENCODE_API_KEY` 是 `OPENCODE_GO_API_KEY` 的兼容别名；两者同时存在且值不同时以
+`OPENCODE_GO_API_KEY` 为准，并统一到两个变量。需要可预测行为时直接设置专名变量。
 
 ## 安装 Agent
 
@@ -126,10 +114,9 @@ codex --version 2>/dev/null || true
 
 ```bash
 co go deepseek-v4.1-flash max
-co zen gpt-5.6-luna max
 cl pay 'deepseek-pro[1m]'
-op gpt
-op cpa
+op pay
+op go
 ```
 
 传统参数仍具有最高优先级：

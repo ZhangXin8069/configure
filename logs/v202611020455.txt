@@ -1,0 +1,80 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-02 04:55:14 +0800
+批次: agent-provider-cleanup
+主任务: agent 途径收敛与 env.sh source marker 回滚
+触发原因: 阶段成果
+摘要: 仅保留 pay/go；撤销 env.sh 导出式 marker 并保留 screen；完整测试与 form 门禁通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — agent 内置途径收敛
+- 目标: 删除 agent 系列的 cpa 支持，仅保留 pay/go。
+- 操作: 移除 `opencode-zen` 与 `cpa` 配置；Unix/Windows 参数解析仅接受 `pay/go` 和完整名 `deepseek-pay/opencode-go`；OpenCode V2 不再注入自定义 provider；删除 CLIProxyAPI、旧 GPT/LQCD key 迁移和自定义 provider 分支。
+- 关键输出: `agent-config.json` 与 `agent-custom.json.refer` 的 providers 均仅含 `deepseek-pay/opencode-go`。
+- 退出码: 0
+- 证据与判断: `agent.test.sh` 新增配置集合断言并通过。
+
+### S2 — 动态模型元数据修复
+- 目标: 在移除自定义 provider 后，仍为 V1 内置 provider 注入动态模型清单。
+- 操作: `provider-json` 在目标 provider 块存在但无 `models` 时创建该字段，再合并缓存/静态模型。
+- 关键输出: `dynamic-gpt` 成功写入 `opencode-go.models`，V2 配置保持 `providers={}`。
+- 退出码: 0
+- 证据与判断: `agent.test.sh` 的动态模型用例通过。
+
+### S3 — env.sh source marker 回滚
+- 目标: 撤销 `_CONFIGURE_ENV_LOADED_PATH` 导出和重复 source 提前返回。
+- 操作: 删除 marker 导出、marker 判断和子 Shell 跳过测试；保留 screen 别名、SSH_SCREEN_NAME/SSH_CLIENT 命名、重连与缺失降级。
+- 关键输出: bash/zsh 重复 source 后 PATH 不重复追加，marker 不再存在，screen 测试通过。
+- 退出码: 0
+- 证据与判断: `bash env.test.sh` 在 `/usr/bin/bash` 与 `/usr/bin/zsh` 均通过。
+
+## 验证与证据
+- `timeout 300 bash bin/agent.test.sh`: 通过。
+- `timeout 180 bash env.test.sh`: 通过。
+- `timeout 180 bash bin/agent-windows.test.sh`: 静态契约通过；当前环境无 PowerShell，Parser 跳过。
+- `timeout 120 bash bin/agent-dispatch.test.sh`: 通过。
+- `bash -n` 覆盖 env 与 agent Shell 脚本: 通过。
+- `python3 -m py_compile` 覆盖模型目录与协议桥: 通过。
+- JSON 解析 `agent-config.json`、`agent-custom.json.refer`: 通过。
+- `form-audit --strict --quiet`、snapshot、data-tracking、AGENTS sync check、configure-check: 零错误。
+- `git diff --check`: 零错误。
+
+## 变更与产物
+- 文件: AGENTS.md; bin/AGENTS.md; bin/agent-config.json; bin/agent-custom.json.refer; bin/agent-dispatch.sh; bin/agent-dispatch.test.sh; bin/agent-model-catalog.py; bin/agent-protocol-bridge.py; bin/agent-runtime.ps1; bin/agent-windows.test.sh; bin/agent.sh; bin/agent.test.sh; env.sh; env.test.sh; lib/_agent/setup.md; lib/_codex/config.toml; lib/_codex/setup.md
+- 产物: 仅保留 pay/go 的 agent 配置与启动行为；保留 screen 的 env.sh 重复 source 行为。
+- 未改动范围: 历史报告、logs、data、skills/form 固定快照、外部 vendored 内容。
+
+## 风险、限制与下一步
+- 风险: Windows 仅完成静态契约检查，当前环境缺少 PowerShell Parser/运行器。
+- 阻塞: 无。
+- 下一步: 按用户指定顺序执行 push、final log 与 dev tag。
+
+## 用户输入指令
+1. 彻底删除agent系列的'cpa',只保留pay与go
+2. 完成后~diff~debug~init~push~tag
+3. 并且恢复之前的env.sh的相关设定(撤销" 新增 env.sh 导出式 source marker",但保留screen的相关设定)
+
+## Agent 全文报告
+--- report begin ---
+✓ agent/env 阶段验收完成
+
+任务:
+- agent 系列仅保留 pay/go，删除 cpa/CLIProxyAPI、zen/gpt 快捷词及旧 key 迁移路径。
+- env.sh 撤销导出式 source marker，保留 screen 设定。
+
+改动:
+- agent 配置、Unix/Windows 启动器、dispatch、模型目录、协议桥注释、测试与当前文档同步收敛。
+- OpenCode V2 providers 固定为空，V1 仍按 key 和动态模型目录注入内置 provider。
+- env.sh 重复 source 会重新定义别名/函数，PATH/LD_LIBRARY_PATH 仍按前缀去重。
+
+验证:
+- 完整 agent/env/Windows 静态/dispatch/语法/Python/JSON/form/diff 检查通过。
+- Windows PowerShell Parser 因环境缺少 powershell.exe/pwsh.exe 未运行，已由静态契约覆盖。
+
+后续:
+- 提交并推送代码与阶段日志。
+- 归档最终日志并推送。
+- push 成功后创建并推送 dev47 标签。
+--- report end ---

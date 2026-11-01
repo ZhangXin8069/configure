@@ -405,13 +405,10 @@ _opencode_session_from_log() {
 }
 
 # 旧 key 环境变量名过渡：新名缺失而旧名存在时导出新名（并告警提示迁移）
-#   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY；CUSTOM_GPT_API_KEY/LQCD_API_KEY → CLI_PROXY_API_KEY
+#   DEEPSEEK_API_KEY → DEEPSEEK_PAY_API_KEY
 _migrate_legacy_keys() {
     local _pair _new_name _old_name
-    for _pair in \
-        "DEEPSEEK_PAY_API_KEY:DEEPSEEK_API_KEY" \
-        "CLI_PROXY_API_KEY:CUSTOM_GPT_API_KEY" \
-        "CLI_PROXY_API_KEY:LQCD_API_KEY"; do
+    for _pair in "DEEPSEEK_PAY_API_KEY:DEEPSEEK_API_KEY"; do
         _new_name="${_pair%%:*}"
         _old_name="${_pair##*:}"
         if [[ -z "${!_new_name:-}" && -n "${!_old_name:-}" ]]; then
@@ -421,67 +418,31 @@ _migrate_legacy_keys() {
     done
 }
 
-# OpenCode 三类 key 变量等价，按使用方案选择首选变量后归一化到三者：
-#   go=GO>ZEN>API；zen=ZEN>API>GO；未指定方案=API>GO>ZEN（默认仍用 go 基础设置）。
+# OPENCODE_GO_API_KEY 与兼容别名 OPENCODE_API_KEY 归一化到两者。
 _migrate_opencode_keys() {
-    local _mode="${1:-default}" _value=""
-    case "${_mode}" in
-        go)
-            _value="${OPENCODE_GO_API_KEY:-${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-}}}"
-            ;;
-        zen)
-            _value="${OPENCODE_ZEN_API_KEY:-${OPENCODE_API_KEY:-${OPENCODE_GO_API_KEY:-}}}"
-            ;;
-        *)
-            _value="${OPENCODE_API_KEY:-${OPENCODE_GO_API_KEY:-${OPENCODE_ZEN_API_KEY:-}}}"
-            ;;
-    esac
+    local _value="${OPENCODE_GO_API_KEY:-${OPENCODE_API_KEY:-}}"
     [[ -n "${_value}" ]] || return 0
-    local _name _existing _conflict=0
-    for _name in OPENCODE_API_KEY OPENCODE_ZEN_API_KEY OPENCODE_GO_API_KEY; do
-        _existing="${!_name:-}"
-        if [[ -n "${_existing}" && "${_existing}" != "${_value}" ]]; then
-            _conflict=1
-        fi
-    done
+    local _conflict=0
+    if [[ -n "${OPENCODE_API_KEY:-}" && "${OPENCODE_API_KEY}" != "${_value}" ]]; then
+        _conflict=1
+    fi
     export OPENCODE_API_KEY="${_value}"
-    export OPENCODE_ZEN_API_KEY="${_value}"
     export OPENCODE_GO_API_KEY="${_value}"
     if (( _conflict )); then
-        echo "###${_NAME:-agent}: warning: OPENCODE_API_KEY/OPENCODE_ZEN_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按 ${_mode} 方案统一###" >&2
+        echo "###${_NAME:-agent}: warning: OPENCODE_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按 GO>API 统一###" >&2
     fi
 }
 
-_detect_opencode_key_mode() {
-    local _arg _provider
-    for _arg in "$@"; do
-        case "${_arg}" in
-            go|opencode-go) printf 'go\n'; return 0;;
-            zen|opencode-zen) printf 'zen\n'; return 0;;
-        esac
-    done
-    for _arg in CODEX_PROVIDER_ID OPENCODE_PROVIDER CLAUDE_PROVIDER; do
-        _provider="${!_arg:-}"
-        case "${_provider}" in
-            go|opencode-go) printf 'go\n'; return 0;;
-            zen|opencode-zen) printf 'zen\n'; return 0;;
-        esac
-    done
-    printf 'default\n'
-}
-
-# 途径名规整化：cpa → CPA，与 _agent_config_load 展开出的 _CFG_* 变量名保持一致
+# 途径名规整化，与 _agent_config_load 展开出的 _CFG_* 变量名保持一致
 _cfg_provider_key() {
     printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go、zen→opencode-zen、gpt→cpa；完整途径名原样返回
+# 供应商快捷词：pay→deepseek-pay、go→opencode-go；完整途径名原样返回
 _provider_alias() {
     case "$1" in
         pay) printf 'deepseek-pay\n';;
         go)  printf 'opencode-go\n';;
-        zen) printf 'opencode-zen\n';;
-        gpt) printf 'cpa\n';;
         *)   printf '%s\n' "$1";;
     esac
 }
@@ -597,74 +558,7 @@ def opencode_providers(cfg):
         if not env_key or not os.environ.get(env_key):
             continue
         provider_id = str(provider.get("opencode_provider_id") or name)
-        if name == "cpa":
-            base_url = str(provider.get("base_url") or "")
-            if not base_url:
-                continue
-            meta = provider.get("opencode") or {}
-            models = {str(m): {} for m in (meta.get("models") or [])}
-            blocks[provider_id] = {
-                "npm": str(meta.get("npm") or "@ai-sdk/openai"),
-                "name": str(provider.get("label") or name),
-                "options": {"baseURL": base_url, "apiKey": "{env:%s}" % env_key},
-                "models": models,
-            }
-        else:
-            blocks[provider_id] = {"options": {"apiKey": "{env:%s}" % env_key}}
-    return blocks
-
-
-def opencode_v2_package(npm):
-    packages = {
-        "@ai-sdk/openai": "@opencode/ai/providers/openai",
-        "@ai-sdk/openai-compatible": "@opencode/ai/providers/openai-compatible",
-        "@ai-sdk/anthropic": "@opencode/ai/providers/anthropic-compatible",
-        "@ai-sdk/google": "@opencode/ai/providers/google",
-    }
-    return packages.get(npm, npm)
-
-
-def opencode_providers_v2(cfg):
-    agents = cfg.get("agents") or {}
-    providers = cfg.get("providers") or {}
-    key_providers = (agents.get("opencode") or {}).get("key_providers") or []
-    blocks = {}
-    for name in key_providers:
-        provider = providers.get(name)
-        if not isinstance(provider, dict):
-            continue
-        env_key = str(provider.get("env_key") or "")
-        if not env_key or not os.environ.get(env_key):
-            continue
-        provider_id = str(provider.get("opencode_provider_id") or name)
-        # Built-in providers use the runtime environment. Only CLIProxyAPI's cpa
-        # endpoint needs an explicit native provider block.
-        if name != "cpa" or provider_id != "cpa":
-            continue
-        base_url = str(provider.get("base_url") or "")
-        if not base_url:
-            continue
-        meta = provider.get("opencode") or {}
-        known_models = provider.get("models") or {}
-        strengths = [str(value) for value in (provider.get("supported_strengths") or [])]
-        models = {}
-        for model_id in (meta.get("models") or []):
-            model_id = str(model_id)
-            model_meta = known_models.get(model_id) or {}
-            item = {"modelID": model_id}
-            package = opencode_v2_package(str(model_meta.get("npm") or meta.get("npm") or ""))
-            if package:
-                item["package"] = package
-            if strengths:
-                item["variants"] = [{"id": strength} for strength in strengths]
-            models[model_id] = item
-        blocks[provider_id] = {
-            "name": str(provider.get("label") or name),
-            "env": [env_key],
-            "package": opencode_v2_package(str(meta.get("npm") or "")),
-            "settings": {"baseURL": base_url, "apiKey": "{env:%s}" % env_key},
-            "models": models,
-        }
+        blocks[provider_id] = {"options": {"apiKey": "{env:%s}" % env_key}}
     return blocks
 
 
@@ -680,9 +574,7 @@ def main():
     flatten(cfg, [], leaves)
     lines = ["%s=%s" % (variable_name(parts), shlex.quote(value)) for parts, value in leaves]
     provider_json = json.dumps(opencode_providers(cfg), ensure_ascii=False, separators=(",", ":"))
-    provider_v2_json = json.dumps(opencode_providers_v2(cfg), ensure_ascii=False, separators=(",", ":"))
     lines.append("_CFG_OPENCODE_PROVIDER_JSON=%s" % shlex.quote(provider_json))
-    lines.append("_CFG_OPENCODE_PROVIDER_V2_JSON=%s" % shlex.quote(provider_v2_json))
     # 以 UTF-8 字节写出：不受调用方 locale（如 LANG=C）影响，避免中文值编码错误
     sys.stdout.buffer.write(("\n".join(lines) + "\n").encode("utf-8"))
 
@@ -939,7 +831,7 @@ run_claude() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.claude 与 agents.claude.model 互为一层，高优先层缺值回退另一层。
@@ -964,14 +856,14 @@ run_claude() {
     [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|zen|gpt|cpa|deepseek-pay|opencode-go|opencode-zen)
+            pay|go|deepseek-pay|opencode-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|zen|gpt|cpa] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=cpa(CLIProxyAPI)（如 ${_NAME} zen）。"
+                echo "用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go（如 ${_NAME} go）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
@@ -997,7 +889,7 @@ run_claude() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -1037,11 +929,11 @@ run_claude() {
 
     # ---- 途径设置：Anthropic 兼容端点与 key 均取自 agent-config.json/agent-custom.json ----
     # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
-    # 途径来自命令行快捷词（pay/go/zen/gpt）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
+    # 途径来自命令行快捷词（pay/go）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
     # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go。
     local _cl_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}")"
     if [[ -z "${_cl_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CLAUDE_PROVIDER 环境变量，两者一视同仁）：
@@ -1129,8 +1021,6 @@ run_claude() {
         case "${_cl_provider}" in
             deepseek-pay) _cl_provider_hint=pay;;
             opencode-go) _cl_provider_hint=go;;
-            opencode-zen) _cl_provider_hint=zen;;
-            cpa) _cl_provider_hint=gpt;;
         esac
         echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Claude 的 Anthropic Messages 协议：${AGENT_MODEL_RESOLVED_CLAUDE_UNSUPPORTED_REASON:-该模型不支持 /v1/messages}###" >&2
         echo "###${_NAME}: hint: 请改用 'op ${_cl_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
@@ -1495,7 +1385,7 @@ run_opencode() {
     fi
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.opencode 与 agents.opencode.model 互为一层，高优先层缺值回退另一层。
@@ -1522,7 +1412,7 @@ run_opencode() {
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|zen|gpt|cpa|deepseek-pay|opencode-go|opencode-zen)
+            pay|go|deepseek-pay|opencode-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -1531,8 +1421,8 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
                 VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|zen|gpt|cpa] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=cpa(CLIProxyAPI)（如 ${_NAME} zen）。"
+                echo "用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go（如 ${_NAME} go）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
@@ -1558,7 +1448,7 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -1607,7 +1497,7 @@ run_opencode() {
     # 两层皆空时启动报错。
     local _op_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}")"
     if [[ -z "${_op_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 OPENCODE_PROVIDER 环境变量，两者一视同仁）
@@ -1740,18 +1630,13 @@ run_opencode() {
     _op_provider_json="$(_agent_model_provider_json "${_op_provider}" "${_op_provider_json}")"
     export OPENCODE_CONFIG_CONTENT
     if (( _op_v2 )); then
-        local _op_provider_v2_json="${_CFG_OPENCODE_PROVIDER_V2_JSON:-}"
-        if [[ -z "${_op_provider_v2_json}" ]]; then
-            _op_provider_v2_json='{}'
-        fi
-        _op_provider_v2_json="$(_agent_model_provider_json "${_op_provider}" "${_op_provider_v2_json}")"
         OPENCODE_CONFIG_CONTENT="$("${_AGENT_PYTHON:-python3}" - \
             "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" "${_op_update}" \
-            "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_op_provider_v2_json}" <<'PYEOF'
+            "${_CFG_AGENTS_OPENCODE_LSP:-true}" <<'PYEOF'
 import json
 import sys
 
-agent, model, variant, update, lsp, provider_json = sys.argv[1:7]
+agent, model, variant, update, lsp = sys.argv[1:6]
 model_ref = model if not variant else model + "#" + variant
 config = {
     "$schema": "https://opencode.ai/config.json",
@@ -1760,7 +1645,7 @@ config = {
     "default_agent": agent,
     "model": model,
     "agents": {agent: {"model": model_ref}},
-    "providers": json.loads(provider_json or "{}"),
+    "providers": {},
 }
 print(json.dumps(config, ensure_ascii=False, separators=(",", ":")))
 PYEOF
@@ -2309,7 +2194,7 @@ run_codex() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL]
+    # 用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL]
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
@@ -2337,7 +2222,7 @@ run_codex() {
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|zen|gpt|cpa|deepseek-pay|opencode-go|opencode-zen)
+            pay|go|deepseek-pay|opencode-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -2369,15 +2254,15 @@ run_codex() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|zen|gpt|cpa] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / zen=opencode-zen / gpt=cpa(CLIProxyAPI)（如 ${_NAME} zen）。"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go（如 ${_NAME} go）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|zen|gpt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -2426,7 +2311,7 @@ run_codex() {
     # 两层皆空时启动报错。
     local _cx_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}")"
     if [[ -z "${_cx_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|zen|gpt、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CODEX_PROVIDER_ID 环境变量，两者一视同仁）
@@ -2488,8 +2373,6 @@ run_codex() {
         case "${_cx_provider}" in
             deepseek-pay) _cx_provider_hint=pay;;
             opencode-go) _cx_provider_hint=go;;
-            opencode-zen) _cx_provider_hint=zen;;
-            cpa) _cx_provider_hint=gpt;;
         esac
         echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Codex Responses 协议：${AGENT_MODEL_RESOLVED_CODEX_UNSUPPORTED_REASON:-该模型不支持 /responses}###" >&2
         echo "###${_NAME}: hint: 请改用 'op ${_cx_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
@@ -2858,9 +2741,7 @@ PY
 }
 
 _migrate_legacy_keys
-_OPENCODE_KEY_MODE="$(_detect_opencode_key_mode "$@")"
-_migrate_opencode_keys "${_OPENCODE_KEY_MODE}"
-unset _OPENCODE_KEY_MODE
+_migrate_opencode_keys
 _agent_config_load
 _ensure_utf8_locale || true
 

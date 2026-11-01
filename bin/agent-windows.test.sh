@@ -75,8 +75,8 @@ assert_not_contains "$runtime" 'DEFAULT_MODEL_FLAG'
 assert_contains "$runtime" '$permissionMode'
 assert_contains "$runtime" 'agents.opencode.agent'
 assert_contains "$runtime" 'function Get-OpenCodeMajorVersion'
-assert_contains "$runtime" 'function Get-OpenCodeProviderConfigV2'
-assert_contains "$runtime" 'ConvertTo-OpenCodeV2Package'
+assert_not_contains "$runtime" 'Get-OpenCodeProviderConfigV2'
+assert_not_contains "$runtime" 'ConvertTo-OpenCodeV2Package'
 assert_contains "$runtime" 'default_agent'
 assert_contains "$runtime" "'--standalone', '-s', \$sid, '--model', \$modelRef"
 assert_contains "$runtime" "'--format', 'json'"
@@ -96,9 +96,8 @@ assert_contains "$runtime" 'function New-ClaudeSettingsFile'
 assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
 assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$script:Model, \$prompt"
 assert_contains "$runtime" 'Resolve-ProviderAlias'
-assert_contains "$runtime" "'pay', 'go', 'zen', 'gpt', 'cpa', 'deepseek-pay', 'opencode-go', 'opencode-zen'"
-assert_contains "$runtime" "'gpt' { return 'cpa' }"
-assert_contains "$runtime" "'zen' { return 'opencode-zen' }"
+assert_contains "$runtime" "'pay', 'go', 'deepseek-pay', 'opencode-go'"
+assert_not_contains "$runtime" 'opencode-zen'
 assert_contains "$runtime" 'Get-AgentProtocolCompatibility'
 assert_contains "$runtime" 'CodexWireApi'
 assert_contains "$runtime" 'ClaudeWireApi'
@@ -128,12 +127,11 @@ assert_not_contains "$runtime" 'IsNullOrWhiteSpace($providerStrength)) { $provid
 assert_not_contains "$runtime" "'-m', '-o', '-p', '-q', '-k', '-g', '-f', '-h'"
 assert_contains "$runtime" 'Invoke-LegacyKeyMigration'
 assert_contains "$runtime" "'DEEPSEEK_PAY_API_KEY', 'DEEPSEEK_API_KEY'"
-assert_contains "$runtime" "'CLI_PROXY_API_KEY', 'CUSTOM_GPT_API_KEY'"
-assert_contains "$runtime" "'CLI_PROXY_API_KEY', 'LQCD_API_KEY'"
-assert_contains "$runtime" "'OPENCODE_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_GO_API_KEY'"
-assert_contains "$runtime" 'OPENCODE_API_KEY/OPENCODE_ZEN_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按'
-assert_contains "$runtime" "'OPENCODE_GO_API_KEY', 'OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY'"
-assert_contains "$runtime" "'OPENCODE_ZEN_API_KEY', 'OPENCODE_API_KEY', 'OPENCODE_GO_API_KEY'"
+assert_contains "$runtime" "'OPENCODE_GO_API_KEY', 'OPENCODE_API_KEY'"
+assert_contains "$runtime" 'OPENCODE_API_KEY/OPENCODE_GO_API_KEY 值不一致，已按 GO>API 统一'
+assert_not_contains "$runtime" 'CLI_PROXY_API_KEY'
+assert_not_contains "$runtime" 'CUSTOM_GPT_API_KEY'
+assert_not_contains "$runtime" 'LQCD_API_KEY'
 assert_contains "$runtime" 'agent-statusline.ps1'
 assert_contains "$runtime" 'AGENT_STATUSLINE_SEGMENTS'
 assert_contains "$runtime" 'statusLine'

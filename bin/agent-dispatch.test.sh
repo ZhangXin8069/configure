@@ -60,15 +60,15 @@ grep -Fxq -- '1' "$FAKE_MINIMAL"
 output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
     AGENT_PARENT_MODEL=glm-5.3-flash AGENT_PARENT_STRENGTH=high \
     AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
-    "$test_root/agent-dispatch.sh" --agent co --provider zen \
-    --model gpt-5.6-luna --strength max --no-secure --task 'override' --json)
+    "$test_root/agent-dispatch.sh" --agent co --provider pay \
+    --model deepseek-flash --strength max --no-secure --task 'override' --json)
 printf '%s' "$output" | python3 -c '
 import json,sys
 x=json.load(sys.stdin)
-assert x["agent"]=="co" and x["provider"]=="zen"
-assert x["model"]=="gpt-5.6-luna" and x["strength"]=="max"
+assert x["agent"]=="co" and x["provider"]=="pay"
+assert x["model"]=="deepseek-flash" and x["strength"]=="max"
 ' || { printf 'FAIL: 显式覆盖 JSON 不正确：%s\n' "$output" >&2; exit 1; }
-grep -Fq -- '--once zen --model gpt-5.6-luna --reasoning-effort max' "$FAKE_ARGS"
+grep -Fq -- '--once pay --model deepseek-flash --reasoning-effort max' "$FAKE_ARGS"
 
 output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
     AGENT_PARENT_MODEL=glm-5.3-flash AGENT_PARENT_STRENGTH=high \
