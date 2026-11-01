@@ -424,6 +424,94 @@ _test_submodule_recurse_config_is_ignored() {
         || _fail "父仓库应保留待显式处理的子模块指针差异"
     [[ "$(git -C "${super_seed}" rev-parse HEAD^)" == "${parent_one}" ]] \
         || _fail "父仓库测试提交链错误"
+
+    local parent_before_push
+    parent_before_push=$(git -C "${work}" rev-parse HEAD)
+    (
+        cd "${work}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpush.sh"
+    ) > "${TEST_DIR}/pull-then-push.log" 2>&1
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${parent_before_push}" ]] \
+        || _fail "pull 后 gpush 不应提交子模块工作树回退"
+    grep -Fq 'Nothing to commit.' "${TEST_DIR}/pull-then-push.log" \
+        || _fail "pull 后 gpush 未报告无改动"
+    [[ "$(git --git-dir="${super_remote}" rev-parse refs/heads/main)" == "${parent_two}" ]] \
+        || _fail "pull 后 gpush 不应改变父仓库远端"
+    grep -Fq 'Submodule worktrees were left unchanged' "${TEST_DIR}/submodule-recurse.log" \
+        || _fail "gpull 未提示子模块工作树有意保持不变"
+}
+
+_test_dirty_submodule_does_not_create_false_stash() {
+    local root="${TEST_DIR}/dirty-submodule-stash"
+    local sub_remote="${root}/sub-remote.git"
+    local super_remote="${root}/super-remote.git"
+    local sub_seed="${root}/sub-seed"
+    local super_seed="${root}/super-seed"
+    local work="${root}/super-work"
+    local sub_one
+    local sub_two
+    local parent_two
+
+    mkdir -p "${root}"
+    git init -q --bare "${sub_remote}"
+    git -C "${sub_remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${sub_seed}"
+    _configure_identity "${sub_seed}"
+    printf 'one\n' > "${sub_seed}/value.txt"
+    git -C "${sub_seed}" add value.txt
+    git -C "${sub_seed}" commit -q -m sub-one
+    git -C "${sub_seed}" remote add origin "${sub_remote}"
+    git -C "${sub_seed}" push -q -u origin main
+    sub_one=$(git -C "${sub_seed}" rev-parse HEAD)
+
+    git init -q --bare "${super_remote}"
+    git -C "${super_remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${super_seed}"
+    _configure_identity "${super_seed}"
+    git -C "${super_seed}" -c protocol.file.allow=always \
+        submodule add -q "${sub_remote}" child
+    printf 'base\n' > "${super_seed}/local.txt"
+    git -C "${super_seed}" add .gitmodules child local.txt
+    git -C "${super_seed}" commit -q -m parent-one
+    git -C "${super_seed}" remote add origin "${super_remote}"
+    git -C "${super_seed}" push -q -u origin main
+
+    git clone -q "${super_remote}" "${work}"
+    _configure_identity "${work}"
+    git -C "${work}" -c protocol.file.allow=always \
+        submodule update -q --init --checkout
+    printf 'dirty child\n' > "${work}/child/value.txt"
+
+    printf 'two\n' > "${sub_seed}/value.txt"
+    git -C "${sub_seed}" commit -q -am sub-two
+    git -C "${sub_seed}" push -q
+    sub_two=$(git -C "${sub_seed}" rev-parse HEAD)
+    git -C "${super_seed}/child" fetch -q origin main
+    git -C "${super_seed}/child" checkout -q "${sub_two}"
+    git -C "${super_seed}" add child
+    git -C "${super_seed}" commit -q -m parent-two
+    git -C "${super_seed}" push -q
+    parent_two=$(git -C "${super_seed}" rev-parse HEAD)
+
+    set +e
+    (
+        cd "${work}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/dirty-submodule-stash.log" 2>&1
+    local pull_status=$?
+    set -e
+
+    ((pull_status == 0)) || _fail "仅子模块脏时 gpull 不应失败: ${pull_status}"
+
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${parent_two}" ]] \
+        || _fail "含脏子模块时未拉取父仓库更新"
+    [[ "$(git -C "${work}/child" rev-parse HEAD)" == "${sub_one}" ]] \
+        || _fail "gpull 不应切换脏子模块 HEAD"
+    grep -Fqx 'dirty child' "${work}/child/value.txt" \
+        || _fail "gpull 不应覆盖子模块未提交改动"
+    [[ -z "$(git -C "${work}" stash list)" ]] || _fail "gpull 留下了 stash"
+    ! grep -Fq 'No stash entries found' "${TEST_DIR}/dirty-submodule-stash.log" \
+        || _fail "gpull 错误地尝试恢复不存在的 stash"
 }
 
 main() {
@@ -435,6 +523,7 @@ main() {
     _test_stale_index_lock_recovery
     _test_fresh_index_lock_is_not_removed
     _test_submodule_recurse_config_is_ignored
+    _test_dirty_submodule_does_not_create_false_stash
 }
 
 main "$@"

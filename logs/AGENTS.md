@@ -898,3 +898,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## bin-git-parent-only-staging - final - 2026-11-01 17:49:00 +0800
+- 主任务: 修复 pull 后 push 回流子模块指针
+- 日志文件: logs/v2026110117-3.txt
+- 文件大小: 6627 bytes
+- 触发原因: 任务完成
+- 关键内容: gpull 忽略子模块差异进行 stash 判定，gpush 排除 gitlink 暂存并拒绝预暂存子模块；pull→push 链路回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -1,0 +1,86 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-01 17:49:00 +0800
+批次: bin-git-parent-only-staging
+主任务: 修复 pull 后 push 回流子模块指针
+触发原因: 任务完成
+摘要: gpull 忽略子模块差异进行 stash 判定，gpush 排除 gitlink 暂存并拒绝预暂存子模块；pull→push 链路回归通过
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 真实环境取证
+- 目标: 解释工作区干净、pull 有更新后 push 仍产生父仓库提交的原因。
+- 命令/操作: 只读检查 /Users/zhangxin/MyQCD、/Users/zhangxin/PyQCD 的 HEAD、stash、submodule 映射和最近提交。
+- 关键输出: MyQCD 的 e2cf6bc 将 refer/git-rep/PyQCD 从 51e8f14 改回 52e648；PyQCD 的 1af0b8b 将 refer/git-rep/PyQCU 从 0b37896 改回 8d7002。两条提交均为旧 gpush 自动生成。
+- 证据与判断: 父仓库 pull 更新 gitlink 后，子模块工作树按设计保持旧提交；旧 gpush 的 git add -A 把该本地 gitlink 差异重新写回父仓库。
+
+### S2 — 红测复现
+- 目标: 分别锁定 gpush 暂存范围与 gpull stash 判定两个根因。
+- 命令/操作: 增加真实本地裸远端、父仓库和子模块夹具；运行只有子模块指针变化时的 gpush，以及仅子模块脏时的 gpull。
+- 关键输出: 修复前 gpush 红测“只有子模块指针变化时 gpush 不应创建父仓库提交”失败；gpull 红测以状态 1 失败，复现 No stash entries found 路径。
+- 证据与判断: gpush 的 git add -A 错误暂存 gitlink；gpull 将子模块 dirty 状态误判为可 stash 的父仓库本地改动。
+
+### S3 — 最小修复
+- 目标: 保证普通 pull/push 只处理父仓库，同时不破坏父仓库真实改动。
+- 命令/操作: gpush 枚举已索引及 .gitmodules 登记的 gitlink，git add -A 使用 literal exclude pathspec；存在预暂存 gitlink 时预检失败。gpull 的本地改动判断使用 --ignore-submodules=all，stash 创建后回读 refs/stash 确认实际产生。
+- 关键输出: gpush 正常提交父仓库普通文件但不写入本地子模块 HEAD；gpull 成功快进父仓库，子模块 HEAD 与未提交内容保持不变，且无 stash 误报。
+- 证据与判断: 两个根因分别在不变量入口处修复，没有改变显式 gpull-sub.sh 子模块流程。
+
+### S4 — 端到端回归
+- 目标: 验证用户期望链路“工作区干净 → pull 有更新 → push 应无改动”。
+- 命令/操作: 在 gpull.test.sh 中串联真实 gpull 与 gpush；运行全部相关测试和仓库检查。
+- 关键输出: pull 后父仓库 HEAD 前进，子模块工作树不动，随后 gpush 输出 Nothing to commit，父仓库本地及远端 HEAD 均不再变化。
+- 证据与判断: 新增回归通过，聚合入口测试与专用 gpull-sub 测试均通过。
+
+## 验证与证据
+- 测试/检查: bash -n gpush.test.sh gpull.test.sh gz-all-push.test.sh zg-all-pull.test.sh gpull-sub.test.sh。
+- 结果: 全部通过，退出码 0。
+- 测试/检查: 依次运行上述五个功能测试脚本。
+- 结果: 全部通过；覆盖 clean→pull→push、脏子模块、预暂存 gitlink、父仓库普通改动、递归配置和专用子模块路径。
+- 测试/检查: form-audit --strict、form-snapshot-verify、form-data-tracking-check、form-large-files-check、git diff --check。
+- 结果: 全部通过。
+- 测试/检查: tools/configure-check.sh。
+- 结果: errors=0、warnings=1；唯一警告为既有插件 manifest 缺失，与本改动无关。
+- 未验证项: shellcheck 未安装；未运行真实 gz-all-push.sh，避免发布其他项目中的非本任务改动。
+
+## 变更与产物
+- 文件: bin/gpush.sh、bin/gpush.test.sh、bin/gpull.sh、bin/gpull.test.sh、bin/AGENTS.md。
+- 产物: 本最终日志及日志索引。
+- 未改动范围: 未提交、未推送；未改写 MyQCD/PyQCD 已发布历史；未修改真实子模块工作树。
+- 已知遗留: MyQCD e2cf6bc 与 PyQCD 1af0b8b 是旧缺陷已经产生的远端提交，需要用户单独决定是否用非破坏性 revert 清理。
+
+## 风险、限制与下一步
+- 风险: pull 后父仓库的 git status 仍会显示 gitlink 与旧子模块工作树的差异，这是“不自动修改子模块”的预期状态；gpull 会给出明确 NOTICE，gpush 会忽略该差异。
+- 阻塞: 无。
+- 下一步: 如需同步新父指针，显式运行 gpull-sub.sh；如需撤销现有两条自动提交，先确认采用 revert 还是其他非破坏性方案。
+
+## 用户输入指令
+```text
+用户报告连续执行 zg-all-pull.sh 两次与 gz-all-push.sh 一次：MyQCD 首次 pull 快进 refer/git-rep/PyQCD 后报 No stash entries found，随后 gz-all-push.sh 在 MyQCD、PyQCD 各创建并推送一个仅修改子模块指针的提交。用户原文结论：问题依旧没有解决,本该的情况:{工作区干净->pull[有更新]->push[应无改动]}
+```
+
+## Agent 全文报告
+--- report begin ---
+任务：修复 `zg-all-pull.sh → gz-all-push.sh` 在父仓库仅更新子模块指针时仍产生 push 提交的问题。
+
+根因：
+- `gpull.sh` 把子模块工作树差异计入父仓库本地改动，导致未创建 stash 时仍执行 `stash pop` 并报错。
+- `gpush.sh` 使用 `git add -A`，会把子模块工作树的旧 HEAD 重新暂存为父仓库 gitlink 改动并提交。
+
+修复：
+- `gpush.sh` 枚举索引 gitlink 与 `.gitmodules` 映射，暂存时用 literal exclude pathspec 排除；预暂存 gitlink 时明确失败。
+- `gpull.sh` 判断父仓库本地改动时使用 `--ignore-submodules=all`，并回读 `refs/stash` 确认真实 stash 后才恢复。
+- 父仓库快进但子模块未更新时输出明确 NOTICE，提示使用 `gpull-sub.sh`。
+- `bin/AGENTS.md` 已同步上述语义。
+
+验证：
+- 真实本地 Git 夹具验证：clean → pull 有更新 → gpush 输出 `Nothing to commit`，父仓库本地及远端不再变化。
+- 仅子模块脏时 pull 成功，无 stash 误报，子模块 HEAD 和未提交内容均保留。
+- 父仓库普通文件仍可正常由 gpush 提交，但同一提交不会包含本地子模块 HEAD。
+- 五组相关测试、form/snapshot/data/大文件检查及 `git diff --check` 全部通过。
+- 未提交、未推送；未运行真实 `gz-all-push.sh`。
+
+已知历史副作用：MyQCD `e2cf6bc` 和 PyQCD `1af0b8b` 是旧缺陷产生的、已推送的 gitlink 回退提交。本次没有改写或清理这些提交，需用户明确选择非破坏性 revert 或其他方案。
+
+结论：`finished`。后续相同链路不会再由 gpush 自动创建 gitlink 回退提交。
+--- report end ---

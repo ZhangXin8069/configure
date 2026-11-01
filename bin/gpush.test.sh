@@ -22,7 +22,8 @@ cat > "${TEST_DIR}/bin/git" <<'SH'
 printf '%s\n' "$*" >> "${FAKE_GIT_LOG}"
 case "$*" in
     "rev-parse --show-toplevel") printf '%s\n' "${FAKE_REPO_ROOT}" ;;
-    "add -A"|"diff --cached --quiet") ;;
+    "ls-files --stage -z") ;;
+    "add -A -- ."|"diff --cached --quiet --ignore-submodules=all") ;;
     "rev-parse --abbrev-ref HEAD") printf 'main\n' ;;
     "push --recurse-submodules=no origin main") ;;
     "push --recurse-submodules=no origin --tags") exit 1 ;;
@@ -69,6 +70,7 @@ _test_does_not_recurse_into_submodules() {
     local sub_one
     local sub_two
     local remote_after
+    local parent_before
 
     mkdir -p "${root}"
     git init -q --bare "${sub_remote}"
@@ -103,15 +105,45 @@ _test_does_not_recurse_into_submodules() {
     sub_two=$(git -C "${repo}/child" rev-parse HEAD)
     git -C "${repo}" config push.recurseSubmodules on-demand
 
+    parent_before=$(git -C "${repo}" rev-parse HEAD)
     (
         cd "${repo}"
         GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpush.sh"
     ) > "${TEST_DIR}/no-submodule-push.log" 2>&1
 
+    [[ "$(git -C "${repo}" rev-parse HEAD)" == "${parent_before}" ]] \
+        || _fail "只有子模块指针变化时 gpush 不应创建父仓库提交"
+    grep -Fq 'Nothing to commit.' "${TEST_DIR}/no-submodule-push.log" \
+        || _fail "只有子模块指针变化时 gpush 未报告无改动"
     remote_after=$(git --git-dir="${sub_remote}" rev-parse refs/heads/main)
     [[ "${remote_after}" == "${sub_one}" ]] \
         || _fail "gpush 不应在 push.recurseSubmodules=on-demand 时推送子模块提交"
     [[ "${sub_two}" != "${sub_one}" ]] || _fail "测试夹具未创建新的子模块提交"
+
+    printf 'parent change\n' > "${repo}/parent.txt"
+    (
+        cd "${repo}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpush.sh"
+    ) > "${TEST_DIR}/parent-change-push.log" 2>&1
+    [[ "$(git -C "${repo}" rev-parse HEAD)" != "${parent_before}" ]] \
+        || _fail "父仓库普通文件变化应被 gpush 提交"
+    [[ "$(git -C "${repo}" diff-tree --no-commit-id --name-only -r HEAD)" == 'parent.txt' ]] \
+        || _fail "gpush 提交范围应只包含父仓库普通文件"
+    [[ "$(git -C "${repo}" rev-parse HEAD:child)" == "${sub_one}" ]] \
+        || _fail "gpush 不应把本地子模块 HEAD 写入父仓库新提交"
+
+    git -C "${repo}" add child
+    set +e
+    (
+        cd "${repo}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpush.sh"
+    ) > "${TEST_DIR}/staged-submodule.log" 2>&1
+    local staged_status=$?
+    set -e
+    ((staged_status != 0)) || _fail "已有暂存 gitlink 时 gpush 应失败"
+    grep -Fq 'Staged submodule changes require an explicit submodule workflow' \
+        "${TEST_DIR}/staged-submodule.log" \
+        || _fail "已有暂存 gitlink 时缺少明确错误"
 }
 
 _test_does_not_recurse_into_submodules

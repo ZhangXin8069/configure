@@ -157,7 +157,12 @@ if [[ -z "${BRANCH}" ]]; then
 fi
 
 _has_local_changes() {
-    ! git diff --quiet || ! git diff --cached --quiet
+    ! git diff --quiet --ignore-submodules=all \
+        || ! git diff --cached --quiet --ignore-submodules=all
+}
+
+_stash_oid() {
+    git rev-parse --verify --quiet refs/stash 2>/dev/null || true
 }
 
 _pull_with_manual_stash() {
@@ -166,15 +171,21 @@ _pull_with_manual_stash() {
     local message="gpull auto-stash $(date "+%Y-%m-%d-%H-%M-%S")"
     local stash_created=0
     local pull_status=0
+    local stash_before
 
     if _has_local_changes; then
+        stash_before=$(_stash_oid)
         # Git < 2.13 lacks `stash push`; Git >= 2.13 accepts the modern form.
         if git -c submodule.recurse=false stash push --quiet --message "$message" >/dev/null 2>&1; then
-            stash_created=1
+            [[ "$(_stash_oid)" != "${stash_before}" ]] && stash_created=1
         elif git -c submodule.recurse=false stash save --quiet "$message"; then
-            stash_created=1
+            [[ "$(_stash_oid)" != "${stash_before}" ]] && stash_created=1
         else
             echo "ERROR: Unable to stash local tracked changes; pull aborted." >&2
+            return 1
+        fi
+        if ((stash_created == 0)); then
+            echo "ERROR: Git reported no stash entry after detecting local parent changes; pull aborted." >&2
             return 1
         fi
     fi
@@ -263,6 +274,11 @@ fi
 if ((_PULL_STATUS != 0)); then
     echo "ERROR: git pull failed with status ${_PULL_STATUS}." >&2
     exit "${_PULL_STATUS}"
+fi
+
+if git diff --quiet --ignore-submodules=all \
+    && ! git diff --quiet --ignore-submodules=none; then
+    echo "NOTICE: Submodule worktrees were left unchanged; use gpull-sub.sh explicitly to update them."
 fi
 
 echo "###${_NAME} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
