@@ -1,0 +1,87 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 04:56:34 +0800
+批次: agent-provider-cleanup
+主任务: agent 途径收敛与 env.sh source marker 回滚
+触发原因: 任务完成
+摘要: 仅保留 pay/go；撤销 env.sh 导出式 marker 并保留 screen；测试与 form 门禁通过；第一批 3b96621 已推送
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 清理 agent 内置途径
+- 目标: 删除 agent 系列的 cpa 支持，仅保留 pay/go。
+- 命令/操作: 移除 `opencode-zen`、`cpa` 配置和解析分支；Unix/Windows 启动器仅接受 `pay/go` 与完整名 `deepseek-pay/opencode-go`；OpenCode V2 不再注入自定义 provider。
+- 关键输出: `agent-config.json` 与 `agent-custom.json.refer` 的 providers 均为 `deepseek-pay/opencode-go`。
+- 退出码: 0
+- 证据与判断: 配置集合断言和完整 agent 测试通过。
+
+### S2 — 保留动态模型注入
+- 目标: 自定义 provider 删除后，V1 内置 provider 仍能获得动态模型清单。
+- 命令/操作: `provider-json` 在 provider 块存在但缺少 `models` 时创建该字段，再合并缓存或静态模型。
+- 关键输出: `dynamic-gpt` 注入到 `opencode-go.models`；V2 保持 `providers={}`。
+- 退出码: 0
+- 证据与判断: 模型目录在线刷新与动态注入用例通过。
+
+### S3 — 回滚 env.sh source marker
+- 目标: 撤销 `_CONFIGURE_ENV_LOADED_PATH` 导出式 marker 与重复 source 提前返回。
+- 命令/操作: 删除 marker 导出、marker 判断和子 Shell 跳过测试；保留 screen 别名、SSH_SCREEN_NAME/SSH_CLIENT 会话命名、重连和缺失降级。
+- 关键输出: bash/zsh 重复 source 后 marker 不存在且 PATH 不重复追加；screen 测试通过。
+- 退出码: 0
+- 证据与判断: `env.test.sh` 在 bash 与 zsh 均通过。
+
+### S4 — 交付门禁
+- 目标: 验证、归档并按用户顺序推送。
+- 命令/操作: 完整测试、form 审计、显式暂存、data/large-file 闸门、fast-forward 检查和 `bin/gpush.sh`。
+- 关键输出: 提交 `3b96621`；`origin/main` 从 `f09bfba` 快进到 `3b96621`。
+- 退出码: 0
+- 证据与判断: 第一批推送成功；当前最终日志将再提交推送，然后创建并推送 `dev47`。
+
+## 验证与证据
+- `timeout 300 bash bin/agent.test.sh`: 通过。
+- `timeout 180 bash env.test.sh`: bash/zsh 通过。
+- `timeout 180 bash bin/agent-windows.test.sh`: 静态契约通过；PowerShell Parser 因环境缺失跳过。
+- `timeout 120 bash bin/agent-dispatch.test.sh`: 通过。
+- Shell `bash -n`、Python `py_compile`、JSON 解析: 通过。
+- `form-audit --strict --quiet`、snapshot、data-tracking、AGENTS sync、configure-check: 零错误。
+- `git diff --check`、`git diff --cached --check`: 零错误。
+- 大文件闸门: 已检查 19 个文件，均低于 10,000,000 字节。
+
+## 变更与产物
+- 文件: `AGENTS.md`、`bin/AGENTS.md`、agent 配置/启动器/模型目录/协议桥/测试、`env.sh`/`env.test.sh`、`lib/_agent/setup.md`、`lib/_codex/{config.toml,setup.md}`。
+- 产物: agent 内置供应商精简为 pay/go；env.sh 恢复普通重复 source 行为并保留 screen。
+- 未改动范围: 历史报告、data、form 固定快照、refer 与 vendored 内容。
+
+## 风险、限制与下一步
+- 风险: Windows 仅完成静态契约检查，本机无 powershell.exe/pwsh.exe。
+- 阻塞: 无。
+- 下一步: 推送本最终日志，创建并推送 `dev47` 注释标签。
+
+## 用户输入指令
+1. 彻底删除agent系列的'cpa',只保留pay与go
+2. 完成后~diff~debug~init~push~tag
+3. 并且恢复之前的env.sh的相关设定(撤销" 新增 env.sh 导出式 source marker",但保留screen的相关设定)
+
+## Agent 全文报告
+--- report begin ---
+✓ agent/env 交付完成
+
+改动内容:
+- agent 系列仅保留 pay/go，删除 cpa/CLIProxyAPI、zen/gpt 快捷词及旧 key 迁移路径。
+- OpenCode V1 保留动态模型注入，V2 使用内置 provider 且不写自定义 provider 块。
+- env.sh 撤销导出式 source marker 和提前返回，保留 screen 全部设定与 PATH 前缀去重。
+
+推理依据:
+- 配置层只保留 deepseek-pay/opencode-go，可让解析器、环境变量和文档形成单一事实来源。
+- 动态模型字段必须在 provider 块存在时按需创建，否则删除自定义 provider 会静默丢失模型目录。
+- marker 回滚只影响重复 source 语义，不应触碰 screen 会话能力。
+
+验证结果:
+- 完整 agent、env、Windows 静态契约、dispatch、Shell/Python 语法和 JSON 测试通过。
+- form 结构、快照、数据边界、规则同步、镜像与大文件闸门通过。
+- 第一批提交 `3b96621` 已推送；Windows PowerShell Parser 因本机无 PowerShell 未运行。
+
+后续步骤:
+- 推送本最终日志提交。
+- 创建并推送 dev47 非破坏性注释标签。
+--- report end ---
