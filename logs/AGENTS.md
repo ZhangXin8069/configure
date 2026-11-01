@@ -889,3 +889,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## bin-git-submodule-isolation-delivery - final - 2026-11-01 17:31:04 +0800
+- 主任务: 执行 diff-init-push-tag 交付
+- 日志文件: logs/v2026110117-2.txt
+- 文件大小: 5386 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成子模块递归修复的复核、文档同步、提交推送与 bug4 标签发布
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

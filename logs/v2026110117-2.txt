@@ -1,0 +1,80 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-01 17:31:04 +0800
+批次: bin-git-submodule-isolation-delivery
+主任务: 执行 diff-init-push-tag 交付
+触发原因: 任务完成
+摘要: 完成子模块递归修复的复核、文档同步、提交推送与 bug4 标签发布
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — diff 与标签历史检查
+- 目标: 在提交前核对工作区范围、差异边界与标签历史链。
+- 命令/操作: 运行 git status、git diff --stat、git diff --numstat、git diff --check，并审阅五个脚本/测试文件、bin/AGENTS.md 与日志索引。
+- 关键输出: 初始改动为 6 个跟踪文件和 1 个未跟踪日志，+170/-17；无冲突标记、权限漂移、删除或大文件。
+- 证据与判断: tag-chain.sh --check --remote origin 在交付前通过，140 个受管标签的 follow 链、祖先关系和远端对象一致。
+
+### S2 — init 文档同步
+- 目标: 检查目录级初始化、agent 文件、技能镜像与文档时效。
+- 命令/操作: 枚举 AGENTS.md 和 agent 初始化目录，运行 form-audit --strict 与 configure-check.sh。
+- 关键输出: 目录初始化完整；唯一 agent 目录 lib/_deepseek/.codex 为受保护安装模板；.opencode/skills 按仓库约定不创建；更新 bin/AGENTS.md 明确普通 push/pull 仅处理父仓库。
+- 证据与判断: 没有需要新建或归档的初始化文件，只有现有 bin 文档需要同步本次行为变化。
+
+### S3 — push 交付
+- 目标: 通过最终测试后提交并推送主分支。
+- 命令/操作: 重跑 gpush、gpull、gz-all-push、zg-all-pull、gpull-sub 五组回归；检查 form-audit、快照、data 边界、大文件、敏感模式、远端 fast-forward；显式暂存 8 个文件后提交并推送。
+- 关键输出: 五组测试全部退出 0；origin/main 与交付前 HEAD 一致；暂存区检查通过；提交 3be9a332681cb1a0277642d4693e90f38e70990a 已推送，远端 main 回读一致。
+- 证据与判断: 提交只包含本任务代码、测试、文档和日志，未使用 git add -A。
+
+### S4 — tag 交付
+- 目标: 为已验证的子模块递归修复创建非破坏性 bug 标签并同步远端。
+- 命令/操作: 创建注释标签 bug4，消息 follow bug3，推送后运行 tag-chain.sh --check --remote origin，并回读新旧对象。
+- 关键输出: bug4 标签对象 edf07ff3ecb619f7f3b4db12d4405cee66fb5d5e，peeled commit 3be9a332681cb1a0277642d4693e90f38e70990a；远端同对象；141 个受管标签链检查通过。
+- 证据与判断: 标签目标与验证提交一致，前驱 bug3，无标签冲突或远端漂移。
+
+## 验证与证据
+- 测试/检查: gpush.test.sh、gpull.test.sh、gz-all-push.test.sh、zg-all-pull.test.sh、gpull-sub.test.sh。
+- 结果: 全部通过，退出码 0。
+- 测试/检查: bash -n、form-audit --strict、form-snapshot-verify、form-data-tracking-check、form-large-files-check、git diff --check。
+- 结果: 全部通过。
+- 测试/检查: tools/configure-check.sh。
+- 结果: errors=0、warnings=1；唯一警告为 plugins/ 没有可直接加载的 .codex-plugin/plugin.json，属既有状态。
+- 测试/检查: tag-chain.sh --check --remote origin。
+- 结果: 通过，141 个受管标签。
+- 未验证项: shellcheck 未安装；未对真实 PyQCD/PyQCU 执行 push/pull 行为回归，相关行为由本地裸远端夹具覆盖。
+
+## 变更与产物
+- 文件: bin/gpush.sh、bin/gpull.sh、bin/gpush.test.sh、bin/gpull.test.sh、bin/gpull-sub.test.sh、bin/AGENTS.md。
+- 文件: logs/v2026110117.txt、logs/AGENTS.md，以及本交付归档日志。
+- 提交: 3be9a332681cb1a0277642d4693e90f38e70990a。
+- 标签: bug4，本地与 origin 均为 edf07ff3ecb619f7f3b4db12d4405cee66fb5d5e。
+- 未改动范围: 未 force push，未删除或改写已有标签，未修改真实子模块仓库。
+
+## 风险、限制与下一步
+- 风险: 顶层 gpush 仍按既有 git add -A 语义提交父仓库可见的 gitlink 差异，但不会递归推送子模块；子模块内容变更应使用显式专用流程。
+- 阻塞: 无。
+- 下一步: 无；主分支与 bug4 已完成远端同步。
+
+## 用户输入指令
+```text
+~diff~init~push~tag
+```
+
+## Agent 全文报告
+--- report begin ---
+任务：按顺序执行 `~diff~init~push~tag`。
+
+结果：
+- `~diff`：确认变更集中在 `gpush/gpull`、其真实 Git 子模块回归、`bin/AGENTS.md` 和日志；边界检查通过。
+- `~init`：初始化状态完整，无需新增 AGENTS.md 或技能副本；同步 `bin/AGENTS.md`，明确普通 pull/push 只处理父仓库，子模块仅由 `*-sub` 入口处理。
+- `~push`：五组相关回归和仓库检查通过后，提交 `3be9a332681cb1a0277642d4693e90f38e70990a`，成功推送 `origin/main`。
+- `~tag`：创建并推送注释标签 `bug4`，消息跟随 `bug3`；标签对象 `edf07ff3ecb619f7f3b4db12d4405cee66fb5d5e`，指向提交 `3be9a33`。
+
+验证：
+- 标签全历史链检查通过，受管标签数 141。
+- `origin/main` 与本地提交一致。
+- `form-audit --strict`、快照、data 边界、大文件、敏感模式检查与 `git diff --check` 均通过。
+- `configure-check` 为 errors=0、warnings=1，仅保留既有插件 manifest 警告。
+
+结论：`finished`。`bug4` 已作为本次子模块递归修复的发布点同步到本地和远端。
+--- report end ---
