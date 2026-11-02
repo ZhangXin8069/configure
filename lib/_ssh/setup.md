@@ -208,9 +208,10 @@ source ~/configure/env.sh
 scn [名字]       # 新建；名字默认取 SSH_CLIENT 的客户端地址
 scl              # 查看
 scr [名字]       # 重连并踢掉旧连接
+scw              # 清理失效的 screen socket
 ```
 
-新建 session 后按 `Ctrl+a d` 脱离。上述 `scn/scl/scr` 管理的是本地会话；SSH 入口管理的是
+新建 session 后按 `Ctrl+a d` 脱离。上述 `scn/scl/scr/scw` 管理的是本地会话；SSH 入口管理的是
 登录成功后的远端会话，两者相互独立。
 
 ## 排障顺序

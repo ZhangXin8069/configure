@@ -107,6 +107,7 @@ _screen_normalize_term
 alias scn='_screen_new'
 alias scl='_screen_list'
 alias scr='_screen_resume'
+alias scw='screen -wipe'
 # ls 系（修正原 --color=tty 非法选项为 --color=auto; 两 shell 通用）
 alias ls='ls --color=auto'
 alias l='ls -lah'

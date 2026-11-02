@@ -19,6 +19,8 @@
 !/bin/op
 !/bin/ops
 !/lib/_clash/clash-for-linux
+!/lib/_bashrc
+!/lib/_zshrc
 !/lib/_oh-my-zsh/custom/plugins/you-should-use/LICENSE
 !/lib/_oh-my-zsh/custom/plugins/zsh-autosuggestions/Dockerfile
 !/lib/_oh-my-zsh/custom/plugins/zsh-autosuggestions/LICENSE
@@ -138,6 +140,8 @@ __pycache__/
 !.gitkeep
 !.gitmodules
 !.keep
+!/lib/_oh-my-zsh/custom/plugins/zsh-syntax-highlighting/.version
+!/lib/_oh-my-zsh/custom/plugins/zsh-syntax-highlighting/.revision-hash
 !AUTHORS
 !CHANGELOG
 !CHANGELOG.\*

@@ -1042,3 +1042,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## configure-shell-init-20261103 - final - 2026-11-03 02:46:16 +0800
+- 主任务: 修复 sh_init.sh -a 因缺失 lib/_bashrc 失败并完成实际部署
+- 日志文件: logs/v2026110302.txt
+- 文件大小: 4975 bytes
+- 触发原因: 任务完成
+- 关键内容: 恢复 shell 模板与插件元数据，增加部署前预检和回归测试，验证 -a 可重复执行
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## configure-screen-wipe-alias-20261103 - final - 2026-11-03 02:53:29 +0800
+- 主任务: 为 screen -wipe 增加 Bash/Zsh 通用别名 scw
+- 日志文件: logs/v2026110302-2.txt
+- 文件大小: 2910 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 scw=screen -wipe，覆盖 Bash/Zsh 定义与参数展开测试，并同步命令文档
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

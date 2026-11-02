@@ -1,0 +1,62 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 02:46:16 +0800
+批次: configure-shell-init-20261103
+主任务: 修复 sh_init.sh -a 因缺失 lib/_bashrc 失败并完成实际部署
+触发原因: 任务完成
+摘要: 恢复 shell 模板与插件元数据，增加部署前预检和回归测试，验证 -a 可重复执行
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与根因
+- 目标: 修复 `/root/configure/bin/sh_init.sh -a` 在缺少 `lib/_bashrc` 时失败的问题，并完成部署回归。
+- 命令/操作: 执行 `bin/sh_init.sh -a` 并检查 Git 树、忽略规则、部署目标与备份。
+- 关键输出: `cp: cannot stat '/root/configure/bin/../lib/_bashrc': No such file or directory`；失败前 `/root/.bashrc` 已被移动为带时间戳备份。
+- 退出码: 原始部署失败；具体命令退出非零。
+- 证据与判断: `_bashrc`、`_zshrc` 被根 `.gitignore` 的全量忽略规则排除且当前工作树缺失；`deploy()` 在检查源文件前先移动目标，导致部分变更。`zsh-syntax-highlighting` 的 `.version` 与 `.revision-hash` 也因隐藏文件规则缺失。
+
+### S2 — 修复与回归
+- 目标: 恢复可版本化模板，保证任何目标移动前完成源预检，并消除插件加载错误。
+- 命令/操作: 恢复 `lib/_bashrc`、`lib/_zshrc`；增加 `bin/sh_init.test.sh`；修正 `.gitignore` 与 `bin/give_git_ignore.sh` 白名单；执行两次完整 `-a` 部署和 shell 加载验证。
+- 关键输出: 回归测试输出 `PASS: sh_init.sh deployment and missing-source preflight`；两次 `sh_init.sh -a` 均以退出码 0 完成；`zsh -dfc` 加载 `.zshrc` 输出 `zsh-source-ok`，插件错误消失。
+- 退出码: 0。
+- 证据与判断: 模板与 `/root` 部署目标逐字节一致；Bash/Zsh 语法通过；缺失源测试证明原 `.bashrc` 不会再被提前移动。
+
+## 验证与证据
+- 测试/检查: `bash bin/sh_init.test.sh`、`bash -n bin/sh_init.sh`、`bash -n lib/_bashrc`、`zsh -n lib/_zshrc`、`sh -n bin/give_git_ignore.sh`。
+- 结果: 全部通过。
+- 结果: `form-audit --strict --quiet`、`form-snapshot-verify --quiet`、`form-data-tracking-check --root . --quiet`、`tools/configure-check.sh`、`git diff --check` 均通过；`configure-check` 仅有仓库原有插件 manifest 警告。
+- 结果: `give_git_ignore.sh -n` 生成的规则包含 `lib/_bashrc`、`lib/_zshrc` 与两个插件元数据文件的精确白名单。
+- 未验证项: 无本次变更相关未验证项。
+
+## 变更与产物
+- 文件: `.gitignore`、`bin/give_git_ignore.sh`、`bin/sh_init.sh`、`bin/sh_init.test.sh`、`bin/AGENTS.md`、`lib/_shell/setup.md`。
+- 文件: 恢复 `lib/_bashrc`、`lib/_zshrc` 与 `zsh-syntax-highlighting` 的 `.version`、`.revision-hash`。
+- 产物: `/root/.bashrc`、`/root/.zshrc`、`/root/.oh-my-zsh` 已按模板重新部署。
+- 备份: 最终部署前的旧配置保存在 `/root/.*.2026-11-03-02-43-52.bak`；原始失败备份 `/root/.bashrc.2026-11-03-02-37-30.bak` 保留。
+- 未改动范围: 未提交、未暂存、未推送 Git 变更。
+
+## 风险、限制与下一步
+- 风险: `configure-check` 报告仓库当前没有可直接加载的 `.codex-plugin/plugin.json`，与本任务无关。
+- 阻塞: 无。
+- 下一步: 新终端可直接生效；当前终端可执行 `source ~/.bashrc` 或 `source ~/.zshrc`。
+
+## 用户输入指令
+```text
+/root sh_init.sh -a
+###sh_init.sh in /root/configure/bin is running...:2026-11-03-02-37-30###
+cp: cannot stat '/root/configure/bin/../lib/_bashrc': No such file or directory
+```
+
+## Agent 全文报告
+--- report begin ---
+已完成 `sh_init.sh -a` 的故障修复和实际部署。
+
+根因有三处：`lib/_bashrc` 与 `lib/_zshrc` 被全量忽略规则排除且当前缺失；部署函数先移动旧点文件、后复制源文件，导致源缺失时目标被提前移走；oh-my-zsh 的 `zsh-syntax-highlighting` 运行期元数据也被隐藏文件规则漏掉。
+
+修复内容包括：恢复并版本化两个 shell 模板；在 `sh_init.sh` 中增加全量源预检和部署函数内部二次检查；补齐 `.gitignore` 与 `give_git_ignore.sh` 的精确白名单；新增 `bin/sh_init.test.sh` 覆盖缺失源不移动目标、`-a` 预检失败、正常部署、目标备份和隐藏文件复制；同步更新相关文档。
+
+验证结果：回归测试通过；`bin/sh_init.sh -a` 实际执行两次均退出 0；部署后的 `.bashrc`、`.zshrc` 与仓库模板逐字节一致；Bash/Zsh 语法检查通过；新 `.zshrc` 实际加载成功且插件错误已消失；格式、快照、数据边界、镜像一致性和 `git diff --check` 检查通过。唯一警告是仓库没有可直接加载的 Codex 插件 manifest，与本次任务无关。
+
+原失败命令产生的 `/root/.bashrc.2026-11-03-02-37-30.bak` 已保留；最终部署前的配置备份为 `/root/.*.2026-11-03-02-43-52.bak`。未执行 Git 暂存、提交或推送。
+--- report end ---

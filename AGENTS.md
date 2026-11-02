@@ -10,7 +10,7 @@
 2. 设置 `LD_LIBRARY_PATH`（仓库 `lib/` 优先，防重复规则同 PATH）
 3. 检测 UTF-8 locale：`LANG` 已是 UTF-8 时跳过；否则单 `grep -im1` 查 `C.UTF-8`/`en_US.UTF-8`
 4. source `lib/_git_aliases.sh`（git 别名；zsh 专有别名 `gk/gke/globurl/gtl/gup*` 按 `$ZSH_VERSION` 分支定义，bash 下自动补 `git_current_branch`/`git_main_branch`/`git_develop_branch` 与 `ggu` 函数兜底）
-5. 定义两 shell 通用别名（导航/grep/ls 系/常用工具；screen 会话 `scn`、`scl`、`scr` 使用 `SSH_SCREEN_NAME` 或 `SSH_CLIENT` 客户端地址；`history=omz_history` 仅 zsh 下定义，`which-command` 保留 zsh 默认）
+5. 定义两 shell 通用别名（导航/grep/ls 系/常用工具；screen 会话 `scn`、`scl`、`scr` 使用 `SSH_SCREEN_NAME` 或 `SSH_CLIENT` 客户端地址，`scw` 等价于 `screen -wipe`；`history=omz_history` 仅 zsh 下定义，`which-command` 保留 zsh 默认）
 
 `env.sh` 的大规模 alias/function/executable 冲突预检与告警当前按用户要求注释暂停；预检实现保留在
 `lib/_env_conflicts.sh`，恢复时取消 `env.sh` 中 `@CONFLICT_GUARD_PAUSED@` 块的注释。重复 source

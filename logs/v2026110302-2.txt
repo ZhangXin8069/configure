@@ -1,0 +1,47 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 02:53:29 +0800
+批次: configure-screen-wipe-alias-20261103
+主任务: 为 screen -wipe 增加 Bash/Zsh 通用别名 scw
+触发原因: 任务完成
+摘要: 新增 scw=screen -wipe，覆盖 Bash/Zsh 定义与参数展开测试，并同步命令文档
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 别名实现与验证
+- 目标: 将 `screen -wipe` 定义为 `scw`，并确保 Bash/Zsh 均可用。
+- 命令/操作: 在 `env.sh` 的 screen 别名区增加 `alias scw='screen -wipe'`；扩展 `env.test.sh` 检查别名文本，并使用 fake `screen` 验证实际展开参数；同步 `AGENTS.md`、`lib/_commands/setup.md` 与 `lib/_ssh/setup.md`。
+- 关键输出: Bash 输出 `alias scw='screen -wipe'`，Zsh 输出 `scw='screen -wipe'`；fake-screen 用例输出 `-wipe`。
+- 退出码: 0。
+- 证据与判断: 别名在两种目标 shell 中均被加载，且展开后严格调用 `screen -wipe`，测试未触碰真实 screen 会话。
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh env.test.sh`、`timeout 180s bash env.test.sh`、Bash/Zsh 交互别名检查、`form-audit --strict --quiet`、`form-data-tracking-check --root . --quiet`、`tools/configure-check.sh`、`git diff --check`。
+- 结果: 全部通过；`env.test.sh` 在 Bash 与 Zsh 下均通过。
+- 结果: `tools/configure-check.sh` 仅报告仓库原有插件 manifest 警告，无错误。
+- 未验证项: 无本次变更相关未验证项。
+
+## 变更与产物
+- 文件: `env.sh`、`env.test.sh`、`AGENTS.md`、`lib/_commands/setup.md`、`lib/_ssh/setup.md`。
+- 产物: Bash/Zsh 通用别名 `scw='screen -wipe'`。
+- 未改动范围: 未执行真实 `screen -wipe`，未暂存、提交或推送 Git 变更。
+
+## 风险、限制与下一步
+- 风险: 无新增风险；当前工作树还包含上一任务尚未提交的改动，本任务未触碰其逻辑。
+- 阻塞: 无。
+- 下一步: 新终端会自动加载别名；当前终端可执行 `source ~/.bashrc` 或 `source ~/.zshrc`。
+
+## 用户输入指令
+```text
+也将"Remove dead screens with 'screen -wipe'.
+3 Sockets in /run/screen/S-root."中的"screen -wipe"别名为'scw'
+```
+
+## Agent 全文报告
+--- report begin ---
+已完成 `scw` 别名配置：`env.sh` 中新增 `alias scw='screen -wipe'`，Bash 与 Zsh 共用。
+
+测试同步扩展：既有 screen 别名检查现在包含 `scw`，并通过 fake `screen` 验证 `scw` 实际展开为带 `-wipe` 参数的命令，不会操作真实会话。相关命令与 SSH 文档也已同步。
+
+验证结果：`bash -n env.sh env.test.sh` 通过；完整 `env.test.sh` 在 Bash 和 Zsh 下均通过；两个 shell 实际加载后分别显示 `alias scw='screen -wipe'` 与 `scw='screen -wipe'`；格式审计、数据边界检查和 `git diff --check` 均通过。未执行真实 `screen -wipe`，未提交或推送。
+--- report end ---

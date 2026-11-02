@@ -13,6 +13,7 @@ case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.
 if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+_LIB=${_PATH}/../lib
 
 mode=z
 while getopts "bza" opt; do
@@ -25,10 +26,25 @@ while getopts "bza" opt; do
     esac
 done
 
+# 在修改任何目标点文件前完成必需源检查，避免“先备份、后失败”导致目标缺失。
+require_source()
+{
+    local src=$1
+    if [ ! -e "${src}" ]; then
+        echo "错误: 部署源缺失: ${src}" >&2
+        echo "请先恢复对应模板，未修改任何目标文件。" >&2
+        exit 1
+    fi
+}
+
 # 备份旧目标(带时间戳)并部署新版本
 deploy()
 {
     local src=$1 dst=$2
+    if [ ! -e "${src}" ]; then
+        echo "错误: 部署源缺失: ${src}" >&2
+        return 1
+    fi
     if [ -e "$dst" ]; then
         mv "$dst" "$dst.$(date "+%Y-%m-%d-%H-%M-%S").bak"
     fi
@@ -36,17 +52,25 @@ deploy()
 }
 
 if [[ $mode == b || $mode == a ]]; then
-    deploy "${_PATH}/../lib/_bashrc" "${HOME}/.bashrc"
+    require_source "${_LIB}/_bashrc"
+fi
+
+if [[ $mode == z || $mode == a ]] && command -v zsh >/dev/null 2>&1; then
+    require_source "${_LIB}/_zshrc"
+fi
+
+if [[ $mode == b || $mode == a ]]; then
+    deploy "${_LIB}/_bashrc" "${HOME}/.bashrc"
 fi
 
 if [[ $mode == z || $mode == a ]]; then
     if command -v zsh >/dev/null 2>&1; then
-        deploy "${_PATH}/../lib/_zshrc" "${HOME}/.zshrc"
+        deploy "${_LIB}/_zshrc" "${HOME}/.zshrc"
     else
         echo "警告: 未安装 zsh (apt install zsh wget), 跳过 .zshrc 部署" >&2
     fi
-    if [ -d "${_PATH}/../lib/_oh-my-zsh" ]; then
-        deploy "${_PATH}/../lib/_oh-my-zsh" "${HOME}/.oh-my-zsh"
+    if [ -d "${_LIB}/_oh-my-zsh" ]; then
+        deploy "${_LIB}/_oh-my-zsh" "${HOME}/.oh-my-zsh"
     else
         echo "警告: lib/_oh-my-zsh 缺失, 跳过; 可手动官方安装:" >&2
         echo "  sh -c \"\$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)\"" >&2

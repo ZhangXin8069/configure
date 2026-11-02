@@ -194,6 +194,10 @@ CHANGELOG.*
 .keep
 .gitkeep
 
+# Vendored shell runtime metadata
+/lib/_oh-my-zsh/custom/plugins/zsh-syntax-highlighting/.version
+/lib/_oh-my-zsh/custom/plugins/zsh-syntax-highlighting/.revision-hash
+
 # Common configuration directories
 !.github/
 !.github/**

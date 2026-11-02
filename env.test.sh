@@ -241,12 +241,18 @@ _check_screen_helpers() {
     local fake_screen=$2
     local output
     local status
+    local -a alias_flags=()
+
+    case "${shell_path##*/}" in
+        bash) alias_flags=(-O expand_aliases) ;;
+    esac
 
     output=$("$shell_path" -c '
         source "$1" >/dev/null 2>&1
         alias scn
         alias scl
         alias scr
+        alias scw
     ' configure-env-test "$env_file")
     _assert_contains "$output" 'scn'
     _assert_contains "$output" '_screen_new'
@@ -254,6 +260,14 @@ _check_screen_helpers() {
     _assert_contains "$output" '_screen_list'
     _assert_contains "$output" 'scr'
     _assert_contains "$output" '_screen_resume'
+    _assert_contains "$output" 'scw'
+    _assert_contains "$output" 'screen -wipe'
+
+    output=$(PATH="${fake_screen%/*}:$PATH" "$shell_path" "${alias_flags[@]}" -c '
+        source "$1" >/dev/null 2>&1
+        eval scw
+    ' configure-env-test "$env_file")
+    _assert_line "$output" '-wipe'
 
     output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='' SSH_SCREEN_NAME='' \
         SCREEN_TERM=screen-256color \
