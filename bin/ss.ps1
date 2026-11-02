@@ -81,32 +81,65 @@ if ($null -eq $ssh) {
     exit 127
 }
 
-$screen = Get-Command screen -CommandType Application -ErrorAction SilentlyContinue |
-    Select-Object -First 1
 $screenSession = $env:SSH_SCREEN_NAME
 if ([string]::IsNullOrWhiteSpace($screenSession)) {
-    $screenSession = 'ss'
+    $screenSession = $env:COMPUTERNAME
+}
+if ([string]::IsNullOrWhiteSpace($screenSession)) {
+    $screenSession = [System.Net.Dns]::GetHostName()
+}
+$screenSession = $screenSession -replace '[^A-Za-z0-9_.-]', '_'
+
+$remoteShell = $env:SSH_REMOTE_SHELL
+if ([string]::IsNullOrWhiteSpace($remoteShell)) {
+    $remoteShell = if ($ipSuffix -eq 19) { 'powershell' } else { 'posix' }
+}
+if ($remoteShell -notin @('posix', 'powershell')) {
+    [Console]::Error.WriteLine('ERROR: SSH_REMOTE_SHELL must be posix or powershell.')
+    exit 64
+}
+
+if ($remoteShell -eq 'powershell') {
+    $remoteScreenScript = @(
+        '$ErrorActionPreference = ''SilentlyContinue'''
+        '$screenCommand = Get-Command screen -ErrorAction SilentlyContinue'
+        '$screenTerm = ''screen'''
+        '$infocmpCommand = Get-Command infocmp -ErrorAction SilentlyContinue'
+        'if ($null -ne $infocmpCommand) {'
+        '    & $infocmpCommand.Path screen-256color *> $null'
+        '    if ($LASTEXITCODE -eq 0) { $screenTerm = ''screen-256color'' }'
+        '}'
+        '$hostShell = (Get-Process -Id $PID).Path'
+        'if ([string]::IsNullOrWhiteSpace($hostShell)) { $hostShell = ''powershell.exe'' }'
+        'if ($null -ne $screenCommand) {'
+        ("    & `$screenCommand.Path -U -T `$screenTerm -S '" + $screenSession + "' -t '" + $screenSession + "'")
+        '} else {'
+        '    Write-Warning ''remote screen is unavailable; continuing without it.'''
+        '    & $hostShell -NoLogo -NoProfile'
+        '}'
+    ) -join "`n"
+}
+else {
+    $remoteScreenScript = @(
+        'if command -v screen >/dev/null 2>&1; then'
+        '    screen_term=screen'
+        '    if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then'
+        '        screen_term=screen-256color'
+        '    fi'
+        ("    exec screen -U -T `"`$screen_term`" -S '" + $screenSession + "' -t '" + $screenSession + "'")
+        'fi'
+        "printf '%s\n' '[WARN] remote screen is unavailable; continuing without it.' >&2"
+        'exec "${SHELL:-/bin/sh}" -l'
+    ) -join "`n"
 }
 
 $sshArguments = @(
+    '-t',
     '-o', 'ServerAliveInterval=30',
     '-o', 'ServerAliveCountMax=3',
     '-l', $target[0],
     ('192.168.188.' + $ipSuffix)
 )
 
-if ($null -eq $screen) {
-    $screenGuide = Join-Path $PSScriptRoot '_screen-guide.txt'
-    if (Test-Path -LiteralPath $screenGuide -PathType Leaf) {
-        Get-Content -LiteralPath $screenGuide -Encoding UTF8 |
-            ForEach-Object { [Console]::Error.WriteLine($_) }
-    }
-    else {
-        [Console]::Error.WriteLine('[WARN] screen is unavailable; continuing without a persistent session.')
-    }
-    & $ssh.Source @sshArguments
-}
-else {
-    & $screen.Source -t $screenSession -S $screenSession -d -R $ssh.Source @sshArguments
-}
+& $ssh.Source @sshArguments $remoteScreenScript
 exit $LASTEXITCODE

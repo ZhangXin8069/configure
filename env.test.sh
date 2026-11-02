@@ -256,24 +256,29 @@ _check_screen_helpers() {
     _assert_contains "$output" '_screen_resume'
 
     output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='' SSH_SCREEN_NAME='' \
+        SCREEN_TERM=screen-256color \
         "$shell_path" -c '
             source "$1" >/dev/null 2>&1
             _screen_new explicit-name
         ' configure-env-test "$env_file")
-    _assert_contains "$output" '-t explicit-name -S explicit-name sh -c '
+    _assert_contains "$output" '-U -T screen-256color -t explicit-name -S explicit-name sh -c '
 
     output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='203.0.113.9 5555 22' SSH_SCREEN_NAME='' \
+        SCREEN_TERM=screen-256color \
         "$shell_path" -c '
             source "$1" >/dev/null 2>&1
             _screen_new
         ' configure-env-test "$env_file")
-    _assert_contains "$output" '-t 203.0.113.9 -S 203.0.113.9 sh -c '
+    _assert_contains "$output" '-U -T screen-256color -t 203.0.113.9 -S 203.0.113.9 sh -c '
 
+    : > "$test_root/screen-resume.log"
     output=$(SCREEN_BIN="$fake_screen" SSH_CLIENT='' SSH_SCREEN_NAME='manual-name' \
+        SCREEN_FAKE_LOG="$test_root/screen-resume.log" \
         "$shell_path" -c '
             source "$1" >/dev/null 2>&1
             _screen_resume
         ' configure-env-test "$env_file")
+    _assert_contains "$(command cat "$test_root/screen-resume.log")" '-S manual-name -X encoding utf8'
     _assert_line "$output" '-t manual-name -dr manual-name'
 
     output=$(SCREEN_BIN="$fake_screen" \
@@ -302,6 +307,20 @@ _check_screen_helpers() {
     _assert_contains "$output" 'macOS: brew install screen'
     _assert_contains "$output" 'Ctrl+a d'
     _assert_contains "$output" 'screen -dr <名字>'
+
+    output=$(STY=12345.test SCREEN_TERM=screen-256color TERM=screen \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            printf "%s\n" "$TERM"
+        ' configure-env-test "$env_file")
+    _assert_line "$output" 'screen-256color'
+
+    output=$(STY='' SCREEN_TERM=screen-256color TERM=screen \
+        "$shell_path" -c '
+            source "$1" >/dev/null 2>&1
+            printf "%s\n" "$TERM"
+        ' configure-env-test "$env_file")
+    _assert_line "$output" 'screen'
 }
 
 _check_env_loading_guard() {
@@ -411,7 +430,10 @@ main() {
     git -C "$empty_repo" init -q -b main
     mkdir -p "${fake_screen%/*}"
     mkdir -p "$test_root/home" "$clean_bin" "$conflict_bin"
-    printf '%s\n' '#!/usr/bin/env bash' 'printf "%s\\n" "$*"' >"$fake_screen"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'if [[ -n "${SCREEN_FAKE_LOG:-}" ]]; then printf "%s\\n" "$*" >> "$SCREEN_FAKE_LOG"; fi' \
+        'printf "%s\\n" "$*"' >"$fake_screen"
     printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$conflict_bin/cl"
     chmod +x "$fake_screen" "$conflict_bin/cl"
 

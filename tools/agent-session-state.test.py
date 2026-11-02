@@ -21,6 +21,39 @@ TRANSIENT_TEXT = (
 
 
 class SessionStateTests(unittest.TestCase):
+    def test_context_overflow_is_detected_but_not_transient(self):
+        namespace = runpy.run_path(str(SCRIPT), run_name="agent_session_state_test")
+        is_context_overflow = namespace["error_is_context_overflow"]
+        phrase = (
+            "This model's maximum context length is 1048576 tokens; "
+            "the prompt has 1331848 tokens (max_model_len)"
+        )
+        self.assertTrue(is_context_overflow(phrase))
+        self.assertTrue(is_context_overflow({"code": "context_length_exceeded"}))
+        self.assertFalse(namespace["error_is_transient"](phrase))
+
+    def test_latest_completion_error_returns_context_overflow_flag(self):
+        namespace = runpy.run_path(str(SCRIPT), run_name="agent_session_state_test")
+        with tempfile.TemporaryDirectory() as temp:
+            rollout = Path(temp) / "rollout.jsonl"
+            rollout.write_text(
+                json.dumps(
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "error": {
+                                "message": "maximum context length exceeded: prompt has 1331848 tokens"
+                            },
+                        },
+                    }
+                )
+                + "\n",
+                encoding="utf-8",
+            )
+            result = namespace["latest_completion_error"](rollout, 4096)
+        self.assertEqual(result, (True, False, True, True, "completed"))
+
     def test_concurrency_limit_variants_are_transient(self):
         namespace = runpy.run_path(str(SCRIPT), run_name="agent_session_state_test")
         is_transient = namespace["error_is_transient"]
@@ -53,7 +86,13 @@ class SessionStateTests(unittest.TestCase):
                 ("session-1", "idle", json.dumps({"outcome": "failed"}), 1, "idle-1"),
             )
             result = namespace["opencode_completion_error"](connection, "session-1", 2)
-        self.assertEqual(result, (True, False, True, "completed"))
+        self.assertEqual(result, (True, False, False, True, "completed"))
+
+    def test_opencode_missing_message_table_returns_full_classification_tuple(self):
+        namespace = runpy.run_path(str(SCRIPT), run_name="agent_session_state_test")
+        with sqlite3.connect(":memory:") as connection:
+            result = namespace["opencode_completion_error"](connection, "session-1", 1)
+        self.assertEqual(result, (False, False, False, False, "unknown"))
 
     def _run_lookup(
         self,

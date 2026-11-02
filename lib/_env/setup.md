@@ -31,6 +31,7 @@ printf '%s\n' "$LD_LIBRARY_PATH"
 注释暂停，其余 PATH、locale、alias 和 function 继续加载；成功后导出
 `_CONFIGURE_ENV_LOADED_PATH`。当前 Shell 或子 Shell 再次 source 且路径完全匹配时直接幂等返回。
 它会避免重复加入仓库 `bin/` 和 `lib/`，但不能阻止机器 `env.sh` 自己重复追加路径。
+在 screen 内加载时还会把继承的基础/哑终端 `TERM` 归一化为可用的 256 色 screen term。
 
 ## 加载前冲突闸门（暂停）
 

@@ -1,0 +1,129 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 22:15:46 +0800
+批次: agent-config-benchmark
+主任务: 比较本库 agent 配置与最小原生提示的 HumanEval 效率
+触发原因: 任务完成
+摘要: 固定模型与 16 道 HumanEval 配对测试：两臂均 16/16 正确；本库配置 token 约 10.01 倍、墙钟时间约 1.97 倍
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 固定数据集与受控实验设计
+- 目标: 在同 launcher、provider、model、strength、工作区、超时和隐藏测试下，比较完整 configure prompt/skills 与 agent-dispatch 最小原生提示。
+- 命令/操作: 下载 openai/human-eval 固定提交 b9453e8f1865df0a0057a1383767caa400acfbcf 的 HumanEval.jsonl.gz，并校验 SHA256 b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef。
+- 关键输出: 数据集共 164 题；按 seed=configure-agent-benchmark-v1 的 SHA256 排序抽取 16 题，配对运行 native/library 两臂。
+- 退出码: 0。
+- 证据与判断: 同一 provider=go、model=deepseek-v4.1-flash、strength=max、单臂 300 秒；16 道 canonical solution 全部通过隐藏测试，评测器有效。
+### S2 — 小样本校准与边界复核
+- 目标: 验证 token 解析、代理完成、测试评分和越界写入检测。
+- 命令/操作: 先运行 2 题 pilot；检查 agent JSONL 的 turn.completed.usage，统计 input/cached/output token 和工具动作。
+- 关键输出: pilot 显示完整配置臂约 146-180 秒、273k+ tokens；原生臂约 31-45 秒、31k-43k tokens。pilot 只用于校准，不计入最终汇总。
+- 退出码: 0。
+- 证据与判断: 代理日志可稳定提供 provider usage；pilot 同时暴露 180 秒限制可能截断完整配置收尾，因此正式单臂上限提升到 300 秒。
+### S3 — 正式 16 题配对运行
+- 目标: 完成 32 次独立代理运行并计算正确率、token、墙钟和有效工作量。
+- 命令/操作: 通过 run-guarded.sh 串行执行，单臂 300 秒、总硬限 110 分钟、心跳 60 秒、停滞阈值 8 分钟；题内交替 native/library 起始顺序。
+- 关键输出: 32/32 运行完成，32/32 通过隐藏测试，0 超时，0 usage 缺失，0 越界 file_change。总执行墙钟 4479 秒。
+- 退出码: 0。
+- 证据与判断: 两臂 pass@1 均为 16/16；差异集中在执行协议成本而非本样本正确率。
+### S4 — 独立复核与工程门禁
+- 目标: 校验汇总、测试工具、格式、数据边界和 Git 安全。
+- 命令/操作: 独立重算 32 个 result；运行 Python 单测、canonical oracle、form-audit、snapshot verify、data tracking check、configure-check 和 git diff --check。
+- 关键输出: 32/32 正确；native 616208 tokens / 1505.457 秒；library 6170652 tokens / 2970.155 秒；聚合 token 比 10.0139x，墙钟比 1.9729x。
+- 退出码: 0；configure-check 普通模式 0 errors、1 个既有 plugin manifest 警告；strict 模式因该既有警告返回 1。
+- 证据与判断: 数据、统计和工具行为均有本次运行证据；没有暂存、提交、推送或回滚并发用户的改动。
+
+## 验证与证据
+- 测试/检查: python3 tools/agent-config-benchmark.test.py -v
+- 结果: 4/4 通过。
+- 测试/检查: HumanEval canonical hidden-test oracle
+- 结果: 16/16 通过。
+- 测试/检查: 正式配对隐藏测试
+- 结果: 32/32 通过，0 失败、0 超时。
+- 测试/检查: token/时间独立重算
+- 结果: native 616208 tokens、1505.457 秒；library 6170652 tokens、2970.155 秒；与 summary.json 一致。
+- 测试/检查: form-audit --strict --quiet
+- 结果: 退出码 0。
+- 测试/检查: form-snapshot-verify.sh --quiet
+- 结果: 退出码 0。
+- 测试/检查: form-data-tracking-check.sh --root . --quiet
+- 结果: 退出码 0；data 仅跟踪 .gitignore、AGENTS.md、README.md。
+- 测试/检查: tools/configure-check.sh
+- 结果: 0 errors；1 个既有 plugins 无 manifest 警告。
+- 测试/检查: git diff --check
+- 结果: 退出码 0。
+- 未验证项: 未测试 SWE-bench、Terminal-Bench 等仓库级/终端级任务；未比较不同模型或原生 Codex 默认模型。
+
+## 变更与产物
+- 文件: tools/agent-config-benchmark.py
+- 文件: tools/agent-config-benchmark.test.py
+- 文件: tools/AGENTS.md
+- 文件: tools/README.md
+- 文件: AGENTS.md
+- 产物: data/cache/agent-config-benchmark/20261102/formal16/summary.md
+- 产物: data/cache/agent-config-benchmark/20261102/formal16/summary.json
+- 产物: data/cache/agent-config-benchmark/20261102/formal16/manifest.json
+- 产物: data/cache/agent-config-benchmark/20261102/formal16/results/*.result.json
+- 产物: data/cache/agent-config-benchmark/20261102/formal16/process.log 与 process.events.jsonl
+- 未改动范围: 未修改 provider 配置、系统配置、凭据、data 跟踪契约或并发用户改动；未执行 Git 暂存、提交、推送和标签。
+
+## 风险、限制与下一步
+- 风险: 16 题样本对很小的正确率差异统计功效有限；Wilson 95% 区间两臂均为 80.64%-100%。
+- 风险: HumanEval 是短程单文件算法任务，不能直接外推到复杂仓库维护、长期任务、日志/恢复/多 agent 编排价值。
+- 风险: 墙钟受 provider 排队与网络长尾影响，原生臂实测有 27-183 秒波动；token 差异比耗时差异稳定。
+- 风险: total tokens 含缓存输入；未缓存输入比 9.4418x，输出 token 比 4.9647x，按供应商计价时应使用对应权重。
+- 阻塞: 无。
+- 下一步: 若需要仓库级结论，固定同一模型继续运行 SWE-bench Verified 或 Terminal-Bench 小样本，并保留任务级配对统计。
+
+## 用户输入指令
+使用本库agent配置与agent原生配置相比,工作效率如何?token消耗如何?正确率如何?耗时如何?使用网络上的标准任务进行测试
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**测试口径**
+- 标准任务：官方 HumanEval，固定提交 `b9453e8f1865df0a0057a1383767caa400acfbcf`，数据集 SHA256 `b796127e635a67f93fb35c04f4cb03cf06f38c8072ee7cee8833d7bee06979ef`。
+- 样本：按固定 seed 的 SHA256 顺序，从 164 题抽取 16 题，做 16 个题内配对。
+- 两臂固定 `go / deepseek-v4.1-flash / max`、同一 launcher、工作区结构、300 秒上限和隐藏测试。
+- `native`：`agent-dispatch` 最小原生提示，不注入本库完整 prompt/skills。
+- `library`：本库完整 prompt、全局/工作区技能清单与自动技能编排。
+- 每个任务使用全新 Git 工作区和独立 agent thread；隐藏测试不暴露给代理。
+
+**核心结果**
+
+| 指标 | 原生最小提示 | 本库完整配置 | 本库/原生 |
+|---|---:|---:|---:|
+| HumanEval pass@1 | 16/16 = 100% | 16/16 = 100% | 0 个百分点 |
+| Wilson 95% 区间 | 80.64%-100% | 80.64%-100% | 相同 |
+| 平均 total tokens/题 | 38,513 | 385,666 | 10.01x |
+| 未缓存输入 token/题 | 6,837 | 64,553 | 9.44x |
+| 输出 token/题 | 2,596 | 12,889 | 4.96x |
+| 平均墙钟/题 | 94.1 秒 | 185.6 秒 | 1.97x |
+| 中位墙钟/题 | 83.6 秒 | 186.2 秒 | 2.23x |
+| 命令执行次数/题 | 5.56 | 20.44 | 3.68x |
+| 每 10 万 total tokens 正确题数 | 2.597 | 0.259 | 0.100x |
+| 每分钟正确题数 | 0.638 | 0.323 | 0.507x |
+
+**如何解读**
+- 正确率：本样本没有观察到差异；16 题全对也使 McNemar 检验 p=1，样本不足以排除很小的差异。就这批短程算法题而言，完整配置没有带来正确率增益。
+- token：本库配置的平均 token 是原生的 10.37 倍（逐题比值均值，中位数 9.67 倍）；聚合总量为 6,170,652 对 616,208，即 10.01 倍。缓存输入计入 total；按未缓存输入看仍为 9.44 倍，按输出 token 看为 4.96 倍。
+- 耗时：聚合总代理墙钟为 2,970.2 秒对 1,505.5 秒，约 1.97 倍；平均差 91.5 秒/题，配对 bootstrap 95% 区间 42.9-137.4 秒。配置臂在 16 题中的 13 题更慢，3 题更快；原生臂自身存在 27-183 秒长尾，所以耗时比 token 比更不稳定。
+- 工作效率：按正确题数/10 万 total tokens，本库配置约为原生的 10%；按正确题数/分钟，约为原生的 51%。在这类短任务上，完整配置的自动路由、技能正文读取、目标管理和收尾验证形成了显著固定成本。
+
+**结论**
+本库 agent 配置适合复杂、多阶段、需要日志/恢复/范围控制的仓库任务；但对短小、单文件、一次成型的算法题，它相对最小原生提示没有测到正确率优势，同时消耗约 10 倍 token、接近 2 倍墙钟时间。若目标是批量短代码生成，应优先使用最小提示；若目标是长链路工程交付，应使用完整配置，但需要把步骤预算、技能读取和收尾成本纳入容量规划。
+
+**限制**
+- HumanEval 不能衡量长上下文仓库定位、跨文件修改、测试修复、回滚、日志和恢复能力。
+- 16 题样本只适合识别大效应，不适合精确估计很小的正确率差异。
+- 墙钟包含 provider 排队和网络波动；token 指标更稳定。
+- 这里的“原生”是同 launcher/同模型的最小提示对照，不是替换为另一个原生默认模型的比较。
+
+**产物**
+- 基准工具：`tools/agent-config-benchmark.py`
+- 回归测试：`tools/agent-config-benchmark.test.py`
+- 汇总：`data/cache/agent-config-benchmark/20261102/formal16/summary.md`
+- 机器数据：`data/cache/agent-config-benchmark/20261102/formal16/summary.json`
+- 逐次结果：`data/cache/agent-config-benchmark/20261102/formal16/results/`
+--- report end ---

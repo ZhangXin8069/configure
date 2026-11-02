@@ -605,6 +605,16 @@ assert_contains "$cl_c_locale_output" '已切换为 C.UTF-8'
 assert_file_contains "$call_log" 'LANG=C.UTF-8 LC_ALL=C.UTF-8'
 printf 'PASS: cl 在非 UTF-8 locale 下自动切换到可用 UTF-8 locale\n'
 
+# --- screen 内 TERM 归一化：旧会话的 screen/dumb 提升为可用 256 色 term ---
+screen_term_fn=$(sed -n '/^_ensure_screen_terminal() {/,/^}/p' "$launcher")
+screen_term_out=$(STY=12345.test SCREEN_TERM=screen-256color TERM=screen bash -c "${screen_term_fn}"$'\n''_ensure_screen_terminal; printf "%s\n" "$TERM"')
+[[ "$screen_term_out" == 'screen-256color' ]] || fail "screen 内 TERM 未归一化：$screen_term_out"
+screen_term_out=$(STY=12345.test SCREEN_TERM=screen-256color TERM=dumb bash -c "${screen_term_fn}"$'\n''_ensure_screen_terminal; printf "%s\n" "$TERM"')
+[[ "$screen_term_out" == 'screen-256color' ]] || fail "screen 内 dumb TERM 未归一化：$screen_term_out"
+screen_term_out=$(STY='' SCREEN_TERM=screen-256color TERM=screen bash -c "${screen_term_fn}"$'\n''_ensure_screen_terminal; printf "%s\n" "$TERM"')
+[[ "$screen_term_out" == 'screen' ]] || fail "screen 外 TERM 不应被修改：$screen_term_out"
+printf 'PASS: screen 内 TERM 提升为 256 色且 screen 外保持不变\n'
+
 # --- 实时日志截断按字符进行，不产生半个 UTF-8 字符 ---
 clip_fn=$(sed -n '/^_clip_text() {/,/^}/p' "$launcher")
 clip_out=$(LC_ALL=C bash -c "${clip_fn}"$'\n''_clip_text "中文测试" 3')

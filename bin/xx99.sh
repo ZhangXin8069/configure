@@ -21,6 +21,7 @@ echo "### ${_NAME} started : $(date "+%Y-%m-%d-%H-%M-%S") ###"
 readonly TARGET_HOST="172.25.193.104"
 readonly SSH_PORT="${SSH_PORT:-22}"
 readonly SSH_USER="${SSH_USER:-kfutfd}"
+readonly REMOTE_SHELL="${SSH_REMOTE_SHELL:-powershell}"
 
 # 解析命令行参数
 NO_DDOCKER=false
@@ -106,7 +107,7 @@ echo ""
 if [[ "${NO_DDOCKER}" == true ]]; then
     echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST}（跳过 ddocker）"
     echo ""
-    _ssh_screen "${_NAME}" \
+    SSH_REMOTE_SHELL="${REMOTE_SHELL}" _ssh_screen "${_NAME}" \
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}"
 else
@@ -114,10 +115,10 @@ else
     echo ""
     # -t 强制分配 TTY（docker exec -it 需要）; 远程执行 ddocker.bat
     # ddocker.bat 退出后（成功退出容器或登入失败），始终退回 x99 SSH 终端，避免直接断开连接
-    _ssh_screen "${_NAME}" \
+    SSH_REMOTE_SHELL="${REMOTE_SHELL}" _ssh_screen "${_NAME}" \
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
-        -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" \
-        "ddocker.bat; echo ''; echo '[INFO] 已退出 ddocker，回到 x99 终端'; exec bash -l"
+        -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" -- \
+        "ddocker.bat; Write-Host ''; Write-Host '[INFO] 已退出 ddocker，回到 x99 终端'"
 fi
 
 echo ""

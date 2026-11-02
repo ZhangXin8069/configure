@@ -979,3 +979,57 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## screen-agent-tui - final - 2026-11-02 20:56:13 +0800
+- 主任务: 修复 screen 下本库 agent 页面乱码
+- 日志文件: logs/v2026110220.txt
+- 文件大小: 6130 bytes
+- 触发原因: 任务完成
+- 关键内容: 锁定 screen UTF-8 与 256 色窗口 term，归一化旧会话 TERM，并通过 shell、agent、SSH、form 与真实 screen 烟测
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## ssh-screen-post-login - final - 2026-11-02 21:33:17 +0800
+- 主任务: 重构 SSH screen 为连接后远端新建会话
+- 日志文件: logs/v2026110221.txt
+- 文件大小: 6834 bytes
+- 触发原因: 任务完成
+- 关键内容: SSH 先直连并分配 TTY，认证后在远端按客户端主机名创建独立 UTF-8 screen，禁止自动进入旧会话，Unix/Windows 契约与回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-config-benchmark - final - 2026-11-02 22:15:46 +0800
+- 主任务: 比较本库 agent 配置与最小原生提示的 HumanEval 效率
+- 日志文件: logs/v2026110222.txt
+- 文件大小: 9542 bytes
+- 触发原因: 任务完成
+- 关键内容: 固定模型与 16 道 HumanEval 配对测试：两臂均 16/16 正确；本库配置 token 约 10.01 倍、墙钟时间约 1.97 倍
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-config-benchmark-analysis - final - 2026-11-02 23:02:34 +0800
+- 主任务: 分析本库 agent 配置与最小原生提示的优劣
+- 日志文件: logs/v2026110223.txt
+- 文件大小: 9385 bytes
+- 触发原因: 任务完成
+- 关键内容: 基于 16 题 HumanEval 配对和原始命令日志完成成本归因：完整配置优势在流程治理与可审计性，劣势在固定上下文、工具回合和日志开销
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-run-resume - final - 2026-11-02 23:42:07 +0800
+- 主任务: 恢复 run 20261102T203512.V5La45
+- 日志文件: logs/v2026110223-2.txt
+- 文件大小: 5673 bytes
+- 触发原因: 任务完成
+- 关键内容: 确认旧 run 因上下文超限无法原样恢复；停止无效重试并从日志与工作树重建现场，全部当前回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-context-overflow-handoff - final - 2026-11-03 00:02:08 +0800
+- 主任务: 修改 agent-resume：上下文超限改走新 thread 压缩交接
+- 日志文件: logs/v2026110300.txt
+- 文件大小: 7113 bytes
+- 触发原因: 任务完成
+- 关键内容: 识别 context overflow 为不可原 thread 重试状态，生成限长脱敏交接并通过原 launcher 启动一次新 run；完整恢复与仓库回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

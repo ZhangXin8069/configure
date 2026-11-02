@@ -32,6 +32,34 @@ cat >"$fake_launcher" <<'EOF'
 #!/usr/bin/env bash
 set -Eeuo pipefail
 count_file=${FAKE_COUNT_FILE:-}
+dispatch_task=${AGENT_DISPATCH_TASK:-}
+if [[ -n "${FAKE_HANDOFF_CAPTURE:-}" ]]; then
+    printf '%s' "$dispatch_task" >"$FAKE_HANDOFF_CAPTURE"
+fi
+if [[ -n "${FAKE_NEW_RUN_ID:-}" ]]; then
+    printf '  run: %s\n' "$FAKE_NEW_RUN_ID"
+    new_run_dir=${FAKE_DATA_ROOT:?}/runs/${FAKE_NEW_RUN_ID}
+    mkdir -p "$new_run_dir"
+    cat >"$new_run_dir/manifest.env" <<EOF2
+schema_version=1
+run_id=$FAKE_NEW_RUN_ID
+agent=codex
+launcher=co
+workspace_root=${PWD}
+cwd=${PWD}
+run_dir=$new_run_dir
+log_file=$new_run_dir/agent.log
+event_file=$new_run_dir/events.jsonl
+stop_file=$new_run_dir/stop
+session_id=${FAKE_NEW_THREAD_ID:?}
+thread_id=${FAKE_NEW_THREAD_ID:?}
+turn=1
+state=finished
+EOF2
+    printf '%s\n' "{\"type\":\"thread.started\",\"thread_id\":\"${FAKE_NEW_THREAD_ID}\"}" \
+        >"$new_run_dir/agent.log"
+    : >"$new_run_dir/events.jsonl"
+fi
 attempt=1
 if [[ -n "$count_file" ]]; then
     attempt=$(cat -- "$count_file" 2>/dev/null || printf '0')
@@ -47,6 +75,7 @@ fi
     printf 'claude_provider=%s\n' "${CLAUDE_PROVIDER:-}"
     printf 'resume_active=%s\n' "${AGENT_RESUME_ACTIVE:-}"
     printf 'auto_resume=%s\n' "${AGENT_AUTO_RESUME:-}"
+    printf 'handoff_task_present=%s\n' "$([[ -n "$dispatch_task" ]] && printf 1 || printf 0)"
 } >>"${FAKE_CALL_LOG:?}"
 [[ -z "${FAKE_SLEEP:-}" ]] || sleep "$FAKE_SLEEP"
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"resumed-ok"}}' \
@@ -54,8 +83,13 @@ printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"r
 success_attempt=${FAKE_SUCCESS_ATTEMPT:-1}
 if (( attempt < success_attempt )); then
     printf '%s\n' "simulated interruption attempt=${attempt}" >>"${FAKE_RUN_LOG:?}"
+    if [[ "${FAKE_CONTEXT_ON_RESUME:-0}" == 1 ]]; then
+        printf '%s\n' '{"type":"turn.failed","error":{"message":"maximum context length exceeded"}}' \
+            >>"${FAKE_RUN_LOG:?}"
+    fi
     exit 1
 fi
+[[ -n "$dispatch_task" ]] && exit 0
 awk '
     BEGIN { done = 0 }
     /^state=/ { print "state=finished"; done = 1; next }
@@ -168,6 +202,131 @@ grep -Fq '"event":"resume-scheduled"' "$event_file" || fail '缺少 resume-sched
 grep -Fq '"event":"resume-start"' "$event_file" || fail '缺少 resume-start 事件'
 grep -Fq '"event":"resume-end"' "$event_file" || fail '缺少 resume-end 事件'
 printf 'PASS: Codex 429 中断在默认策略下可检测并恢复原 thread\n'
+
+create_run 20261021T031100.context codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-context-thread"}' \
+    '{"type":"turn.failed","error":{"message":"This model maximum context length is 1048576 tokens; the prompt has 1331848 tokens (max_model_len)"}}' \
+    >"$log_file"
+set_fake_env
+export FAKE_NEW_RUN_ID=20261021T031101.handoff
+export FAKE_NEW_THREAD_ID=01a15ab8-handoff-thread
+export FAKE_DATA_ROOT=$data_root
+export FAKE_HANDOFF_CAPTURE=$test_root/context-handoff-prompt.txt
+printf '%s\n' \
+    '继续完成上下文超限恢复测试。' \
+    'API_KEY=sk-should-not-leak' \
+    "$(printf 'x%.0s' {1..6000})" >"$run_dir/inputs.txt"
+for _ in $(seq 1 300); do printf '%s\n' '中文压缩交接内容' >>"$run_dir/inputs.txt"; done
+context_check=$(AGENT_RESUME_HANDOFF_MAX_BYTES=4096 \
+    "$resume_tool" --run-id 20261021T031100.context --data-root "$data_root" --check)
+assert_contains "$context_check" 'status=handoff'
+assert_contains "$context_check" 'reason=context_overflow'
+assert_contains "$context_check" 'handoff_bytes=4096'
+[[ ! -e "$run_dir/resume-handoff.md" ]] || fail '--check 不应生成压缩交接文件'
+
+context_resume=$(AGENT_RESUME_HANDOFF_MAX_BYTES=4096 "$resume_tool" \
+    --run-id 20261021T031100.context --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+assert_contains "$context_resume" 'status=handoff-finished'
+assert_contains "$context_resume" 'source_run_id=20261021T031100.context'
+assert_contains "$context_resume" 'handoff_run_id=20261021T031101.handoff'
+context_calls=$(<"$FAKE_CALL_LOG")
+assert_contains "$context_calls" 'args=--once --model fake-codex --reasoning-effort max'
+assert_contains "$context_calls" 'handoff_task_present=1'
+if grep -Fq 'args=--resume 20261021T031100.context' <<<"$context_calls"; then
+    fail '上下文超限后仍重试了原 thread'
+fi
+[[ "$(cat "$FAKE_COUNT_FILE")" == 1 ]] || fail '上下文超限应只启动一次新 thread'
+[[ -s "$run_dir/resume-handoff.md" ]] || fail '未生成压缩交接文件'
+(( $(wc -c <"$run_dir/resume-handoff.md") <= 4096 )) || fail '压缩交接文件超过配置上限'
+python3 - "$run_dir/resume-handoff.md" <<'PY'
+from pathlib import Path
+import sys
+
+Path(sys.argv[1]).read_text(encoding="utf-8")
+PY
+grep -Fq 'source_run_id=20261021T031100.context' "$run_dir/resume-handoff.md" || fail '交接文件缺少源 run'
+grep -Fq 'reason=context_overflow' "$run_dir/resume-handoff.md" || fail '交接文件缺少超限原因'
+grep -Fq '继续完成上下文超限恢复测试。' "$FAKE_HANDOFF_CAPTURE" || fail '新 thread 未收到原任务提示'
+if grep -Fq 'sk-should-not-leak' "$run_dir/resume-handoff.md" "$FAKE_HANDOFF_CAPTURE"; then
+    fail '压缩交接泄露了疑似密钥'
+fi
+grep -Fq 'resume_class=context_overflow_handoff' "$manifest" || fail '源 run 未记录交接分类'
+grep -Fq 'handoff_run_id=20261021T031101.handoff' "$manifest" || fail '源 run 未关联新 run'
+grep -Fq 'handoff_thread_id=01a15ab8-handoff-thread' "$manifest" || fail '源 run 未关联新 thread'
+grep -Fq '"event":"resume-handoff-start"' "$event_file" || fail '缺少压缩交接开始事件'
+grep -Fq '"event":"resume-handoff-end"' "$event_file" || fail '缺少压缩交接完成事件'
+
+before_context_calls=$(cksum "$FAKE_CALL_LOG")
+set +e
+duplicate_context=$("$resume_tool" --run-id 20261021T031100.context --data-root "$data_root" \
+    --delay 0 --launcher "$fake_launcher" 2>&1)
+duplicate_context_status=$?
+set -e
+(( duplicate_context_status == 4 )) || fail "上下文交接不应重复执行：$duplicate_context"
+assert_contains "$duplicate_context" 'reason=handoff_already_started'
+[[ "$(cksum "$FAKE_CALL_LOG")" == "$before_context_calls" ]] || fail '重复调用仍启动了新 thread'
+unset FAKE_NEW_RUN_ID FAKE_NEW_THREAD_ID FAKE_DATA_ROOT FAKE_HANDOFF_CAPTURE
+printf 'PASS: 上下文超限停止原 thread 重试并生成受限交接后启动新 run\n'
+
+create_run 20261021T031105.contextlate codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-context-late-thread"}' \
+    'unexpected process termination' \
+    >"$log_file"
+set_fake_env
+export FAKE_SUCCESS_ATTEMPT=2
+export FAKE_CONTEXT_ON_RESUME=1
+export FAKE_NEW_RUN_ID=20261021T031106.handofflate
+export FAKE_NEW_THREAD_ID=01a15ab8-handoff-late-thread
+export FAKE_DATA_ROOT=$data_root
+export FAKE_HANDOFF_CAPTURE=$test_root/context-handoff-late-prompt.txt
+context_late_output=$("$resume_tool" --run-id 20261021T031105.contextlate --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+assert_contains "$context_late_output" 'status=handoff-finished'
+context_late_calls=$(<"$FAKE_CALL_LOG")
+assert_contains "$context_late_calls" 'args=--resume 20261021T031105.contextlate --once'
+assert_contains "$context_late_calls" 'args=--once --model fake-codex --reasoning-effort max'
+[[ "$(cat "$FAKE_COUNT_FILE")" == 2 ]] || fail '迟到超限应只经历一次原 thread 尝试后立即交接'
+unset FAKE_SUCCESS_ATTEMPT FAKE_CONTEXT_ON_RESUME FAKE_NEW_RUN_ID FAKE_NEW_THREAD_ID FAKE_DATA_ROOT FAKE_HANDOFF_CAPTURE
+printf 'PASS: 恢复回合新暴露上下文超限时立即转入新 thread 交接\n'
+
+create_run 20261021T031103.contextfail codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-context-fail-thread"}' \
+    '{"type":"turn.failed","error":{"message":"context_length_exceeded"}}' \
+    >"$log_file"
+set_fake_env
+export FAKE_SUCCESS_ATTEMPT=2
+export FAKE_NEW_RUN_ID=20261021T031104.handofffail
+export FAKE_NEW_THREAD_ID=01a15ab8-handoff-fail-thread
+export FAKE_DATA_ROOT=$data_root
+export FAKE_HANDOFF_CAPTURE=$test_root/context-handoff-fail-prompt.txt
+set +e
+context_fail_output=$("$resume_tool" --run-id 20261021T031103.contextfail --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+context_fail_status=$?
+set -e
+(( context_fail_status == 8 )) || fail "上下文交接失败应返回 8：$context_fail_output"
+assert_contains "$context_fail_output" 'status=handoff-failed'
+[[ "$(cat "$FAKE_COUNT_FILE")" == 1 ]] || fail '交接失败不应重试旧 thread 或重复创建新 thread'
+grep -Fq 'resume_class=context_overflow_handoff' "$manifest" || fail '交接失败未留下不可重试状态'
+grep -Fq 'handoff_run_id=20261021T031104.handofffail' "$manifest" || fail '交接失败未关联已创建的新 run'
+unset FAKE_SUCCESS_ATTEMPT FAKE_NEW_RUN_ID FAKE_NEW_THREAD_ID FAKE_DATA_ROOT FAKE_HANDOFF_CAPTURE
+printf 'PASS: 上下文交接启动失败返回 8 且不会无限重试\n'
+
+create_run 20261021T031102.latest codex co tasks
+printf '%s\n' \
+    '{"type":"thread.started","thread_id":"01a15ab8-latest-failure-thread"}' \
+    '{"type":"turn.failed","error":{"message":"maximum context length exceeded"}}' \
+    '{"type":"turn.failed","error":{"message":"429 Too Many Requests"}}' \
+    >"$log_file"
+set_fake_env
+latest_failure_check=$("$resume_tool" --run-id 20261021T031102.latest --data-root "$data_root" --check)
+assert_contains "$latest_failure_check" 'status=resumable'
+assert_contains "$latest_failure_check" 'reason=transient_failure'
+printf 'PASS: 历史上下文超限不会覆盖后续瞬时失败的分类\n'
 
 concurrency_index=0
 concurrency_phrases=(
@@ -368,6 +527,67 @@ assert_contains "$tui_output" 'status=finished'
 grep -Fq 'thread_id=01a15e3f-e541-7c00-b8d3-4bd9643fd6f3' "$manifest" ||
     fail 'TUI 型 429 未从 Codex 状态库恢复 thread_id'
 printf 'PASS: TUI 空日志时可从 Codex 状态库与 rollout 恢复同一 thread\n'
+
+create_run 20261021T031023.tui_context codex co tasks
+: >"$log_file"
+codex_context_home=$test_root/codex-context-home
+codex_context_rollout_dir=$codex_context_home/sessions/2026/10/21
+codex_context_db=$codex_context_home/state_5.sqlite
+codex_context_rollout=$codex_context_rollout_dir/rollout-tui-context.jsonl
+mkdir -p "$codex_context_rollout_dir"
+python3 - "$codex_context_db" "$codex_context_rollout" "$workspace_root/tasks" <<'PY'
+import sqlite3
+import sys
+from datetime import datetime
+
+state_db, rollout, cwd = sys.argv[1:]
+created_ms = int(datetime.strptime("2026-10-21T03:10:22+0800", "%Y-%m-%dT%H:%M:%S%z").timestamp() * 1000)
+with sqlite3.connect(state_db) as connection:
+    connection.execute(
+        """
+        CREATE TABLE threads (
+            id TEXT PRIMARY KEY, created_at_ms INTEGER NOT NULL,
+            cwd TEXT NOT NULL, source TEXT NOT NULL,
+            archived INTEGER NOT NULL DEFAULT 0,
+            first_user_message TEXT NOT NULL DEFAULT '',
+            preview TEXT NOT NULL DEFAULT '', rollout_path TEXT NOT NULL
+        )
+        """
+    )
+    connection.execute(
+        "INSERT INTO threads VALUES (?, ?, ?, 'cli', 0, ?, ?, ?)",
+        (
+            "01a15e3f-context-tui-thread",
+            created_ms,
+            cwd,
+            "run_id=20261021T031023.tui_context",
+            "run_id=20261021T031023.tui_context",
+            rollout,
+        ),
+    )
+PY
+python3 - "$codex_context_rollout" <<'PY'
+import json
+import sys
+
+event = {
+    "type": "event_msg",
+    "payload": {
+        "type": "task_complete",
+        "error": {
+            "message": "This model's maximum context length is 1048576 tokens; the prompt has 1331848 tokens"
+        },
+    },
+}
+with open(sys.argv[1], "w", encoding="utf-8") as stream:
+    stream.write(json.dumps(event, separators=(",", ":")) + "\n")
+PY
+set_fake_env
+tui_context_check=$(AGENT_CODEX_STATE_DB="$codex_context_db" \
+    "$resume_tool" --run-id 20261021T031023.tui_context --data-root "$data_root" --check)
+assert_contains "$tui_context_check" 'status=handoff'
+assert_contains "$tui_context_check" 'reason=context_overflow'
+printf 'PASS: TUI 空日志时可从 Codex rollout 识别上下文超限\n'
 
 create_run 20261021T031600.claude claude cl tasks
 : >"$log_file"

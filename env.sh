@@ -102,6 +102,7 @@ alias grep='grep --color=auto --exclude-dir={.bzr,CVS,.git,.hg,.svn,.idea,.tox}'
 source "${_configure_env_root}/lib/_git_aliases.sh"
 _SCREEN_GUIDE_PATH="${_configure_env_root}/bin/_screen-guide.txt"
 source "${_configure_env_root}/lib/_screen.sh"
+_screen_normalize_term
 # screen 会话: 默认取 SSH_CLIENT 客户端地址，也可用 SSH_SCREEN_NAME 或参数覆盖
 alias scn='_screen_new'
 alias scl='_screen_list'

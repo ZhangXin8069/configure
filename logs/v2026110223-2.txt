@@ -1,0 +1,81 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 23:42:07 +0800
+批次: agent-run-resume
+主任务: 恢复 run 20261102T203512.V5La45
+触发原因: 任务完成
+摘要: 确认旧 run 因上下文超限无法原样恢复；停止无效重试并从日志与工作树重建现场，全部当前回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 - 恢复旧 run 现场
+- 目标: 恢复 run 20261102T203512.V5La45，并确认原任务断点。
+- 命令/操作: 读取 manifest、events、agent/resume/bridge/tui-watch 日志、state、近期任务日志与 Git 状态。
+- 关键输出: 旧 thread 为 01a19c41-b7f4-7990-89da-d06063841509；manifest 状态为 failed；自动恢复进程仍在对同一 thread 重试。
+- 退出码: 0
+- 证据与判断: 最后成功归档为 agent-config-benchmark-analysis；无后续未完成用户请求。恢复失败是上下文超限，不是任务逻辑错误。
+
+### S2 - 定位并停止无效恢复循环
+- 目标: 避免继续消耗资源重试必然失败的会话。
+- 命令/操作: 核对模型错误、恢复日志与 PID 树，只向 agent-resume 父进程发送 TERM。
+- 关键输出: 模型上限 1048576 tokens，旧 thread 请求为 1331848 至 1331852 tokens；恢复尝试均返回 400。
+- 退出码: 0
+- 证据与判断: 同一 thread 无论重试多少次都会超限；人工终止后复核，目标恢复进程与子 co 进程均已消失，其他 Codex 进程未受影响。
+
+### S3 - 复核遗留工作树
+- 目标: 确认旧会话留下的未提交改动仍可继续交付。
+- 命令/操作: 审查 diff，执行 shell/Python 语法检查、env/ss/benchmark/agent 回归、form 审计、快照校验、data 白名单与 diff 检查。
+- 关键输出: 所有命令退出码为 0；benchmark 单测 4/4 通过；完整 agent.test.sh 全部 PASS。
+- 退出码: 0
+- 证据与判断: 工作树中的 screen、SSH、HumanEval benchmark 及其日志改动均通过当前回归；本次恢复不改写原会话成果，也未提交或推送。
+
+## 验证与证据
+- 测试/检查: bash -n；python3 -m py_compile；env.test.sh；ss.test.sh；agent-config-benchmark.test.py；agent.test.sh；form-audit；form-snapshot-verify；form-data-tracking-check；git diff --check。
+- 结果: 全部通过。
+- 未验证项: 未重新运行耗时数小时、依赖 provider 的 16 题正式 benchmark；未连接真实远端执行 SSH 端到端测试。这两项此前已归档，且不是本次恢复所需。
+
+## 变更与产物
+- 文件: 本次恢复未修改源代码，仅新增本日志并更新 logs/AGENTS.md 索引。
+- 产物: 恢复现场确认、无效恢复循环处置记录与完整验证证据。
+- 未改动范围: 未回滚旧会话留下的工作树改动；未提交、推送、打标或修改系统配置。
+
+## 风险、限制与下一步
+- 风险: 旧 thread 已超过模型上下文窗口，不能通过普通 resume 原样续接。
+- 阻塞: 无。当前会话已通过工作区内日志与 Git 状态恢复可操作上下文。
+- 下一步: 如还需继续旧对话中的探索，应在当前精简上下文中指定新的具体目标；若需修复恢复器，应单独处理“上下文超限不应无限重试”的分类与降级路径。
+
+## 用户输入指令
+resume"20261102T203512.V5La45"
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**恢复结果**
+- 已确认 run `20261102T203512.V5La45` 的最后成功任务是“分析本库 agent 配置与最小原生提示的优劣”，该任务已归档为 `finished`，不存在遗留用户任务。
+- 旧 thread 为 `01a19c41-b7f4-7990-89da-d06063841509`。恢复请求约 1,331,852 tokens，超过模型 1,048,576 tokens 上限，普通 resume 每次都会返回 400。
+- 已停止仍在对同一超限 thread 重试的恢复进程；复核后目标 `agent-resume` 及其子 `co` 进程均已退出，没有影响其他 Codex 会话。
+- 已从 manifest、事件、恢复日志、近期归档和 Git 工作树重建当前现场。最后任务完成后，驱动仅继续发送“继续”，没有形成新的用户目标。
+
+**改动内容**
+- 本次未修改源代码。
+- 仅按 `log` 契约新增本恢复日志并更新日志索引。
+- 旧会话留下的 screen、SSH、HumanEval benchmark 和文档改动保持原样，未回滚、未提交、未推送。
+
+**推理依据**
+- 上游错误明确给出 1,048,576 tokens 上限与实际约 1,331,852 tokens 请求量，三次恢复错误数值一致，可排除凭据、网络和任务代码问题。
+- `logs/AGENTS.md` 最新批次为 `agent-config-benchmark-analysis - final`，对应日志正文为 `finished`；其后没有新的成功任务或未闭合交付。
+- 工作树变更与 20:00、21:00、22:00、23:00 的已归档任务逐项对应，没有发现无法归属的新改动。
+
+**验证结果**
+- `bash -n` 与 `python3 -m py_compile` 通过。
+- `env.test.sh`、`ss.test.sh`、`agent-config-benchmark.test.py` 通过，Python 单测 4/4。
+- 完整 `agent.test.sh` 通过，全部断言为 PASS。
+- `form-audit --strict --quiet`、快照校验和 data 跟踪白名单通过。
+- `git diff --check` 通过。
+- 未重跑正式 16 题 provider benchmark，也未连接真实远端做 SSH 端到端测试；这两项已于旧会话归档，本次只验证恢复后的工作树一致性。
+
+**后续步骤**
+- 旧 thread 不能原样继续；后续请在当前精简上下文里给出要接着执行的具体目标。
+- 若需要从机制上避免再次发生，可另行修复 `agent-resume.sh`：识别上下文超限为不可自动重试状态，并改用新 thread 加压缩交接，而不是持续重试旧 thread。
+--- report end ---

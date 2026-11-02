@@ -10,13 +10,17 @@
 - `task-scope.sh` 是只读任务分流入口，把自然语言任务映射到技能组合与拆分建议；保持可执行，并同步 `README.md` 里的用途、参数和测试入口。
 - `agent-resume.sh` 检测 agent run 的意外中断，默认等待 10 秒后通过原统一 launcher 执行
   `--resume`；除用户停止、正常结束或仍有存活锁的 run 外，failed/blocked/stale-running 等状态均会恢复。
-  默认无限重试，`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数，达到可选上限后才退出；调度锁防止同一 run
-  出现并行恢复链，每次 launcher 仍受硬超时和心跳约束。检测范围包含 429、并发上限中英文变体、连接中断和
-  `upstream_error` / `reasoning_content ... passed back` 等错误。配套 `agent-resume.test.sh`，并覆盖派发
-  子 agent 的同构 manifest。
+  普通瞬时失败默认无限重试，`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数；模型上下文超限属于不可原 thread
+  重试状态，改为生成脱敏、限长的 `resume-handoff.md`，用原 launcher 启动一次新 run/thread，并把
+  `handoff_run_id` / `handoff_thread_id` 写回源 manifest。交接尝试由 `.context-overflow-handoff-attempted`
+  去重，后续调用返回 `reason=handoff_already_started`，不会重复烧资源。调度锁防止同一 run 出现并行恢复链，
+  每次 launcher 仍受硬超时和心跳约束。检测范围包含上下文窗口/`context_length_exceeded`、429、并发上限
+  中英文变体、连接中断和 `upstream_error` / `reasoning_content ... passed back` 等错误。配套
+  `agent-resume.test.sh`，并覆盖派发子 agent 的同构 manifest。
 - `agent-session-state.py` 是 Codex、Claude Code、OpenCode 共用的只读会话解析器：按 manifest 的
   `run_id + cwd + created_at` 分别查询 Codex state DB/rollout、Claude 项目 JSONL、OpenCode V1/V2
-  SQLite，并只依据最后一个完整 turn 输出 `failure_found` 与瞬时性分类；不修改各 agent 状态、不输出消息正文或凭据。
+  SQLite，并只依据最后一个完整 turn 输出 `failure_found`、`context_overflow` 与瞬时性分类；不修改各 agent
+  状态、不输出消息正文或凭据。
   `agent-codex-state.py` 保留为 Codex 兼容入口。配套 `agent-session-state.test.py` 与
   `agent-codex-state.test.py`。
 - `agent-tui-watch.py` 是 TUI 的同生命周期旁路监控器：复用会话解析器的最新 `turn_state` 与
@@ -33,6 +37,12 @@
   Slurm allowlist 和 accelerator management visibility；不得运行 benchmark/stress、写系统状态、
   输出 hostname、绝对路径、job/device ID 或未脱敏环境变量。未知值保持 `null`，配套
   `agent-resources.test.py`。
+- `agent-config-benchmark.py` 是配对 HumanEval 基准入口：固定官方数据集 commit 与 SHA256，
+  在相同 launcher/provider/model/strength 下比较完整 configure prompt 与 `agent-dispatch` 最小提示，
+  从 Codex JSONL 提取 provider token usage 和工具动作，并用隐藏测试计算 pass@1。它只写指定
+  `data/cache/` 或调用方给定的仓库内输出目录；发现子 agent 文件写入超出任务工作区时立即中止。
+  支持 `--download-dataset`、断点复用、Wilson 区间、配对 bootstrap 和 McNemar 精确检验；
+  配套 `agent-config-benchmark.test.py`。
 - `plugin-audit.py` 是只读 plugin/hook/MCP 静态审计入口：校验 `.codex-plugin/plugin.json`、
   相对路径边界、hook event/schema、重复 id、命令风险、timeout、远程 hook 与 MCP runtime；
   拒绝重复 JSON 键与非有限数值，检查 hook/MCP 命令的父目录穿越和符号链接逃逸，并对输出中的已知

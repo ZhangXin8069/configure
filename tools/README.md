@@ -61,6 +61,41 @@ tools/task-scope.sh --task "先帮我评估这个分类器的可行性，再给�
 bash tools/task-scope.test.sh
 ```
 
+### `agent-config-benchmark.py`
+
+对完整 configure agent prompt/skills 与同一 launcher 的最小原生提示做配对基准。默认从固定的
+[`openai/human-eval@b9453e8f`](https://github.com/openai/human-eval/tree/b9453e8f1865df0a0057a1383767caa400acfbcf)
+快照抽样 HumanEval 任务，校验数据集 SHA256，在全新 Git 工作区中让两臂完成同一 `solution.py`，
+再用隐藏测试计算 pass@1。两臂固定 provider、模型、强度、超时和工作区；工具从 Codex JSONL 的
+`turn.completed.usage` 读取 input/cached/output token，并统计命令和文件修改动作。
+
+```bash
+python3 tools/agent-config-benchmark.py \
+  --download-dataset \
+  --output-dir data/cache/agent-config-benchmark/run-001 \
+  --sample-size 16 \
+  --timeout-seconds 300
+
+python3 tools/agent-config-benchmark.py \
+  --output-dir data/cache/agent-config-benchmark/run-001 \
+  --sample-size 16 \
+  --timeout-seconds 300 \
+  --resume
+```
+
+输出包括逐臂 `summary.json`、可读 `summary.md`、每题每臂 result 和原始 dispatch/agent 日志。
+`--resume` 只补跑缺失配对并重算汇总；`--task-id HumanEval/0` 可重复指定固定任务。抽样由
+`--seed` 的 SHA256 顺序确定，增加样本量会保留此前抽样前缀。工具需要 `git`、`python3`、网络
+（首次下载数据集）和可用的 `bin/agent-dispatch.sh` provider 凭据；数据集为 MIT license。
+基准不是完整软件工程能力结论：HumanEval 主要测短程算法实现，不能替代 SWE-bench/Terminal-Bench
+等仓库级或终端任务。
+
+回归测试：
+
+```bash
+python3 tools/agent-config-benchmark.test.py
+```
+
 ### `agent-resume.sh`
 
 检测 agent 意外中断的 run，并在默认等待 10 秒后通过原统一 launcher 执行
@@ -73,8 +108,10 @@ bash tools/task-scope.test.sh
 子 agent 使用同一恢复路径。若 Codex 在首个回合失败前已写入 `thread.started` 但 manifest 尚无
 `thread_id`，工具会从 `agent.log` 回填；TUI 日志为空时，还会用 `agent-session-state.py` 按
 `run_id + cwd + created_at` 查询 Codex/Claude Code/OpenCode 的本地会话存储，并依据最后一个完整
-turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。恢复监督进程默认无限重试，
-每次尝试之间等待 `AGENT_RESUME_DELAY` 秒；`.auto-resume-schedule` 防止同一 run 出现并行恢复链，
+turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。普通瞬时失败默认无限重试，
+每次尝试之间等待 `AGENT_RESUME_DELAY` 秒；模型上下文超限时不重试原 thread，而是生成不超过
+`AGENT_RESUME_HANDOFF_MAX_BYTES`（默认 32768 字节）的脱敏 `resume-handoff.md`，再用原 launcher 的
+`--once` 新 run 接管，并把新 run/thread 标识写回源 manifest。`.auto-resume-schedule` 防止同一 run 出现并行恢复链，
 `.auto-resume-attempted` 记录尝试次数。`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数，设置正整数可加安全上限。
 恢复链不要求 root 或系统级写权限：配置根来自 `AGENT_CONFIGURE_ROOT` 或脚本真实路径，数据根来自
 `AGENT_DATA_DIR` / `CONFIGURE_AGENT_DATA_DIR`、部署目录或当前用户 `$HOME/configure/data`，临时锁与日志均位于
@@ -89,9 +126,11 @@ tools/agent-resume.sh --force --run-id RUN_ID
 
 退出码：`0` 恢复成功，`1` 达到可选重试上限后仍失败，`2` 参数错误，`3` 不可恢复，`4` 正在运行/
 已停止/已正常结束或已有恢复调度，`5` manifest 或会话标识无效，`6` 找不到 run，`7` launcher 不可用，
-`73` 工作目录或写权限不可用，`124` 单次恢复超时。恢复子进程默认硬超时 1800 秒、心跳 60 秒，可用
-`--timeout`、`--heartbeat`、`AGENT_RESUME_DELAY`、`AGENT_RESUME_TIMEOUT`、`AGENT_RESUME_HEARTBEAT`
-调整；`AGENT_RESUME_MAX_ATTEMPTS` 可设置重试上限；`AGENT_AUTO_RESUME=0` 可关闭 runtime 自动调度。
+`8` 上下文超限交接失败，`73` 工作目录或写权限不可用，`124` 单次恢复超时。恢复子进程默认硬超时
+1800 秒、心跳 60 秒，可用 `--timeout`、`--heartbeat`、`--handoff-max-bytes`、
+`AGENT_RESUME_DELAY`、`AGENT_RESUME_TIMEOUT`、`AGENT_RESUME_HEARTBEAT`、
+`AGENT_RESUME_HANDOFF_MAX_BYTES` 调整；`AGENT_RESUME_MAX_ATTEMPTS` 可设置重试上限；
+`AGENT_AUTO_RESUME=0` 可关闭 runtime 自动调度。
 
 回归测试：
 
@@ -114,8 +153,8 @@ bash tools/agent-resume.test.sh
   `OPENCODE_DATA_HOME` / XDG 数据目录下的 `opencode.db`，同时支持 V1 `message/part` 与 V2
   `session_message`。
 
-三系都限制 cwd 与创建时间窗口，且只以最新完整 turn 输出 `failure_found` 和瞬时性分类；较早失败不会
-覆盖后续成功。恢复调用默认受 5 秒硬超时约束，可用 `AGENT_STATE_TIMEOUT` 调整；超时、数据库
+三系都限制 cwd 与创建时间窗口，且只以最新完整 turn 输出 `failure_found`、`context_overflow` 和瞬时性
+分类；较早失败不会覆盖后续成功。恢复调用默认受 5 秒硬超时约束，可用 `AGENT_STATE_TIMEOUT` 调整；超时、数据库
 不可读或会话不唯一时 fail-closed。`agent-codex-state.py` 是兼容旧路径的 Codex 入口。
 
 ### `agent-tui-watch.py`

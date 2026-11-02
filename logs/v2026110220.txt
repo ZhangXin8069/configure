@@ -1,0 +1,95 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 20:56:13 +0800
+批次: screen-agent-tui
+主任务: 修复 screen 下本库 agent 页面乱码
+触发原因: 任务完成
+摘要: 锁定 screen UTF-8 与 256 色窗口 term，归一化旧会话 TERM，并通过 shell、agent、SSH、form 与真实 screen 烟测
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与根因定位
+- 目标: 定位 /root/configure 的 cl/op/co 在 GNU screen 中页面乱码的终端环境原因。
+- 命令/操作: 检查当前进程环境、screen 版本/会话信息、screen 启动参数、locale、agent.sh 终端编码逻辑与相关测试。
+- 关键输出: 当前 agent 进程 TERM=screen、LANG=C.utf8；screen 4.09.00；本库启动命令未传 -U 或 -T。受控 screen 冒烟中，LC_ALL=C 且不带 -U 创建时 screen -Q info 不含 UTF-8，发送 encoding utf8 后变为 UTF-8。
+- 退出码: 0（诊断命令）；在缺失会话上尝试 encoding 时真实 screen 返回 1 并输出 No screen session found.，据此将探测改为静默失败。
+- 证据与判断: 根因属于 screen 启动链路未锁定 UTF-8 与窗口 term，且旧会话可被子 shell/agent 继承基础 TERM=screen。现有 agent.sh 只处理 locale，没有处理 screen 终端能力。
+
+### S2 — 实现修复
+- 目标: 新会话、旧会话、env.sh 启动路径和未加载 env.sh 的 agent 启动路径全部获得稳定 UTF-8/256 色终端环境。
+- 命令/操作: 修改 lib/_screen.sh、env.sh、bin/_ssh_screen.sh、bin/agent.sh；新建 screen 使用 -U -T screen-256color，terminfo 缺失时回退 screen；重连前静默发送 encoding utf8；screen 内将基础 TERM 归一化为 256 色 term，screen 外不改 TERM；支持 SCREEN_TERM 显式覆盖。
+- 关键输出: env.test.sh、bin/ss.test.sh、bin/agent.test.sh 新增对应断言并通过。
+- 退出码: 0。
+- 证据与判断: 修复覆盖 scn、scr、SSH screen 入口及 agent 直接启动，避免依赖调用方先加载 env.sh。
+
+### S3 — 文档与门禁
+- 目标: 同步行为说明并完成仓库质量门禁。
+- 命令/操作: 更新 bin/AGENTS.md、lib/_env/setup.md、lib/_ssh/setup.md；执行 bash/zsh 语法、完整测试、form 审计、快照校验、data 白名单和 diff 检查。
+- 关键输出: 所有测试与门禁返回 0；.opencode/skills 不存在，因此按仓库约定跳过 configure-check 镜像核对；未暂存文件，所以大文件脚本检查 0 个暂存对象。
+- 退出码: 0。
+- 证据与判断: 改动边界仅限 screen/agent 终端链路、对应测试和文档，无 data 或凭据变更。
+
+## 验证与证据
+- 测试/检查: bash -n env.sh env.test.sh lib/_screen.sh bin/_ssh_screen.sh bin/agent.sh bin/agent.test.sh bin/ss.test.sh
+- 结果: 通过。
+- 测试/检查: zsh -n env.sh env.test.sh lib/_screen.sh
+- 结果: 通过。
+- 测试/检查: bash env.test.sh
+- 结果: 通过，覆盖 bash/zsh 的 screen 参数、重连编码、TERM 归一化和 screen 外不变性。
+- 测试/检查: bash bin/ss.test.sh
+- 结果: 通过，覆盖 screen 新建/重连参数与退出码透传。
+- 测试/检查: bash bin/agent.test.sh
+- 结果: 完整矩阵通过，包含新增的 screen TERM 回归。
+- 测试/检查: 真实 GNU screen 冒烟
+- 结果: LC_ALL=C 会话最初非 UTF-8，新 _screen_enable_utf8 后 screen -Q info 显示 UTF-8。
+- 测试/检查: form-audit --strict --quiet、form-snapshot-verify --quiet、form-data-tracking-check --quiet、git diff --check
+- 结果: 全部通过。
+- 未验证项: 未取得用户原始乱码页面截图，无法对视觉现象做逐字对照；修复依据为终端状态、启动参数和真实 screen 编码烟测。
+
+## 变更与产物
+- 文件: bin/AGENTS.md
+- 文件: bin/_ssh_screen.sh
+- 文件: bin/agent.sh
+- 文件: bin/agent.test.sh
+- 文件: bin/ss.test.sh
+- 文件: env.sh
+- 文件: env.test.sh
+- 文件: lib/_env/setup.md
+- 文件: lib/_screen.sh
+- 文件: lib/_ssh/setup.md
+- 产物: screen 终端能力归一化、旧会话 UTF-8 重连修复及对应文档/测试。
+- 未改动范围: 未修改系统 screen 安装、系统配置、data、凭据、提交或远程状态。
+
+## 风险、限制与下一步
+- 风险: 已运行的 agent 进程不会热更新自身 TERM；现有 screen server 可通过 scr 在线切换 UTF-8，但 TUI 应在重新 source env.sh 后退出并重启一次以继承 screen-256color。
+- 阻塞: 无。
+- 下一步: 在用户实际 screen 中执行 source /root/configure/env.sh，退出当前 cl/op/co 后重新启动；必要时用 scl 和 screen -Q info 确认会话包含 UTF-8。
+
+## 用户输入指令
+在screen下的本库agent存在页面乱码情况
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- 新建 screen 会话现在显式使用 `-U` 与 `-T screen-256color`，terminfo 缺失时回退基础 `screen`。
+- 重连旧会话前静默发送 `encoding utf8`，修复先于 UTF-8 locale 启动的旧 screen server。
+- `env.sh` 和 `agent.sh` 都会在 screen 内把 `TERM=screen/dumb` 归一化；screen 外保持原值。
+- 支持用 `SCREEN_TERM` 显式覆盖窗口 term。
+- 同步更新 agent/SSH 文档与回归测试。
+
+**推理依据**
+当前 agent 进程只得到 `TERM=screen`，而本库 screen 创建命令没有锁定 UTF-8 或窗口 term。受控实验中，`LC_ALL=C` 创建的 screen 初始不含 UTF-8，新逻辑在线切换后 `screen -Q info` 显示 UTF-8。修复因此覆盖新会话、旧会话和未加载 `env.sh` 的 agent 启动路径。
+
+**验证结果**
+- bash/zsh 语法检查通过。
+- `env.test.sh`、`ss.test.sh`、完整 `agent.test.sh` 通过。
+- 真实 GNU screen UTF-8 在线切换烟测通过。
+- form 严格审计、快照校验、data 白名单、diff 检查和日志写入门禁通过。
+- `.opencode/skills` 不存在，镜像检查按约定跳过。
+- 未暂存、提交或推送。
+
+**后续步骤**
+现有已打开的 agent 进程需要重启一次：先执行 `source /root/configure/env.sh`，再退出并重新启动 `cl`、`op` 或 `co`。可用 `screen -Q info` 确认当前会话包含 `UTF-8`。
+--- report end ---

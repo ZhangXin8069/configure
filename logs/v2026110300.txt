@@ -1,0 +1,82 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 00:02:08 +0800
+批次: agent-context-overflow-handoff
+主任务: 修改 agent-resume：上下文超限改走新 thread 压缩交接
+触发原因: 任务完成
+摘要: 识别 context overflow 为不可原 thread 重试状态，生成限长脱敏交接并通过原 launcher 启动一次新 run；完整恢复与仓库回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 - 复现上下文超限重试缺陷
+- 目标: 验证旧逻辑把 context overflow 当作普通可恢复失败。
+- 命令/操作: 新增 headless context-overflow、迟到超限、历史超限后 429、TUI rollout 超限和共享解析器分类测试。
+- 关键输出: RED 阶段 agent-resume 返回 `status=resumable reason=unexpected_interruption`；解析器缺少 `error_is_context_overflow` 且返回四元组。
+- 退出码: 1
+- 证据与判断: 原实现会对必然超限的 thread 无限重试，必须改为一次性新 thread 交接。
+
+### S2 - 实现不可重试分类与新 thread 交接
+- 目标: 上下文超限时停止原 thread 重试，生成压缩交接并由新 run/thread 接管。
+- 命令/操作: 修改 `tools/agent-resume.sh` 与 `tools/agent-session-state.py`；检测最新 failure 的上下文超限标志；生成 `resume-handoff.md`；通过原 launcher 执行不带 `--resume` 的 `--once` 新 run；写回 handoff run/thread 标识。
+- 关键输出: `--check` 对超限返回 `status=handoff`；成功返回 `status=handoff-finished`；重复调用返回退出码 4 与 `reason=handoff_already_started`；交接启动失败返回退出码 8 且不重试旧 thread。
+- 退出码: 0
+- 证据与判断: 交接默认上限 32768 字节，按 UTF-8 字符边界截断，任务摘录经过常见凭据模式脱敏，并保留 Git 状态与源 run 证据路径。
+
+### S3 - 回归与收尾
+- 目标: 保证普通瞬时恢复行为不变并完成仓库门禁。
+- 命令/操作: 执行恢复器、状态解析器、Codex 状态、TUI watcher、Codex resume、agent dispatch、hook、完整 agent、form、data、snapshot、大文件和 diff 检查。
+- 关键输出: 恢复器 22 个场景及汇总断言全部 PASS；session-state 12/12、Codex state 7/7、TUI watcher 9/9、Codex resume 2/2；完整 agent.test.sh 全部 PASS。
+- 退出码: 0
+- 证据与判断: form strict、snapshot、data 白名单、大文件、git diff --check 通过；configure-check 非严格模式 errors=0，仅有仓库既有的零 plugin manifest 警告。
+
+## 验证与证据
+- 测试/检查: bash -n；python3 -m py_compile；tools/agent-resume.test.sh；agent-session-state.test.py；agent-codex-state.test.py；agent-tui-watch.test.py；agent-codex-resume.test.py；hooks/agent-resume.test.sh；bin/agent-dispatch.test.sh；bin/agent.test.sh。
+- 结果: 全部通过。
+- 未验证项: 未使用真实 provider 发起一次上下文超限后的实际新 thread 模型回合；新 thread 启动参数与结果通过 fake launcher、完整 agent 回归和静态路径验证。
+
+## 变更与产物
+- 文件: tools/agent-resume.sh、tools/agent-session-state.py、tools/agent-resume.test.sh、tools/agent-session-state.test.py、AGENTS.md、bin/AGENTS.md、tools/AGENTS.md、tools/README.md。
+- 产物: 上下文超限一次性新 thread 交接、压缩交接文件、源 run 到新 run/thread 的 manifest 关联及完整回归覆盖。
+- 未改动范围: 未提交、未推送、未打标；未修改系统配置、凭据或仓库外路径。
+
+## 风险、限制与下一步
+- 风险: 该交接是一个受控的单次新 thread 回合，不等于恢复原 thread 的全部隐藏状态；它依赖工作树、inputs、events、日志和 Git 状态等可观察证据。
+- 风险: 普通 TUI watcher 仍在进程存活期间执行原生原地恢复；本文修复覆盖进程退出后由 agent-resume 兜底的路径。
+- 阻塞: 无。
+- 下一步: 如需覆盖 TUI 存活期间的上下文超限，应单独让 agent-tui-watch 在检测到 context_overflow 后退出原地恢复路径并转交 agent-resume。
+
+## 用户输入指令
+修改 agent-resume.sh，将上下文超限识别为不可重试状态，并改用新 thread 加压缩交接
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**改动内容**
+- `tools/agent-resume.sh` 现在区分最新失败类型：普通 429、连接中断等继续恢复原 thread；上下文超限返回 `status=handoff`，不再重试旧 thread。
+- 超限后生成限长、脱敏、UTF-8 安全的 `resume-handoff.md`，默认 32768 字节，可用 `--handoff-max-bytes` 或 `AGENT_RESUME_HANDOFF_MAX_BYTES` 调整。
+- 新 run 使用原统一 launcher，但只传 `--once`，不传 `--resume`；交接内容通过 `AGENT_DISPATCH_TASK` 注入，完整继承 provider/model/strength/cwd/sandbox/approval 和原 secure launcher。
+- 源 manifest 写回 `resume_class=context_overflow_handoff`、`handoff_file`、`handoff_run_id`、`handoff_thread_id`；`.context-overflow-handoff-attempted` 防止重复创建新 thread。
+- 交接启动失败返回退出码 8；后续调用返回退出码 4 与 `reason=handoff_already_started`，不会回落到原 thread 无限重试。
+- `tools/agent-session-state.py` 对 Codex、Claude Code、OpenCode 增加 `context_overflow` 输出，并继续只依据最后一个完整 turn 分类。
+- 新增 headless、TUI 空日志、迟到超限、历史超限后 429、失败退出码 8、重复交接、文件上限、凭据脱敏和 UTF-8 边界测试。
+- 同步根目录、`bin/`、`tools/` 文档。
+
+**推理依据**
+- 同一 thread 的上下文已经超过模型窗口时，重试只会重复发送超限历史，无法自愈。
+- 新 thread 必须获得可操作但不庞大的现场，因此交接只包含源 run 标识、原任务摘录、当前 Git 快照、证据路径和明确续接规则。
+- 通过最新完整 turn 和最新错误行分类，避免历史上的 context overflow 覆盖后续正常瞬时失败。
+- 交接开始前写入不可重试标记，失败也不回落到旧 thread，避免恢复风暴和重复消耗。
+
+**验证结果**
+- `tools/agent-resume.test.sh` 的 22 个场景和最终汇总断言全部通过。
+- `tools/agent-session-state.test.py` 12/12、`tools/agent-codex-state.test.py` 7/7、`tools/agent-tui-watch.test.py` 9/9、`tools/agent-codex-resume.test.py` 2/2 通过。
+- `hooks/agent-resume.test.sh`、`bin/agent-dispatch.test.sh` 和完整 `bin/agent.test.sh` 通过。
+- shell/Python 语法、form strict、snapshot、data 跟踪白名单、大文件与 `git diff --check` 通过。
+- `tools/configure-check.sh` 非严格模式 errors=0；严格模式仍因仓库既有的“无已加载 plugin manifest”警告返回 1。
+- 未使用真实 provider 复现一次上下文超限后模型交接；真实启动路径由 fake launcher、现有 launcher 回归和静态参数检查覆盖。
+
+**后续步骤**
+- 若还需覆盖 TUI 进程存活期间的超限，应让 `agent-tui-watch.py` 识别 `context_overflow=1`，停止原地恢复并转交 `agent-resume.sh`。
+- 本次未提交、推送或打标。
+--- report end ---

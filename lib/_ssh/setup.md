@@ -182,12 +182,24 @@ xx99.sh -n
 `ServerAliveCountMax=3`。客户端每 30 秒发送一次加密保活探测，连续 3 次无响应才判定失联；
 这主要用于避免空闲连接被 NAT、防火墙或服务端的无流量超时提前回收。
 
-## screen 持久会话
+## SSH 后远端 screen
 
-仓库内 8 个交互式 SSH 入口会在 screen 可用时自动创建或重连持久会话。会话名默认取 SSH
-客户端脚本名（如 `ss.sh`、`ssnsc.bat`），可用 `SSH_SCREEN_NAME` 覆盖；窗口标题 `-t`
-先与 sockname 同名，screen 启动后再按会话内的 `$STY` 更新为完整的
-`<pid>.<sockname>`。已存在同名会话时使用 `-d -R` 重连并踢掉旧连接。
+仓库内 8 个交互式 SSH 入口不再在本地 SSH 前创建 screen，而是直接执行带 TTY 的 SSH。
+认证成功后在远端检查 `screen`，并创建新的 UTF-8 会话：`-S` 与窗口标题 `-t` 都使用本地
+SSH 客户端主机名，`SSH_SCREEN_NAME` 可显式覆盖。命令不使用 `-r`、`-R` 或 `-d -R`，
+因此不会自动进入旧会话；同一客户端可以并行建立多个 SSH，每个连接获得独立的远端 screen。
+窗口 term 优先使用 `screen-256color`，远端缺少该 terminfo 时回退 `screen`。
+
+远端脚本类型由 `SSH_REMOTE_SHELL=posix|powershell` 控制。默认 19 号 Windows 主机和 X99
+使用 PowerShell，其余入口使用 POSIX `sh`；可在调用前显式覆盖。PowerShell 分支只使用
+PowerShell 原生命令检测 screen，不发送 `if command`、`&&`、`>&2` 或 `exec` 等 POSIX 语法。
+
+`xx99.sh` 的 ddocker 等既有远端命令也会按 PowerShell 语法执行。所有远端没有 screen 时都只输出
+warning 并进入交互 shell，不再依赖本地 `_screen-guide.txt` 或本地是否安装 screen。
+
+本地 `scn` 新建会话仍使用 `-U -T screen-256color`（terminfo 缺失时回退基础 `screen`），
+`scr` 重连本地旧会话前会在线发送 `encoding utf8`。加载 `env.sh` 或启动 agent 时仍会把旧
+本地窗口继承的 `TERM=screen/dumb` 归一化，避免 cl/op/co 页面乱码。
 
 重新加载环境后可直接使用：
 
@@ -198,9 +210,8 @@ scl              # 查看
 scr [名字]       # 重连并踢掉旧连接
 ```
 
-新建 session 后按 `Ctrl+a d` 脱离。screen 缺失时，入口会列出 Debian/Ubuntu、RHEL 系、
-Arch 系、openSUSE、Alpine、FreeBSD 与 macOS 的安装命令，以及上述使用方式，然后跳过持久化
-并继续原 SSH 连接。
+新建 session 后按 `Ctrl+a d` 脱离。上述 `scn/scl/scr` 管理的是本地会话；SSH 入口管理的是
+登录成功后的远端会话，两者相互独立。
 
 ## 排障顺序
 

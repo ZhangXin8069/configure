@@ -248,6 +248,24 @@ _ensure_utf8_locale() {
     return 1
 }
 
+# screen 可能由旧版 helper、IDE 或未 source env.sh 的父 shell 创建。
+# 在启动 TUI 前把基础/哑终端 term 提升为 screen 的 256 色 term，避免
+# 颜色与字符绘制能力不足造成页面乱码；screen 外不修改 TERM。
+_ensure_screen_terminal() {
+    [[ -n "${STY:-}" ]] || return 0
+    case "${TERM:-}" in
+        ''|dumb|screen|screen-bce|screen-bce.*) ;;
+        *) return 0 ;;
+    esac
+    local _screen_term=${SCREEN_TERM:-screen-256color}
+    if [[ -z "${SCREEN_TERM:-}" ]] &&
+       { ! command -v infocmp >/dev/null 2>&1 ||
+         ! command infocmp "${_screen_term}" >/dev/null 2>&1; }; then
+        _screen_term=screen
+    fi
+    export TERM="${_screen_term}"
+}
+
 # 按字符截断实时日志行。GNU `cut -c` 实际按字节切，在中文行上会留下半个
 # 字符形成乱码；用 python3 按 UTF-8 解码后截断，缺失解释器时退回 cut（保底不报错）。
 _clip_text() {
@@ -2744,6 +2762,7 @@ _migrate_legacy_keys
 _migrate_opencode_keys
 _agent_config_load
 _ensure_utf8_locale || true
+_ensure_screen_terminal || true
 
 case "${_AGENT}" in
     claude)   run_claude "$@";;

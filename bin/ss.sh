@@ -17,7 +17,7 @@ _finish() {
 }
 
 main() {
-    local short alias ip_text ip user default_ip numeric_fallback_user rc
+    local short alias ip_text ip user default_ip numeric_fallback_user remote_shell rc
 
     numeric_fallback_user="zhangxin"
 
@@ -78,7 +78,15 @@ main() {
         esac
     fi
 
-    _ssh_screen "${_NAME}" \
+    remote_shell=${SSH_REMOTE_SHELL:-}
+    if [[ -z "${remote_shell}" ]]; then
+        case "${user}:${ip}" in
+            kfutfd:19) remote_shell=powershell ;;
+            *) remote_shell=posix ;;
+        esac
+    fi
+
+    SSH_REMOTE_SHELL="${remote_shell}" _ssh_screen "${_NAME}" \
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -l "${user}" "192.168.188.${ip}"
     rc=$?

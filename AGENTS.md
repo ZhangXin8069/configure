@@ -31,9 +31,9 @@
 | `logs/` | 任务需求单与 agent 阶段/完成日志；需求单沿用 `v{YYYYMMDD}.txt`，`log` 技能按紧凑时间戳生成日志并维护 `logs/AGENTS.md` 批次索引 |
 | `refer/` | 外部参考项目拷贝（如 `git-rep/oh-my-codex`），只读对照，不属于本库维护范围 |
 | `data/` | agent 运行时本地数据：runs、hooks、cache、会话/日志/数据库、shell 快照与模型目录缓存；仅目录契约文件可入库 |
-| `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；普通 TUI 由 `tools/agent-tui-watch.py` 对意外中断做原地恢复，进程退出后的 `agent-resume` 作为 headless/兜底路径并默认无限重试；不会自动修改 agent 配置或 `core.hooksPath` |
+| `hooks/` | 通用 agent hook 适配层与独立 Git 质量门禁；普通 TUI 由 `tools/agent-tui-watch.py` 对意外中断做原地恢复，进程退出后的 `agent-resume` 作为 headless/兜底路径，对瞬时错误重试、对上下文超限改为新 thread 压缩交接；不会自动修改 agent 配置或 `core.hooksPath` |
 | `plugins/` | Codex 插件推荐索引与显式安装器；支持固定 ref、只读状态和安装前 plugin/hook/MCP 静态审计；不自动安装第三方插件 |
-| `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 按 10 秒间隔恢复意外中断 run，`agent-resources.py` 提供脱敏资源快照，`plugin-audit.py` 静态审计 plugin/hook/MCP manifest |
+| `tools/` | 配置仓库维护工具与上游工具推荐信息；`agent-resume.sh` 按 10 秒间隔恢复意外中断 run，并在上下文超限时停止原 thread 重试、生成脱敏压缩交接后启动新 thread，`agent-resources.py` 提供脱敏资源快照，`agent-config-benchmark.py` 用固定 HumanEval 快照配对比较完整/最小 agent 配置的通过率、token、耗时和工具动作，`plugin-audit.py` 静态审计 plugin/hook/MCP manifest |
 | `lib/_clash/` | Clash 代理环境安装包包装目录；`setup.sh --check` 仅检查，默认执行会解压覆盖子目录 |
 
 ## 外部组件边界
