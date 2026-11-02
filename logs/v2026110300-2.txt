@@ -1,0 +1,105 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 00:44:15 +0800
+批次: diff-init-tag
+主任务: 执行 diff-init-tag 并修复 SSH 远端 PowerShell 无 screen 降级
+触发原因: 任务完成
+摘要: 完成工作树审计、33 技能镜像初始化、全量门禁、提交推送和 dev48 标签；修复 Windows PowerShell 远端脚本混入 POSIX 语法
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — diff 与范围审计
+- 目标: 在执行 init 和 tag 前审计全部未提交改动。
+- 命令/操作: 检查 git status、diff stat/numstat/summary、未跟踪文件、最近提交、远程分支、145 个历史标签和 tag-chain。
+- 关键输出: 初始工作树包含 screen/SSH 终端链路、HumanEval 基准、agent 恢复交接和 6 份交付日志；本地与 origin/main 同点，标签链检查通过。
+- 退出码: 0。
+- 证据与判断: 改动均属于已完成任务，无待恢复的暂存内容或远程分叉。
+### S2 — SSH PowerShell 缺陷修复
+- 目标: 修复 `ss.sh` 默认 Windows 目标把 POSIX 远端脚本交给 PowerShell 导致的解析错误。
+- 命令/操作: 增加 `SSH_REMOTE_SHELL=posix|powershell`；19 号 Windows 目标与 X99 默认 PowerShell；PowerShell 使用 `Get-Command`、`Write-Warning` 和交互 shell 降级；同步 Windows `ss.ps1`。
+- 关键输出: `ss.test.sh` 覆盖 19 号 PowerShell、42 号 POSIX、显式覆盖、单引号转义和 x99 契约；bash 语法、env、agent、Windows 静态契约测试通过。
+- 退出码: 0。
+- 证据与判断: 原错误来自远端 shell 类型不匹配，而非 SSH 或 screen 二进制本身。远端无 screen 时现在只 warning 并进入交互 shell。
+- 未验证项: 本机无 pwsh/powershell.exe，且缺少远端密码，未执行真实 Windows PowerShell 端到端解析；已记录为外部验证缺口。
+### S3 — init 技能镜像
+- 目标: 重建被忽略的本地 `.opencode/skills/` 镜像并确认目录契约。
+- 命令/操作: 复制 33 个技能目录及 `skills/AGENTS.md`，逐目录 diff，并执行 configure-check。
+- 关键输出: 镜像 33 个技能、完整 diff=0；配置检查 errors=0，仅保留既有 plugin manifest 警告。
+- 退出码: 0。
+- 证据与判断: 首次检查发现根 AGENTS 漏复制，补齐后重跑通过；无外部 refer/vendor 目录被修改。
+### S4 — 门禁、提交、推送与标签
+- 目标: 完成条件式交付和远端闭环。
+- 命令/操作: 显式暂存 33 个文件，执行 cached diff、大文件、data 白名单、敏感扫描；提交并推送 main；创建并推送 dev48。
+- 关键输出: commit b5b73a0，33 files，+2786/-214；origin/main=b5b73a0；dev48 tag object 2f40056，peeled b5b73a0；tag-chain 146 个标签通过。
+- 退出码: 0。
+- 证据与判断: 工作树在标签后为 clean，远端分支与标签对象均已回读一致。
+
+## 验证与证据
+- 测试/检查: bash -n；zsh -n；python3 -m py_compile
+- 结果: 通过。
+- 测试/检查: env.test.sh、ss.test.sh、agent.test.sh、agent-windows.test.sh
+- 结果: 通过；PowerShell parser 因本机无 PowerShell 明确跳过。
+- 测试/检查: agent-resume.test.sh、agent-session-state.test.py、agent-codex-state.test.py、agent-tui-watch.test.py、agent-codex-resume.test.py、hooks/agent-resume.test.sh、agent-dispatch.test.sh、agent-config-benchmark.test.py
+- 结果: 全部通过。
+- 测试/检查: form-audit --strict、snapshot verify、data tracking、large files、configure-check、git diff --check
+- 结果: 通过；configure-check 保留 1 个既有 plugin manifest 警告、0 errors。
+- 测试/检查: tag-chain --check --remote origin
+- 结果: 146 个标签的 follow 链、祖先关系和远端对象全部通过。
+- 未验证项: 真实 Windows OpenSSH 会话未在本机重放。
+
+## 变更与产物
+- 文件: 33 个已提交文件，涵盖 bin/env/lib/tools/logs。
+- 产物: commit b5b73a0；tag dev48；本地 `.opencode/skills` 33 技能镜像。
+- 未改动范围: data 仅保留三份跟踪契约；未修改外部 refer/vendor；未改写、删除或强推任何历史标签。
+
+## 风险、限制与下一步
+- 风险: PowerShell 分支只完成静态与契约验证，需用户在 19 号主机实际重试确认 warning 后进入交互 shell。
+- 风险: total 改动为复合快照，标签消息按五个功能组概括。
+- 阻塞: 无。
+- 下一步: 用户在 Windows 目标重新运行 `ss.sh`；若仍失败，将实际远端输出作为下一轮复现证据。
+
+## 用户输入指令
+~diff~init~tag
+对上述debug(无screen环境直接warnning后跳过)
+不应该有错误
+
+## Agent 全文报告
+--- report begin ---
+finished
+
+**diff**
+- 初始范围包含四组已完成改动：screen TUI 终端能力、SSH 登录后远端会话、HumanEval agent 配置基准、agent 上下文超限交接。
+- 共 33 个文件进入交付，`+2786/-214`；6 份既有最终日志一并归档。
+- 标签链预检覆盖 145 个历史标签，本地与远端均一致。
+
+**debug**
+- 根因是 `_ssh_screen.sh` 把所有远端都当作 POSIX shell，而 `kfutfd@192.168.188.19` 默认远端 shell 是 Windows PowerShell；PowerShell 在执行前拒绝 `if command`、`&&` 和 `>&2`。
+- 新增 `SSH_REMOTE_SHELL=posix|powershell`。19 号 Windows 目标和 X99 默认使用 PowerShell，其余目标保持 POSIX，可用环境变量显式覆盖。
+- PowerShell 分支使用 `Get-Command screen` 检测；没有 screen 时只 `Write-Warning`，随后进入交互 PowerShell，不产生解析错误。
+- `ss.ps1` 的 19 号目标同步采用 PowerShell 远端脚本，避免 Windows 客户端连接 Windows 主机时触发同类问题。
+- 本机没有 `pwsh/powershell.exe`，也没有远端密码，因此真实 Windows 会话只能标记为外部验证缺口；静态契约、单引号转义和无 POSIX 语法检查已经覆盖。
+
+**init**
+- 重建被忽略的 `.opencode/skills/` 镜像，复制 33 个技能目录与 `skills/AGENTS.md`。
+- 镜像逐文件 diff 为 0；`tools/configure-check.sh` 结果为 0 errors，仅保留既有 plugin manifest 警告。
+- `refer/`、oh-my-zsh、vim vendor/gitlink、source snapshot 和 `lib/_deepseek/.codex` 安装模板均未修改。
+
+**tag**
+- 提交：`b5b73a0 feat(agent): harden terminal, recovery, and benchmark workflows`
+- 分支：已推送 `main`，`origin/main` 与本地 HEAD 一致。
+- 标签：`dev48`，注释 `follow bug6, ... [codex].`
+- 标签对象：`2f40056e7f1cb25183c0ba25c56a89c4a78dfebf`
+- Peeled commit：`b5b73a03b00d79a6c869fa7d194e50570cbe101a`
+- `tag-chain.sh --check --remote origin`：146 个标签全部通过。
+
+**验证**
+- `bash -n`、`zsh -n`、`python3 -m py_compile` 通过。
+- `env.test.sh`、`ss.test.sh`、`agent.test.sh`、`agent-windows.test.sh` 通过。
+- 恢复、会话状态、TUI watcher、Codex resume、hook、dispatch 与 benchmark 测试全部通过。
+- `form-audit --strict`、snapshot、data tracking、大文件、configure-check、diff check 通过。
+- PowerShell parser 与真实 Windows SSH 端到端测试因环境限制未执行。
+
+**后续**
+- 在 19 号 Windows 主机重新运行 `ss.sh`，预期无解析错误；若远端没有 screen，应只看到 warning 并进入交互 shell。
+- 若仍需完全自动化验证，需要在具备 PowerShell 和测试远端账户的环境执行一次受控会话。
+--- report end ---

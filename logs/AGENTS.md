@@ -1033,3 +1033,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## diff-init-tag - final - 2026-11-03 00:44:15 +0800
+- 主任务: 执行 diff-init-tag 并修复 SSH 远端 PowerShell 无 screen 降级
+- 日志文件: logs/v2026110300-2.txt
+- 文件大小: 7375 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成工作树审计、33 技能镜像初始化、全量门禁、提交推送和 dev48 标签；修复 Windows PowerShell 远端脚本混入 POSIX 语法
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
