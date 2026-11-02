@@ -127,9 +127,37 @@ _validate_submodule_path() {
     local path=$1
 
     case "${path}" in
-        ""|/*|..|../*|*/..|*/../*|*$'\n'*) return 1 ;;
+        ""|"."|"./"|/*|..|../*|*/..|*/../*|./*|*/./*|*/.|*$'\n'*) return 1 ;;
     esac
     return 0
+}
+
+_is_tracked_gitlink() {
+    local path=$1
+    local entry
+    local metadata
+    local mode
+    local indexed_path
+
+    while IFS= read -r -d '' entry; do
+        metadata=${entry%%$'\t'*}
+        indexed_path=${entry#*$'\t'}
+        mode=${metadata%% *}
+        if [[ "${indexed_path}" == "${path}" && "${mode}" == 160000 ]]; then
+            return 0
+        fi
+    done < <(git -C "${_REPO_ROOT}" ls-files --stage -z -- "${path}" 2>/dev/null)
+    return 1
+}
+
+_submodule_is_within_repo() {
+    local submodule=$1
+    local repo_real
+    local submodule_real
+
+    repo_real=$(cd "${_REPO_ROOT}" && pwd -P) || return 1
+    submodule_real=$(cd "${submodule}" && pwd -P) || return 1
+    [[ "${submodule_real}" == "${repo_real}/"* ]]
 }
 
 _remote_default_ref() {
@@ -171,11 +199,22 @@ _has_local_state() {
 _stash_local_state() {
     local submodule=$1
     local message=$2
+    local stash_before
+    local stash_after
+
+    stash_before=$(git -C "${submodule}" rev-parse --verify --quiet refs/stash 2>/dev/null || true)
 
     if git -C "${submodule}" stash push --all --quiet --message "${message}" >/dev/null 2>&1; then
-        return 0
+        stash_after=$(git -C "${submodule}" rev-parse --verify --quiet refs/stash 2>/dev/null || true)
+        [[ -n "${stash_after}" && "${stash_after}" != "${stash_before}" ]]
+        return $?
     fi
-    git -C "${submodule}" stash save --quiet --all "${message}"
+    if git -C "${submodule}" stash save --quiet --all "${message}"; then
+        stash_after=$(git -C "${submodule}" rev-parse --verify --quiet refs/stash 2>/dev/null || true)
+        [[ -n "${stash_after}" && "${stash_after}" != "${stash_before}" ]]
+        return $?
+    fi
+    return 1
 }
 
 _back_submodule() {
@@ -185,6 +224,8 @@ _back_submodule() {
     local remote_ref
     local remote_commit
     local branch
+    local branch_backup_ref
+    local branch_head
     local old_head
     local backup_ref
     local stash_message
@@ -194,7 +235,7 @@ _back_submodule() {
         echo "ERROR: Refusing unsafe submodule path '${path}' from .gitmodules." >&2
         return 1
     fi
-    if ! git -C "${_REPO_ROOT}" ls-files --stage -- "${path}" | grep -q '^160000 '; then
+    if ! _is_tracked_gitlink "${path}"; then
         echo "ERROR: ${path} is mapped in .gitmodules but is not a tracked gitlink." >&2
         return 1
     fi
@@ -218,6 +259,11 @@ _back_submodule() {
         fi
     fi
 
+    if ! _submodule_is_within_repo "${submodule}"; then
+        echo "ERROR: Refusing submodule path outside repository: ${path}" >&2
+        return 1
+    fi
+
     if (( _DRY_RUN )); then
         echo "DRY-RUN: would force-align ${path} to origin's default branch"
     else
@@ -232,6 +278,7 @@ _back_submodule() {
         fi
         remote_commit=$(git -C "${submodule}" rev-parse --verify "${remote_ref}^{commit}") || return 1
         old_head=$(git -C "${submodule}" rev-parse --verify HEAD) || return 1
+        branch=${remote_ref#origin/}
         backup_ref="refs/gback-sub-backups/$(date "+%Y%m%d%H%M%S")-${old_head:0:12}-$$"
         if ! git -C "${submodule}" update-ref "${backup_ref}" "${old_head}"; then
             echo "ERROR: Unable to preserve old HEAD for ${path}." >&2
@@ -248,7 +295,18 @@ _back_submodule() {
             echo "BACKUP: ${path} dirty state -> git stash"
         fi
 
-        branch=${remote_ref#origin/}
+        if git -C "${submodule}" show-ref --verify --quiet "refs/heads/${branch}"; then
+            branch_head=$(git -C "${submodule}" rev-parse --verify "refs/heads/${branch}") || return 1
+            if [[ "${branch_head}" != "${old_head}" && "${branch_head}" != "${remote_commit}" ]]; then
+                branch_backup_ref="${backup_ref}-branch"
+                if ! git -C "${submodule}" update-ref "${branch_backup_ref}" "${branch_head}"; then
+                    echo "ERROR: Unable to preserve local branch ${branch} for ${path}." >&2
+                    return 1
+                fi
+                echo "BACKUP: ${path} branch ${branch} ${branch_head:0:12} -> ${branch_backup_ref}"
+            fi
+        fi
+
         if ! git -C "${submodule}" checkout -B "${branch}" --track "${remote_ref}"; then
             echo "ERROR: Unable to restore branch ${branch} for ${path}." >&2
             return 1

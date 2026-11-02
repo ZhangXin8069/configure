@@ -98,6 +98,14 @@ _make_submodule_fixture() {
     mkdir -p "${SUPER_WORK}/orphan"
 }
 
+_publish_super_submodule_pointer() {
+    local commit=$1
+
+    git -C "${SUPER_SEED}" update-index --cacheinfo "160000,${commit},child"
+    git -C "${SUPER_SEED}" commit -q -m super-submodule-pointer
+    git -C "${SUPER_SEED}" push -q origin main
+}
+
 _make_unregistered_gitlink_fixture() {
     local name=$1
     local gitlink_commit
@@ -278,6 +286,84 @@ _test_submodule_pointer_is_stashed() {
     git -C "${repo}" submodule update -q --init --recursive --checkout -- child
     [[ "$(git -C "${repo}/child" rev-parse HEAD)" == "${changed_child}" ]] \
         || _fail "无法从 stash 恢复子模块指针"
+}
+
+_test_fetchable_submodule_target_is_prefetched() {
+    _make_submodule_fixture fetchable-submodule-target
+    local repo="${SUPER_WORK}"
+    local target_child
+
+    printf 'fetchable submodule update\n' >> "${SUBMODULE_SEED}/value.txt"
+    git -C "${SUBMODULE_SEED}" commit -q -am submodule-fetchable
+    target_child=$(git -C "${SUBMODULE_SEED}" rev-parse HEAD)
+    git -C "${SUBMODULE_SEED}" push -q
+    _publish_super_submodule_pointer "${target_child}"
+
+    if git -C "${repo}/child" cat-file -e "${target_child}^{commit}" 2>/dev/null; then
+        _fail "可获取子模块提交的夹具已在本地包含目标对象"
+    fi
+
+    (
+        cd "${repo}"
+        bash "${_PATH}/gback.sh"
+    ) > "${TEST_DIR}/fetchable-submodule-target.log" 2>&1 || {
+        cat "${TEST_DIR}/fetchable-submodule-target.log" >&2
+        _fail "gback 应预取远端可用的子模块目标提交"
+    }
+
+    [[ "$(git -C "${repo}" rev-parse HEAD)" == "$(git -C "${repo}" rev-parse origin/main)" ]] \
+        || _fail "可获取子模块目标时父仓库未对齐 origin/main"
+    [[ "$(git -C "${repo}/child" rev-parse HEAD)" == "${target_child}" ]] \
+        || _fail "可获取子模块目标时未检出目标提交"
+    [[ -z "$(git -C "${repo}" status --porcelain --ignored --ignore-submodules=none)" ]] \
+        || _fail "可获取子模块目标时工作区不干净"
+}
+
+_test_unreachable_submodule_target_aborts_before_backup() {
+    _make_submodule_fixture unreachable-submodule-target
+    local repo="${SUPER_WORK}"
+    local original_head
+    local original_child
+    local stash_count
+    local missing_child
+
+    original_head=$(git -C "${repo}" rev-parse HEAD)
+    original_child=$(git -C "${repo}/child" rev-parse HEAD)
+    stash_count=$(git -C "${repo}" stash list | wc -l | tr -d ' ')
+    printf 'unpublished submodule update\n' >> "${SUBMODULE_SEED}/value.txt"
+    git -C "${SUBMODULE_SEED}" commit -q -am submodule-unpublished
+    missing_child=$(git -C "${SUBMODULE_SEED}" rev-parse HEAD)
+    _publish_super_submodule_pointer "${missing_child}"
+
+    if git -C "${repo}/child" cat-file -e "${missing_child}^{commit}" 2>/dev/null; then
+        _fail "不可获取子模块提交的夹具意外包含目标对象"
+    fi
+    printf 'must survive aborted gback\n' > "${repo}/local-state.txt"
+
+    set +e
+    (
+        cd "${repo}"
+        bash "${_PATH}/gback.sh"
+    ) > "${TEST_DIR}/unreachable-submodule-target.log" 2>&1
+    local status=$?
+    set -e
+
+    ((status != 0)) || _fail "目标子模块提交不可获取时 gback 应返回非零"
+    grep -Fq '上游记录的子模块提交不可用' "${TEST_DIR}/unreachable-submodule-target.log" \
+        || {
+            cat "${TEST_DIR}/unreachable-submodule-target.log" >&2
+            _fail "目标子模块提交不可获取时缺少明确错误"
+        }
+    grep -Fq "${missing_child}" "${TEST_DIR}/unreachable-submodule-target.log" \
+        || _fail "目标子模块提交不可获取时未报告提交号"
+    [[ "$(git -C "${repo}" rev-parse HEAD)" == "${original_head}" ]] \
+        || _fail "子模块目标预检失败时不应移动父仓库 HEAD"
+    [[ "$(git -C "${repo}/child" rev-parse HEAD)" == "${original_child}" ]] \
+        || _fail "子模块目标预检失败时不应移动子模块 HEAD"
+    [[ "$(git -C "${repo}" stash list | wc -l | tr -d ' ')" == "${stash_count}" ]] \
+        || _fail "子模块目标预检失败时不应新增 stash"
+    [[ "$(cat "${repo}/local-state.txt")" == 'must survive aborted gback' ]] \
+        || _fail "子模块目标预检失败时不应移动工作区内容"
 }
 
 _test_dirty_submodule_aborts_without_reset() {
@@ -483,6 +569,8 @@ main() {
     _test_clean_divergence_is_stashed
     _test_worktree_state_is_stashed
     _test_submodule_pointer_is_stashed
+    _test_fetchable_submodule_target_is_prefetched
+    _test_unreachable_submodule_target_aborts_before_backup
     _test_dirty_submodule_aborts_without_reset
     _test_unregistered_gitlink_with_ignored_state_is_stashed
     _test_submodule_pointer_with_worktree_state_is_stashed

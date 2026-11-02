@@ -74,9 +74,42 @@ _test_requires_multiple_matching_children() {
         || _fail "缺少最小子系列数量错误"
 }
 
+_test_repository_wrappers_propagate_failure() {
+    local fixture="${TEST_DIR}/wrapper-failure"
+    local wrapper_bin="${fixture}/configure/bin"
+    local wrapper
+    local status
+
+    mkdir -p "${wrapper_bin}" "${fixture}/configure/.git" \
+        "${fixture}/MyQCD/.git" "${fixture}/PyQCD/.git" "${fixture}/PyQCU/.git"
+    cp "${_PATH}/gz-configure-push.sh" "${_PATH}/gz-myqcd-push.sh" \
+        "${_PATH}/gz-pyqcd-push.sh" "${_PATH}/gz-pyqcu-push.sh" "${wrapper_bin}/"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'exit 7' > "${wrapper_bin}/gpush.sh"
+    chmod +x "${wrapper_bin}/"*.sh
+
+    for wrapper in gz-configure-push.sh gz-myqcd-push.sh gz-pyqcd-push.sh gz-pyqcu-push.sh; do
+        set +e
+        bash "${wrapper_bin}/${wrapper}" > "${TEST_DIR}/${wrapper}.log" 2>&1
+        status=$?
+        set -e
+
+        ((status == 7)) || {
+            cat "${TEST_DIR}/${wrapper}.log" >&2
+            _fail "${wrapper} 未传播 gpush 的退出码 (${status})"
+        }
+        ! grep -Fq ' is done' "${TEST_DIR}/${wrapper}.log" || {
+            cat "${TEST_DIR}/${wrapper}.log" >&2
+            _fail "${wrapper} 在 gpush 失败后仍打印 done"
+        }
+    done
+}
+
 main() {
     _test_sorted_execution_and_failure_aggregation
     _test_requires_multiple_matching_children
+    _test_repository_wrappers_propagate_failure
 }
 
 main "$@"

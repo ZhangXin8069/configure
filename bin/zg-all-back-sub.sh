@@ -21,14 +21,14 @@ Options and positional paths supported by gback-sub.sh are forwarded unchanged.
 EOF
 }
 
-for _arg in "$@"; do
-    case "${_arg}" in
+if (( $# > 0 )); then
+    case "$1" in
         -h|--help)
             _usage
             exit 0
             ;;
     esac
-done
+fi
 
 if [[ ! -r "${_PATH}/_all_series.sh" ]]; then
     echo "ERROR: Missing aggregate series helper: ${_PATH}/_all_series.sh" >&2

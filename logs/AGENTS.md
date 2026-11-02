@@ -970,3 +970,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 2026-11-02-git-sync-sub-series - final - 2026-11-02 12:21:27 +0800
+- 主任务: debug-git-sync-sub-series
+- 日志文件: logs/v2026110212.txt
+- 文件大小: 7401 bytes
+- 触发原因: 任务完成
+- 关键内容: 修复 gback/gpush/gpull 与全部 Git sub 系列的半完成、失败传播、递归与数据保护问题
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -69,8 +69,8 @@ _test_pull_preserves_changes() {
     mkdir -p "${fake_bin}"
     printf '%s\n' \
         '#!/usr/bin/env bash' \
-        'if [[ ${1:-} == pull && ${2:-} == -h ]]; then' \
-        '    echo "usage: git pull [<options>] (autostash unavailable)"' \
+        'if [[ ${1:-} == merge && ${2:-} == -h ]]; then' \
+        '    echo "usage: git merge [<options>] (autostash unavailable)"' \
         '    exit 0' \
         'fi' \
         'if [[ ${1:-} == stash && ${2:-} == push ]]; then' \
@@ -441,6 +441,130 @@ _test_submodule_recurse_config_is_ignored() {
         || _fail "gpull 未提示子模块工作树有意保持不变"
 }
 
+_test_unavailable_submodule_target_does_not_block_parent_pull() {
+    local root="${TEST_DIR}/missing-submodule-target"
+    local sub_remote="${root}/sub-remote.git"
+    local super_remote="${root}/super-remote.git"
+    local sub_seed="${root}/sub-seed"
+    local super_seed="${root}/super-seed"
+    local work="${root}/super-work"
+    local sub_before
+    local missing_child
+    local parent_before
+    local parent_after
+
+    mkdir -p "${root}"
+    git init -q --bare "${sub_remote}"
+    git -C "${sub_remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${sub_seed}"
+    _configure_identity "${sub_seed}"
+    printf 'one\n' > "${sub_seed}/value.txt"
+    git -C "${sub_seed}" add value.txt
+    git -C "${sub_seed}" commit -q -m sub-one
+    git -C "${sub_seed}" remote add origin "${sub_remote}"
+    git -C "${sub_seed}" push -q -u origin main
+
+    git init -q --bare "${super_remote}"
+    git -C "${super_remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${super_seed}"
+    _configure_identity "${super_seed}"
+    git -C "${super_seed}" -c protocol.file.allow=always \
+        submodule add -q "${sub_remote}" child
+    git -C "${super_seed}" commit -q -m parent-one
+    git -C "${super_seed}" remote add origin "${super_remote}"
+    git -C "${super_seed}" push -q -u origin main
+    parent_before=$(git -C "${super_seed}" rev-parse HEAD)
+
+    git clone -q "${super_remote}" "${work}"
+    _configure_identity "${work}"
+    git -C "${work}" config protocol.file.allow always
+    git -C "${work}" -c protocol.file.allow=always submodule update -q --init --checkout
+    git -C "${work}" config submodule.recurse true
+    git -C "${work}" config fetch.recurseSubmodules on-demand
+    sub_before=$(git -C "${work}/child" rev-parse HEAD)
+
+    printf 'unpublished\n' > "${sub_seed}/value.txt"
+    git -C "${sub_seed}" commit -q -am sub-unpublished
+    missing_child=$(git -C "${sub_seed}" rev-parse HEAD)
+    if git -C "${work}/child" cat-file -e "${missing_child}^{commit}" 2>/dev/null; then
+        _fail "缺失子模块目标夹具意外包含目标对象"
+    fi
+
+    git -C "${super_seed}" update-index --cacheinfo "160000,${missing_child},child"
+    git -C "${super_seed}" commit -q -m parent-missing-submodule-target
+    git -C "${super_seed}" push -q
+    parent_after=$(git -C "${super_seed}" rev-parse HEAD)
+
+    (
+        cd "${work}"
+        bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/missing-submodule-target.log" 2>&1 || {
+        cat "${TEST_DIR}/missing-submodule-target.log" >&2
+        _fail "不可获取的子模块目标不应阻断父仓库 fast-forward"
+    }
+
+    [[ "${parent_before}" != "${parent_after}" ]] || _fail "父仓库测试夹具未产生新提交"
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${parent_after}" ]] \
+        || _fail "父仓库未 fast-forward 到缺失子模块目标所在提交"
+    [[ "$(git -C "${work}/child" rev-parse HEAD)" == "${sub_before}" ]] \
+        || _fail "gpull 不应尝试切换子模块工作树"
+    [[ "$(git -C "${work}" status --porcelain --ignore-submodules=none -- child)" == ' M child' ]] \
+        || _fail "父仓库应保留待显式处理的子模块指针差异"
+}
+
+_test_ignored_file_collision_is_not_overwritten() {
+    local remote="${TEST_DIR}/ignored-collision-remote.git"
+    local seed="${TEST_DIR}/ignored-collision-seed"
+    local work="${TEST_DIR}/ignored-collision-work"
+    local other="${TEST_DIR}/ignored-collision-other"
+    local original_head
+    local status
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${seed}"
+    _configure_identity "${seed}"
+    printf 'artifact.txt\n' > "${seed}/.gitignore"
+    printf 'base\n' > "${seed}/tracked.txt"
+    git -C "${seed}" add .gitignore tracked.txt
+    git -C "${seed}" commit -q -m initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+
+    git clone -q "${remote}" "${work}"
+    _configure_identity "${work}"
+    git clone -q "${remote}" "${other}"
+    _configure_identity "${other}"
+    original_head=$(git -C "${work}" rev-parse HEAD)
+
+    printf 'local precious data\n' > "${work}/artifact.txt"
+    if ! git -C "${work}" check-ignore -q artifact.txt; then
+        _fail "ignored 文件碰撞夹具未生效"
+    fi
+
+    printf 'remote tracked artifact\n' > "${other}/artifact.txt"
+    git -C "${other}" add -f artifact.txt
+    git -C "${other}" commit -q -m add-tracked-artifact
+    git -C "${other}" push -q
+
+    set +e
+    (
+        cd "${work}"
+        bash "${_PATH}/gpull.sh"
+    ) > "${TEST_DIR}/ignored-collision.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || {
+        cat "${TEST_DIR}/ignored-collision.log" >&2
+        _fail "远程 tracked 文件与本地 ignored 文件碰撞时 gpull 应拒绝覆盖"
+    }
+    grep -Fqx 'local precious data' "${work}/artifact.txt" \
+        || _fail "gpull 覆盖了本地 ignored 文件内容"
+    [[ "$(git -C "${work}" rev-parse HEAD)" == "${original_head}" ]] \
+        || _fail "拒绝 ignored 文件覆盖时不应移动 HEAD"
+}
+
 _test_dirty_submodule_does_not_create_false_stash() {
     local root="${TEST_DIR}/dirty-submodule-stash"
     local sub_remote="${root}/sub-remote.git"
@@ -523,6 +647,8 @@ main() {
     _test_stale_index_lock_recovery
     _test_fresh_index_lock_is_not_removed
     _test_submodule_recurse_config_is_ignored
+    _test_unavailable_submodule_target_does_not_block_parent_pull
+    _test_ignored_file_collision_is_not_overwritten
     _test_dirty_submodule_does_not_create_false_stash
 }
 

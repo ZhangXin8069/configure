@@ -24,6 +24,7 @@ case "$*" in
     "rev-parse --show-toplevel") printf '%s\n' "${FAKE_REPO_ROOT}" ;;
     "ls-files --stage -z") ;;
     "add -A -- ."|"diff --cached --quiet --ignore-submodules=all") ;;
+    "symbolic-ref --quiet --short HEAD") printf 'main\n' ;;
     "rev-parse --abbrev-ref HEAD") printf 'main\n' ;;
     "push --recurse-submodules=no origin main") ;;
     "push --recurse-submodules=no origin --tags") exit 1 ;;
@@ -146,6 +147,101 @@ _test_does_not_recurse_into_submodules() {
         || _fail "已有暂存 gitlink 时缺少明确错误"
 }
 
+_test_commit_failure_aborts_before_push() {
+    local root="${TEST_DIR}/commit-failure"
+    local remote="${root}/remote.git"
+    local repo="${root}/repo"
+    local fake_bin="${root}/fake-bin"
+    local real_git
+    local parent_before
+    local remote_before
+    local status
+
+    mkdir -p "${fake_bin}"
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${repo}"
+    git -C "${repo}" config user.name gpush-test
+    git -C "${repo}" config user.email gpush-test@example.invalid
+    printf 'base\n' > "${repo}/tracked.txt"
+    git -C "${repo}" add tracked.txt
+    git -C "${repo}" commit -q -m initial
+    git -C "${repo}" remote add origin "${remote}"
+    git -C "${repo}" push -q -u origin main
+    parent_before=$(git -C "${repo}" rev-parse HEAD)
+    remote_before=$(git --git-dir="${remote}" rev-parse refs/heads/main)
+    printf 'local update\n' > "${repo}/tracked.txt"
+
+    real_git=$(command -v git)
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'printf "%s\n" "$*" >> "${FAKE_GIT_LOG:?}"' \
+        'if [[ ${1:-} == commit ]]; then exit 1; fi' \
+        "exec $(printf '%q' "${real_git}") \"\$@\"" > "${fake_bin}/git"
+    chmod +x "${fake_bin}/git"
+
+    set +e
+    (
+        cd "${repo}"
+        PATH="${fake_bin}:${PATH}" FAKE_GIT_LOG="${root}/git.log" \
+            bash "${_PATH}/gpush.sh"
+    ) > "${TEST_DIR}/commit-failure.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || {
+        cat "${TEST_DIR}/commit-failure.log" >&2
+        _fail "commit 失败后 gpush 仍返回 0"
+    }
+    grep -Fq 'commit failed' "${TEST_DIR}/commit-failure.log" \
+        || _fail "commit 失败后缺少明确错误"
+    grep -Fq 'ERROR: commit failed' "${TEST_DIR}/commit-failure.log" \
+        || _fail "commit 失败后缺少 ERROR 标记"
+    [[ "$(git -C "${repo}" rev-parse HEAD)" == "${parent_before}" ]] \
+        || _fail "commit 失败后不应移动 HEAD"
+    [[ "$(git --git-dir="${remote}" rev-parse refs/heads/main)" == "${remote_before}" ]] \
+        || _fail "commit 失败后不应改变远端分支"
+    ! grep -Eq '^push ' "${root}/git.log" || _fail "commit 失败后不应继续 push"
+}
+
+_test_detached_head_is_rejected() {
+    local root="${TEST_DIR}/detached"
+    local remote="${root}/remote.git"
+    local repo="${root}/repo"
+    local detached_head
+    local status
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${repo}"
+    git -C "${repo}" config user.name gpush-test
+    git -C "${repo}" config user.email gpush-test@example.invalid
+    printf 'base\n' > "${repo}/tracked.txt"
+    git -C "${repo}" add tracked.txt
+    git -C "${repo}" commit -q -m initial
+    git -C "${repo}" remote add origin "${remote}"
+    git -C "${repo}" push -q -u origin main
+    git -C "${repo}" checkout -q --detach HEAD
+    detached_head=$(git -C "${repo}" rev-parse HEAD)
+    printf 'local update\n' > "${repo}/tracked.txt"
+
+    set +e
+    (
+        cd "${repo}"
+        bash "${_PATH}/gpush.sh"
+    ) > "${TEST_DIR}/detached.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || _fail "detached HEAD 下 gpush 应返回非零"
+    grep -Fq 'Detached HEAD' "${TEST_DIR}/detached.log" \
+        || _fail "detached HEAD 下 gpush 缺少明确错误"
+    [[ "$(git -C "${repo}" rev-parse HEAD)" == "${detached_head}" ]] \
+        || _fail "detached HEAD 下 gpush 不应创建本地提交"
+}
+
 _test_does_not_recurse_into_submodules
+_test_commit_failure_aborts_before_push
+_test_detached_head_is_rejected
 
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

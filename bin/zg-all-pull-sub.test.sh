@@ -92,6 +92,21 @@ _test_dry_run_only_forwards_to_children() {
         || _fail "PyQCU 参数未透传"
 }
 
+_test_help_as_option_value_is_forwarded() {
+    local fixture="${TEST_DIR}/help-value"
+    local event_log="${fixture}/events.log"
+
+    _make_fixture "${fixture}"
+    EVENT_LOG="${event_log}" \
+        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --path --help \
+        > "${TEST_DIR}/help-value.log" 2>&1
+
+    grep -Fqx 'configure:--path --help' "${event_log}" \
+        || _fail "--path 的 --help 值未透传"
+    ! grep -Fq 'Usage: zg-all-pull-sub.sh' "${TEST_DIR}/help-value.log" \
+        || _fail "--path 的 --help 值被聚合器误判为帮助"
+}
+
 _test_failures_are_aggregated() {
     local fixture="${TEST_DIR}/failure"
     local event_log="${fixture}/events.log"
@@ -166,6 +181,7 @@ main() {
     _test_only_sorted_children_run
     _test_help_is_non_mutating
     _test_dry_run_only_forwards_to_children
+    _test_help_as_option_value_is_forwarded
     _test_failures_are_aggregated
     _test_requires_multiple_matching_children
     _test_wrappers_change_into_target_repositories

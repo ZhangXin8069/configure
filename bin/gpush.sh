@@ -14,6 +14,13 @@ echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
 
+BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
+if [[ -z "${BRANCH}" ]]; then
+    echo "ERROR: Detached HEAD; checkout a branch before gpush." >&2
+    exit 1
+fi
+echo "Branch:  ${BRANCH}"
+
 _submodule_paths() {
     local entry
     local metadata
@@ -87,18 +94,28 @@ if _has_staged_submodule_changes; then
     echo "ERROR: Staged submodule changes require an explicit submodule workflow; gpush aborted." >&2
     exit 1
 fi
-_stage_parent_changes
+if ! _stage_parent_changes; then
+    echo "ERROR: Unable to stage parent-repository changes." >&2
+    exit 1
+fi
 
 # Skip commit if nothing staged
-if git diff --cached --quiet --ignore-submodules=all; then
+git diff --cached --quiet --ignore-submodules=all
+_DIFF_STATUS=$?
+if (( _DIFF_STATUS == 0 )); then
     echo "Nothing to commit."
-else
+elif (( _DIFF_STATUS == 1 )); then
     COMMIT_MSG="$(date "+%Y-%m-%d-%H-%M-%S")"
-    git commit -m "$COMMIT_MSG"
+    if ! git commit -m "$COMMIT_MSG"; then
+        echo "ERROR: commit failed; gpush aborted before push." >&2
+        exit 1
+    fi
+else
+    echo "ERROR: Unable to inspect staged changes; gpush aborted before push." >&2
+    exit 1
 fi
 
 # Push current branch to its upstream (or origin)
-BRANCH=$(git rev-parse --abbrev-ref HEAD)
 PUSH_FAILED=0
 if ! git push --recurse-submodules=no origin "$BRANCH"; then
     echo "ERROR: branch push failed: $BRANCH" >&2

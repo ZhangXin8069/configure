@@ -255,12 +255,141 @@ _test_stale_index_lock_is_recovered() {
         || _fail "缺少过期锁恢复证据"
 }
 
+_test_ignored_file_collision_is_not_overwritten() {
+    local remote="${TEST_DIR}/ignored-collision-remote.git"
+    local seed="${TEST_DIR}/ignored-collision-seed"
+    local super="${TEST_DIR}/ignored-collision-super"
+    local submodule="${super}/refer/ignored-sub"
+    local old_head
+    local status
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${seed}"
+    _configure_identity "${seed}"
+    printf 'artifact.txt\n' > "${seed}/.gitignore"
+    printf 'base\n' > "${seed}/value.txt"
+    git -C "${seed}" add .gitignore value.txt
+    git -C "${seed}" commit -q -m initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+
+    git init -q -b main "${super}"
+    _configure_identity "${super}"
+    printf 'super\n' > "${super}/README.md"
+    git -C "${super}" add README.md
+    git -C "${super}" commit -q -m super-initial
+    git -C "${super}" -c protocol.file.allow=always \
+        submodule add -q "${remote}" refer/ignored-sub
+    git -C "${super}" commit -q -am add-submodule
+    git -C "${super}" config protocol.file.allow always
+    git -C "${submodule}" checkout -q --detach HEAD
+    git -C "${submodule}" branch -D main >/dev/null
+    old_head=$(git -C "${submodule}" rev-parse HEAD)
+    printf 'local precious data\n' > "${submodule}/artifact.txt"
+    if ! git -C "${submodule}" check-ignore -q artifact.txt; then
+        _fail "子模块 ignored 文件碰撞夹具未生效"
+    fi
+
+    printf 'remote tracked artifact\n' > "${seed}/artifact.txt"
+    git -C "${seed}" add -f artifact.txt
+    git -C "${seed}" commit -q -m add-tracked-artifact
+    git -C "${seed}" push -q
+
+    set +e
+    (cd "${super}" && bash "${_PATH}/gpull-sub.sh" --path refer/ignored-sub) \
+        > "${TEST_DIR}/ignored-collision.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || {
+        cat "${TEST_DIR}/ignored-collision.log" >&2
+        _fail "子模块 detached 恢复覆盖 ignored 文件时应失败"
+    }
+    grep -Fqx 'local precious data' "${submodule}/artifact.txt" \
+        || _fail "子模块 detached 恢复覆盖了 ignored 文件"
+    [[ "$(git -C "${submodule}" rev-parse HEAD)" == "${old_head}" ]] \
+        || _fail "拒绝 ignored 文件覆盖时不应移动子模块 HEAD"
+}
+
+_test_stale_origin_head_uses_new_remote_default() {
+    local remote="${TEST_DIR}/stale-head-remote.git"
+    local seed="${TEST_DIR}/stale-head-seed"
+    local super="${TEST_DIR}/stale-head-super"
+    local submodule="${super}/refer/stale-head-sub"
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${seed}"
+    _configure_identity "${seed}"
+    printf 'main\n' > "${seed}/value.txt"
+    git -C "${seed}" add value.txt
+    git -C "${seed}" commit -q -m main-initial
+    git -C "${seed}" remote add origin "${remote}"
+    git -C "${seed}" push -q -u origin main
+    git -C "${seed}" checkout -q -b trunk
+    printf 'trunk\n' > "${seed}/value.txt"
+    git -C "${seed}" commit -q -am trunk-update
+    git -C "${seed}" push -q -u origin trunk
+
+    git init -q -b main "${super}"
+    _configure_identity "${super}"
+    printf 'super\n' > "${super}/README.md"
+    git -C "${super}" add README.md
+    git -C "${super}" commit -q -m super-initial
+    git -C "${super}" -c protocol.file.allow=always \
+        submodule add -q "${remote}" refer/stale-head-sub
+    git -C "${super}" commit -q -am add-submodule
+    git -C "${super}" config protocol.file.allow always
+    git -C "${submodule}" checkout -q --detach HEAD
+
+    git -C "${remote}" symbolic-ref HEAD refs/heads/trunk
+    (cd "${super}" && bash "${_PATH}/gpull-sub.sh" --path refer/stale-head-sub) \
+        > "${TEST_DIR}/stale-head.log" 2>&1
+
+    [[ "$(git -C "${submodule}" symbolic-ref --quiet --short HEAD)" == trunk ]] \
+        || _fail "远端默认分支变更后仍恢复到陈旧的 origin/HEAD"
+    grep -Fqx 'trunk' "${submodule}/value.txt" \
+        || _fail "未检出远端新的默认分支 trunk"
+}
+
+_test_dot_path_is_rejected() {
+    local remote="${TEST_DIR}/unsafe-dot-remote.git"
+    local seed="${TEST_DIR}/unsafe-dot-seed"
+    local super="${TEST_DIR}/unsafe-dot-super"
+    local status
+
+    _create_submodule_fixture "${remote}" "${seed}" "${super}" refer/safe-sub
+    git -C "${super}" config -f .gitmodules submodule.unsafe.path .
+    git -C "${super}" config -f .gitmodules submodule.unsafe.url "${remote}"
+    git -C "${super}" add .gitmodules
+    git -C "${super}" commit -q -m add-unsafe-dot-submodule
+
+    set +e
+    (cd "${super}" && bash "${_PATH}/gpull-sub.sh" --dry-run --path .) \
+        > "${TEST_DIR}/unsafe-dot.log" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || {
+        cat "${TEST_DIR}/unsafe-dot.log" >&2
+        _fail "gpull-sub 应拒绝 path=. 的伪子模块"
+    }
+    grep -Fq 'unsafe submodule path' "${TEST_DIR}/unsafe-dot.log" \
+        || _fail "gpull-sub 拒绝 path=. 时缺少明确错误"
+    ! grep -Fq 'DRY-RUN: would pull .' "${TEST_DIR}/unsafe-dot.log" \
+        || _fail "gpull-sub 不应把父仓库根目录当作子模块"
+}
+
 main() {
     _test_mapped_submodule_pull
     _test_failure_propagates
     _test_unmapped_gitlink_is_ignored
     _test_divergent_detached_submodule_uses_remote_default
     _test_stale_index_lock_is_recovered
+    _test_ignored_file_collision_is_not_overwritten
+    _test_stale_origin_head_uses_new_remote_default
+    _test_dot_path_is_rejected
 }
 
 main "$@"

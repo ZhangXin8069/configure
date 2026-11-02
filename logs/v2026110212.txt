@@ -1,0 +1,88 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-02 12:21:27 +0800
+批次: 2026-11-02-git-sync-sub-series
+主任务: debug-git-sync-sub-series
+触发原因: 任务完成
+摘要: 修复 gback/gpush/gpull 与全部 Git sub 系列的半完成、失败传播、递归与数据保护问题
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 - gback 子模块目标失败
+- 目标: 修复 /root/MyQCD 中 gback.sh 在父仓库回退后无法切换 PyQCD 子模块的半完成问题。
+- 命令/操作: 复现父仓库 gitlink 52e64805b0c627d39132c6e66d6f1d871f92f6a3 不存在；检查 gback.sh 的顺序与 Git 递归配置。
+- 关键输出: remote error: upload-pack: not our ref 52e64805b0c627d39132c6e66d6f1d871f92f6a3；父子模块当前 HEAD 51e8f141da05db2452f8bc85a7ed276cb4d8c645，origin/main 4e885b15a7ab18da1b38448cce49cedb13f6bd19。
+- 退出码: 原命令失败；修复后 gback.test.sh 顺序回归通过。
+- 证据与判断: 根因是上游 gitlink 不可取，且脚本在预检前已经 stash/reset；父 fetch 的 on-demand 子模块递归还会提前失败。修复为父 fetch 强制 no-recurse，并在 stash/reset 前验证目标子模块提交存在或可 fetch。
+
+### S2 - gpush 与 push wrappers
+- 目标: 保证 staging、commit、branch push、tag push 和批量 wrappers 的失败都不被吞掉。
+- 命令/操作: 增加 detached HEAD、commit 失败、wrapper 状态传播回归；运行 gpush.test.sh 和 gz-all-push.test.sh。
+- 关键输出: 修复前 commit 失败仍打印 done 并返回 0；gz-*-push.sh 把子进程状态 7 覆盖为 0。
+- 退出码: 修复后两组测试均为 0。
+- 证据与判断: gpush 现于 push 前检查分支、staging、cached diff 和 commit；全部 gz-*-push wrappers 保存并返回 gpush 状态，失败时不再打印 done。
+
+### S3 - gpull、gpull-sub、gback-sub 与全部 sub 聚合
+- 目标: 消除隐式子模块递归、ignored 文件覆盖、错误路径、半完成 stash 和错误默认分支。
+- 命令/操作: 新增缺失子模块目标、ignored 文件碰撞、陈旧 origin/HEAD、path=.、静默 stash 成功、分支尖端覆盖及 aggregate 参数转发回归。
+- 关键输出: 修复前 gpull 会用缺失子模块目标阻断父仓库拉取，并静默覆盖 ignored 文件；path=. 可把父仓库当伪子模块；静默 stash 成功会导致 untracked 文件被 clean 删除。
+- 退出码: 修复后 gpull.test.sh、gpull-sub.test.sh、gback-sub.test.sh、zg-all-pull-sub.test.sh、zg-all-back-sub.test.sh 均为 0。
+- 证据与判断: gpull 改用预取后的 ff-only merge + --no-overwrite-ignore，并刷新远端 HEAD；sub 工具拒绝 . 和逃逸路径、精确匹配 gitlink；gback-sub 备份将被覆盖的分支尖端并要求 stash ref 确实变化。
+
+### S4 - 质量门禁
+- 目标: 完成 diff、debug、init 与提交前验证。
+- 命令/操作: 顺序运行 9 组测试、bash -n、git diff --check、form-audit --strict、data tracking、large-files、tools/configure-check.sh、tag-chain.sh --check --remote origin。
+- 关键输出: 9/9 测试通过；结构审计 0 errors；data 检查通过；大文件检查通过；configure-check 0 errors/1 个既有 plugin warning；144 个受管标签链通过。
+- 退出码: 均为 0。
+- 证据与判断: init 盘点无待归档 agent 文件，9 个维护顶层目录的 AGENTS.md 齐全，33 个 skill 镜像一致，因此 init 无文件变更。
+
+## 验证与证据
+- 测试/检查: gpush.test.sh、gpull.test.sh、gpull-sub.test.sh、gback.test.sh、gback-sub.test.sh、zg-all-pull.test.sh、zg-all-pull-sub.test.sh、zg-all-back-sub.test.sh、gz-all-push.test.sh。
+- 结果: 顺序执行 9/9 通过；bash -n 全部通过；git diff --check 通过。
+- 未验证项: 没有在真实 /root/MyQCD 上重新执行 gback，因为其上游 e2cf6bc 仍引用不存在的 PyQCD 提交，真实修复必须先纠正上游 gitlink；当前 MyQCD 保持旧失败留下的可恢复状态，未擅自修改。
+
+## 变更与产物
+- 文件: bin/gback.sh、bin/gback.test.sh、bin/gpush.sh、bin/gpush.test.sh、bin/gpull.sh、bin/gpull.test.sh、bin/gpull-sub.sh、bin/gpull-sub.test.sh、bin/gback-sub.sh、bin/gback-sub.test.sh、四个 gz-*-push.sh、gz-all-push.test.sh、zg-all-pull-sub.sh、zg-all-back-sub.sh 及对应测试、bin/AGENTS.md。
+- 产物: 统一的安全预检、失败传播、ignored 文件保护、路径 containment、分支/stash 备份和 9 组回归测试。
+- 未改动范围: 未修改 /root/MyQCD、其子模块或远端，未 force push，未删除或改写标签。
+
+## 风险、限制与下一步
+- 风险: /root/MyQCD 的父仓库 origin/main 仍引用 PyQCD 52e64805b0c627d39132c6e66d6f1d871f92f6a3；该对象在 PyQCD 远端不存在，任何工具都无法凭空恢复。
+- 阻塞: 仅真实 MyQCD gback 完成动作阻塞；configure 工具修复本身已完成。
+- 下一步: 恢复并推送该 PyQCD 提交，或修正父仓库 gitlink 后重试新版 gback；随后由用户按需恢复现有 stash。
+
+## 用户输入指令
+1. debug gback.sh，并附 /root/MyQCD 中 upload-pack: not our ref 52e64805b0c627d39132c6e66d6f1d871f92f6a3 的完整失败输出。
+2. 也同步检查并 debug [gpush, gpull, 及其 sub 系列]。
+3. 包括所有的 sub 系列。
+4. 完成后 ~diff ~debug ~init ~push ~tag。
+
+## Agent 全文报告
+--- report begin ---
+已完成 Git 同步工具族修复，状态 finished（真实 MyQCD 操作仍受上游坏 gitlink 限制）。
+
+改动内容:
+1. gback/gpull 的父仓库 fetch 强制禁用子模块递归。
+2. gback 在 stash/reset 前预检上游已初始化子模块目标提交，失败时不再留下新的半完成状态。
+3. gpush 在 detached HEAD、staging 失败、cached diff 错误或 commit 失败时于 push 前中止；四个 gz-*-push wrapper 正确传播退出码。
+4. gpull 使用预取后的 ff-only merge，并通过 --no-overwrite-ignore 保护本地 ignored 文件；detached 恢复前刷新 origin/HEAD。
+5. gpull-sub/gback-sub 拒绝 . 与路径逃逸、精确校验 gitlink，并做真实路径 containment；gback-sub 额外备份同名本地分支尖端、验证 stash ref 确实创建。
+6. 两个 sub 聚合器仅把首参数识别为自身 help，--path --help 等值会原样转发。
+7. 新增相应回归，覆盖缺失子模块目标、ignored 碰撞、陈旧默认分支、path=.、静默 stash 成功、wrapper 失败传播与参数语义。
+
+推理依据:
+- 原 gback 失败由上游引用不存在对象触发，但脚本顺序使其在确认目标可取前就 stash/reset。
+- Git pull/checkout 默认允许更新 ignored 文件，而 autostash 不包含它们，存在不可恢复的数据风险。
+- 所有父级操作必须显式隔离 submodule recursion；显式 sub 流程负责后续动作。
+- 子模块路径必须同时满足语法安全、精确索引 gitlink 和物理仓库边界。
+
+验证结果:
+- 9 组顺序测试全部通过。
+- bash -n、git diff --check、form-audit --strict、data tracking、large-files、configure-check、标签链检查全部通过。
+- init 无需写操作。
+- /root/MyQCD 未重新执行 gback：其 upstream e2cf6bc 引用的 PyQCD 提交 52e64805b0c627d39132c6e66d6f1d871f92f6a3 不在远端；新版脚本会安全中止，必须修复上游后重试。
+
+后续步骤:
+- 提交并推送本轮改动。
+- 创建并推送 bug6 注释标签。
+--- report end ---

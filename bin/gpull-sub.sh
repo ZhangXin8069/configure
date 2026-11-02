@@ -128,20 +128,39 @@ _validate_submodule_path() {
     local path=$1
 
     case "${path}" in
-        ""|/*|..|../*|*/..|*/../*|*$'\n'*)
+        ""|"."|"./"|/*|..|../*|*/..|*/../*|./*|*/./*|*/.|*$'\n'*)
             return 1
             ;;
     esac
     return 0
 }
 
-_ensure_origin_head() {
-    local submodule=$1
+_is_tracked_gitlink() {
+    local path=$1
+    local entry
+    local metadata
+    local mode
+    local indexed_path
 
-    if git -C "${submodule}" symbolic-ref --quiet refs/remotes/origin/HEAD >/dev/null 2>&1; then
-        return 0
-    fi
-    git -C "${submodule}" remote set-head origin --auto >/dev/null 2>&1 || true
+    while IFS= read -r -d '' entry; do
+        metadata=${entry%%$'\t'*}
+        indexed_path=${entry#*$'\t'}
+        mode=${metadata%% *}
+        if [[ "${indexed_path}" == "${path}" && "${mode}" == 160000 ]]; then
+            return 0
+        fi
+    done < <(git -C "${_REPO_ROOT}" ls-files --stage -z -- "${path}" 2>/dev/null)
+    return 1
+}
+
+_submodule_is_within_repo() {
+    local submodule=$1
+    local repo_real
+    local submodule_real
+
+    repo_real=$(cd "${_REPO_ROOT}" && pwd -P) || return 1
+    submodule_real=$(cd "${submodule}" && pwd -P) || return 1
+    [[ "${submodule_real}" == "${repo_real}/"* ]]
 }
 
 _pull_submodule() {
@@ -157,7 +176,7 @@ _pull_submodule() {
         return 1
     fi
 
-    if ! git -C "${_REPO_ROOT}" ls-files --stage -- "${path}" | grep -q '^160000 '; then
+    if ! _is_tracked_gitlink "${path}"; then
         echo "ERROR: ${path} is mapped in .gitmodules but is not a tracked gitlink." >&2
         return 1
     fi
@@ -184,11 +203,15 @@ _pull_submodule() {
         fi
     fi
 
+    if ! _submodule_is_within_repo "${submodule}"; then
+        echo "ERROR: Refusing submodule path outside repository: ${path}" >&2
+        return 1
+    fi
+
     if (( _DRY_RUN )); then
         echo "DRY-RUN: would pull ${path}"
     else
         old_head=$(git -C "${submodule}" rev-parse --verify HEAD 2>/dev/null || true)
-        _ensure_origin_head "${submodule}"
         if ! (
             cd "${submodule}" \
                 && GPULL_DETACHED_MODE="${GPULL_SUB_DETACHED_MODE:-${GPULL_DETACHED_MODE:-back}}" \

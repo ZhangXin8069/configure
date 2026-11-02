@@ -43,7 +43,8 @@ ORIGINAL_HEAD=$(git rev-parse HEAD) || {
 }
 
 # 只更新远程跟踪引用，不改写本地标签或其他分支。
-git fetch --all --prune --no-tags || {
+git -c fetch.recurseSubmodules=false -c submodule.recurse=false \
+    fetch --all --prune --no-tags --no-recurse-submodules || {
     echo "ERROR: git fetch 失败。"
     exit 1
 }
@@ -149,6 +150,27 @@ _update_initialized_submodules() {
     (( ${#paths[@]} == 0 )) || git submodule update --recursive --checkout -- "${paths[@]}"
 }
 
+_verify_upstream_submodule_commits() {
+    local path
+    local target
+
+    while IFS= read -r -d '' path; do
+        [[ -e "${path}/.git" ]] || continue
+        target=$(git rev-parse --verify "${UPSTREAM_COMMIT}:${path}" 2>/dev/null) || continue
+        git -C "${path}" cat-file -e "${target}^{commit}" 2>/dev/null && continue
+
+        echo "Fetching submodule target: ${path} ($(git rev-parse --short "${target}"))"
+        if ! git -C "${path}" fetch --quiet --no-tags --no-recurse-submodules origin; then
+            echo "WARN: 子模块预取失败: ${path}" >&2
+        fi
+        git -C "${path}" cat-file -e "${target}^{commit}" 2>/dev/null && continue
+
+        echo "ERROR: 上游记录的子模块提交不可用: ${path} (${target})" >&2
+        echo "请先恢复并推送该提交，或修正 ${UPSTREAM} 中的 gitlink 后重试。" >&2
+        return 1
+    done < <(_registered_submodule_paths ".gitmodules")
+}
+
 _store_stash_anchor() {
     local message=$1
     local anchor=$2
@@ -200,6 +222,11 @@ _create_worktree_anchor_stash() {
     }
     rm -f -- "${temp_index}"
     _create_anchor_stash "${message}" "${worktree_tree}"
+}
+
+_verify_upstream_submodule_commits || {
+    echo "ERROR: 子模块目标预检失败；gback 已中止，未新增 stash，也未移动 HEAD 或工作区。" >&2
+    exit 1
 }
 
 N_STASH=$(git stash list 2>/dev/null | wc -l)

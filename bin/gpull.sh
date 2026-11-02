@@ -56,7 +56,8 @@ else
 fi
 
 # Fetch all remotes
-if ! git fetch --all --prune --no-recurse-submodules; then
+if ! git -c fetch.recurseSubmodules=false -c submodule.recurse=false \
+    fetch --all --prune --no-recurse-submodules; then
     echo "ERROR: git fetch failed; pull aborted." >&2
     exit 1
 fi
@@ -66,6 +67,7 @@ _find_origin_default_ref() {
     local candidate
     local candidates
 
+    git remote set-head origin --auto >/dev/null 2>&1 || true
     remote_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
     if [[ "${remote_ref}" == origin/* ]] \
         && git show-ref --verify --quiet "refs/remotes/${remote_ref}"; then
@@ -133,7 +135,7 @@ _restore_detached_branch() {
             echo "BACKUP: preserved local branch ${branch} as ${branch_backup_ref}."
         fi
         echo "NOTICE: Restoring ${branch} from ${remote_ref} and overriding the detached worktree."
-        git -c submodule.recurse=false checkout --no-recurse-submodules \
+        git -c submodule.recurse=false checkout --no-overwrite-ignore --no-recurse-submodules \
             -B "${branch}" --track "${remote_ref}" || return 1
         BRANCH=${branch}
         echo "Branch:  ${BRANCH}"
@@ -142,9 +144,10 @@ _restore_detached_branch() {
 
     echo "NOTICE: Restoring tracking branch ${branch} from ${remote_ref}."
     if git show-ref --verify --quiet "refs/heads/${branch}"; then
-        git -c submodule.recurse=false checkout --no-recurse-submodules "${branch}" || return 1
+        git -c submodule.recurse=false checkout --no-overwrite-ignore \
+            --no-recurse-submodules "${branch}" || return 1
     else
-        git -c submodule.recurse=false checkout --no-recurse-submodules \
+        git -c submodule.recurse=false checkout --no-overwrite-ignore --no-recurse-submodules \
             -b "${branch}" --track "${remote_ref}" || return 1
     fi
 
@@ -165,9 +168,8 @@ _stash_oid() {
     git rev-parse --verify --quiet refs/stash 2>/dev/null || true
 }
 
-_pull_with_manual_stash() {
+_merge_with_manual_stash() {
     local branch=$1
-    shift
     local message="gpull auto-stash $(date "+%Y-%m-%d-%H-%M-%S")"
     local stash_created=0
     local pull_status=0
@@ -190,17 +192,17 @@ _pull_with_manual_stash() {
         fi
     fi
 
-    git -c submodule.recurse=false pull --no-recurse-submodules "$@" origin "$branch" \
-        || pull_status=$?
+    git -c fetch.recurseSubmodules=false -c submodule.recurse=false \
+        merge --ff-only --no-overwrite-ignore "origin/${branch}" || pull_status=$?
     if ((pull_status != 0)); then
         if ((stash_created)); then
-            echo "WARN: Pull failed; local changes remain in git stash." >&2
+            echo "WARN: Merge failed; local changes remain in git stash." >&2
         fi
         return "$pull_status"
     fi
 
     if ((stash_created)) && ! git -c submodule.recurse=false stash pop --quiet; then
-        echo "ERROR: Pull succeeded, but restoring local changes conflicted." >&2
+        echo "ERROR: Merge succeeded, but restoring local changes conflicted." >&2
         echo "Resolve the conflict, then run: git stash pop" >&2
         return 1
     fi
@@ -262,17 +264,18 @@ esac
 
 # Only fast-forward pulls are automatic; divergent histories require a manual decision.
 _PULL_STATUS=0
-_PULL_HELP=$(git pull -h 2>&1 || true)
-if [[ "${_PULL_HELP}" == *"--autostash"* ]]; then
-    git pull --ff-only --no-rebase --autostash --no-recurse-submodules \
-        origin "$BRANCH" || _PULL_STATUS=$?
+_MERGE_HELP=$(git merge -h 2>&1 || true)
+if [[ "${_MERGE_HELP}" == *"--autostash"* ]]; then
+    git -c fetch.recurseSubmodules=false -c submodule.recurse=false \
+        merge --ff-only --autostash --no-overwrite-ignore "origin/${BRANCH}" \
+        || _PULL_STATUS=$?
 else
-    echo "Notice: Git lacks pull --autostash; using the manual stash fallback."
-    _pull_with_manual_stash "$BRANCH" --ff-only --no-rebase || _PULL_STATUS=$?
+    echo "Notice: Git lacks merge --autostash; using the manual stash fallback."
+    _merge_with_manual_stash "$BRANCH" || _PULL_STATUS=$?
 fi
 
 if ((_PULL_STATUS != 0)); then
-    echo "ERROR: git pull failed with status ${_PULL_STATUS}." >&2
+    echo "ERROR: git merge failed with status ${_PULL_STATUS}." >&2
     exit "${_PULL_STATUS}"
 fi
 
