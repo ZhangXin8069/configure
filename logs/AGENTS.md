@@ -1060,3 +1060,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## diff-debug-init-push-tag-dev49 - final - 2026-11-03 03:01:50 +0800
+- 主任务: 执行 diff-debug-init-push-tag 交付并创建 dev49 标签
+- 日志文件: logs/v2026110303.txt
+- 文件大小: 4817 bytes
+- 触发原因: 任务完成
+- 关键内容: 审计并提交 shell 修复、scw 别名与 Docker 环境，推送 main 和 dev49，完成 tag 链回读
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
