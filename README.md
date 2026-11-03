@@ -1,2 +1,2 @@
-# configure by zhangxin
-> referring to configure/docs
+# configure
+configure by zhangxin
