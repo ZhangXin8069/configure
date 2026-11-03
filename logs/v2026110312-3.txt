@@ -1,0 +1,68 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 12:25:36 +0800
+批次: tag-dev51
+主任务: tag dev51：提交并同步 zreplace 与 locale 鲁棒性改动
+触发原因: 任务完成
+摘要: 创建 dev51 注释标签，快进推送 main，并完成远端标签链回读验证
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 标签类型、基线与历史链
+- 目标: 对当前已完成改动执行 `~tag` 交付。
+- 命令/操作: 检查分支、远端、标签编号、基线差异和注释标签链。
+- 关键输出: 最新标签 `dev50`；无显式类型，按规范默认 `dev`，下一个主版本为 `dev51`。
+- 退出码: 0。
+- 证据与判断: `tag-chain.sh --check --remote origin` 在创建前通过，managed tags=148，follow 链、提交祖先关系和远端对象一致。
+
+### S2 — init 与交付闸门
+- 命令/操作: 按 tag 默认流程执行 diff/init 只读调查，运行相关语法、行为和结构检查。
+- 关键输出: 初始化扫描仅命中 `refer/**` 只读上游副本与已登记 `lib/_deepseek/.codex` 模板，无初始化写入；18 个明确文件通过 staged diff、data 白名单、大文件、form 与 configure 检查。
+- 退出码: 全部为 0。
+- 证据与判断: Bash/Zsh locale、zreplace、gpull/gpush/gback/gback-sub/gpull-sub/zg-all-pull/grm-ignore 回归全部通过；远端 main 可 fast-forward。
+
+### S3 — 提交、推送与打标
+- 命令/操作: 显式暂存 18 个文件，提交 `73c63ba`，以 POSIX locale 推送 `main`，创建并推送注释标签 `dev51`。
+- 关键输出: `8dc49fe..73c63ba main -> main`；远端新标签 `dev51 -> dev51`。
+- 退出码: 0。
+- 证据与判断: `dev51` 为 annotated tag，消息 `follow dev50`；peeled commit 与远端 main 均为 `73c63babfc33d9334651b90eabef2d40dad3f825`。
+
+### S4 — 远端回读
+- 命令/操作: 运行 `tag-chain.sh --check --remote origin`，并用 `git ls-remote` 回读 main、tag 对象与 peeled commit。
+- 关键输出: tag-chain PASS，managed tags=149；main peeled 与 `dev51^{}` 均指向 `73c63ba`。
+- 退出码: 0。
+- 证据与判断: 本地与远端分支、标签注释对象和目标提交均一致，交付闭环完成。
+
+## 验证与证据
+- `bash -n`：13 个相关 shell 文件通过。
+- 行为测试: env、zreplace、gpull、gpush、gback、gback-sub、gpull-sub、zg-all-pull、grm-ignore 全部通过。
+- 结构检查: `form-audit --strict --quiet`、`form-data-tracking-check`、`form-large-files-check` 通过。
+- 标签检查: 创建前后 tag-chain 均通过；远端回读一致。
+- Git: 提交 `73c63ba` 已推送至 `origin/main`，标签 `dev51` 已推送。
+
+## 变更与产物
+- 文件: 18 个文件，575 insertions，31 deletions。
+- 提交: `73c63babfc33d9334651b90eabef2d40dad3f825`。
+- 标签: `dev51`，follow `dev50`。
+- 未改动范围: 未执行 force push，未删除或改写已推送标签，未修改系统配置。
+
+## 风险、限制与下一步
+- 风险: 无新增阻塞风险。
+- 限制: 标签指向实现提交；本最终日志按仓库既有模式随后作为 docs(log) 提交追加到 main。
+- 阻塞: 无。
+- 下一步: 其他机器执行 `git fetch --tags` 同步 `dev51`。
+
+## 用户输入指令
+~tag
+
+## Agent 全文报告
+--- report begin ---
+✓ tag 完成
+类型: dev
+标签: dev51
+消息: follow dev50, 1. 新增 zreplace，复用 zsearch 匹配并在确认后执行固定字符串内容替换; 2. 强化 env.sh 全类别 locale 探测、冲突隔离与 UTF-8 回退; 3. 统一 SSH Git 操作的 LANG/LC_ALL POSIX locale 边界并消除 gpull setlocale 告警; 4. 补齐替换、locale 与 Git 同步工具回归测试及文档日志; [codex].
+提交: 73c63babfc33d9334651b90eabef2d40dad3f825
+验证: Bash/Zsh locale、zreplace 与 7 个 Git 工具测试全部通过；form/data/大文件/结构检查通过；tag-chain 149 个标签远端一致。
+远程: origin/main 与 dev51 已推送并回读一致。
+状态: finished
+--- report end ---

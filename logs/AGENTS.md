@@ -1114,3 +1114,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## tag-dev51 - final - 2026-11-03 12:25:36 +0800
+- 主任务: tag dev51：提交并同步 zreplace 与 locale 鲁棒性改动
+- 日志文件: logs/v2026110312-3.txt
+- 文件大小: 3987 bytes
+- 触发原因: 任务完成
+- 关键内容: 创建 dev51 注释标签，快进推送 main，并完成远端标签链回读验证
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
