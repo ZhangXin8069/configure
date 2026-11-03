@@ -217,7 +217,7 @@ bash install-recommended.sh --audit superpowers nvidia
 |---|---|---|---|
 | GitHub | [Repositories API](https://api.github.com/search/repositories?q=agent%20skills&sort=stars&order=desc&per_page=10)，HTTP 200 | 前 10 项中核对了 `obra/superpowers`、`mattpocock/skills`、`affaan-m/ECC`、`anthropics/skills`、`addyosmani/agent-skills` 等；其余为通用项目或工具 | 只吸收已核对的 manifest/实践；`mattpocock/skills` 因无原生 Codex manifest 且职责重叠暂不纳入 |
 | GitLab | [Projects API](https://gitlab.com/api/v4/projects?search=agent%20skills&order_by=star_count&sort=desc&per_page=10)，HTTP 200 | 前 10 项为 5、3、3、2、2、2、1、1、1、1 star；发现 `ska-telescope/ska-ai-skills` 等有 Codex 目录的候选 | 许可证、兼容性和实际能力不足以超过现有推荐，暂不纳入一键 profile |
-| Gitee | [API](https://code.itp.ac.cn/api/v5/search/repositories?q=agent%20skills&sort=stars_count&order=desc&page=1&per_page=10)，HTTP 200、结构化结果 0；[搜索页](https://so.code.itp.ac.cn/?q=agent%20skills)，HTTP 200 | 未取得可用的结构化排名 | 如实保留空结果，不虚构候选 |
+| Gitee | [API](https://gitlab.itp.ac.cn/api/v5/search/repositories?q=agent%20skills&sort=stars_count&order=desc&page=1&per_page=10)，HTTP 200、结构化结果 0；[搜索页](https://so.gitlab.itp.ac.cn/?q=agent%20skills)，HTTP 200 | 未取得可用的结构化排名 | 如实保留空结果，不虚构候选 |
 | Codeberg | [Forgejo API](https://codeberg.org/api/v1/repos/search?q=agent%20skills&sort=stars&order=desc&limit=10)，HTTP 200、结构化结果 0；[Explore](https://codeberg.org/explore/repos?sort=stars&order=desc)，HTTP 200 | 未取得可用的结构化排名 | 如实保留空结果，不虚构候选 |
 
 GitHub API 首次请求曾收到 HTTP 504，重试第 1 次（30 秒超时）即恢复为 HTTP 200；前述四个平台的结果均为本轮只读获取。网页回退页面可访问但未取得结构化排名，未用于伪造排序。

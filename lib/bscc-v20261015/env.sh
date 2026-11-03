@@ -12,9 +12,9 @@ module list
 # ssh-add ~/.ssh/id_ed25519
 # echo -e "id_rsa.pub:\n"
 # cat ~/.ssh/id_ed25519.pub
-# echo -e "\nput this to gitee's ssh.then run\"ssh -T git@code.itp.ac.cn\""
-# git clone git@code.itp.ac.cn:zhangxin8069/configure.git
-# git clone git@code.itp.ac.cn:zhangxin8069/PyQCU.git
+# echo -e "\nput this to gitee's ssh.then run\"ssh -T git@gitlab.itp.ac.cn\""
+# git clone git@gitlab.itp.ac.cn:zhangxin8069/configure.git
+# git clone git@gitlab.itp.ac.cn:zhangxin8069/PyQCU.git
 # source ./env.sh
 # sh_init.sh
 
@@ -44,7 +44,7 @@ conda activate qcu
 # conda env remove -n qcu
 
 ## HTOP
-# git clone https://code.itp.ac.cn/zhangxin8069/htop.git
+# git clone https://gitlab.itp.ac.cn/zhangxin8069/htop.git
 # ./autogen.sh
 # ./configure --prefix=${HOME}/lib/htop
 # make -j8

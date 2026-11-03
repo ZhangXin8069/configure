@@ -196,7 +196,7 @@ sudo make install
 It takes time⬆
 
 就这!That is it!
-![就这!That is it!](https://code.itp.ac.cn/zhangxin8069/Install-OpenMC-in-Windows-wsl2-and-change-sources-for-Chinese-users/raw/main/successful.png "就这!That is it!")
+![就这!That is it!](https://gitlab.itp.ac.cn/zhangxin8069/Install-OpenMC-in-Windows-wsl2-and-change-sources-for-Chinese-users/raw/main/successful.png "就这!That is it!")
 
 ## 更多
 

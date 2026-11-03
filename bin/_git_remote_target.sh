@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Shared per-invocation Git remote host override.
 
-_GIT_REMOTE_DEFAULT_TARGET=code.itp.ac.cn
-_GIT_REMOTE_ALLOWED_TARGETS="code.itp.ac.cn gitee.com github.com gitlab.com"
+_GIT_REMOTE_DEFAULT_TARGET=gitlab.itp.ac.cn
+_GIT_REMOTE_ALLOWED_TARGETS="gitlab.itp.ac.cn gitee.com github.com gitlab.com gitlab.itp.ac.cn"
 _GIT_REMOTE_SELECTED_TARGET=
 _GIT_REMOTE_HELP_REQUESTED=0
 _GIT_REMOTE_REMAINING_ARGS=()

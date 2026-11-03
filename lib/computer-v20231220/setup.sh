@@ -13,8 +13,8 @@ sudo apt install libreoffice
 firefox 'https://code.visualstudio.com/sha/download?build=stable&os=linux-deb-x64'
 # sudo dpkg -i code_******_amd64.deb
 ######
-git clone https://code.itp.ac.cn/zhangxin8069/configure.git
-git clone https://code.itp.ac.cn/zhangxin8069/qcu.git
+git clone https://gitlab.itp.ac.cn/zhangxin8069/configure.git
+git clone https://gitlab.itp.ac.cn/zhangxin8069/qcu.git
 pushd ~/configure
 source ./env.sh
 # 别名已废弃: bin/ 直接进 PATH, 无需 script_alias.sh

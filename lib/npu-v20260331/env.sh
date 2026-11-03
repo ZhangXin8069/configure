@@ -73,20 +73,20 @@ export LD_LIBRARY_PATH=/root/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 # git config --global http.proxy http://10.147.32.201:3128
 
 ## TILELANG
-# git clone --recursive https://code.itp.ac.cn/zhangxin8069/tilelang-ascend.git
+# git clone --recursive https://gitlab.itp.ac.cn/zhangxin8069/tilelang-ascend.git
 ## the image gitmodule of tilelang
 # [submodule "3rdparty/cutlass"]
 # 	path = 3rdparty/cutlass
-# 	url = https://code.itp.ac.cn/zhangxin8069/cutlass
+# 	url = https://gitlab.itp.ac.cn/zhangxin8069/cutlass
 # [submodule "3rdparty/tvm"]
 # 	path = 3rdparty/tvm
-# 	url = https://code.itp.ac.cn/zhangxin8069/tvm.git
+# 	url = https://gitlab.itp.ac.cn/zhangxin8069/tvm.git
 # [submodule "3rdparty/composable_kernel"]
 # 	path = 3rdparty/composable_kernel
-# 	url = https://code.itp.ac.cn/zhangxin8069/composable_kernel.git
+# 	url = https://gitlab.itp.ac.cn/zhangxin8069/composable_kernel.git
 # [submodule "3rdparty/catlass"]
 # 	path = 3rdparty/catlass
-# 	url = https://code.itp.ac.cn/ascend/catlass.git
+# 	url = https://gitlab.itp.ac.cn/ascend/catlass.git
 # [submodule "3rdparty/pto-isa"]
 # 	path = 3rdparty/pto-isa
 # 	url = https://gitcode.com/cann/pto-isa.git
@@ -96,40 +96,40 @@ export LD_LIBRARY_PATH=/root/lib/hdfsrc/lib:$LD_LIBRARY_PATH
 ## the image gitmodule of tvm
 # [submodule "dmlc-core"]
 #         path = 3rdparty/dmlc-core
-#         url = https://code.itp.ac.cn/zhangxin8069/dmlc-core.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/dmlc-core.git
 # [submodule "dlpack"]
 #         path = 3rdparty/dlpack
-#         url = https://code.itp.ac.cn/zhangxin8069/dlpack.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/dlpack.git
 # [submodule "3rdparty/rang"]
 #         path = 3rdparty/rang
-#         url = https://code.itp.ac.cn/zhangxin8069/rang.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/rang.git
 # [submodule "3rdparty/vta-hw"]
 #         path = 3rdparty/vta-hw
-#         url = https://code.itp.ac.cn/zhangxin8069/tvm-vta.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/tvm-vta.git
 # [submodule "3rdparty/libbacktrace"]
 #         path = 3rdparty/libbacktrace
-#         url = https://code.itp.ac.cn/zhangxin8069/libbacktrace.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/libbacktrace.git
 # [submodule "3rdparty/cutlass"]
 #         path = 3rdparty/cutlass
-#         url = https://code.itp.ac.cn/zhangxin8069/cutlass.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/cutlass.git
 # [submodule "3rdparty/OpenCL-Headers"]
 #         path = 3rdparty/OpenCL-Headers
-#         url = https://code.itp.ac.cn/zhangxin8069/OpenCL-Headers.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/OpenCL-Headers.git
 # [submodule "3rdparty/cnpy"]
 #         path = 3rdparty/cnpy
-#         url = https://code.itp.ac.cn/zhangxin8069/cnpy.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/cnpy.git
 # [submodule "3rdparty/cutlass_fpA_intB_gemm"]
 #         path = 3rdparty/cutlass_fpA_intB_gemm
-#         url = https://code.itp.ac.cn/zhangxin8069/cutlass_fpA_intB_gemm
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/cutlass_fpA_intB_gemm
 # [submodule "3rdparty/libflash_attn"]
 #         path = 3rdparty/libflash_attn
-#         url = https://code.itp.ac.cn/zhangxin8069/libflash_attn
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/libflash_attn
 # [submodule "3rdparty/flashinfer"]
 #         path = 3rdparty/flashinfer
-#         url = https://code.itp.ac.cn/zhangxin8069/flashinfer.git
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/flashinfer.git
 # [submodule "3rdparty/composable_kernel"]
 #         path = 3rdparty/composable_kernel
-#         url = https://code.itp.ac.cn/zhangxin8069/composable_kernel
+#         url = https://gitlab.itp.ac.cn/zhangxin8069/composable_kernel
 # pushd /root/tilelang-ascend
 # bash ./install_ascend.sh
 # source ./set_env.sh

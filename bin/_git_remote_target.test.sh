@@ -28,8 +28,8 @@ _test_parse_args() {
         || _fail "non-target option was not preserved"
 
     _git_remote_target_parse_args -t
-    [[ "${_GIT_REMOTE_SELECTED_TARGET}" == code.itp.ac.cn ]] \
-        || _fail "bare -t did not select code.itp.ac.cn"
+    [[ "${_GIT_REMOTE_SELECTED_TARGET}" == gitlab.itp.ac.cn ]] \
+        || _fail "bare -t did not select gitlab.itp.ac.cn"
     [[ "${#_GIT_REMOTE_REMAINING_ARGS[@]}" -eq 0 ]] \
         || _fail "bare -t changed the remaining arguments"
 
@@ -60,12 +60,12 @@ _test_url_rewrite_is_temporary() {
     local repo="${TEST_DIR}/repo"
 
     git init -q -b main "${repo}"
-    git -C "${repo}" remote add origin git@code.itp.ac.cn:owner/repo.git
-    git -C "${repo}" remote add https-origin https://code.itp.ac.cn/owner/repo.git
-    git -C "${repo}" remote add ssh-origin ssh://git@code.itp.ac.cn/owner/repo.git
-    git -C "${repo}" remote add git-ssh-origin git+ssh://git@code.itp.ac.cn/owner/repo.git
-    git -C "${repo}" remote add http-origin http://code.itp.ac.cn/owner/repo.git
-    git -C "${repo}" remote add git-origin git://code.itp.ac.cn/owner/repo.git
+    git -C "${repo}" remote add origin git@gitlab.itp.ac.cn:owner/repo.git
+    git -C "${repo}" remote add https-origin https://gitlab.itp.ac.cn/owner/repo.git
+    git -C "${repo}" remote add ssh-origin ssh://git@gitlab.itp.ac.cn/owner/repo.git
+    git -C "${repo}" remote add git-ssh-origin git+ssh://git@gitlab.itp.ac.cn/owner/repo.git
+    git -C "${repo}" remote add http-origin http://gitlab.itp.ac.cn/owner/repo.git
+    git -C "${repo}" remote add git-origin git://gitlab.itp.ac.cn/owner/repo.git
     git -C "${repo}" remote add local-origin "${TEST_DIR}/local-repo.git"
 
     (
@@ -86,7 +86,7 @@ _test_url_rewrite_is_temporary() {
             || _fail "local URLs must not be rewritten"
     )
 
-    [[ "$(git -C "${repo}" remote get-url origin)" == git@code.itp.ac.cn:owner/repo.git ]] \
+    [[ "$(git -C "${repo}" remote get-url origin)" == git@gitlab.itp.ac.cn:owner/repo.git ]] \
         || _fail "remote URL override leaked outside the invocation"
 }
 
@@ -94,7 +94,7 @@ _test_reapply_and_existing_config() {
     local repo="${TEST_DIR}/reapply-repo"
 
     git init -q -b main "${repo}"
-    git -C "${repo}" remote add origin git@code.itp.ac.cn:owner/repo.git
+    git -C "${repo}" remote add origin git@gitlab.itp.ac.cn:owner/repo.git
 
     (
         export GIT_CONFIG_COUNT=1

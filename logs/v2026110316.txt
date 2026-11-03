@@ -11,13 +11,13 @@ Git 根目录: /root/configure
 ### S1 — 需求收敛与范围盘点
 - 目标: 为本库实际执行 fetch/pull/push/clone 的 Git 功能增加 `-t [DOMAIN]`，仅当前调用替换远程域名。
 - 命令/操作: 检索 `bin/` 中 Git 联网入口，读取 `gpush/gpull/gback/*-sub/zg-*/*gz-*`、`zg-all-pull`、`grm-ignore` 及相关测试。
-- 关键输出: 当前 `origin=git@code.itp.ac.cn:zhangxin8069/configure.git`；工作树初始干净。
+- 关键输出: 当前 `origin=git@gitlab.itp.ac.cn:zhangxin8069/configure.git`；工作树初始干净。
 - 退出码: 0
 - 证据与判断: 用户明确排除 `gf/gl/gp/gfa` 等通用别名、`git_init`、`ggitee`；采用保留协议和仓库路径、只替换域名的临时重写。
 ### S2 — 共享实现与接入
 - 目标: 用单一实现保证所有入口语义一致，且不写入 Git 配置。
 - 命令/操作: 新增 `bin/_git_remote_target.sh`，通过 `GIT_CONFIG_COUNT/GIT_CONFIG_KEY_n/GIT_CONFIG_VALUE_n` 注入 `url.<target>.insteadOf`；接入 7 个联网入口，并让 16 个 `zg-*`/`gz-*` 包装器透传参数。
-- 关键输出: 支持 `code.itp.ac.cn`、`gitee.com`、`github.com`、`gitlab.com`；裸 `-t` 使用 `code.itp.ac.cn`；无 `-t` 不覆盖。
+- 关键输出: 支持 `gitlab.itp.ac.cn`、`gitee.com`、`github.com`、`gitlab.com`；裸 `-t` 使用 `gitlab.itp.ac.cn`；无 `-t` 不覆盖。
 - 退出码: 0
 - 证据与判断: SCP、SSH、git+ssh、HTTPS、HTTP、git 协议均保留；子模块初始化与递归调用继承同一临时环境。
 ### S3 — 回归与仓库门禁
@@ -58,11 +58,11 @@ Git 根目录: /root/configure
 - 远端只替换协议前缀中的受支持域名；非标准端口或自建域名不在本次支持范围。
 - 用户确认需要时可进入提交、推送流程。
 ## 用户输入指令
-为本库所有git远程相关的功能添加如下设定:1.添加'-t'选项,默认为'-t code.itp.ac.cn',也可以'-t gitee.com'或'-t github.com'或'-t gitlab.com';2.'-t'函数将临时指定远程对象,仅此一次调用生效;3.有不清楚的地方立即指出
+为本库所有git远程相关的功能添加如下设定:1.添加'-t'选项,默认为'-t gitlab.itp.ac.cn',也可以'-t gitee.com'或'-t github.com'或'-t gitlab.com';2.'-t'函数将临时指定远程对象,仅此一次调用生效;3.有不清楚的地方立即指出
 后续澄清：1. 不改造 gf/gl/gp/gfa 等通用 Git 别名，以及 git_init、ggitee；2. 保留协议和仓库路径，只替换域名；3. 有显式传 -t 才替换远程。
 ## Agent 全文报告
 --- report begin ---
-任务已完成：所有实际联网的 Git 脚本现支持 `-t [DOMAIN]`，仅当前调用生效。共享层通过 Git 环境配置注入临时 `insteadOf` 映射，不修改仓库或全局 Git 配置；未传 `-t` 时保持现有远程，裸 `-t` 使用 `code.itp.ac.cn`，也支持 `gitee.com`、`github.com`、`gitlab.com`。
+任务已完成：所有实际联网的 Git 脚本现支持 `-t [DOMAIN]`，仅当前调用生效。共享层通过 Git 环境配置注入临时 `insteadOf` 映射，不修改仓库或全局 Git 配置；未传 `-t` 时保持现有远程，裸 `-t` 使用 `gitlab.itp.ac.cn`，也支持 `gitee.com`、`github.com`、`gitlab.com`。
 
 接入范围包括 `gpush`、`gpull`、`gback`、`gpull-sub`、`gback-sub`、`grm-ignore`、`zg-all-pull`，以及全部 `zg-*`/`gz-*` 仓库包装器和聚合入口。SCP、SSH、git+ssh、HTTPS、HTTP、git 协议均保留，仓库路径不变；子模块初始化和递归处理继承同一临时目标。
 

@@ -173,7 +173,7 @@ form 负责路径、命名和索引位置审计。
 示例：
 
 ```bash
-git submodule add https://code.itp.ac.cn/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
+git submodule add https://gitlab.itp.ac.cn/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
 git submodule add https://github.com/IHEP-LQCD/EasyDistillation.git \
   refer/git-rep/EasyDistillation
 ```
@@ -204,10 +204,10 @@ git submodule add https://github.com/IHEP-LQCD/EasyDistillation.git \
 
 | 语言族 | 原始 URL | 本地快照 | 提交 |
 |---|---|---|---|
-| C++/CUDA | `https://code.itp.ac.cn/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu` | `source-snapshots/pyqcu-dev89/cpp/cuda/qcu/` | `f73f0b4be6c9bccbd61122b45fa53c2d7c764a74` |
-| Python | `https://code.itp.ac.cn/zhangxin8069/PyQCD/tree/dev15/pyqcd` | `source-snapshots/pyqcd-dev15/pyqcd/` | `811900c76c5b9fb3632ee855a9c2ae97e6df76b6` |
-| Bash | `https://code.itp.ac.cn/zhangxin8069/configure/tree/main/bin` | `source-snapshots/configure-main/bin/` | `ad8623b6355eddd932abe4d1e8be3170321731bc` |
-| 其他/静态资源 | `https://code.itp.ac.cn/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static` | `source-snapshots/lattice-qcd-at-imp.top-stab4/static/` | `5ee896da0be245ce3477fa13428fe5c96b1ca760` |
+| C++/CUDA | `https://gitlab.itp.ac.cn/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu` | `source-snapshots/pyqcu-dev89/cpp/cuda/qcu/` | `f73f0b4be6c9bccbd61122b45fa53c2d7c764a74` |
+| Python | `https://gitlab.itp.ac.cn/zhangxin8069/PyQCD/tree/dev15/pyqcd` | `source-snapshots/pyqcd-dev15/pyqcd/` | `811900c76c5b9fb3632ee855a9c2ae97e6df76b6` |
+| Bash | `https://gitlab.itp.ac.cn/zhangxin8069/configure/tree/main/bin` | `source-snapshots/configure-main/bin/` | `ad8623b6355eddd932abe4d1e8be3170321731bc` |
+| 其他/静态资源 | `https://gitlab.itp.ac.cn/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static` | `source-snapshots/lattice-qcd-at-imp.top-stab4/static/` | `5ee896da0be245ce3477fa13428fe5c96b1ca760` |
 
 `source-snapshots/` 是固定提交的离线明文证据，不等同于 `refer/git-rep/` 下的可运行参考
 子库；前者用于规则核验，后者用于完整参考实现。两者都不替代本库源码。

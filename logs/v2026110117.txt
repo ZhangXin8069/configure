@@ -56,7 +56,7 @@ Git 根目录: /Users/zhangxin/configure
 ## 用户输入指令
 ```text
 "remote: Set trace flag 4b4ce5ba
-To code.itp.ac.cn:zhangxin8069/PyQCD.git
+To gitlab.itp.ac.cn:zhangxin8069/PyQCD.git
    6e9871f..d725dad  main -> main
 Everything up-to-date
 ###gpush.sh is done......:2026-11-01-17-15-30###

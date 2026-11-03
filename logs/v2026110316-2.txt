@@ -1,0 +1,57 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 16:16:10 +0800
+批次: git-remote-target-default-20261103
+主任务: 将裸 -t 的默认远程目标改为 gitlab.itp.ac.cn
+触发原因: 任务完成
+摘要: 更新裸 -t 默认值、允许目标、clone 边界与回归测试
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 修改默认目标
+- 目标: 裸 `-t` 从 `gitlab.itp.ac.cn` 改为 `gitlab.itp.ac.cn`。
+- 命令/操作: 修改共享远程目标 helper 的默认值和允许列表。
+- 关键输出: `_GIT_REMOTE_DEFAULT_TARGET=gitlab.itp.ac.cn`；允许列表新增 `gitlab.itp.ac.cn`。
+- 退出码: 0
+- 证据与判断: 显式 `-t DOMAIN`、裸 `-t`、完全省略 `-t` 三种语义保持独立。
+### S2 — 保持省略 -t 的旧行为
+- 目标: 避免维修裸 `-t` 时改变 `zg-all-pull` 无参数 clone 源。
+- 命令/操作: 将无显式目标时的 clone host 固定回原有 `gitlab.itp.ac.cn`，仅裸 `-t` 使用新默认值。
+- 关键输出: 现有强制 HTTPS clone 回归继续断言 `gitlab.itp.ac.cn`；新增裸 `-t` 回归断言 `gitlab.itp.ac.cn`。
+- 退出码: 0
+- 证据与判断: 用户只要求修改裸 `-t`，因此无 `-t` 行为不应漂移。
+### S3 — 验证
+- 目标: 确认帮助、语义和回归全部同步。
+- 命令/操作: 运行共享测试、包装器测试、`zg-all-pull` 测试、语法检查、form/data 审计、configure 检查和临时 URL 实测。
+- 关键输出: 全部定向测试通过；裸 `-t` 将 `origin` 临时解析为 `git@gitlab.itp.ac.cn:zhangxin8069/configure.git`，调用后恢复原 URL。
+- 退出码: 0
+- 证据与判断: 文档帮助动态显示新默认值，功能与测试一致。
+## 验证与证据
+- `bash bin/_git_remote_target.test.sh`: PASS
+- `bash bin/git-remote-wrappers.test.sh`: PASS
+- `bash bin/zg-all-pull.test.sh`: PASS，包含无 `-t` 保持 code、裸 `-t` 使用 gitlab.itp 两条边界
+- `bash -n` 覆盖变更脚本与测试: PASS
+- `form-audit.sh --strict --quiet`: PASS
+- `form-data-tracking-check.sh --root . --quiet`: PASS
+- `tools/configure-check.sh`: errors=0, warnings=1（既有 plugins manifest 警告）
+- `git diff --check`: PASS
+## 变更与产物
+- 文件: `bin/_git_remote_target.sh`
+- 文件: `bin/_git_remote_target.test.sh`
+- 文件: `bin/zg-all-pull.sh`
+- 文件: `bin/zg-all-pull.test.sh`
+- 文件: `bin/AGENTS.md`
+- 未改动范围: 通用 Git 别名、`git_init.sh`、`ggitee.sh`；未提交、未推送。
+## 风险、限制与下一步
+- 未执行真实跨平台网络操作。
+- 用户确认需要时可进入提交与推送流程。
+## 用户输入指令
+修改:裸 -t 使用 gitlab.itp.ac.cn
+## Agent 全文报告
+--- report begin ---
+已将裸 `-t` 的默认目标改为 `gitlab.itp.ac.cn`，并把该域名加入允许目标列表。帮助文本和节点文档会动态显示新默认值。
+
+同时明确保留两个边界：显式 `-t github.com` 等仍按指定域名处理；完全不传 `-t` 时不覆盖现有远程，`zg-all-pull` 在无显式目标时仍按原有行为从 `gitlab.itp.ac.cn` clone 缺失仓库。
+
+共享测试、包装器测试、`zg-all-pull` 回归、`bash -n`、form/data 审计、configure 检查和 `git diff --check` 均通过。实测裸 `-t` 将当前远程临时解析为 `git@gitlab.itp.ac.cn:zhangxin8069/configure.git`，调用结束后恢复为 `git@gitlab.itp.ac.cn:zhangxin8069/configure.git`。未提交、未推送。
+--- report end ---

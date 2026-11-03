@@ -1150,3 +1150,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-remote-target-default-20261103 - final - 2026-11-03 16:16:10 +0800
+- 主任务: 将裸 -t 的默认远程目标改为 gitlab.itp.ac.cn
+- 日志文件: logs/v2026110316-2.txt
+- 文件大小: 3430 bytes
+- 触发原因: 任务完成
+- 关键内容: 更新裸 -t 默认值、允许目标、clone 边界与回归测试
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

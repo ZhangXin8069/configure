@@ -18,7 +18,7 @@ team 负责跨轮协作与 worker 生命周期，不替代具体领域技能。�
 转 `dispatch`；若只是单线程循环收敛，转 `all`；若只是无人值守包装，转 `auto`；若只是续接
 中断后的上下文，转 `go-on`。
 
-本技能吸收用户指定的 [muIon-beam team skill](https://code.itp.ac.cn/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills/team)
+本技能吸收用户指定的 [muIon-beam team skill](https://gitlab.itp.ac.cn/chx6/muIon-beam/tree/db48dcbed023a427c5b87231451b5392c6e65684/.codex/skills/team)
 的通用原则；仅保留能力匹配、单文件单写者和只读审查者约束，不引入其项目路径或运行时记录目录。
 
 ## 核心原则

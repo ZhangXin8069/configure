@@ -44,7 +44,7 @@ Git 根目录: /root/configure
 grm-ignore.sh  -r oringin
 ...
 无匹配 .gitignore 的历史文件，无需重写。
-...,grm-ignore.sh相当部分本该排除的文件匹配失败,例如https://code.itp.ac.cn/zhangxin8069/PyQCU/tree/test34/data
+...,grm-ignore.sh相当部分本该排除的文件匹配失败,例如https://gitlab.itp.ac.cn/zhangxin8069/PyQCU/tree/test34/data
 ```
 
 ## Agent 全文报告

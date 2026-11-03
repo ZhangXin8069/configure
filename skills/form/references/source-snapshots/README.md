@@ -8,10 +8,10 @@
 
 | 语言族 | 原始 URL | ref | 提交 | 本地根 | 明文条目 | 符号链接 | 明文字节 | 排除二进制 |
 |---|---|---|---:|---|---:|---:|---:|---:|
-| cpp/cuda | `https://code.itp.ac.cn/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu` | annotated tag `dev89` | `f73f0b4be6c9bccbd61122b45fa53c2d7c764a74` | `pyqcu-dev89/` | 70 | 0 | 1,229,465 | 0 |
-| python | `https://code.itp.ac.cn/zhangxin8069/PyQCD/tree/dev15/pyqcd` | annotated tag `dev15` | `811900c76c5b9fb3632ee855a9c2ae97e6df76b6` | `pyqcd-dev15/` | 415 | 0 | 5,430,625 | 365 |
-| bash | `https://code.itp.ac.cn/zhangxin8069/configure/tree/main/bin` | branch `main` | `ad8623b6355eddd932abe4d1e8be3170321731bc` | `configure-main/` | 107 | 15 | 724,206 | 0 |
-| other/static | `https://code.itp.ac.cn/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static` | annotated tag `stab4` | `5ee896da0be245ce3477fa13428fe5c96b1ca760` | `lattice-qcd-at-imp.top-stab4/` | 19 | 0 | 1,840,442 | 11 |
+| cpp/cuda | `https://gitlab.itp.ac.cn/zhangxin8069/PyQCU/tree/dev89/cpp/cuda/qcu` | annotated tag `dev89` | `f73f0b4be6c9bccbd61122b45fa53c2d7c764a74` | `pyqcu-dev89/` | 70 | 0 | 1,229,465 | 0 |
+| python | `https://gitlab.itp.ac.cn/zhangxin8069/PyQCD/tree/dev15/pyqcd` | annotated tag `dev15` | `811900c76c5b9fb3632ee855a9c2ae97e6df76b6` | `pyqcd-dev15/` | 415 | 0 | 5,430,625 | 365 |
+| bash | `https://gitlab.itp.ac.cn/zhangxin8069/configure/tree/main/bin` | branch `main` | `ad8623b6355eddd932abe4d1e8be3170321731bc` | `configure-main/` | 107 | 15 | 724,206 | 0 |
+| other/static | `https://gitlab.itp.ac.cn/zhangxin8069/lattice-qcd-at-imp.top/tree/stab4/static` | annotated tag `stab4` | `5ee896da0be245ce3477fa13428fe5c96b1ca760` | `lattice-qcd-at-imp.top-stab4/` | 19 | 0 | 1,840,442 | 11 |
 
 tag object 哈希：
 
