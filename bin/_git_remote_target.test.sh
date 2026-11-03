@@ -61,6 +61,9 @@ _test_url_rewrite_is_temporary() {
 
     git init -q -b main "${repo}"
     git -C "${repo}" remote add origin git@gitlab.itp.ac.cn:owner/repo.git
+    git -C "${repo}" remote add legacy-origin git@code.itp.ac.cn:owner/repo.git
+    git -C "${repo}" remote add custom-origin git@legacy.example.invalid:owner/repo.git
+    git -C "${repo}" remote add custom-port https://legacy.example.invalid:8443/owner/repo.git
     git -C "${repo}" remote add https-origin https://gitlab.itp.ac.cn/owner/repo.git
     git -C "${repo}" remote add ssh-origin ssh://git@gitlab.itp.ac.cn/owner/repo.git
     git -C "${repo}" remote add git-ssh-origin git+ssh://git@gitlab.itp.ac.cn/owner/repo.git
@@ -69,20 +72,27 @@ _test_url_rewrite_is_temporary() {
     git -C "${repo}" remote add local-origin "${TEST_DIR}/local-repo.git"
 
     (
+        cd "${repo}"
         _git_remote_target_apply github.com >/dev/null
-        [[ "$(git -C "${repo}" remote get-url origin)" == git@github.com:owner/repo.git ]] \
+        [[ "$(git remote get-url origin)" == git@github.com:owner/repo.git ]] \
             || _fail "scp-like URL did not preserve protocol, user, and path"
-        [[ "$(git -C "${repo}" remote get-url https-origin)" == https://github.com/owner/repo.git ]] \
+        [[ "$(git remote get-url legacy-origin)" == git@github.com:owner/repo.git ]] \
+            || _fail "legacy configured URL was not overridden"
+        [[ "$(git remote get-url custom-origin)" == git@github.com:owner/repo.git ]] \
+            || _fail "custom configured URL was not overridden"
+        [[ "$(git remote get-url custom-port)" == https://github.com:8443/owner/repo.git ]] \
+            || _fail "configured URL port was not preserved"
+        [[ "$(git remote get-url https-origin)" == https://github.com/owner/repo.git ]] \
             || _fail "HTTPS URL was not rewritten"
-        [[ "$(git -C "${repo}" remote get-url ssh-origin)" == ssh://git@github.com/owner/repo.git ]] \
+        [[ "$(git remote get-url ssh-origin)" == ssh://git@github.com/owner/repo.git ]] \
             || _fail "SSH URL was not rewritten"
-        [[ "$(git -C "${repo}" remote get-url git-ssh-origin)" == git+ssh://git@github.com/owner/repo.git ]] \
+        [[ "$(git remote get-url git-ssh-origin)" == git+ssh://git@github.com/owner/repo.git ]] \
             || _fail "git+ssh URL was not rewritten"
-        [[ "$(git -C "${repo}" remote get-url http-origin)" == http://github.com/owner/repo.git ]] \
+        [[ "$(git remote get-url http-origin)" == http://github.com/owner/repo.git ]] \
             || _fail "HTTP URL was not rewritten"
-        [[ "$(git -C "${repo}" remote get-url git-origin)" == git://github.com/owner/repo.git ]] \
+        [[ "$(git remote get-url git-origin)" == git://github.com/owner/repo.git ]] \
             || _fail "git protocol URL was not rewritten"
-        [[ "$(git -C "${repo}" remote get-url local-origin)" == "${TEST_DIR}/local-repo.git" ]] \
+        [[ "$(git remote get-url local-origin)" == "${TEST_DIR}/local-repo.git" ]] \
             || _fail "local URLs must not be rewritten"
     )
 
@@ -97,15 +107,79 @@ _test_reapply_and_existing_config() {
     git -C "${repo}" remote add origin git@gitlab.itp.ac.cn:owner/repo.git
 
     (
+        cd "${repo}"
         export GIT_CONFIG_COUNT=1
         export GIT_CONFIG_KEY_0=test.sentinel
         export GIT_CONFIG_VALUE_0=kept
         _git_remote_target_apply github.com >/dev/null
         _git_remote_target_apply gitlab.com >/dev/null
-        [[ "$(git -C "${repo}" config test.sentinel)" == kept ]] \
+        [[ "$(git config test.sentinel)" == kept ]] \
             || _fail "existing environment Git config was not preserved"
-        [[ "$(git -C "${repo}" remote get-url origin)" == git@gitlab.com:owner/repo.git ]] \
+        [[ "$(git remote get-url origin)" == git@gitlab.com:owner/repo.git ]] \
             || _fail "a later target did not replace the earlier temporary mapping"
+    )
+}
+
+_test_same_target_reapply_discovers_new_remotes() {
+    local first="${TEST_DIR}/same-target-first"
+    local second="${TEST_DIR}/same-target-second"
+
+    git init -q -b main "${first}"
+    git -C "${first}" remote add origin git@first.example.invalid:owner/first.git
+    git init -q -b main "${second}"
+    git -C "${second}" remote add origin git@second.example.invalid:owner/second.git
+
+    (
+        cd "${first}"
+        _git_remote_target_apply github.com >/dev/null
+        [[ "$(git remote get-url origin)" == git@github.com:owner/first.git ]] \
+            || _fail "initial configured URL was not overridden"
+
+        cd "${second}"
+        _git_remote_target_apply github.com >/dev/null
+        [[ "$(git remote get-url origin)" == git@github.com:owner/second.git ]] \
+            || _fail "same-target reapply did not discover the second repository URL"
+    )
+}
+
+_test_configured_url_controls_transport() {
+    local repo="${TEST_DIR}/transport-repo"
+    local fake_ssh="${TEST_DIR}/fake-ssh"
+    local ssh_log="${TEST_DIR}/ssh.log"
+
+    git init -q -b main "${repo}"
+    git -C "${repo}" remote add origin git@legacy.example.invalid:owner/repo.git
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'printf "%s\n" "$*" >> "${SSH_CAPTURE:?}"' \
+        'exit 1' >"${fake_ssh}"
+    chmod +x "${fake_ssh}"
+
+    (
+        cd "${repo}"
+        _git_remote_target_apply github.com >/dev/null
+        set +e
+        GIT_SSH_COMMAND="${fake_ssh}" SSH_CAPTURE="${ssh_log}" GIT_TERMINAL_PROMPT=0 \
+            git ls-remote origin >"${TEST_DIR}/transport.log" 2>&1
+        set -e
+    )
+
+    grep -Fq 'git@github.com' "${ssh_log}" \
+        || _fail "configured URL did not control the actual SSH transport target"
+}
+
+_test_bare_target_overrides_configured_url() {
+    local repo="${TEST_DIR}/bare-target-repo"
+
+    git init -q -b main "${repo}"
+    git -C "${repo}" remote add origin git@legacy.example.invalid:owner/repo.git
+
+    (
+        cd "${repo}"
+        _git_remote_target_parse_args -t
+        _git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" >/dev/null
+        [[ "$(git remote get-url origin)" == git@gitlab.itp.ac.cn:owner/repo.git ]] \
+            || _fail "bare -t did not use the default target for a configured URL"
     )
 }
 
@@ -115,6 +189,9 @@ main() {
     _test_invalid_target
     _test_url_rewrite_is_temporary
     _test_reapply_and_existing_config
+    _test_same_target_reapply_discovers_new_remotes
+    _test_configured_url_controls_transport
+    _test_bare_target_overrides_configured_url
 }
 
 main "$@"

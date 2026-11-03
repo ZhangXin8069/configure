@@ -1168,3 +1168,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-remote-target-config-20261103 - final - 2026-11-03 18:09:50 +0800
+- 主任务: 修复 Git 功能脚本 -t 对已配置远程 URL 的覆盖语义
+- 日志文件: logs/v2026110318.txt
+- 文件大小: 5552 bytes
+- 触发原因: 任务完成
+- 关键内容: 动态覆盖 .git/config 与 .gitmodules 中的实际远程 URL，并补齐任意域名、旧域名、默认目标和传输级回归
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

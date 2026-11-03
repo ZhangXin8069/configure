@@ -1,0 +1,72 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 18:09:50 +0800
+批次: git-remote-target-config-20261103
+主任务: 修复 Git 功能脚本 -t 对已配置远程 URL 的覆盖语义
+触发原因: 任务完成
+摘要: 动态覆盖 .git/config 与 .gitmodules 中的实际远程 URL，并补齐任意域名、旧域名、默认目标和传输级回归
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 根因定位
+- 目标: 确认 `-t/--target` 为何会被已有 `.git/config` 远程 URL 绕过。
+- 命令/操作: 检索 Git 脚本、阅读 `_git_remote_target.sh` 与相关测试，使用受控 SSH 传输复现。
+- 关键输出: 旧实现仅对固定源域名生成 `insteadOf`；旧域名 `code.itp.ac.cn` 或自定义域名不在列表时不会被 `-t` 改写。
+- 证据与判断: 裸 `-t` 的默认值本身正确，问题在已知源域名集合无法覆盖实际已配置 URL。
+
+### S2 — 共享层修复
+- 目标: 让显式 `-t` 始终覆盖当前仓库已配置的实际远程 URL，同时保持仅本次调用生效。
+- 命令/操作: 从 `remote.*.url` 与 `submodule.*.url` 读取实际 URL，保留协议、用户、端口和仓库路径，生成精确临时 `insteadOf` 映射；保留旧域名兼容映射。
+- 关键输出: 任意域名、旧域名、非标准端口和裸 `-t` 默认目标均可覆盖；同一目标跨仓库重复应用会继续发现新 URL。
+- 证据与判断: 所有映射仍通过 `GIT_CONFIG_COUNT` 注入，不写入仓库配置；调用结束后原 URL 保持不变。
+
+### S3 — 回归与仓库门禁
+- 目标: 验证基础脚本、子模块脚本、聚合包装器和仓库结构检查。
+- 命令/操作: 运行共享层、包装器、gpush、gpull、gback、grm-ignore、两个 sub 脚本及四个聚合器测试；运行语法、form、data、大文件和差异检查。
+- 关键输出: 所有本次相关测试通过；传输级测试确认旧 URL 的 `git ls-remote origin` 实际 SSH 主机为 `github.com`。
+- 证据与判断: `gback.test.sh` 在并行全量运行中出现一次既有偶发断言失败，随后连续 3 次单独运行通过；本次修改未进入该断言路径。
+
+## 验证与证据
+- `bash bin/_git_remote_target.test.sh`: PASS
+- `bash bin/git-remote-wrappers.test.sh`: PASS
+- `bash bin/gpush.test.sh`: PASS
+- `bash bin/gpull.test.sh`: PASS
+- `bash bin/gback.test.sh`: 并行运行一次偶发失败，随后连续 3 次 PASS
+- `bash bin/grm-ignore.test.sh`: PASS
+- `bash bin/gpull-sub.test.sh`: PASS
+- `bash bin/gback-sub.test.sh`: PASS
+- `bash bin/zg-all-pull.test.sh`: PASS
+- `bash bin/zg-all-pull-sub.test.sh`: PASS
+- `bash bin/gz-all-push.test.sh`: PASS
+- `bash bin/zg-all-back.test.sh`: PASS
+- `bash bin/zg-all-back-sub.test.sh`: PASS
+- `bash -n bin/_git_remote_target.sh bin/_git_remote_target.test.sh`: PASS
+- `form-audit.sh --root . --strict --quiet`: PASS
+- `form-data-tracking-check.sh --root . --quiet`: PASS
+- `form-large-files-check.sh --root .`: PASS，已检查 0 个待提交文件
+- `tools/configure-check.sh`: errors=0，warnings=1（既有插件 manifest 警告）
+- `git diff --check`: PASS
+- `form-snapshot-verify.sh --quiet`: FAIL（既有基线问题，8 个固定快照文件哈希不匹配，快照目录本次无改动）
+
+## 变更与产物
+- 文件: `bin/_git_remote_target.sh`，增加实际 URL 解析、精确映射和同目标增量应用。
+- 文件: `bin/_git_remote_target.test.sh`，覆盖旧域名、自定义域名、端口、跨仓库重应用、真实 SSH 传输和裸 `-t` 默认值。
+- 文件: `bin/AGENTS.md`，补充 `-t` 对已配置 URL 始终生效的约定。
+- 未改动范围: 未暂存、未提交、未推送；未修改固定快照、系统配置、凭据或其他仓库。
+
+## 风险、限制与下一步
+- 风险: 映射基于当前仓库配置生成；完全不传 `-t` 时仍保持原行为，不覆盖远程。
+- 基线阻塞: 固定快照有 8 个文件在本任务前已与 `SHA256SUMS.txt` 不一致，来自既有提交 `4a39e2a` 的全局替换残留；不在本任务范围内，未擅自改写固定证据。
+- 下一步: 如需提交，先显式授权；固定快照应在单独任务中按原始提交恢复并重算清单。
+
+## 用户输入指令
+本库的git相关功能脚本的'-t'选项应保持开启,即即使'.git/config'已经定义远程url,依旧执行'-t'指定的远程(存在默认值)
+
+## Agent 全文报告
+--- report begin ---
+已完成 `-t/--target` 修复。共享层现在会读取当前仓库 `.git/config` 与 `.gitmodules` 的实际 URL，生成只在当前进程生效的精确 `insteadOf` 映射，因此即使远程 URL 已配置为旧域名、自定义域名或带非标准端口，显式 `-t` 仍会选择指定目标；裸 `-t` 同样使用默认 `gitlab.itp.ac.cn`。协议、用户、端口与仓库路径保持不变，仓库配置不会被写回。
+
+验证覆盖了共享层、所有 Git 基础入口、子模块入口和聚合包装器，以及真实 SSH 传输目标。相关测试全部通过；`gback.test.sh` 在并行全量运行中出现一次既有偶发失败，随后连续 3 次单独运行通过。`form-audit`、data 边界、大文件闸门和 `git diff --check` 通过，`configure-check` 为 0 error、1 个既有插件警告。
+
+`form-snapshot-verify` 仍失败：8 个固定快照文件在本任务开始前已与 `SHA256SUMS.txt` 不一致，快照目录本次无改动，来源可追溯到既有提交 `4a39e2a` 的全局替换。该问题未在本任务中越界修改。未暂存、提交或推送。
+--- report end ---

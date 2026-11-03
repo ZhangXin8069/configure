@@ -35,6 +35,8 @@ echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 `cl`、`cls`、`op`、`co`、`ops`、`cos` 为符号链接（→ `agent.sh`）；`cl.bat`/`op.bat`/`co.bat` 为符号链接（→ `agent.bat`，Windows 检出时符号链接不可用则复制或 `mklink /H`）。
 
+Git 功能脚本的 `-t/--target` 对当前进程始终生效：除固定支持域名外，共享层会读取当前仓库 `.git/config` 与 `.gitmodules` 的实际 URL，生成精确的临时 `insteadOf` 映射，因此旧域名、自定义域名或已存在 `remote.*.url` 均不会阻止 `-t` 选择的目标；映射不写入仓库配置。
+
 ## 平台与注意事项
 
 - `.bat`/`.ps1` 为 Windows 对应版，**不**被别名生成器扫描（只扫 `.sh`）；`agent-protocol-bridge.py` 当前仅在 Unix `agent.sh` 启用，Windows 对 `bridge_models` 明确提示改用 `op`，不发起必然失败的直连请求
