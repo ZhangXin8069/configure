@@ -1,0 +1,107 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 21:41:57 +0800
+批次: tag-baseline-and-chain-optim
+主任务: ~up~diff~debug~optim~init~push~tag 全流程交付
+触发原因: 任务完成
+摘要: 修复 tag 基线时间序、优化 tag-chain 并刷新 up 参考源
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — ~up 参考源刷新与本地四树基线
+- 目标: 刷新 skills/up 的 3.1 参考源表与派生索引，核对 skills/tools/hooks/plugins 基线。
+- 命令/操作: curl 多源热榜查询（查询词 `agent skills`）、raw 文档核验、tools/configure-check.sh、skills 目录完整性扫描。
+- 关键输出:
+  - GitHub API 200，total=154633，top=`obra/superpowers`（stars=311592）。
+  - GitLab API 200，返回 5，top=`macrodream/blueprint`（star_count=8）。
+  - Codeberg API 200，`includeDesc=true` 返回 5，top=`leeg/chiron-codex-agent-skills`（stars=3）。
+  - Gitee 搜索 API 302→登录页（需认证），保留旧空结果并标待复核。
+  - agentskills.io 200；Anthropic skill-creator raw 200；obra/superpowers writing 与 verification raw 200。
+  - awesome-opencode README raw 200，API stars=10850，最后 README 提交 399a93b（2026-11-03T08:37:15Z）。
+- 退出码: configure-check 0（初始基线 errors=0，仅 plugins 无原生 manifest 的 WARN）。
+- 证据与判断: 本地 33 个技能目录均有 SKILL.md/AGENTS.md，frontmatter name 无错配；无需新增技能。
+
+### S2 — ~debug 标签基线根因与修复
+- 目标: 解释并修复最新标签基线选择错误。
+- 复现: `git tag -l --sort=-v:refname | grep ... | head -1` 选中 stab84（2026-10-16），实际最新 tagger 时间为 dev51（2026-11-03）。
+- 证据: stab84..HEAD 为 847 files changed / +43485 / -40266；dev51..HEAD 为 112 files changed / +5007 / -234。
+- 根因: `--sort=-v:refname` 按版本字符串排序，跨 stab/dev/bug/test 前缀时不做时间排序，导致基线回溯到旧标签。
+- 改动: 新增 `skills/tag/tag-baseline.sh`（creatordate 主排序、v:refname 决定并列）；SKILL.md 与 references 改用该脚本；新增 `skills/tag/tag-baseline.test.sh` 覆盖混合前缀、并列时间、空仓库与非法目标。
+- 验证: 测试先失败（脚本缺失）→ 实现后通过；真实仓库 `--latest` 输出 dev51，`--previous dev51` 输出 dev50。
+
+### S3 — ~optim tag-chain 历史链检查优化
+- 目标: 降低每次打标前 `tag-chain.sh --check` 的固定开销。
+- 基线: 本地 `--check` 3 次均约 4.29s（149 个受管标签）。
+- 主导项: 每个字段查询 fork 一个 awk；commit_rank 对每个提交做 O(N²) 查重；远程核对逐标签 fork。
+- 改动: 一次 awk 关联标签元数据；`git rev-list` 单遍按行号建 rank；祖先缓存与重复 follow 改为 Bash 3.2 兼容的索引数组；远端对象批量关联。
+- 复测: 本地 `--check` 5 次 0.429–0.469s（约 0.43s，-90%）。优化前后 `--check` 与 `--repair --dry-run` 输出逐字节一致。
+- 验证: `bash -n` 通过；`tag-chain.test.sh` 通过。
+
+### S4 — ~diff / ~init 同步与检查
+- 目标: 审查改动范围并同步 AGENTS.md/镜像。
+- 操作: `git status --short`、`git diff --stat`、`git diff --check`、`.opencode/skills` 逐文件 cmp、散落 agent init 文件扫描。
+- 结果: 本次 10 个文件（8 改 2 增），无未跟踪杂项；无 CLAUDE.md/CODEX.md/.claude 等散落初始化文件；顶层目录 AGENTS.md 齐全；镜像一致。
+
+### S5 — ~push / ~tag 交付
+- 目标: 提交、推送 main 并创建下一个受管标签。
+- 操作: 显式暂存 10 个文件；`git diff --cached --check` 0；大文件闸门通过（10 文件，限制 10,000,000 字节）；提交 ba4de8e；写日志后提交；创建 dev52 并推送。
+- 证据与判断: 真实基线为 dev51，按 tag 技能默认类型推断选择 dev，编号 dev52。
+
+## 验证与证据
+- 语法: `bash -n` 覆盖 tag-chain.sh、tag-baseline.sh 及两个测试脚本，全部通过。
+- 测试: `tag-chain.test.sh` 通过；`tag-baseline.test.sh` 通过。
+- 结构: `tools/configure-check.sh` errors=0，warnings=1（plugins 无 .codex-plugin/plugin.json，属预期状态）。
+- 格式: `form-audit.sh --strict --quiet` 退出 0；`form-snapshot-verify.sh --quiet` 退出 0；`form-data-tracking-check.sh --root . --quiet` 退出 0。
+- Git: `git diff --check` 退出 0；`git diff --cached --check` 退出 0；`form-large-files-check.sh` 通过。
+- 行为: 优化前后 tag-chain 输出一致；tag-baseline 在真实仓库选出 dev51。
+- 未验证项: Gitee 与 chx6 树页面需登录，未取得结构化排名，已如实标 `网页回退`/`待复核`。
+
+## 变更与产物
+- 文件:
+  - AGENTS.md（新增 tag 测试命令）
+  - skills/AGENTS.md（tag 技能表补基线时间序说明）
+  - skills/tag/AGENTS.md（新增 tag-baseline 测试约定）
+  - skills/tag/SKILL.md（基线/前驱改用 tag-baseline.sh）
+  - skills/tag/references/tag-operations.md（同步）
+  - skills/tag/tag-chain.sh（批量关联与内存缓存）
+  - skills/tag/tag-baseline.sh（新增）
+  - skills/tag/tag-baseline.test.sh（新增）
+  - skills/up/SKILL.md（参考源最近验证刷新）
+  - skills/up/references/awesome-opencode.md（元数据刷新）
+- 产物: 本地提交 ba4de8e；随后本地/远程标签 dev52。
+- 未改动范围: 未修改 bin/tools/hooks/plugins 的实现代码；未改动其他技能正文。
+
+## 风险、限制与下一步
+- 风险: Gitee 与用户指定实践源需要认证，热榜覆盖不完整；awesome-opencode 正文快照仍为 2026-08-27，README 已变化，需下次整体刷新。
+- 阻塞: 无。
+- 下一步: 推送 main 与 dev52 后回读 `git ls-remote` 校验；后续如需要可整体刷新 awesome-opencode 正文。
+
+## 用户输入指令
+~up~diff~debug~optim~init~push~tag
+
+## Agent 全文报告
+--- report begin ---
+✓ 交付完成（身份：{代码}）
+
+改动内容
+- ~up: 刷新 skills/up 参考源表至 2026-11-03（GitHub/GitLab/Codeberg/agentskills.io/Anthropic/superpowers 实测；Gitee 与 chx6 树页面需登录，标网页回退/待复核），更新 awesome-opencode 元数据（stars=10850，README SHA 与最后提交）。
+- ~debug: 根因是 tag 技能用 `git tag --sort=-v:refname` 选基线，混合前缀下把 stab84（10-16）排在 dev51（今天）前，导致 847 文件错误 diff。新增 skills/tag/tag-baseline.sh（creatordate 主排序、v:refname 决定并列），SKILL.md/references 改用该脚本，新增 tag-baseline.test.sh 覆盖混合前缀、并列、空仓库与非法目标。
+- ~optim: tag-chain 对每个字段 fork awk，且 commit_rank 对每个提交做 O(N²) 查重。改为一次 awk 关联、rev-list 单遍排名、内存祖先/重复缓存；本地 --check 4.29s → 0.43s（5 次约 0.43s，-90%），优化前后输出逐字节一致。
+- ~init: 同步根 AGENTS.md 测试命令、skills/tag/AGENTS.md、skills/AGENTS.md 技能表；散落 agent init 文件扫描为 0，顶层目录 AGENTS.md 齐全；.opencode/skills 镜像逐文件 cmp 一致。
+- ~push/~tag: 提交 ba4de8e，随后推送 main 并打 dev52。
+
+推理依据
+- 基线必须按 tagger 时间而非版本字符串；否则跨前缀标签会交错。
+- tag-chain 的耗时来自进程 fork（149 标签 × 多字段 + 提交排名查重），批处理与内存缓存不改变语义。
+- up Step 0 只回写来源新鲜度与派生元数据，不越权刷新正文。
+
+验证结果
+- bash -n 全部通过。
+- tag-chain.test.sh、tag-baseline.test.sh 通过。
+- configure-check: errors=0, warnings=1（plugins 无原生 manifest，预期）。
+- form-audit --strict、snapshot-verify、data-tracking、git diff --check、大文件闸门均通过。
+- tag-chain --check 输出与优化前完全一致；真实仓库基线解析为 dev51。
+
+后续步骤
+- 推送 main 与 dev52 标签并回读校验；无遗留项。
+--- report end ---

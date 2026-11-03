@@ -1240,3 +1240,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## tag-baseline-and-chain-optim - final - 2026-11-03 21:41:57 +0800
+- 主任务: ~up~diff~debug~optim~init~push~tag 全流程交付
+- 日志文件: logs/v2026110321-4.txt
+- 文件大小: 7962 bytes
+- 触发原因: 任务完成
+- 关键内容: 修复 tag 基线时间序、优化 tag-chain 并刷新 up 参考源
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
