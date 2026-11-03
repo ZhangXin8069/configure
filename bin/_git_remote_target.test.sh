@@ -61,7 +61,6 @@ _test_url_rewrite_is_temporary() {
 
     git init -q -b main "${repo}"
     git -C "${repo}" remote add origin git@gitlab.itp.ac.cn:owner/repo.git
-    git -C "${repo}" remote add legacy-origin git@code.itp.ac.cn:owner/repo.git
     git -C "${repo}" remote add custom-origin git@legacy.example.invalid:owner/repo.git
     git -C "${repo}" remote add custom-port https://legacy.example.invalid:8443/owner/repo.git
     git -C "${repo}" remote add https-origin https://gitlab.itp.ac.cn/owner/repo.git
@@ -76,8 +75,6 @@ _test_url_rewrite_is_temporary() {
         _git_remote_target_apply github.com >/dev/null
         [[ "$(git remote get-url origin)" == git@github.com:owner/repo.git ]] \
             || _fail "scp-like URL did not preserve protocol, user, and path"
-        [[ "$(git remote get-url legacy-origin)" == git@github.com:owner/repo.git ]] \
-            || _fail "legacy configured URL was not overridden"
         [[ "$(git remote get-url custom-origin)" == git@github.com:owner/repo.git ]] \
             || _fail "custom configured URL was not overridden"
         [[ "$(git remote get-url custom-port)" == https://github.com:8443/owner/repo.git ]] \

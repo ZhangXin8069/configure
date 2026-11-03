@@ -3,7 +3,6 @@
 
 _GIT_REMOTE_DEFAULT_TARGET=gitlab.itp.ac.cn
 _GIT_REMOTE_ALLOWED_TARGETS="gitlab.itp.ac.cn gitee.com github.com gitlab.com"
-_GIT_REMOTE_LEGACY_SOURCE_HOSTS="code.itp.ac.cn"
 _GIT_REMOTE_SELECTED_TARGET=
 _GIT_REMOTE_HELP_REQUESTED=0
 _GIT_REMOTE_REMAINING_ARGS=()
@@ -231,7 +230,7 @@ _git_remote_target_apply() {
         announce=1
     fi
 
-    for source in ${_GIT_REMOTE_LEGACY_SOURCE_HOSTS} ${_GIT_REMOTE_ALLOWED_TARGETS}; do
+    for source in ${_GIT_REMOTE_ALLOWED_TARGETS}; do
         [[ "${source}" == "${target}" ]] && continue
         _git_remote_target_add_mapping \
             "url.git@${target}:.insteadOf" "git@${source}:"

@@ -1177,3 +1177,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## remove-legacy-git-domain-20261103 - final - 2026-11-03 18:25:51 +0800
+- 主任务: 删除 Git 远程目标层的旧域名兼容路径与当前树引用
+- 日志文件: logs/v2026110318-2.txt
+- 文件大小: 4192 bytes
+- 触发原因: 任务完成
+- 关键内容: 删除共享兼容变量、测试夹具和当前日志中的旧域名值，同时保留任意已配置 URL 的动态 -t 覆盖
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

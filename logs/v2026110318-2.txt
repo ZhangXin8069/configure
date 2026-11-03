@@ -1,0 +1,67 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 18:25:51 +0800
+批次: remove-legacy-git-domain-20261103
+主任务: 删除 Git 远程目标层的旧域名兼容路径与当前树引用
+触发原因: 任务完成
+摘要: 删除共享兼容变量、测试夹具和当前日志中的旧域名值，同时保留任意已配置 URL 的动态 -t 覆盖
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 全仓定位
+- 目标: 找出当前工作树中的全部旧域名引用。
+- 命令/操作: 使用 `rg` 与 `git grep` 进行不区分大小写的全仓检索，并检查同一字符串的提交历史。
+- 关键输出: 当前树仅有 3 处：共享兼容变量、一个测试夹具、上一任务日志正文。
+- 证据与判断: 工作树在本任务开始时干净；旧域名只作为兼容输入存在，动态 URL 覆盖并不依赖它。
+
+### S2 — 彻底移除
+- 目标: 删除旧域名兼容路径和所有当前树引用。
+- 命令/操作: 移除兼容源域名变量及循环输入；删除对应测试远程与断言；将历史日志表述改为不包含域名值。
+- 关键输出: 固定支持目标仍为 `gitlab.itp.ac.cn`、`gitee.com`、`github.com`、`gitlab.com`。
+- 证据与判断: 已配置的任意旧域名或自定义域名仍由实际 `.git/config`、`.gitmodules` URL 动态映射覆盖，不依赖硬编码旧域名。
+
+## 验证与证据
+- 全仓 `rg -n -i --hidden --glob '!.git/**'` 检索旧域名：0 匹配
+- `bash -n bin/_git_remote_target.sh bin/_git_remote_target.test.sh`: PASS
+- `bash bin/_git_remote_target.test.sh`: PASS
+- `bash bin/git-remote-wrappers.test.sh`: PASS
+- `bash bin/gpush.test.sh`: PASS
+- `bash bin/gpull.test.sh`: PASS
+- `bash bin/gback.test.sh`: PASS
+- `bash bin/grm-ignore.test.sh`: PASS
+- `bash bin/gpull-sub.test.sh`: PASS
+- `bash bin/gback-sub.test.sh`: PASS
+- `bash bin/zg-all-pull.test.sh`: PASS
+- `bash bin/zg-all-pull-sub.test.sh`: PASS
+- `bash bin/gz-all-push.test.sh`: PASS
+- `bash bin/zg-all-back.test.sh`: PASS
+- `bash bin/zg-all-back-sub.test.sh`: PASS
+- `form-audit.sh --root . --strict --quiet`: PASS
+- `form-data-tracking-check.sh --root . --quiet`: PASS
+- `form-large-files-check.sh --root .`: PASS
+- `tools/configure-check.sh`: errors=0，warnings=1（既有插件 manifest 警告）
+- `git diff --check`: PASS
+- `form-snapshot-verify.sh --quiet`: FAIL（既有固定快照 8 项哈希偏差，快照目录本次未改动）
+
+## 变更与产物
+- 文件: `bin/_git_remote_target.sh`，删除旧域名硬编码兼容输入。
+- 文件: `bin/_git_remote_target.test.sh`，删除旧域名测试夹具和断言。
+- 文件: `logs/v2026110318.txt`，删除历史日志中的旧域名值。
+- 未改动范围: 未改写 Git 历史，未暂存、提交或推送。
+
+## 风险、限制与下一步
+- 风险: 旧域名输入不再提供固定兼容映射；但当前仓库实际配置仍会通过动态 URL 映射被 `-t` 覆盖。
+- 基线阻塞: 固定快照仍存在本任务前已有的 8 项哈希偏差，本次未修改快照。
+- 历史边界: Git 历史提交仍可通过 `git log -S` 找到旧值；删除已推送历史属于破坏性操作，未在本次授权范围内执行。
+
+## 用户输入指令
+彻底删除旧域名（具体域名值已按用户要求从日志中移除）。
+
+## Agent 全文报告
+--- report begin ---
+已完成旧域名的当前树清理。共享远程目标层不再保留旧域名硬编码兼容变量，对应测试夹具和当前日志引用均已删除；全仓当前工作树检索结果为 0 匹配。
+
+`-t/--target` 功能不受影响：固定支持目标保持不变，已配置的任意旧域名或自定义域名仍会从 `.git/config`、`.gitmodules` 的实际 URL 生成临时精确映射，因此显式 `-t` 仍可覆盖现有远程 URL。
+
+全部相关 Git 脚本测试、`bash -n`、`form-audit`、data 边界、大文件检查、`configure-check` 和 `git diff --check` 已通过。`form-snapshot-verify` 仍报告本任务前已有的 8 项固定快照哈希偏差，本次未修改快照。Git 历史中的既往提交未改写，因为删除已推送历史需要明确的破坏性授权。未暂存、提交或推送。
+--- report end ---
