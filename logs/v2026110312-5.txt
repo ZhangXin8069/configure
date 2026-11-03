@@ -1,0 +1,79 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 12:44:37 +0800
+批次: large-pack-push
+主任务: 诊断 20250814-20260815 仓库 pack 超限并尝试非破坏性分块推送
+触发原因: 任务完成
+摘要: 远端为空且完整 pack 约 572.66 MiB；临时对象播种未能绕过协商，远端默认分支残留需人工处理
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 远端基线与体积证据
+- 目标: 解决 `/root/20250814-20260815` 在 `master` push 时被远端 `pack exceeds maximum allowed size` 拒绝的问题。
+- 命令/操作: 执行 `git fetch --prune origin`，检查远端 heads、提交图、对象数量和 pack 大小。
+- 关键输出: fetch 删除陈旧 `origin/master`，远端实际没有任何分支；本地只有一个 ahead 提交 `5b315dd`，但其父提交 `ca917dc` 首次引入 3061 个文件，完整 HEAD 共 2776 个对象。
+- 退出码: 0。
+- 证据与判断: 单次 push 需要上传完整历史，实测 pack 为 `572,663,484` bytes；`ca917dc` 相对根提交的增量仍有 `572,660,722` bytes，因此按提交分段无效。
+
+### S2 — 大对象分析
+- 命令/操作: 统计递归树体积与最大 blob。
+- 关键输出: 根树未压缩内容约 548.8 MB；`lattice-pdf` 约 538.3 MB，其中 docs 约 201.9 MB、agent 约 148.3 MB、books 约 93.8 MB、examples 约 92.7 MB；最大单文件约 45.4 MB。
+- 退出码: 0。
+- 证据与判断: 远端限制允许单块 45.4 MB，问题在于单次 pack 总量过大，而不是某个单文件无法上传。
+
+### S3 — 非破坏性分块尝试
+- 命令/操作: 临时建立 21 个无父 synthetic commits，每块原始大小不超过 40 MB（单文件超限块为 45.4 MB），逐个推送到 `codex-bootstrap-20261103T123840-88255/chunk-*`。
+- 关键输出: 21 个临时分支均成功接收，证明分块 pack 本身低于服务端限制。
+- 退出码: 0。
+- 证据与判断: 需要最终推送原始 `HEAD`，并依赖服务端已存对象消除重复传输。
+
+### S4 — 最终协商失败与中止
+- 命令/操作: 计算临时提交排除后的最终 pack，并执行 `git push --set-upstream origin HEAD:refs/heads/master`。
+- 关键输出: 本地 pack 估算仍为 `572,663,404` bytes；Git 将全部 2776 个对象重新列入 pack。上传到约 79.09 MiB、27% 时人工中止。
+- 退出码: 130。
+- 证据与判断: 无共同祖先关系的临时提交不能作为 rev-list/pack 协商的排除边界，分块播种方案无法绕过 Git 的最终闭包传输。
+
+### S5 — 清理与残留
+- 命令/操作: 尝试删除 21 个临时分支；创建并删除临时 `master` 以帮助默认分支切换。
+- 关键输出: GitLab 自动把首个 `chunk-1` 设为默认分支；创建 `master` 后 HEAD 仍指向 `chunk-1`，默认分支不能通过普通 Git 删除。其余 20 个临时分支和临时 `master` 已删除。
+- 退出码: 删除默认分支请求失败，其余清理成功。
+- 证据与判断: 远端当前仅保留 `refs/heads/codex-bootstrap-20261103T123840-88255/chunk-1`，提交为 `9cffead9495a78ff3f746c538f6f8731e0ebedf0`。本地工作树未改写，`master` 跟踪状态变为 `origin/master: gone`。
+
+## 验证与证据
+- 远端基线: `git ls-remote --heads origin` 原为空，fetch 删除陈旧 tracking ref，exit=0。
+- pack 测量: 完整历史 `572,663,484` bytes；单提交增量 `572,660,722` bytes。
+- 分块上传: 21 个临时分支全部成功，最大块 45,387,021 bytes。
+- 最终 push: 再次生成完整 2776-object pack，人工中止于 27%，exit=130。
+- 清理回读: 仅默认临时分支 `chunk-1` 残留，其余临时 refs 已删除。
+- locale: 所有远程命令使用 `LANG=C LC_ALL=C`，未再出现 setlocale 告警。
+
+## 变更与产物
+- 文件: 未修改 `/root/20250814-20260815` 工作树或历史。
+- 远端: 残留默认分支 `codex-bootstrap-20261103T123840-88255/chunk-1`；其余 bootstrap refs 已清理。
+- 本地: 临时脚本已删除；未执行 force push、历史改写或系统配置修改。
+
+## 风险、限制与下一步
+- 风险: 远端仓库不再是初始空仓，默认分支为不完整的 bootstrap commit，不能作为有效 `master` 使用。
+- 阻塞: 远端单次 pack 限制低于完整历史体积；Git 无法通过普通 push 将同一历史拆成多个 receive-pack 请求。
+- 下一步: 优先请 GitLab 管理员提高该项目的最大 push 大小到至少约 600 MiB；或明确授权使用 Git LFS/历史重写移除大型 PDF、媒体和二进制后重建 `master`。如要保持远端完全空白，需要用户明确授权删除并重建该项目。
+
+## 用户输入指令
+➜ /root/20250814-20260815 git:(master) git push
+Found existing alias for "git push". You should use: "gp"
+sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Enumerating objects: 2776, done.
+...
+remote: fatal: pack exceeds maximum allowed size
+...
+! [remote rejected] master -> master (unpacker error)
+
+## Agent 全文报告
+--- report begin ---
+✓ 根因定位完成，推送 blocked
+根因: 远端为空，首次 push 需要传输完整 572.66 MiB pack，超过服务端单次限制；工作分支只新增 1 个提交并不代表只需传输这 1 个提交。
+尝试: 将对象拆成 21 个临时分支均成功上传，但最终原始 `master` push 仍重新打包全部 2776 个对象，因此在 79 MiB 时中止。
+远端状态: 其余临时分支已删除；GitLab 自动选中的默认分支 `codex-bootstrap-20261103T123840-88255/chunk-1` 无法用普通 Git 删除，是当前唯一残留。
+本地状态: 工作树未修改，历史未改写，`master` 跟踪的 `origin/master` 已被 prune。
+下一步: 提高 GitLab pack 限额，或在明确授权后使用 Git LFS/历史重写；若要求远端恢复为空，需要明确授权删除并重建该项目。
+状态: blocked
+--- report end ---

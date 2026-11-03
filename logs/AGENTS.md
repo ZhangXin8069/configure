@@ -1132,3 +1132,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## large-pack-push - final - 2026-11-03 12:44:37 +0800
+- 主任务: 诊断 20250814-20260815 仓库 pack 超限并尝试非破坏性分块推送
+- 日志文件: logs/v2026110312-5.txt
+- 文件大小: 5868 bytes
+- 触发原因: 任务完成
+- 关键内容: 远端为空且完整 pack 约 572.66 MiB；临时对象播种未能绕过协商，远端默认分支残留需人工处理
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
