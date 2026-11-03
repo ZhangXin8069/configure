@@ -15,10 +15,10 @@
 # ssh-add ~/.ssh/id_ed25519
 # echo -e "id_rsa.pub:\n"
 # cat ~/.ssh/id_ed25519.pub
-# echo -e "\nput this to gitee's ssh.then run\"ssh -T git@gitee.com\""
+# echo -e "\nput this to gitee's ssh.then run\"ssh -T git@code.itp.ac.cn\""
 # # reboot
-# git clone git@gitee.com:zhangxin8069/configure.git
-# git clone git@gitee.com:zhangxin8069/PyQCU.git
+# git clone git@code.itp.ac.cn:zhangxin8069/configure.git
+# git clone git@code.itp.ac.cn:zhangxin8069/PyQCU.git
 # pushd ~/configure
 # source ./env.sh
 # popd

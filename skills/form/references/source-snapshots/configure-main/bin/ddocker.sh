@@ -112,7 +112,7 @@ else
         echo "    docker pull ubuntu"
         echo "    docker run -d --name test ubuntu tail -f /dev/null"
         echo
-        echo "  Guide: https://gitee.com/zhangxin8069/configure/raw/stab10/lib/_docker/setup.md"
+        echo "  Guide: https://code.itp.ac.cn/zhangxin8069/configure/raw/stab10/lib/_docker/setup.md"
     fi
     echo
     pause

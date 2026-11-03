@@ -14,7 +14,7 @@ conda install conda-forge::cupy=13.3.0
 conda install conda-forge::mpi4py=3.1.4
 conda install conda-forge::Cython=3.0.11
 pushd ~/miniconda3/envs/qcu
-wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
+wget https://code.itp.ac.cn/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
 tar -xzf quda-develop.tar.gz
 mv quda-develop quda
 pushd ./quda

@@ -46,7 +46,7 @@ git submodule update --init --recursive -- refer/git-rep/<name>
 示例：
 
 ```bash
-git submodule add https://gitee.com/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
+git submodule add https://code.itp.ac.cn/zhangxin8069/PyQCU.git refer/git-rep/PyQCU
 git submodule add https://github.com/IHEP-LQCD/EasyDistillation.git \
   refer/git-rep/EasyDistillation
 ```

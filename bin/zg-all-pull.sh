@@ -51,8 +51,8 @@ _is_git_checkout() {
 
 _clone_url() {
     case "$1" in
-        https) printf 'https://gitee.com/zhangxin8069/%s.git\n' "$2" ;;
-        ssh) printf 'git@gitee.com:zhangxin8069/%s.git\n' "$2" ;;
+        https) printf 'https://code.itp.ac.cn/zhangxin8069/%s.git\n' "$2" ;;
+        ssh) printf 'git@code.itp.ac.cn:zhangxin8069/%s.git\n' "$2" ;;
     esac
 }
 

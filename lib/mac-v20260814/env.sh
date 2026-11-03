@@ -7,9 +7,9 @@
 # ssh-add ~/.ssh/id_ed25519
 # echo -e "id_rsa.pub:\n"
 # cat ~/.ssh/id_ed25519.pub
-# echo -e "\nput this to gitee's ssh.then run\"ssh -T git@gitee.com\""
-# git clone git@gitee.com:zhangxin8069/configure.git
-# git clone git@gitee.com:zhangxin8069/PyQCU.git
+# echo -e "\nput this to gitee's ssh.then run\"ssh -T git@code.itp.ac.cn\""
+# git clone git@code.itp.ac.cn:zhangxin8069/configure.git
+# git clone git@code.itp.ac.cn:zhangxin8069/PyQCU.git
 # source ./env.sh
 # sh_init.sh
 

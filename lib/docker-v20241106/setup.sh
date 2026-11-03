@@ -17,7 +17,7 @@ apt install openmpi-bin openmpi-common libopenmpi-dev
 pushd ~
 apt install zsh wget
 sh -c "$(wget https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh -O -)"
-# git clone https://gitee.com/zhangxin8069/configure.git
+# git clone https://code.itp.ac.cn/zhangxin8069/configure.git
 pushd ./configure
 # 别名已废弃: bin/ 直接进 PATH, 无需 script_alias.sh
 cp ./lib/v20241023/env.sh ~/env.sh
@@ -29,7 +29,7 @@ apt update
 apt install libnccl2=2.20.5-1+cuda12.4 libnccl-dev=2.20.5-1+cuda12.4
 apt install cuda-nsight-systems-12-4
 ######
-wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
+wget https://code.itp.ac.cn/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
 tar -xzf quda-develop.tar.gz
 mv quda-develop quda
 pushd ./quda

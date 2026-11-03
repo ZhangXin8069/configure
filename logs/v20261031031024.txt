@@ -10,8 +10,8 @@ Git 根目录: /root/configure
 ## 关键日志
 ### S1 — origin remote 恢复
 - 目标：修复 `/root/PyQCU` 中 `gpush.sh` 报 `origin` 不存在的问题。
-- 检查：`git remote -v` 原为空；SSH 地址 `git@gitee.com:zhangxin8069/PyQCU.git` 可由 `git ls-remote` 访问。
-- 操作：执行 `git remote add origin git@gitee.com:zhangxin8069/PyQCU.git`。
+- 检查：`git remote -v` 原为空；SSH 地址 `git@code.itp.ac.cn:zhangxin8069/PyQCU.git` 可由 `git ls-remote` 访问。
+- 操作：执行 `git remote add origin git@code.itp.ac.cn:zhangxin8069/PyQCU.git`。
 - 结果：origin fetch/push URL 均已恢复。
 
 ### S2 — 普通 gpush 重试

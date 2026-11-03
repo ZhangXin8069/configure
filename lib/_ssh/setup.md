@@ -43,7 +43,7 @@ cat ~/.ssh/id_ed25519.pub
 | 平台 | 地址 |
 |---|---|
 | GitHub | `https://github.com/settings/keys` |
-| Gitee | `https://gitee.com/profile/sshkeys` |
+| Gitee | `https://code.itp.ac.cn/profile/sshkeys` |
 
 ## 加载 ssh-agent
 
@@ -78,8 +78,8 @@ Host github.com
   ServerAliveInterval 30
   ServerAliveCountMax 3
 
-Host gitee.com
-  HostName gitee.com
+Host code.itp.ac.cn
+  HostName code.itp.ac.cn
   User git
   IdentityFile ~/.ssh/id_ed25519
   IdentitiesOnly yes
@@ -123,7 +123,7 @@ WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!
 
 ```bash
 ssh -T git@github.com
-ssh -T git@gitee.com
+ssh -T git@code.itp.ac.cn
 ```
 
 部分平台认证成功时仍返回非零退出码，应以输出中是否包含成功身份或仓库权限提示为准。

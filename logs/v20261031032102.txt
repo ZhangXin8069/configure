@@ -41,6 +41,6 @@ gpush.sh
 ...
 Everything up-to-date
 ...
-error: failed to push some refs to 'gitee.com:zhangxin8069/PyQCU.git'
+error: failed to push some refs to 'code.itp.ac.cn:zhangxin8069/PyQCU.git'
 hint: Updates were rejected because the tag already exists in the remote.
 ```

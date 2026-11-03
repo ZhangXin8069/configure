@@ -99,9 +99,9 @@ _test_forced_https_clone_and_filename_order() {
         ZG_GIT_PROTOCOL=https \
         bash "${wrapper_bin}/zg-all-pull.sh" > "${TEST_DIR}/https.log" 2>&1
 
-    [[ "$(grep -Fc 'clone https://gitee.com/zhangxin8069/' "${clone_log}")" -eq 2 ]] \
+    [[ "$(grep -Fc 'clone https://code.itp.ac.cn/zhangxin8069/' "${clone_log}")" -eq 2 ]] \
         || _fail "应按文件名发现并克隆两个缺失仓库"
-    ! grep -Fq 'git@gitee.com' "${clone_log}" || _fail "强制 HTTPS 时不应尝试 SSH"
+    ! grep -Fq 'git@code.itp.ac.cn' "${clone_log}" || _fail "强制 HTTPS 时不应尝试 SSH"
     [[ "$(paste -sd, "${event_log}")" == existing-a,configure,dynamic,pyqcd,pyqcu ]] \
         || _fail "子系列未按文件名顺序执行或动态发现/自定义脚本兼容失败"
 }
@@ -122,9 +122,9 @@ _test_auto_falls_back_to_https() {
         ZG_GIT_PROTOCOL=auto \
         bash "${wrapper_bin}/zg-all-pull.sh" > "${TEST_DIR}/auto.log" 2>&1
 
-    [[ "$(grep -Fc 'clone git@gitee.com:' "${clone_log}")" -eq 2 ]] \
+    [[ "$(grep -Fc 'clone git@code.itp.ac.cn:' "${clone_log}")" -eq 2 ]] \
         || _fail "auto 模式应先尝试两个 SSH clone"
-    [[ "$(grep -Fc 'clone https://gitee.com/zhangxin8069/' "${clone_log}")" -eq 2 ]] \
+    [[ "$(grep -Fc 'clone https://code.itp.ac.cn/zhangxin8069/' "${clone_log}")" -eq 2 ]] \
         || _fail "auto 模式应在 SSH 失败后回退两个 HTTPS clone"
 }
 

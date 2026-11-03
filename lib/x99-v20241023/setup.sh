@@ -52,15 +52,15 @@ ssh-add ~/.ssh/id_ed25519
 echo -e "id_rsa.pub:\n"
 cat ~/.ssh/id_ed25519.pub
 echo -e "\nput this to github's ssh.then run\"ssh -T git@github.com\""
-git clone git@gitee.com:zhangxin8069/configure.git
-git clone git@gitee.com:zhangxin8069/qcu.git
+git clone git@code.itp.ac.cn:zhangxin8069/configure.git
+git clone git@code.itp.ac.cn:zhangxin8069/qcu.git
 ######
 pushd ./configure
 # 别名已废弃: bin/ 直接进 PATH, 无需 script_alias.sh
 cp ./lib/x99-v20241023/env.sh ~/env.sh
 popd
 ######
-wget https://gitee.com/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
+wget https://code.itp.ac.cn/zhangxin8069/quda_packages/raw/main/quda-develop.tar.gz
 tar -xzf quda-develop.tar.gz
 mv quda-develop quda
 pushd ./quda
