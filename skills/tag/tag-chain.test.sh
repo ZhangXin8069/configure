@@ -204,4 +204,31 @@ fi
 assert_contains "$output" 'tagger 时间并列'
 [ "$(git -C "$tie_repo" show-ref --tags)" = "$tie_refs_before" ] || fail '并列时间场景改写了本地标签'
 
+missing_repo="$test_root/missing-remote-repo"
+missing_remote="$test_root/missing-remote.git"
+git init -q "$missing_repo" || fail '初始化远端缺失测试仓库失败'
+git -C "$missing_repo" config user.name 'Tag Chain Missing Remote Test'
+git -C "$missing_repo" config user.email 'tag-chain-missing@example.invalid'
+printf '%s\n' root >> "$missing_repo/history.txt"
+git -C "$missing_repo" add history.txt || fail '远端缺失测试根提交暂存失败'
+GIT_AUTHOR_DATE='2024-04-01T00:00:00Z' GIT_COMMITTER_DATE='2024-04-01T00:00:00Z' \
+    git -C "$missing_repo" commit -q -m root || fail '远端缺失测试根提交失败'
+GIT_COMMITTER_DATE='2024-04-01T00:00:01Z' git -C "$missing_repo" tag -a stab0 \
+    -m 'stab0 init, 1. root; [test].' || fail '远端缺失测试根标签失败'
+printf '%s\n' dev >> "$missing_repo/history.txt"
+git -C "$missing_repo" add history.txt || fail '远端缺失测试 dev 提交暂存失败'
+GIT_AUTHOR_DATE='2024-04-02T00:00:00Z' GIT_COMMITTER_DATE='2024-04-02T00:00:00Z' \
+    git -C "$missing_repo" commit -q -m dev || fail '远端缺失测试 dev 提交失败'
+GIT_COMMITTER_DATE='2024-04-02T00:00:01Z' git -C "$missing_repo" tag -a dev0 \
+    -m 'follow stab0, 1. dev; [test].' || fail '远端缺失测试 dev 标签失败'
+git init -q --bare "$missing_remote" || fail '初始化远端缺失测试远端失败'
+git -C "$missing_repo" remote add origin "$missing_remote"
+git -C "$missing_repo" push -q --set-upstream origin HEAD || fail '远端缺失测试分支推送失败'
+git -C "$missing_repo" push -q origin refs/tags/stab0 || fail '远端缺失测试根标签推送失败'
+if output=$(bash "$checker" --check --repo "$missing_repo" --remote origin 2>&1); then
+    fail '远端缺失场景意外通过'
+fi
+assert_contains "$output" '[REMOTE] dev0: 远端缺失'
+assert_not_contains "$output" '[REMOTE] dev0: local object/target='
+
 printf 'PASS: tag-chain 自检、dry-run、本地修正和远端 lease 重写测试通过。\n'

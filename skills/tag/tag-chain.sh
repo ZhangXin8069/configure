@@ -118,6 +118,7 @@ cleanup() {
 trap cleanup EXIT HUP INT TERM
 
 tab=$(printf '\t')
+sep=$(printf '\037')
 target_queries="$tmp_dir/target-queries"
 target_results="$tmp_dir/target-results"
 commit_roots="$tmp_dir/commit-roots"
@@ -314,7 +315,7 @@ while IFS="$tab" read -r rank created tag_name; do
 done < "$sorted_order"
 
 printf '%s\n' "${ordered_tags[@]}" > "$tmp_dir/ordered-names"
-awk -F "$tab" -v OFS="$tab" -v names_file="$tmp_dir/ordered-names" '
+awk -F "$tab" -v OFS="$sep" -v names_file="$tmp_dir/ordered-names" '
     FILENAME != names_file {
         map = FILENAME
         sub(/.*\/kv-/, "", map)
@@ -416,7 +417,7 @@ queue_repair() {
     fi
 }
 
-while IFS="$tab" read -r object_type target_oid target_type subject created tag_name; do
+while IFS="$sep" read -r object_type target_oid target_type subject created tag_name; do
     [ -n "$tag_name" ] || continue
     target_type=${target_type:-missing}
 
@@ -511,7 +512,7 @@ if [ -n "$remote_name" ]; then
             fi
         done < "$remote_refs"
 
-        awk -F "$tab" -v OFS="$tab" -v names_file="$tmp_dir/ordered-names" '
+        awk -F "$tab" -v OFS="$sep" -v names_file="$tmp_dir/ordered-names" '
             FILENAME != names_file {
                 map = FILENAME
                 sub(/.*\/kv-/, "", map)
@@ -528,7 +529,7 @@ if [ -n "$remote_name" ]; then
             }
         ' "$tmp_dir"/kv-* "$tmp_dir/ordered-names" > "$tmp_dir/remote-records"
 
-        while IFS="$tab" read -r tag_name remote_object remote_target object_oid target_oid; do
+        while IFS="$sep" read -r tag_name remote_object remote_target object_oid target_oid; do
             [ -n "$tag_name" ] || continue
             if [ -z "$remote_object" ]; then
                 printf '[REMOTE] %s: 远端缺失\n' "$tag_name"
