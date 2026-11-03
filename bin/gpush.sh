@@ -19,7 +19,7 @@ _usage() {
 Usage: gpush.sh [-t [DOMAIN]] [-f] [-h]
 
 Stage parent-repository changes, commit them, and push the current branch and
-tags. No remote host override is applied unless -t/--target is specified.
+tags. The remote host defaults to gitlab.itp.ac.cn when -t/--target is omitted.
 
 Options:
 EOF

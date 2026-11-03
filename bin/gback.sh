@@ -38,8 +38,8 @@ _usage() {
 Usage: gback.sh [-t [DOMAIN]] [-h]
 
 Preserve local state in a stash, then force-align the current branch to its
-latest upstream. Existing remote URLs are preserved unless -t/--target is
-specified.
+latest upstream. The remote host defaults to gitlab.itp.ac.cn when -t/--target
+is omitted.
 
 Options:
 EOF

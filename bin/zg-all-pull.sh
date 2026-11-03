@@ -34,8 +34,8 @@ _git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" || exit $?
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 _CLONE_PROTOCOL=${ZG_GIT_PROTOCOL:-auto}
-# Preserve the existing clone source when no explicit target was requested.
-_CLONE_HOST=${_GIT_REMOTE_SELECTED_TARGET:-gitlab.itp.ac.cn}
+# The default target applies when -t/--target is omitted.
+_CLONE_HOST=${_GIT_REMOTE_SELECTED_TARGET}
 case "${_CLONE_PROTOCOL}" in
     auto|https|ssh) ;;
     *)

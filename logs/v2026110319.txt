@@ -1,0 +1,74 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 19:39:19 +0800
+批次: git-default-target-20261103
+主任务: 将 Git 功能脚本未传 -t 的默认行为改为 gitlab.itp.ac.cn
+触发原因: 任务完成
+摘要: 统一未传、裸 -t 和显式 -t 的远程目标语义，并同步基础、子模块、聚合入口、帮助与回归测试
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 统一默认语义
+- 目标: 让完全省略 `-t` 等同裸 `-t`，默认使用 `gitlab.itp.ac.cn`。
+- 命令/操作: 共享解析器初始化时选中默认目标；共享应用函数对空参数也回退默认值。
+- 关键输出: `_GIT_REMOTE_SELECTED_TARGET`、`_git_remote_target_apply` 和独立子命令 `_TARGET` 均不再保留空目标状态。
+- 证据与判断: 默认目标现在由代码路径实际应用，而不再只是聚合器 clone host 的显示回退。
+
+### S2 — 同步所有入口
+- 目标: 覆盖基础、子模块、历史清理和聚合入口。
+- 命令/操作: 更新 `gpush`、`gpull`、`gback`、`gpull-sub`、`gback-sub`、`grm-ignore`、`zg-all-pull` 及帮助文本。
+- 关键输出: 未传 `-t`、裸 `-t` 均使用 `gitlab.itp.ac.cn`；显式 `-t DOMAIN` 仍覆盖为指定目标。
+- 证据与判断: `gpull-sub`、`gback-sub` 会向递归子调用显式转发默认目标，行为保持一致。
+
+### S3 — 回归与文档
+- 目标: 验证默认、裸参数、显式参数、任意配置 URL 和真实传输目标。
+- 命令/操作: 增加省略 `-t` 的解析、URL 覆盖和 SSH 传输断言；更新节点文档和全部入口帮助。
+- 关键输出: 自定义远程在省略 `-t` 时实际 SSH 主机为 `gitlab.itp.ac.cn`；显式 `-t github.com` 仍连接 `github.com`。
+- 证据与判断: 现有动态 URL、协议、用户、端口与路径保留逻辑不受默认目标变更影响。
+
+## 验证与证据
+- `bash -n` 覆盖 13 个变更脚本：PASS
+- `bash bin/_git_remote_target.test.sh`: PASS
+- `bash bin/git-remote-wrappers.test.sh`: PASS
+- `bash bin/gpush.test.sh`: PASS
+- `bash bin/gpull.test.sh`: PASS
+- `bash bin/gback.test.sh`: PASS
+- `bash bin/grm-ignore.test.sh`: PASS
+- `bash bin/gpull-sub.test.sh`: PASS
+- `bash bin/gback-sub.test.sh`: PASS
+- `bash bin/zg-all-pull.test.sh`: PASS
+- `bash bin/zg-all-pull-sub.test.sh`: PASS
+- `bash bin/gz-all-push.test.sh`: PASS
+- `bash bin/zg-all-back.test.sh`: PASS
+- `bash bin/zg-all-back-sub.test.sh`: PASS
+- `form-audit.sh --root . --strict --quiet`: PASS
+- `form-data-tracking-check.sh --root . --quiet`: PASS
+- `form-large-files-check.sh --root .`: PASS
+- `tools/configure-check.sh`: errors=0，warnings=1（既有插件 manifest 警告）
+- `git diff --check`: PASS
+- `form-snapshot-verify.sh --quiet`: FAIL（既有固定快照 8 项哈希偏差，快照目录本次未改动）
+
+## 变更与产物
+- 文件: `bin/_git_remote_target.sh`，默认选择和空参数应用均回退 `gitlab.itp.ac.cn`。
+- 文件: `bin/gpush.sh`、`bin/gpull.sh`、`bin/gback.sh`，同步帮助说明。
+- 文件: `bin/gpull-sub.sh`、`bin/gback-sub.sh`、`bin/grm-ignore.sh`，同步独立解析器默认值。
+- 文件: `bin/zg-all-pull.sh`，默认目标直接控制 clone host。
+- 文件: 对应测试与 `bin/AGENTS.md`。
+- 未改动范围: 未暂存、提交或推送；未修改固定快照。
+
+## 风险、限制与下一步
+- 行为变化: 所有 Git 功能脚本在省略 `-t` 时都会重写到 `gitlab.itp.ac.cn`，不再保留 `.git/config` 中的原远程域名。
+- 基线阻塞: 固定快照仍有任务前已有的 8 项哈希偏差，本次未处理。
+- 下一步: 如用户明确要求交付，再执行暂存、提交和推送门禁。
+
+## 用户输入指令
+"显式 -t 现在可覆盖旧域名、自定义域名、非标准端口和已配置的",默认的'-t'(即'-t gitlab.itp.ac.cn')也成立,即不使用'-t'也默认'-t gitlab.itp.ac.cn'
+
+## Agent 全文报告
+--- report begin ---
+已完成默认远程目标语义统一：所有相关 Git 功能脚本在完全省略 `-t` 时，现在等同裸 `-t`，实际使用 `gitlab.itp.ac.cn`；显式 `-t DOMAIN` 仍按指定目标执行，裸 `-t` 继续使用默认值。
+
+共享层、`gpush`、`gpull`、`gback`、`gpull-sub`、`gback-sub`、`grm-ignore`、`zg-all-pull` 及对应帮助和测试已同步。动态读取 `.git/config`、`.gitmodules` 的能力保持不变，因此旧域名、自定义域名、非标准端口和已配置远程 URL 都会被目标选择覆盖，且映射不写入仓库配置。
+
+全部 13 个相关 Git 测试、语法检查、form 审计、data 边界、大文件检查和 `git diff --check` 通过；`configure-check` 为 0 error、1 个既有插件警告。固定快照仍报告任务前已有的 8 项哈希偏差，本次未修改快照。未暂存、提交或推送。
+--- report end ---

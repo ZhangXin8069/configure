@@ -3,16 +3,17 @@
 
 _GIT_REMOTE_DEFAULT_TARGET=gitlab.itp.ac.cn
 _GIT_REMOTE_ALLOWED_TARGETS="gitlab.itp.ac.cn gitee.com github.com gitlab.com"
-_GIT_REMOTE_SELECTED_TARGET=
+_GIT_REMOTE_SELECTED_TARGET=${_GIT_REMOTE_DEFAULT_TARGET}
 _GIT_REMOTE_HELP_REQUESTED=0
 _GIT_REMOTE_REMAINING_ARGS=()
 
 _git_remote_target_usage_line() {
     printf '%s\n' \
-        "  -t, --target [DOMAIN]  Temporarily replace the remote host for this call," \
-        "                         including URLs already configured in .git/config." \
+        "  -t, --target [DOMAIN]  Select the remote host for this call; when omitted," \
+        "                         the default is ${_GIT_REMOTE_DEFAULT_TARGET}." \
+        "                         Configured URLs are rewritten in-process." \
         "                         Supported: ${_GIT_REMOTE_ALLOWED_TARGETS}." \
-        "                         Bare -t uses ${_GIT_REMOTE_DEFAULT_TARGET}."
+        "                         Bare -t also uses ${_GIT_REMOTE_DEFAULT_TARGET}."
 }
 
 _git_remote_target_validate() {
@@ -31,7 +32,7 @@ _git_remote_target_validate() {
 _git_remote_target_parse_args() {
     local target
 
-    _GIT_REMOTE_SELECTED_TARGET=
+    _GIT_REMOTE_SELECTED_TARGET=${_GIT_REMOTE_DEFAULT_TARGET}
     _GIT_REMOTE_HELP_REQUESTED=0
     _GIT_REMOTE_REMAINING_ARGS=()
 
@@ -197,7 +198,7 @@ _git_remote_target_add_configured_url_mappings() {
 }
 
 _git_remote_target_apply() {
-    local target=${1:-}
+    local target=${1:-${_GIT_REMOTE_DEFAULT_TARGET}}
     local source
     local base_count
     local index

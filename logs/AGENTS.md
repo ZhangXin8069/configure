@@ -1186,3 +1186,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-default-target-20261103 - final - 2026-11-03 19:39:19 +0800
+- 主任务: 将 Git 功能脚本未传 -t 的默认行为改为 gitlab.itp.ac.cn
+- 日志文件: logs/v2026110319.txt
+- 文件大小: 4808 bytes
+- 触发原因: 任务完成
+- 关键内容: 统一未传、裸 -t 和显式 -t 的远程目标语义，并同步基础、子模块、聚合入口、帮助与回归测试
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

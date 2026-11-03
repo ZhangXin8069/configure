@@ -105,6 +105,8 @@ _test_forced_https_clone_and_filename_order() {
     ! grep -Fq 'git@gitlab.itp.ac.cn' "${clone_log}" || _fail "强制 HTTPS 时不应尝试 SSH"
     [[ "$(paste -sd, "${event_log}")" == existing-a,configure,dynamic,pyqcd,pyqcu ]] \
         || _fail "子系列未按文件名顺序执行或动态发现/自定义脚本兼容失败"
+    grep -Fq 'Remote target: gitlab.itp.ac.cn' "${TEST_DIR}/https.log" \
+        || _fail "省略 -t 时未应用默认远程目标"
 }
 
 _test_auto_falls_back_to_https() {

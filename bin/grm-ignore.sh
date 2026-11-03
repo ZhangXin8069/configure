@@ -37,7 +37,7 @@ _usage() {
 Usage: grm-ignore.sh [-n] [-y] [--keep-backup] [-r REMOTE] [-t [DOMAIN]] [--no-push] [--no-gc]
 
 Rewrite tracked ignore violations out of all history and optionally force-push.
-Existing remote URLs are preserved unless -t/--target is specified.
+The remote host defaults to gitlab.itp.ac.cn when -t/--target is omitted.
 
 Options:
   -n, --dry-run    List matching files without rewriting or pushing.
@@ -69,7 +69,7 @@ cd "$REPO_ROOT"
 echo "Repo: ${REPO_ROOT}"
 
 # ===== 参数解析 =====
-DRY=0; YES=0; KEEP_BACKUP=0; DO_PUSH=1; DO_GC=1; REMOTE_NAME="origin"; _TARGET=
+DRY=0; YES=0; KEEP_BACKUP=0; DO_PUSH=1; DO_GC=1; REMOTE_NAME="origin"; _TARGET=${_GIT_REMOTE_DEFAULT_TARGET}
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -n|--dry-run)  DRY=1; shift ;;

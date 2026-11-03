@@ -105,6 +105,8 @@ _test_mapped_submodule_pull() {
     [[ "$(git -C "${submodule}" symbolic-ref --quiet --short HEAD)" == main ]] \
         || _fail "detached 子模块未恢复到远程默认分支"
     grep -Fq 'processed=1 failed=0' "${TEST_DIR}/mapped.log" || _fail "缺少成功汇总"
+    grep -Fq 'Remote target: gitlab.itp.ac.cn' "${TEST_DIR}/mapped.log" \
+        || _fail "gpull-sub 省略 -t 时未应用默认远程目标"
     git -C "${super}" diff --quiet --cached -- refer/test-sub \
         || _fail "脚本不应自动暂存父库 gitlink"
 

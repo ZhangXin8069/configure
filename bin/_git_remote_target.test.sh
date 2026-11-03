@@ -40,8 +40,8 @@ _test_parse_args() {
         || _fail "--target=DOMAIN consumed unrelated arguments"
 
     _git_remote_target_parse_args
-    [[ -z "${_GIT_REMOTE_SELECTED_TARGET}" ]] \
-        || _fail "omitting -t must not select a target"
+    [[ "${_GIT_REMOTE_SELECTED_TARGET}" == gitlab.itp.ac.cn ]] \
+        || _fail "omitting -t did not select the default target"
 }
 
 _test_invalid_target() {
@@ -141,11 +141,15 @@ _test_same_target_reapply_discovers_new_remotes() {
 
 _test_configured_url_controls_transport() {
     local repo="${TEST_DIR}/transport-repo"
+    local omitted_repo="${TEST_DIR}/transport-omitted-repo"
     local fake_ssh="${TEST_DIR}/fake-ssh"
     local ssh_log="${TEST_DIR}/ssh.log"
+    local omitted_ssh_log="${TEST_DIR}/ssh-omitted.log"
 
     git init -q -b main "${repo}"
     git -C "${repo}" remote add origin git@legacy.example.invalid:owner/repo.git
+    git init -q -b main "${omitted_repo}"
+    git -C "${omitted_repo}" remote add origin git@legacy.example.invalid:owner/omitted.git
     printf '%s\n' \
         '#!/usr/bin/env bash' \
         'printf "%s\n" "$*" >> "${SSH_CAPTURE:?}"' \
@@ -163,6 +167,19 @@ _test_configured_url_controls_transport() {
 
     grep -Fq 'git@github.com' "${ssh_log}" \
         || _fail "configured URL did not control the actual SSH transport target"
+
+    (
+        cd "${omitted_repo}"
+        _git_remote_target_parse_args
+        _git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" >/dev/null
+        set +e
+        GIT_SSH_COMMAND="${fake_ssh}" SSH_CAPTURE="${omitted_ssh_log}" GIT_TERMINAL_PROMPT=0 \
+            git ls-remote origin >"${TEST_DIR}/transport-omitted.log" 2>&1
+        set -e
+    )
+
+    grep -Fq 'git@gitlab.itp.ac.cn' "${omitted_ssh_log}" \
+        || _fail "omitting -t did not control the actual SSH transport target"
 }
 
 _test_bare_target_overrides_configured_url() {
@@ -180,6 +197,21 @@ _test_bare_target_overrides_configured_url() {
     )
 }
 
+_test_omitted_target_overrides_configured_url() {
+    local repo="${TEST_DIR}/omitted-target-repo"
+
+    git init -q -b main "${repo}"
+    git -C "${repo}" remote add origin git@legacy.example.invalid:owner/repo.git
+
+    (
+        cd "${repo}"
+        _git_remote_target_parse_args
+        _git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" >/dev/null
+        [[ "$(git remote get-url origin)" == git@gitlab.itp.ac.cn:owner/repo.git ]] \
+            || _fail "omitting -t did not use the default target for a configured URL"
+    )
+}
+
 main() {
     mkdir -p "${TEST_DIR}"
     _test_parse_args
@@ -189,6 +221,7 @@ main() {
     _test_same_target_reapply_discovers_new_remotes
     _test_configured_url_controls_transport
     _test_bare_target_overrides_configured_url
+    _test_omitted_target_overrides_configured_url
 }
 
 main "$@"

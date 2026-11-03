@@ -48,6 +48,8 @@ _test_base_cli_contract() {
         bash "${_PATH}/${script}" --help >"${TEST_DIR}/${script}.help.log" 2>&1
         grep -Fq -- '-t, --target' "${TEST_DIR}/${script}.help.log" \
             || _fail "${script} help does not document -t"
+        grep -Eq 'when omitted|when -t/--target is omitted' "${TEST_DIR}/${script}.help.log" \
+            || _fail "${script} help does not document the default target for omitted -t"
 
         set +e
         (cd "${_PATH}/.." && bash "${_PATH}/${script}" -t example.com) \

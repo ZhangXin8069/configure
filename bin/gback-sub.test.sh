@@ -89,6 +89,8 @@ _test_force_remote_default_with_backups() {
     git -C "${submodule}" for-each-ref --format='%(objectname)' refs/gback-sub-backups \
         | grep -Fqx "${local_commit}" || _fail "旧 HEAD 未保留备份引用"
     grep -Fq 'BACKUP:' "${TEST_DIR}/restore.log" || _fail "缺少备份提示"
+    grep -Fq 'Remote target: gitlab.itp.ac.cn' "${TEST_DIR}/restore.log" \
+        || _fail "gback-sub 省略 -t 时未应用默认远程目标"
     grep -Fq 'RESTORED: refer/forced-sub' "${TEST_DIR}/restore.log" || _fail "缺少恢复成功提示"
     git -C "${super}" diff --quiet --cached -- refer/forced-sub \
         || _fail "gback-sub 不应自动暂存父库 gitlink"

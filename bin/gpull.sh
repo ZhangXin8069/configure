@@ -20,8 +20,8 @@ _usage() {
     cat <<'EOF'
 Usage: gpull.sh [-t [DOMAIN]] [-h]
 
-Safely fast-forward the parent repository without updating submodules. Existing
-remote URLs are preserved unless -t/--target is specified.
+Safely fast-forward the parent repository without updating submodules. The
+remote host defaults to gitlab.itp.ac.cn when -t/--target is omitted.
 
 Options:
 EOF

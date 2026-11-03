@@ -26,7 +26,7 @@ source "${_PATH}/_git_remote_target.sh"
 _INIT=0
 _RECURSIVE=0
 _DRY_RUN=0
-_TARGET=
+_TARGET=${_GIT_REMOTE_DEFAULT_TARGET}
 _FILTERS=()
 
 _usage() {
