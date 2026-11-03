@@ -21,6 +21,11 @@ REPO_ROOT=$(git rev-parse --show-toplevel) || {
 echo "Repo:    ${REPO_ROOT}"
 cd "${REPO_ROOT}"
 
+# Remote-facing Git calls must not forward a locale missing on the SSH host.
+_git_remote() {
+    LANG=C LC_ALL=C git "$@"
+}
+
 BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
 if [[ -z "${BRANCH}" || "${BRANCH}" == "HEAD" ]]; then
     echo "ERROR: HEAD 处于游离状态，请先检出分支。"
@@ -43,7 +48,7 @@ ORIGINAL_HEAD=$(git rev-parse HEAD) || {
 }
 
 # 只更新远程跟踪引用，不改写本地标签或其他分支。
-git -c fetch.recurseSubmodules=false -c submodule.recurse=false \
+_git_remote -c fetch.recurseSubmodules=false -c submodule.recurse=false \
     fetch --all --prune --no-tags --no-recurse-submodules || {
     echo "ERROR: git fetch 失败。"
     exit 1
@@ -147,7 +152,7 @@ _update_initialized_submodules() {
     while IFS= read -r -d '' path; do
         [[ -e "${path}/.git" ]] && paths+=("${path}")
     done < <(_registered_submodule_paths ".gitmodules")
-    (( ${#paths[@]} == 0 )) || git submodule update --recursive --checkout -- "${paths[@]}"
+    (( ${#paths[@]} == 0 )) || _git_remote submodule update --recursive --checkout -- "${paths[@]}"
 }
 
 _verify_upstream_submodule_commits() {
@@ -160,7 +165,7 @@ _verify_upstream_submodule_commits() {
         git -C "${path}" cat-file -e "${target}^{commit}" 2>/dev/null && continue
 
         echo "Fetching submodule target: ${path} ($(git rev-parse --short "${target}"))"
-        if ! git -C "${path}" fetch --quiet --no-tags --no-recurse-submodules origin; then
+        if ! _git_remote -C "${path}" fetch --quiet --no-tags --no-recurse-submodules origin; then
             echo "WARN: 子模块预取失败: ${path}" >&2
         fi
         git -C "${path}" cat-file -e "${target}^{commit}" 2>/dev/null && continue

@@ -358,6 +358,29 @@ _check_locale_recovery() {
         _fail "$shell_path locale 修复后仍有告警：$(<"$stderr_file")"
 }
 
+_check_locale_category_recovery() {
+    local shell_path=$1
+    local harness_stderr_file=$test_root/locale-category-harness.err
+    local stderr_file=$test_root/locale-category-recovery.err
+    local output
+
+    output=$(_clean_env_shell "$shell_path" "/usr/bin:/bin" -c '
+        export LC_ALL=
+        export LANG=
+        export LC_CTYPE=C.utf8
+        export LC_TIME=C.utf8.configure-test-missing
+        . "$1" 2>/dev/null
+        [[ -n "$LC_ALL" ]] || exit 31
+        [[ "$(locale charmap 2>/dev/null)" == "UTF-8" ]] || exit 32
+        sh -c "locale" >/dev/null 2>>"$2"
+        printf "locale-category-recovered\n"
+    ' configure-env-locale-category "$env_file" "$stderr_file" 2>"$harness_stderr_file") ||
+        _fail "$shell_path 未修复部分失效的 locale 类别，实际输出：$output；Harness 告警：$(<"$harness_stderr_file")；子 shell 告警：$(<"$stderr_file")"
+    _assert_line "$output" 'locale-category-recovered'
+    [[ ! -s "$stderr_file" ]] ||
+        _fail "$shell_path locale 类别修复后仍有告警：$(<"$stderr_file")"
+}
+
 _check_env_loading_guard() {
     local shell_path=$1
     local clean_bin=$2
@@ -478,6 +501,9 @@ main() {
 
         _check_locale_recovery "$shell_path"
         printf '通过：%s 的失效 LC_ALL 自动恢复\n' "$shell_path"
+
+        _check_locale_category_recovery "$shell_path"
+        printf '通过：%s 的部分失效 locale 类别自动恢复\n' "$shell_path"
 
         _check_screen_helpers "$shell_path" "$fake_screen"
         printf '通过：%s 的 screen 别名、标题、重连与缺失降级\n' "$shell_path"

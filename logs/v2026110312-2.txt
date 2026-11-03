@@ -1,0 +1,72 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 12:18:55 +0800
+批次: locale-robustness
+主任务: 增强 locale 鲁棒性并消除 gpull SSH locale 告警
+触发原因: 任务完成
+摘要: 强化 env.sh 多类别 locale 探测，并统一远端 Git 操作为 LANG=C LC_ALL=C
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 问题复现与根因定位
+- 目标: 消除 `/root/MyQCD` 执行 `gpull.sh` 时远端 shell 输出的 `setlocale: LC_ALL: cannot change locale (C.utf8)` 告警，并提升本地 locale 容错。
+- 命令/操作: 检查 `gpull.sh`、`gpush.sh`、`env.sh`、`env.test.sh`、`gpull.test.sh`，并查询 SSH 实际配置。
+- 关键输出: 本机有效 locale 为 `C.UTF-8`；SSH 配置包含 `SendEnv LANG` 与 `SendEnv LC_*`；`gpush.sh` 已固定 `LC_ALL=C`，而 `gpull.sh` 的 fetch/set-head 未固定。
+- 退出码: 0。
+- 证据与判断: 离线机器只保证 POSIX `C` locale，本地 UTF-8 名称经 SSH 转发后不可用，是告警根因。`env.sh` 旧逻辑仅检查 `locale charmap`，还会漏掉 LC_CTYPE 正常但其他 locale 类别失效的混合配置。
+
+### S2 — 实现
+- 命令/操作: 更新 `env.sh`，完整检查 `locale` 的 stderr 与 `locale charmap`；异常时优先尝试当前 LC_ALL/LC_CTYPE/LANG 名称，再尝试内置 UTF-8 候选，均不可用则回退 C。
+- 命令/操作: 为 `gpull.sh`、`gpush.sh`、`gback.sh`、`gback-sub.sh`、`gpull-sub.sh`、`zg-all-pull.sh`、`grm-ignore.sh` 中可能经 SSH 的 clone/fetch/push/submodule update/remote set-head 操作固定 `LANG=C LC_ALL=C`。
+- 关键输出: 远端命令不再携带本地 `C.UTF-8` 名称；本地交互环境仍保持可用 UTF-8 locale。
+- 退出码: 0。
+- 证据与判断: 本地 locale 修复与远端传输边界分离，避免为了兼容远端而永久把本地 shell 降为 C。
+
+### S3 — 测试与端到端复测
+- 命令/操作: 运行 `bash -n`、`env.test.sh`、`gpull.test.sh`、`gpush.test.sh`、`gback.test.sh`、`gback-sub.test.sh`、`gpull-sub.test.sh`、`zg-all-pull.test.sh`、`grm-ignore.test.sh`。
+- 关键输出: Bash 与 Zsh 均通过失效 LC_ALL 和部分 locale 类别失效恢复；gpull fetch 与 gpush push 均验证收到 `LANG=C/LC_ALL=C`；全部相关测试退出码为 0。
+- 命令/操作: 在 `/root/MyQCD` 重新执行 `bash /root/configure/bin/gpull.sh`。
+- 关键输出: Fetching origin / Already up to date，未再出现 `setlocale` 告警，退出码 0。
+- 证据与判断: 原始复现路径已闭环，且 `/root/MyQCD` 工作区仍只有任务前已有的 `M refer/git-rep/PyQCD`，未被修改。
+
+## 验证与证据
+- 语法检查: `bash -n env.sh env.test.sh bin/gpull.sh bin/gpush.sh bin/gback.sh bin/gback-sub.sh bin/gpull-sub.sh bin/zg-all-pull.sh bin/grm-ignore.sh bin/gpush.test.sh bin/gpull.test.sh`，exit=0。
+- locale: `env.test.sh` 在 Bash、Zsh 下全部通过，包括混合类别失效恢复和子 shell 无告警。
+- Git 工具: gpull/push/back/back-sub/pull-sub/zg-all-pull/grm-ignore 测试全部通过。
+- 端到端: `/root/MyQCD` SSH pull 完成且无 locale 告警，exit=0。
+- 结构: `form-audit --strict --quiet` exit=0；`configure-check.sh` exit=0，仅有既有插件 manifest 警告。
+- 差异: `git diff --check` exit=0。
+
+## 变更与产物
+- 文件: `env.sh`、`env.test.sh`、`bin/gpull.sh`、`bin/gpush.sh`、`bin/gback.sh`、`bin/gback-sub.sh`、`bin/gpull-sub.sh`、`bin/zg-all-pull.sh`、`bin/grm-ignore.sh`、`bin/gpull.test.sh`、`bin/gpush.test.sh`、`AGENTS.md`、`bin/AGENTS.md`。
+- 产物: 本地 locale 自动恢复能力，以及所有当前 GitHub/SSH 工具链的 POSIX locale 边界。
+- 未改动范围: 未修改 SSH 系统配置或用户 `~/.ssh/config`；未暂存、提交、推送；此前未提交的 zreplace 与日志改动保持原样。
+
+## 风险、限制与下一步
+- 风险: 远端 Git 命令的提示语言固定为英文，这是避免 locale 依赖的预期取舍。
+- 限制: 远端 shell 自身在进入 Git 前若由其他 SSH 入口转发缺失 locale，仍可能告警；本修复覆盖仓库内 Git 工具链。
+- 阻塞: 无。
+- 下一步: 可直接使用 `gpull.sh`、`gpush.sh` 及 back/submodule 系列验证正常 SSH 工作流。
+
+## 用户输入指令
+➜ /root/MyQCD git:(main) ✗ gpull.sh
+###gpull.sh is running...:2026-11-03-12-14-19###
+Repo:    /root/MyQCD
+Remote:  origin (ssh)
+Branch:  main
+Fetching origin
+sh: warning: setlocale: LC_ALL: cannot change locale (C.utf8): No such file or directory
+Already up to date.
+###gpull.sh is done......:2026-11-03-12-14-20###
+
+增强"locale"的鲁棒性
+
+## Agent 全文报告
+--- report begin ---
+✓ 修复完成
+根因: `gpull.sh` 通过 SSH fetch 时继承了本地 UTF-8 locale，远端未安装同名 locale；同时 `env.sh` 只检查字符集，未覆盖其他 locale 类别失效。
+改动: `env.sh` 改为同时检查 `locale charmap` 与完整 `locale` 告警，并优先复用当前有效 locale；所有可能经 SSH 的 Git 操作统一使用 `LANG=C LC_ALL=C`，覆盖 pull、push、back、submodule、跨仓库 clone 与 ignore 改写。
+验证: Bash/Zsh locale 回归通过；8 个相关 Git 工具测试全部通过；`bash -n`、`form-audit`、`configure-check`、`git diff --check` 均通过；`/root/MyQCD` 的 SSH pull 已无 setlocale 告警。
+边界: 未修改 SSH 配置；未暂存、提交或推送。`/root/MyQCD` 仅有任务前已有的 `M refer/git-rep/PyQCD`。
+状态: finished
+--- report end ---

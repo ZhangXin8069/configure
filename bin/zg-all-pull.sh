@@ -65,7 +65,7 @@ _clone_repo() {
 
     url=$(_clone_url "${protocol}" "${repo}")
     temporary=$(mktemp -d "${target}.clone.XXXXXX") || return 1
-    if ! git clone "${url}" "${temporary}"; then
+    if ! LANG=C LC_ALL=C git clone "${url}" "${temporary}"; then
         rm -rf -- "${temporary}"
         return 1
     fi

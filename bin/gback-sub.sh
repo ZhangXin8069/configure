@@ -165,7 +165,7 @@ _remote_default_ref() {
     local current_branch
     local remote_ref
 
-    git -C "${submodule}" remote set-head origin --auto >/dev/null 2>&1 || true
+    LANG=C LC_ALL=C git -C "${submodule}" remote set-head origin --auto >/dev/null 2>&1 || true
     remote_ref=$(git -C "${submodule}" symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
     if [[ "${remote_ref}" == origin/* ]] \
         && git -C "${submodule}" show-ref --verify --quiet "refs/remotes/${remote_ref}"; then
@@ -253,7 +253,7 @@ _back_submodule() {
             return 0
         fi
         echo "INIT:    ${path}"
-        if ! git -C "${_REPO_ROOT}" submodule update --init -- "${path}"; then
+        if ! LANG=C LC_ALL=C git -C "${_REPO_ROOT}" submodule update --init -- "${path}"; then
             echo "ERROR: Failed to initialize submodule ${path}." >&2
             return 1
         fi
@@ -268,7 +268,7 @@ _back_submodule() {
         echo "DRY-RUN: would force-align ${path} to origin's default branch"
     else
         _git_prepare_index_lock "${submodule}" || return 1
-        if ! git -C "${submodule}" fetch --prune origin; then
+        if ! LANG=C LC_ALL=C git -C "${submodule}" fetch --prune origin; then
             echo "ERROR: Failed to fetch submodule ${path}." >&2
             return 1
         fi

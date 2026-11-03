@@ -18,6 +18,11 @@ echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
 
+# SSH may forward the local locale name to a remote shell that does not have it.
+_git_remote() {
+    LANG=C LC_ALL=C git "$@"
+}
+
 _DETACHED_MODE=${GPULL_DETACHED_MODE:-safe}
 
 if [[ ! -r "${_PATH}/_git_lock.sh" ]]; then
@@ -56,7 +61,7 @@ else
 fi
 
 # Fetch all remotes
-if ! git -c fetch.recurseSubmodules=false -c submodule.recurse=false \
+if ! _git_remote -c fetch.recurseSubmodules=false -c submodule.recurse=false \
     fetch --all --prune --no-recurse-submodules; then
     echo "ERROR: git fetch failed; pull aborted." >&2
     exit 1
@@ -67,7 +72,7 @@ _find_origin_default_ref() {
     local candidate
     local candidates
 
-    git remote set-head origin --auto >/dev/null 2>&1 || true
+    _git_remote remote set-head origin --auto >/dev/null 2>&1 || true
     remote_ref=$(git symbolic-ref --quiet --short refs/remotes/origin/HEAD 2>/dev/null || true)
     if [[ "${remote_ref}" == origin/* ]] \
         && git show-ref --verify --quiet "refs/remotes/${remote_ref}"; then

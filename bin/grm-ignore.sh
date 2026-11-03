@@ -390,8 +390,8 @@ fi
 # ===== [5/6] 强制推送 =====
 if (( DO_PUSH == 1 )) && [[ -n "$REMOTE_URL" ]]; then
     echo "[5/6] 强制推送所有分支与标签到 ${REMOTE_NAME} ..."
-    git push --force "$REMOTE_NAME" --all
-    git push --force "$REMOTE_NAME" --tags
+    LANG=C LC_ALL=C git push --force "$REMOTE_NAME" --all
+    LANG=C LC_ALL=C git push --force "$REMOTE_NAME" --tags
     echo "  提示：远端仍存在的旧分支/标签（本地已无同名者）不会被自动删除。"
     echo "        如需清理: git push --force --prune ${REMOTE_NAME}"
 elif (( DO_PUSH == 1 )); then
@@ -422,4 +422,3 @@ echo "  - 远程仓库的 GC 由托管平台后台调度，磁盘空间可能几
 echo "  - 所有协作者必须重新 clone，不能 pull。"
 echo "  - 子模块历史未被处理；如需清理子模块，cd 进子模块后单独执行本脚本。"
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"
-

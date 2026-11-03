@@ -1096,3 +1096,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## zreplace - final - 2026-11-03 12:08:13 +0800
+- 主任务: 编写 zreplace.sh：复用 zsearch 匹配，经用户确认后替换字段
+- 日志文件: logs/v2026110312.txt
+- 文件大小: 4719 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 zsearch 驱动的确认式固定字符串替换工具及回归测试
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## locale-robustness - final - 2026-11-03 12:18:55 +0800
+- 主任务: 增强 locale 鲁棒性并消除 gpull SSH locale 告警
+- 日志文件: logs/v2026110312-2.txt
+- 文件大小: 5477 bytes
+- 触发原因: 任务完成
+- 关键内容: 强化 env.sh 多类别 locale 探测，并统一远端 Git 操作为 LANG=C LC_ALL=C
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -14,6 +14,11 @@ echo "Repo:    ${REPO_ROOT}"
 
 cd "$REPO_ROOT" || exit 1
 
+# SSH may forward the local locale name to a remote shell that does not have it.
+_git_remote() {
+    LANG=C LC_ALL=C git "$@"
+}
+
 BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
 if [[ -z "${BRANCH}" ]]; then
     echo "ERROR: Detached HEAD; checkout a branch before gpush." >&2
@@ -115,17 +120,15 @@ else
     exit 1
 fi
 
-# SSH may forward LC_* to a remote shell that lacks the local UTF-8 locale name.
-# Push output does not need localized text, so use the universally available C locale.
 # Push current branch to its upstream (or origin)
 PUSH_FAILED=0
-if ! LC_ALL=C git push --recurse-submodules=no origin "$BRANCH"; then
+if ! _git_remote push --recurse-submodules=no origin "$BRANCH"; then
     echo "ERROR: branch push failed: $BRANCH" >&2
     PUSH_FAILED=1
 fi
 
 # Push tags
-if ! LC_ALL=C git push --recurse-submodules=no origin --tags; then
+if ! _git_remote push --recurse-submodules=no origin --tags; then
     echo "ERROR: tag push failed" >&2
     PUSH_FAILED=1
 fi

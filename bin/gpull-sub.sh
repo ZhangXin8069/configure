@@ -197,7 +197,7 @@ _pull_submodule() {
             return 0
         fi
         echo "INIT:    ${path}"
-        if ! git -C "${_REPO_ROOT}" submodule update --init -- "${path}"; then
+        if ! LANG=C LC_ALL=C git -C "${_REPO_ROOT}" submodule update --init -- "${path}"; then
             echo "ERROR: Failed to initialize submodule ${path}." >&2
             return 1
         fi

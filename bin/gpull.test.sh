@@ -31,6 +31,20 @@ _test_pull_preserves_changes() {
     local real_git
     local fake_bin="${TEST_DIR}/fake-bin"
     local fake_git="${fake_bin}/git"
+    local locale_bin="${TEST_DIR}/locale-bin"
+    local locale_git="${locale_bin}/git"
+    local locale_log="${TEST_DIR}/locale.log"
+
+    real_git=$(command -v git)
+    mkdir -p "${locale_bin}"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'case " $* " in' \
+        '    *" fetch "*) printf "fetch-locale=%s/%s\\n" "${LANG:-}" "${LC_ALL:-}" >> "${FAKE_GIT_LOCALE_LOG}" ;;' \
+        '    *" remote set-head "*) printf "set-head-locale=%s/%s\\n" "${LANG:-}" "${LC_ALL:-}" >> "${FAKE_GIT_LOCALE_LOG}" ;;' \
+        'esac' \
+        "exec $(printf '%q' "${real_git}") \"\$@\"" >"${locale_git}"
+    chmod +x "${locale_git}"
 
     git init -q --bare "${remote}"
     git -C "${remote}" symbolic-ref HEAD refs/heads/main
@@ -58,14 +72,16 @@ _test_pull_preserves_changes() {
     printf 'local update\n' > "${work}/local.txt"
     (
         cd "${work}"
-        bash "${_PATH}/gpull.sh"
+        PATH="${locale_bin}:${PATH}" FAKE_GIT_LOCALE_LOG="${locale_log}" \
+            bash "${_PATH}/gpull.sh"
     ) > "${TEST_DIR}/pull.log" 2>&1
 
     grep -Fqx 'remote update' "${work}/remote.txt" || _fail "未拉取远端更新"
     grep -Fqx 'local update' "${work}/local.txt" || _fail "未恢复本地 tracked 改动"
     [[ -z "$(git -C "${work}" stash list)" ]] || _fail "拉取后仍有未恢复的自动 stash"
+    grep -Fqx 'fetch-locale=C/C' "${locale_log}" \
+        || _fail "gpull fetch 未同时使用 POSIX LANG/LC_ALL"
 
-    real_git=$(command -v git)
     mkdir -p "${fake_bin}"
     printf '%s\n' \
         '#!/usr/bin/env bash' \

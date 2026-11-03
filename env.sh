@@ -45,14 +45,20 @@ unset _configure_env_source _configure_env_name
 # export TERM=xterm
 # export TERM=xterm-256color
 # @@LOCALE@@
-# 实测当前有效编码，避免 LC_ALL/LC_CTYPE 覆盖或 locale 名称未生成时产生 setlocale 警告
+# 实测全部 locale 类别，避免仅 LC_CTYPE 可用时掩盖其他类别失效或产生 setlocale 告警。
 _locale_ready=0
 _locale_charmap=$(locale charmap 2>/dev/null || true)
 if [ "${_locale_charmap}" = "UTF-8" ]; then
-    _locale_ready=1
-else
-    for _locale_candidate in C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8 zh_CN.UTF-8 zh_CN.utf8; do
-        if [ "$(LC_ALL="${_locale_candidate}" locale charmap 2>/dev/null || true)" = "UTF-8" ]; then
+    _locale_errors=$(locale 2>&1 >/dev/null || true)
+    [ -z "${_locale_errors}" ] && _locale_ready=1
+fi
+if [ "${_locale_ready}" -eq 0 ]; then
+    for _locale_candidate in \
+        "${LC_ALL:-}" "${LC_CTYPE:-}" "${LANG:-}" \
+        C.UTF-8 C.utf8 en_US.UTF-8 en_US.utf8 zh_CN.UTF-8 zh_CN.utf8; do
+        [ -n "${_locale_candidate}" ] || continue
+        if [ "$(LC_ALL="${_locale_candidate}" locale charmap 2>/dev/null || true)" = "UTF-8" ] \
+            && [ -z "$(LC_ALL="${_locale_candidate}" locale 2>&1 >/dev/null || true)" ]; then
             export LANG="${_locale_candidate}" LC_ALL="${_locale_candidate}"
             _locale_ready=1
             break
@@ -62,7 +68,7 @@ fi
 if [ "${_locale_ready}" -eq 0 ]; then
     export LANG=C LC_ALL=C
 fi
-unset _locale_charmap _locale_candidate _locale_ready
+unset _locale_charmap _locale_candidate _locale_errors _locale_ready
 # @@OPENMPI@@
 # MPI_HOME=/usr/local/openmpi
 # export PATH=${MPI_HOME}/bin:${PATH}
