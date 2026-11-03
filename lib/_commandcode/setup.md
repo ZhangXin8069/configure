@@ -8,10 +8,130 @@
 
 ## 前提
 
-- Node.js 22 或更新版本；Node.js 20 及以下会被 Command Code 拒绝。
+- Node.js 22 或更新版本；Node.js 20 及以下会被 Command Code 拒绝。未安装或版本过旧时，
+  见下文「Node.js 安装指南」，其中包含 HPC 无 root 场景的做法。
 - `config.sh` 与回归测试另需 Bash 和 Python 3；配置器不会自动安装依赖。
 - Linux、macOS、WSL 使用 `command-code` 或短别名 `cmd`。
 - 原生 Windows 使用 `command-code` 或 `cmdc`；`cmd` 已被 Windows 命令解释器占用。
+
+## Node.js 安装指南
+
+Command Code 要求 Node.js 22 或更新版本，npm 随官方 Node.js 一并提供。HPC 登录节点通常没有
+root 权限，优先复用集群已有环境，其次安装到 `$HOME`。
+
+### 1. 先检查是否已提供 Node.js
+
+```bash
+command -v node && node --version
+command -v npm && npm --version
+```
+
+HPC 常通过 environment modules 或 conda 管理 Node.js：
+
+```bash
+module avail node 2>/dev/null || module avail nodejs 2>/dev/null || true
+module load nodejs        # 模块名以 module avail 的实际输出为准
+node --version
+```
+
+```bash
+conda create -n node22 -c conda-forge nodejs=22
+conda activate node22
+node --version
+```
+
+`node --version` 显示 `v22` 或更高即可直接运行 `install.sh`。登录节点与计算节点的环境可能不同，
+请在真正运行 Command Code 的节点上检查。
+
+### 2. 官方预编译二进制（Linux/macOS，无需 root）
+
+以下脚本下载官方 Node.js 22.x 预编译包并解压到 `$HOME/.local/node`，不会修改系统目录：
+
+```bash
+installer="$(mktemp "${TMPDIR:-/tmp}/install-node.XXXXXX")"
+cat > "$installer" <<'NODE_INSTALL'
+#!/usr/bin/env bash
+set -euo pipefail
+
+node_root="$HOME/.local/node"
+
+case "$(uname -s)" in
+    Linux)  node_os=linux ;;
+    Darwin) node_os=darwin ;;
+    *) echo "不支持的系统: $(uname -s)" >&2; exit 1 ;;
+esac
+case "$(uname -m)" in
+    x86_64|amd64)  node_arch=x64 ;;
+    aarch64|arm64) node_arch=arm64 ;;
+    *) echo "不支持的架构: $(uname -m)；请从 https://nodejs.org/dist/latest-v22.x/ 手动选择" >&2; exit 1 ;;
+esac
+
+node_version="$(curl -fsSL https://nodejs.org/dist/latest-v22.x/SHASUMS256.txt |
+    sed -n "s/.*node-v\([0-9][0-9.]*\)-${node_os}-${node_arch}\.tar\.xz/\1/p" |
+    head -n 1 || true)"
+[ -n "$node_version" ] || { echo '无法获取 Node.js 版本，请检查网络或代理设置' >&2; exit 1; }
+
+archive="$(mktemp "${TMPDIR:-/tmp}/node.XXXXXX")"
+trap 'rm -f "$archive"' EXIT
+curl -fsSLo "$archive" "https://nodejs.org/dist/v${node_version}/node-v${node_version}-${node_os}-${node_arch}.tar.xz"
+mkdir -p "$node_root"
+tar -xJf "$archive" -C "$node_root" --strip-components=1
+printf 'Node.js %s 已安装到 %s\n' "$node_version" "$node_root"
+NODE_INSTALL
+bash "$installer"
+rm -f "$installer"
+```
+
+把 Node.js 加入登录 shell（幂等；zsh 用户把 `~/.bashrc` 换成 `~/.zshrc`）：
+
+```bash
+node_bin="$HOME/.local/node/bin"
+grep -Fqs "$node_bin" "$HOME/.bashrc" 2>/dev/null || \
+    printf '\n# Node.js\nexport PATH="%s:$PATH"\n' "$node_bin" >> "$HOME/.bashrc"
+export PATH="$node_bin:$PATH"
+node --version
+npm --version
+```
+
+网络受限时，可在可联网机器下载同版本的 `node-v*-<os>-<arch>.tar.xz` 后复制到 `$HOME`，
+再执行 `mkdir -p "$HOME/.local/node" && tar -xJf <包名>.tar.xz -C "$HOME/.local/node" --strip-components=1`。
+没有 `curl` 时可将 `curl -fsSLo <文件> <URL>` 换成 `wget -qO <文件> <URL>`；需要代理时先设置
+`https_proxy`。
+
+官方 Node.js 22 二进制要求 glibc 2.28+。CentOS 7 等较老系统若报
+`GLIBC_2.28 not found`，改用 conda-forge 的 `nodejs`、集群模块或自行编译。
+
+### 3. nvm（可选，多版本切换）
+
+nvm 同样安装到 `$HOME`，适合需要在多个 Node.js 版本间切换的场景。按
+<https://github.com/nvm-sh/nvm#installing-and-updating> 完成安装后：
+
+```bash
+export NVM_DIR="$HOME/.nvm"
+. "$NVM_DIR/nvm.sh"
+nvm install 22
+nvm alias default 22
+node --version
+```
+
+### 4. 桌面环境
+
+- macOS（Homebrew）：`brew install node@22`，并按 Homebrew 提示把该版本加入 `PATH`。
+- Windows：从 <https://nodejs.org/en/download> 安装 LTS，或运行
+  `winget install OpenJS.NodeJS.LTS`；随后在 `cmd.exe` 中执行 `install.bat`。
+
+### 5. 验证并重新安装 Command Code
+
+```bash
+node --version   # 必须为 v22 或更高
+npm --version
+bash lib/_commandcode/install.sh   # 在仓库根目录
+# 若当前就在 lib/_commandcode 目录，直接运行：bash install.sh
+```
+
+若安装器仍提示版本过低，检查 `command -v node` 与 `node --version` 是否指向同一路径，
+并确认 `PATH` 在 `module load` 之后仍然生效。npm 访问 registry 受限时，按集群文档配置
+`https_proxy` 或 npm 镜像后再运行安装器。
 
 ## 安装
 
@@ -266,5 +386,5 @@ command-code status --json
   `auth.json` 内容。
 - 找不到命令：确认 `test -x "$HOME/.local/bin/command-code"` 成功，并检查
   `$HOME/.local/bin` 是否位于 `PATH`；不要依赖 `npm prefix --global` 返回的版本化目录。
-- Node 版本过旧：升级到 Node.js 22+ 后重新运行安装器。
+- Node 版本过旧或找不到 `node`：按「Node.js 安装指南」升级到 Node.js 22+ 后重新运行安装器。
 - 配置 JSON 损坏：配置器会在写盘前失败并保留原文件；修复 JSON 后重试。

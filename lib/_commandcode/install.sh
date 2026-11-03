@@ -20,6 +20,7 @@ usage() {
 
 要求:
   Node.js >= 22、npm、可访问 npm registry。
+  Node.js 安装指南见 setup.md（含 HPC 无 root 场景）。
 安装目录:
   $install_dir
 
@@ -57,12 +58,12 @@ case "$(uname -s)" in
         ;;
 esac
 
-command -v node >/dev/null 2>&1 || die "未找到 node；请先安装 Node.js 22 或更新版本"
-command -v npm >/dev/null 2>&1 || die "未找到 npm；请先安装 Node.js 22 或更新版本"
+command -v node >/dev/null 2>&1 || die "未找到 node；请先安装 Node.js 22 或更新版本（安装指南见 setup.md「Node.js 安装指南」）"
+command -v npm >/dev/null 2>&1 || die "未找到 npm；请先安装 Node.js 22 或更新版本（安装指南见 setup.md「Node.js 安装指南」）"
 
 node_major="$(node -p 'Number(process.versions.node.split(".")[0])')"
 if [ "$node_major" -lt 22 ]; then
-    die "当前 Node.js 为 $(node --version)，Command Code 要求 Node.js 22 或更新版本"
+    die "当前 Node.js 为 $(node --version)，Command Code 要求 Node.js 22 或更新版本（升级方法见 setup.md「Node.js 安装指南」）"
 fi
 
 argument="${1:-}"
