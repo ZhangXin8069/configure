@@ -124,6 +124,8 @@
 - 修改 `skills/conf-refer-skill/scripts/` 后运行 `bash skills/conf-refer-skill/scripts/find-refer-skills.test.sh`
 - 修改 `skills/rule/scripts/` 后运行 `bash skills/rule/scripts/run-guarded.test.sh`
 - 修改 `skills/form/scripts/` 后运行 `bash skills/form/scripts/form-scripts.test.sh`
+- 修改 `skills/tag/tag-chain.sh` 后运行 `bash skills/tag/tag-chain.test.sh`
+- 修改 `skills/tag/tag-baseline.sh` 后运行 `bash skills/tag/tag-baseline.test.sh`
 - 提交前运行 `bash skills/form/scripts/form-data-tracking-check.sh --root . --quiet`；
   该检查只允许 `data/` 的三个契约文件，并要求 `data/cache/**` 始终被忽略
 - 仓库未安装自动 Git hook；任何 agent 提交前都必须执行上述大文件闸门；

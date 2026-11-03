@@ -235,12 +235,13 @@ NEW_TAG="${TYPE}${NEW_NUM}"
 
 #### Step 1.2 — 查看基线以来的变更
 
-**基线** = 最近一个**任意类型**（stab/dev/bug/test）的标签。若无标签，用第一个提交。
+**基线** = 按 tagger 时间（`creatordate`）最近的**任意类型**（stab/dev/bug/test）标签。
+不能只用 `--sort=-v:refname`：混合前缀下它会把较早的 `stab84` 排在更新的 `dev51` 之前，
+导致基线回溯到错误的旧标签。
 
 ```bash
-# 基线 = 任意类型的最新标签（含子版本标签；版本排序将其排在父标签之上，
-# 所以 stab15_1 优先于 stab15 被选中）
-BASELINE=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' | head -1)
+BASELINE_SCRIPT="${TAG_BASELINE_SCRIPT:-skills/tag/tag-baseline.sh}"
+BASELINE=$(bash "$BASELINE_SCRIPT" --latest)
 # 无标签时用第一个提交
 if [ -z "$BASELINE" ]; then
     BASELINE=$(git rev-list --max-parents=0 HEAD)
@@ -354,7 +355,8 @@ git tag -l --format='%(subject)%0a%(body)' "$TAG_NAME"
 git tag -l --format='Type: %(refname:short)%0aAuthor: %(taggername) <%(taggeremail)>%0aDate: %(taggerdate:iso)%0aMessage: %(subject)' "$TAG_NAME"
 
 # 显示该标签与其前驱之间的提交（任意类型，含子版本）
-PREV_TAG=$(git tag -l --sort=-v:refname | grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' | grep -A1 "^$TAG_NAME$" | tail -1)
+BASELINE_SCRIPT="${TAG_BASELINE_SCRIPT:-skills/tag/tag-baseline.sh}"
+PREV_TAG=$(bash "$BASELINE_SCRIPT" --previous "$TAG_NAME")
 if [ -n "$PREV_TAG" ]; then
     git log ${PREV_TAG}..${TAG_NAME} --oneline --no-merges
 fi

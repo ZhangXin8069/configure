@@ -74,11 +74,12 @@ NEW_TAG="${TYPE}${NEW_NUM}"
 
 ### 1.2 确定变更基线
 
-基线是任意类型中按版本排序最新的标签；没有标签时使用第一个提交。无提交时中止：
+基线是任意类型中按 tagger 时间（`creatordate`）最新的标签；没有标签时使用第一个提交。
+混合前缀下不能使用 `--sort=-v:refname`（会把 `stab84` 排在更新的 `dev51` 之前）。无提交时中止：
 
 ```bash
-BASELINE=$(git tag -l --sort=-v:refname |
-    grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' | head -1)
+TAG_BASELINE_SCRIPT="${TAG_BASELINE_SCRIPT:-skills/tag/tag-baseline.sh}"
+BASELINE=$(bash "$TAG_BASELINE_SCRIPT" --latest)
 if [ -z "$BASELINE" ]; then
     BASELINE=$(git rev-list --max-parents=0 HEAD)
 fi
@@ -136,9 +137,8 @@ git tag -l 'test[0-9]*' | wc -l
 ```bash
 git tag -l --format='%(subject)%0a%(body)' "$TAG_NAME"
 git tag -l --format='Type: %(refname:short)%0aAuthor: %(taggername) <%(taggeremail)>%0aDate: %(taggerdate:iso)%0aMessage: %(subject)' "$TAG_NAME"
-PREV_TAG=$(git tag -l --sort=-v:refname |
-  grep -E '^(stab|dev|bug|test)[0-9]+(_[0-9]+)*$' |
-  grep -A1 "^$TAG_NAME$" | tail -1)
+TAG_BASELINE_SCRIPT="${TAG_BASELINE_SCRIPT:-skills/tag/tag-baseline.sh}"
+PREV_TAG=$(bash "$TAG_BASELINE_SCRIPT" --previous "$TAG_NAME")
 if [ -n "$PREV_TAG" ]; then
     git log "${PREV_TAG}..${TAG_NAME}" --oneline --no-merges
 fi

@@ -124,6 +124,7 @@ commit_roots="$tmp_dir/commit-roots"
 commit_order="$tmp_dir/commit-order"
 order_records="$tmp_dir/order-records"
 sorted_order="$tmp_dir/sorted-order"
+merged_records="$tmp_dir/merged-records"
 remote_refs="$tmp_dir/remote-refs"
 : > "$target_queries"
 : > "$commit_roots"
@@ -166,9 +167,9 @@ kv_has() {
 
 for map_name in \
     tag_object_oid tag_object_type tag_created tag_subject tag_target \
-    tag_target_type tag_payload_file tag_payload_loaded tag_rank \
-    commit_rank ancestor_cache repair_expected_parent repair_kind \
-    seen_parents remote_object_by_tag remote_target_by_tag repair_new_oid; do
+    tag_target_type tag_payload_file tag_payload_loaded \
+    commit_rank repair_expected_parent repair_kind \
+    remote_object_by_tag remote_target_by_tag repair_new_oid; do
     : > "$tmp_dir/kv-$map_name"
 done
 
@@ -256,40 +257,54 @@ fi
 # A single reverse topological walk gives every target commit a stable rank.
 # With --reverse, parents precede children; incomparable branches remain
 # detectable by the adjacent merge-base checks below.
-for tag_name in "${tag_names[@]}"; do
-    target_type=$(kv_value tag_target_type "$tag_name")
-    target_oid=$(kv_value tag_target "$tag_name")
-    if [ "$target_type" = 'commit' ] && [ -n "$target_oid" ]; then
-        printf '%s\n' "$target_oid" >> "$commit_roots"
-    fi
-done
+printf '%s\n' "${tag_names[@]}" > "$tmp_dir/tag-names"
+awk -F "$tab" -v names_file="$tmp_dir/tag-names" '
+    FILENAME != names_file {
+        map = FILENAME
+        sub(/.*\/kv-/, "", map)
+        value[map SUBSEP $1] = $2
+        next
+    }
+    {
+        name = $1
+        if (value["tag_target_type" SUBSEP name] == "commit" && \
+            value["tag_target" SUBSEP name] != "") {
+            print value["tag_target" SUBSEP name]
+        }
+    }
+' "$tmp_dir/kv-tag_target" "$tmp_dir/kv-tag_target_type" "$tmp_dir/tag-names" > "$commit_roots"
 
 if [ -s "$commit_roots" ]; then
     git rev-list --topo-order --reverse --stdin < "$commit_roots" > "$commit_order" || \
         die '无法生成标签目标提交的拓扑顺序'
-    commit_index=0
-    while IFS= read -r commit_oid; do
-        [ -n "$commit_oid" ] || continue
-        if ! kv_has commit_rank "$commit_oid"; then
-            kv_set commit_rank "$commit_oid" "$commit_index"
-            commit_index=$((commit_index + 1))
-        fi
-    done < "$commit_order"
+    # rev-list emits each commit once, so assign ranks in one pass.
+    awk -v OFS="$tab" '{ print $1, NR - 1 }' "$commit_order" > "$tmp_dir/kv-commit_rank"
 fi
 
 : > "$order_records"
-for tag_name in "${tag_names[@]}"; do
-    [ "$tag_name" = "$root_name" ] && continue
-    target_oid=$(kv_value tag_target "$tag_name")
-    if [ -n "$target_oid" ] && kv_has commit_rank "$target_oid"; then
-        kv_set tag_rank "$tag_name" "$(kv_value commit_rank "$target_oid")"
-    else
-        # Keep malformed/non-commit tags deterministic and after valid targets.
-        kv_set tag_rank "$tag_name" 2147483647
-    fi
-    printf '%s\t%s\t%s\n' \
-        "$(kv_value tag_rank "$tag_name")" "$(kv_value tag_created "$tag_name")" "$tag_name" >> "$order_records"
-done
+# Join target, rank and date in one awk pass instead of forking one awk per
+# field lookup; Bash 3.2 has no associative arrays.
+awk -F "$tab" -v OFS="$tab" -v names_file="$tmp_dir/tag-names" -v root="$root_name" '
+    FILENAME != names_file {
+        map = FILENAME
+        sub(/.*\/kv-/, "", map)
+        value[map SUBSEP $1] = $2
+        next
+    }
+    {
+        name = $1
+        if (name == root) {
+            next
+        }
+        target = value["tag_target" SUBSEP name]
+        rank = value["commit_rank" SUBSEP target]
+        if (target == "" || rank == "") {
+            # Keep malformed/non-commit tags deterministic and after valid targets.
+            rank = 2147483647
+        }
+        print rank, value["tag_created" SUBSEP name], name
+    }
+' "$tmp_dir"/kv-* "$tmp_dir/tag-names" > "$order_records"
 sort -t "$tab" -k1,1n -k2,2n -k3,3 "$order_records" > "$sorted_order" || die '标签拓扑排序失败'
 
 declare -a ordered_tags=("$root_name")
@@ -297,6 +312,25 @@ while IFS="$tab" read -r rank created tag_name; do
     [ -n "$tag_name" ] || continue
     ordered_tags+=("$tag_name")
 done < "$sorted_order"
+
+printf '%s\n' "${ordered_tags[@]}" > "$tmp_dir/ordered-names"
+awk -F "$tab" -v OFS="$tab" -v names_file="$tmp_dir/ordered-names" '
+    FILENAME != names_file {
+        map = FILENAME
+        sub(/.*\/kv-/, "", map)
+        value[map SUBSEP $1] = $2
+        next
+    }
+    {
+        name = $1
+        print value["tag_object_type" SUBSEP name],
+            value["tag_target" SUBSEP name],
+            value["tag_target_type" SUBSEP name],
+            value["tag_subject" SUBSEP name],
+            value["tag_created" SUBSEP name],
+            name
+    }
+' "$tmp_dir"/kv-* "$tmp_dir/ordered-names" > "$merged_records"
 
 printf 'Repository: %s\n' "$repo_root"
 printf 'Root: %s\n' "$root_name"
@@ -311,19 +345,38 @@ previous_date=''
 previous_name=''
 previous_target=''
 
+declare -a ancestor_keys=()
+declare -a ancestor_values=()
 is_ancestor() {
     local parent=$1
     local child=$2
     local cache_key="${parent}:${child}"
-    if kv_has ancestor_cache "$cache_key"; then
-        [ "$(kv_value ancestor_cache "$cache_key")" = 1 ]
-        return
-    fi
+    local index=0
+    while [ "$index" -lt "${#ancestor_keys[@]}" ]; do
+        if [ "${ancestor_keys[$index]}" = "$cache_key" ]; then
+            [ "${ancestor_values[$index]}" = 1 ]
+            return
+        fi
+        index=$((index + 1))
+    done
     if git merge-base --is-ancestor "$parent" "$child" >/dev/null 2>&1; then
-        kv_set ancestor_cache "$cache_key" 1
+        ancestor_keys+=("$cache_key")
+        ancestor_values+=(1)
         return 0
     fi
-    kv_set ancestor_cache "$cache_key" 0
+    ancestor_keys+=("$cache_key")
+    ancestor_values+=(0)
+    return 1
+}
+
+declare -a seen_parent_keys=()
+seen_parent_has() {
+    local needle=$1
+    local index=0
+    while [ "$index" -lt "${#seen_parent_keys[@]}" ]; do
+        [ "${seen_parent_keys[$index]}" = "$needle" ] && return 0
+        index=$((index + 1))
+    done
     return 1
 }
 
@@ -363,12 +416,9 @@ queue_repair() {
     fi
 }
 
-for tag_name in "${ordered_tags[@]}"; do
-    object_type=$(kv_value tag_object_type "$tag_name")
-    target_oid=$(kv_value tag_target "$tag_name")
-    target_type=$(kv_value tag_target_type "$tag_name")
+while IFS="$tab" read -r object_type target_oid target_type subject created tag_name; do
+    [ -n "$tag_name" ] || continue
     target_type=${target_type:-missing}
-    subject=$(kv_value tag_subject "$tag_name")
 
     if [ "$object_type" != 'tag' ]; then
         printf '[BLOCK] %s 不是附注标签（object type=%s）\n' "$tag_name" "$object_type"
@@ -400,9 +450,9 @@ for tag_name in "${ordered_tags[@]}"; do
                 "$previous_name" "$tag_name"
             issue_count=$((issue_count + 1))
             blocking_count=$((blocking_count + 1))
-        elif [ "$previous_target" = "$target_oid" ] && [ "$previous_date" = "$(kv_value tag_created "$tag_name")" ]; then
+        elif [ "$previous_target" = "$target_oid" ] && [ "$previous_date" = "$created" ]; then
             printf '[BLOCK] 同一 peeled commit 的 tagger 时间并列: %s 与 %s (%s)\n' \
-                "$previous_name" "$tag_name" "$(kv_value tag_created "$tag_name")"
+                "$previous_name" "$tag_name" "$created"
             issue_count=$((issue_count + 1))
             blocking_count=$((blocking_count + 1))
             order_tie=1
@@ -424,19 +474,19 @@ for tag_name in "${ordered_tags[@]}"; do
             queue_repair "$tag_name" "$expected_parent" 'replace'
         fi
 
-        if [ -n "$actual_parent" ] && kv_has seen_parents "$actual_parent"; then
+        if [ -n "$actual_parent" ] && seen_parent_has "$actual_parent"; then
             printf '[DUPLICATE] %s 重复引用 follow %s（随前缀修正一并消除）\n' "$tag_name" "$actual_parent"
             issue_count=$((issue_count + 1))
         fi
         if [ -n "$actual_parent" ]; then
-            kv_set seen_parents "$actual_parent" 1
+            seen_parent_keys+=("$actual_parent")
         fi
     fi
 
-    previous_date=$(kv_value tag_created "$tag_name")
+    previous_date=$created
     previous_name=$tag_name
     previous_target=$target_oid
-done
+done < "$merged_records"
 
 if [ "$order_tie" -eq 1 ]; then
     repair_count=0
@@ -461,11 +511,25 @@ if [ -n "$remote_name" ]; then
             fi
         done < "$remote_refs"
 
-        for tag_name in "${ordered_tags[@]}"; do
-            remote_object=$(kv_value remote_object_by_tag "$tag_name")
-            remote_target=$(kv_value remote_target_by_tag "$tag_name")
-            object_oid=$(kv_value tag_object_oid "$tag_name")
-            target_oid=$(kv_value tag_target "$tag_name")
+        awk -F "$tab" -v OFS="$tab" -v names_file="$tmp_dir/ordered-names" '
+            FILENAME != names_file {
+                map = FILENAME
+                sub(/.*\/kv-/, "", map)
+                value[map SUBSEP $1] = $2
+                next
+            }
+            {
+                name = $1
+                print name,
+                    value["remote_object_by_tag" SUBSEP name],
+                    value["remote_target_by_tag" SUBSEP name],
+                    value["tag_object_oid" SUBSEP name],
+                    value["tag_target" SUBSEP name]
+            }
+        ' "$tmp_dir"/kv-* "$tmp_dir/ordered-names" > "$tmp_dir/remote-records"
+
+        while IFS="$tab" read -r tag_name remote_object remote_target object_oid target_oid; do
+            [ -n "$tag_name" ] || continue
             if [ -z "$remote_object" ]; then
                 printf '[REMOTE] %s: 远端缺失\n' "$tag_name"
                 issue_count=$((issue_count + 1))
@@ -476,7 +540,7 @@ if [ -n "$remote_name" ]; then
                 issue_count=$((issue_count + 1))
                 blocking_count=$((blocking_count + 1))
             fi
-        done
+        done < "$tmp_dir/remote-records"
     fi
 fi
 
