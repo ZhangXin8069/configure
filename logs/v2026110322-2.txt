@@ -1,0 +1,80 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 22:38:29 +0800
+批次: lib-node-js-rename
+主任务: 重命名 _commandcode/_opencode、丰富 _node-js 并同步引用
+触发原因: 任务完成
+摘要: 重命名两个稳定目录、补全 _node-js、改造 _command-code 依赖并同步引用；全部测试通过，外部自动化已提交 d0f13c9
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 目录重命名
+- 目标: `lib/_commandcode` → `lib/_command-code`，`lib/_opencode` → `lib/_open-code`。
+- 命令/操作: `git -C /root/configure mv lib/_commandcode lib/_command-code`；`git mv lib/_opencode lib/_open-code`。
+- 关键输出: Git 以 R 记录 13 个文件重命名；被忽略的 `_command-code/.commandcode/taste/taste.md` 随目录移动。
+- 退出码: 0
+- 证据与判断: 命名符合仓库“多词用 `-` 连接”的约定，且未改动产品配置目录 `~/.commandcode` 与二进制名。
+
+### S2 — 内部引用更新
+- 目标: 让两个目录的标题、路径、测试提示都指向新名称。
+- 命令/操作: 批量替换 `lib/_commandcode`、`lib\_commandcode`、`lib/_opencode`、`lib\_opencode`，更新 AGENTS.md 标题与 PASS 文本。
+- 关键输出: `_command-code/setup.md` 16+3 处、`_open-code/setup.md` 13+3 处替换完成。
+- 退出码: 0
+- 证据与判断: `git grep` 确认运行路径引用已无旧名；仅剩内部函数名与历史记录。
+
+### S3 — 丰富 `_node-js`
+- 目标: 按其他 `_*` 目录范式补齐安装入口、Windows 安装器、文档和回归测试。
+- 命令/操作: `git mv lib/_node-js/install.sh lib/_node-js/nvm-install.sh`；新增 `install.sh`、`install.bat`、`install.test.sh`、`AGENTS.md`、`setup.md`；`chmod 0755` 两个新脚本。
+- 关键输出: 上游 nvm v0.39.7 安装器 SHA-256 与重命名前完全一致（8e45fa54…f5f643）；`install.sh` 默认目标 22，已满足时不改动系统，否则以 `NODE_VERSION` 驱动 nvm；Windows 安装器支持主版本与精确版本、zip 用户级安装、幂等 PATH。
+- 退出码: 0
+- 证据与判断: `install.test.sh` 覆盖复用、20→22 委派、`v` 前缀、非法参数与 `--check`，全部通过。
+
+### S4 — `_command-code` 复用 `_node-js`
+- 目标: 删除重复的 Node.js 安装指南，安装器在 Node.js 缺失/过旧时指向统一入口。
+- 命令/操作: `install.sh` 增加规范化 `node_dir` 与提示；`install.bat` 增加 `NODE_INSTALLER` 提示；`setup.md` 用约 20 行引用替换原 118 行指南；`AGENTS.md` 增加依赖说明；`install.test.sh` 断言 `_node-js/install.sh` 提示。
+- 关键输出: `bash lib/_command-code/install.sh --help` 显示规范化后的 `_node-js` 绝对路径。
+- 退出码: 0
+- 证据与判断: 安装测试与配置测试均通过。
+
+### S5 — 仓库级同步与验证
+- 目标: 更新 `lib/AGENTS.md`、`_agent/setup.md`、`_windows/setup.md` 与 `bin` 自动安装映射/测试。
+- 命令/操作: 更新目录表与 3 处文档引用；修改 `bin/agent-runtime.sh`、`bin/agent-runtime.ps1`、`bin/agent-windows.test.sh`、`bin/agent.test.sh`、`bin/AGENTS.md`。
+- 关键输出: `bash bin/agent.test.sh` 全部用例通过；`bash bin/agent-windows.test.sh` PASS（PowerShell Parser 因本机无 pwsh 跳过）；`form-audit.sh --strict --quiet` 退出 0。
+- 退出码: 0
+- 证据与判断: 自动安装映射与新目录名一致，未破坏启动器行为。
+
+## 验证与证据
+- 测试/检查: `bash -n` 覆盖全部改动 shell；`_node-js/install.test.sh`、`_command-code/install.test.sh`、`_command-code/config.test.sh`、`_open-code/config.test.sh`、`bin/agent.test.sh`、`bin/agent-windows.test.sh`；`form-audit.sh --root . --strict --quiet`；`git diff --check`。
+- 结果: 全部通过。`_node-js/install.sh --check` 在本机返回 Node.js v24.21.0 满足要求。
+- 未验证项: `lib/_node-js/install.bat` 与 `lib/_command-code/install.bat` 的 Windows 真实执行（当前为 Linux，仅做静态审查）。
+
+## 变更与产物
+- 文件: `lib/_command-code/`、`lib/_open-code/`（重命名）、`lib/_node-js/{AGENTS.md,install.sh,install.bat,install.test.sh,nvm-install.sh,setup.md}`、`lib/AGENTS.md`、`lib/_agent/setup.md`、`lib/_windows/setup.md`、`bin/{AGENTS.md,agent-runtime.sh,agent-runtime.ps1,agent-windows.test.sh,agent.test.sh}`。
+- 产物: 统一的 Node.js 安装入口与文档；`_command-code` 不再维护重复 Node.js 指南。
+- 未改动范围: 历史 `logs/`、带日期 `docs/` 快照、`skills/form/references/source-snapshots/` 固定快照、`bin/agent.sh` 内部函数名、产品配置目录 `~/.commandcode`。
+
+## 风险、限制与下一步
+- 风险: 仓库外部自动化在 22:34:26 创建并推送了 `d0f13c9 2026-11-03-22-34-26`，包含本轮大部分改动；之后 6 个文件的最终细化（精确版本支持、路径规范化、文档措辞、执行位）仍在工作区未提交。
+- 阻塞: 无。
+- 下一步: 复核并按需提交最终 6 个文件；在目标 Windows 机器上执行 `install.bat --check` 做真实验证；如希望历史日期文档也改名，需明确授权后另行处理。
+
+## 用户输入指令
+1.重命名'_commandcode'为'_command-code';2.重命名'_opencode'为'_open-code';2.参考其他'_***',丰富'_node-js';4.引用'_node-js',修改'_command-code';5.整理更新被上述改动影响到的内容
+
+## Agent 全文报告
+--- report begin ---
+已完成重命名、`_node-js` 补全、`_command-code` 集成与全仓引用同步。
+
+改动内容：
+- `lib/_commandcode` → `lib/_command-code`，`lib/_opencode` → `lib/_open-code`，Git 以 R 记录重命名。
+- `_node-js` 新增统一入口 `install.sh`（默认 Node.js 22，已满足时无操作，否则委派 nvm）、`install.bat`（Windows 用户级 zip 安装、幂等 PATH、支持主版本/精确版本）、`AGENTS.md`、`setup.md`、`install.test.sh`；上游 nvm 安装器原样保留为 `nvm-install.sh`（SHA-256 校验一致）。
+- `_command-code` 的 Unix/Windows 安装器在 Node.js 缺失或过旧时指向 `_node-js`；`setup.md` 用引用替换原 118 行重复指南；`AGENTS.md` 与安装测试同步。
+- 更新 `lib/AGENTS.md`、`lib/_agent/setup.md`、`lib/_windows/setup.md` 及 `bin` 自动安装映射/测试中的目录名。历史 `logs/`、带日期 `docs/` 和固定快照未改写。
+
+验证结果：
+- `bash -n` 全部通过；`_node-js`、`_command-code` 安装/配置、`_open-code` 配置测试全部 PASS；`bin/agent.test.sh` 全部通过；`bin/agent-windows.test.sh` PASS（本机无 pwsh，Parser 检查跳过）；`form-audit.sh --strict --quiet` 退出 0；`git diff --check` 干净。
+- 未验证：Windows `.bat` 的真实执行，需在目标机器上跑 `install.bat --check`。
+
+需要你注意：仓库外部自动化在 22:34:26 自动创建并推送了提交 `d0f13c9`，包含了本轮大部分改动；我未执行提交/推送。之后 6 个文件的最终细化仍未提交。如不希望保留该自动提交，需要你明确授权后再处理（我不会自行改写已推送历史）。
+--- report end ---

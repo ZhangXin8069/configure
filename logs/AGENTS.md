@@ -1258,3 +1258,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## lib-node-js-rename - final - 2026-11-03 22:38:29 +0800
+- 主任务: 重命名 _commandcode/_opencode、丰富 _node-js 并同步引用
+- 日志文件: logs/v2026110322-2.txt
+- 文件大小: 7099 bytes
+- 触发原因: 任务完成
+- 关键内容: 重命名两个稳定目录、补全 _node-js、改造 _command-code 依赖并同步引用；全部测试通过，外部自动化已提交 d0f13c9
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## cm-byok-20261103 - final - 2026-11-03 22:46:11 +0800
+- 主任务: cm 系列接入 deepseek-pay/opencode-go BYOK 供应商（Vercel 文档方案）
+- 日志文件: logs/v2026110322-3.txt
+- 文件大小: 5939 bytes
+- 触发原因: 任务完成
+- 关键内容: cm pay/go 通过 providers.json 接入 BYOK，模型按 <途径>/<模型> 寻址；Unix/Windows 双端与回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

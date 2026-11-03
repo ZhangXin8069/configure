@@ -325,6 +325,10 @@ run_launcher() {
             COMMANDCODE_EFFORT="${COMMANDCODE_EFFORT:-}" \
             COMMANDCODE_GOAT_API_KEY="${COMMANDCODE_GOAT_API_KEY:-}" \
             COMMAND_CODE_API_KEY="${COMMAND_CODE_API_KEY:-}" \
+            OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
+            OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
+            DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
+            DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
         *) fail "未知测试 launcher：$name" ;;
     esac
@@ -1223,6 +1227,61 @@ cm_goal_new=$(tail -n +$((cm_goal_before + 1)) "$call_log")
 assert_contains "$cm_goal_new" '-p /goal get the test suite green --model deepseek/deepseek-v4.1-flash'
 assert_contains "$cm_goal_new" '--yolo --no-auto-update --max-turns 100 --trust --skip-onboarding'
 printf 'PASS: cm 原生 /goal 模式、yolo 与 goal turn budget\n'
+
+cm_go_before=$(wc -l < "$call_log")
+set +e
+cm_go_output=$(OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cm "$fake_commandcode" go --once 2>&1)
+cm_go_status=$?
+set -e
+(( cm_go_status == 0 )) || fail "cm go 失败：$cm_go_output"
+assert_contains "$cm_go_output" 'Command Code: opencode-go/deepseek-v4.1-flash（途径默认） | effort=max'
+assert_contains "$cm_go_output" 'provider: opencode-go (BYOK)'
+cm_go_new=$(tail -n +$((cm_go_before + 1)) "$call_log")
+assert_contains "$cm_go_new" '--model opencode-go/deepseek-v4.1-flash --effort max'
+python3 - "$commandcode_home/.commandcode/providers.json" <<'PY' || fail 'cm go 未写入正确的 BYOK provider'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    providers = json.load(handle)['provider']
+go = providers['opencode-go']
+assert go['baseURL'] == 'https://opencode.ai/zen/go/v1'
+assert go['apiKey'] == '$OPENCODE_GO_API_KEY'
+assert 'deepseek-v4.1-flash' in go['models']
+assert go['models']['deepseek-v4.1-flash']['reasoningEfforts']
+assert go['models']['minimax-m3']['api'] == 'anthropic-messages'
+assert go['models']['minimax-m3']['baseURL'] == 'https://opencode.ai/zen/go'
+pay = providers['deepseek-pay']
+assert pay['baseURL'] == 'https://api.deepseek.com'
+assert pay['apiKey'] == '$DEEPSEEK_PAY_API_KEY'
+assert 'deepseek-v4.1-flash' in pay['models']
+assert 'commandcode-goat' not in providers
+PY
+printf 'PASS: cm go 使用 BYOK providers.json 与 opencode-go/ 模型前缀\n'
+
+cm_pay_before=$(wc -l < "$call_log")
+set +e
+cm_pay_output=$(DEEPSEEK_PAY_API_KEY=test-pay-key \
+    run_launcher cm "$fake_commandcode" pay --once 2>&1)
+cm_pay_status=$?
+set -e
+(( cm_pay_status == 0 )) || fail "cm pay 失败：$cm_pay_output"
+assert_contains "$cm_pay_output" 'provider: deepseek-pay (BYOK)'
+cm_pay_new=$(tail -n +$((cm_pay_before + 1)) "$call_log")
+assert_contains "$cm_pay_new" '--model deepseek-pay/deepseek-v4.1-flash --effort max'
+printf 'PASS: cm pay 使用 deepseek-pay/ 模型前缀\n'
+
+cm_suffix_before=$(wc -l < "$call_log")
+set +e
+cm_suffix_output=$(OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cm "$fake_commandcode" go 'deepseek-v4.1-flash[1m]' --once 2>&1)
+cm_suffix_status=$?
+set -e
+(( cm_suffix_status == 0 )) || fail "cm go 上下文后缀失败：$cm_suffix_output"
+cm_suffix_new=$(tail -n +$((cm_suffix_before + 1)) "$call_log")
+assert_contains "$cm_suffix_new" '--model opencode-go/deepseek-v4.1-flash --effort max'
+printf 'PASS: cm BYOK 模型剥离 [1m] 上下文后缀\n'
 
 switch_op_go_glm_before=$(wc -l < "$call_log")
 set +e

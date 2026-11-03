@@ -6,8 +6,9 @@
 set -euo pipefail
 
 script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-node_installer="$script_dir/../_node-js/install.sh"
-node_setup="$script_dir/../_node-js/setup.md"
+node_dir="$(CDPATH= cd -- "$script_dir/../_node-js" 2>/dev/null && pwd || printf '%s' "$script_dir/../_node-js")"
+node_installer="$node_dir/install.sh"
+node_setup="$node_dir/setup.md"
 
 package_name="command-code"
 default_version="1.88.2"

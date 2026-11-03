@@ -59,6 +59,7 @@ for contract in \
     'function Get-OpenCodeProviderConfig' \
     'function Run-CommandCode' \
     'function Set-CommandCodeStatusline' \
+    'function Set-CommandCodeProviders' \
     'function Get-ModelCatalogCachePath' \
     'function Update-ProviderModelCatalog' \
     'function Resolve-AgentModelSelection' \
@@ -71,6 +72,11 @@ for contract in \
 done
 assert_contains "$runtime" "'agent-config.json'"
 assert_contains "$runtime" "'agent-custom.json.refer'"
+assert_contains "$runtime" "'commandcode-goat', 'deepseek-pay', 'opencode-go'"
+assert_contains "$runtime" "apiKey = '\$' + \$envKey"
+assert_contains "$runtime" 'contextWindow'
+assert_contains "$runtime" 'reasoningEfforts'
+assert_contains "$runtime" '(BYOK)'
 assert_not_contains "$runtime" 'default_flag'
 assert_not_contains "$runtime" '$agentConfig.flags'
 assert_not_contains "$runtime" 'DEFAULT_MODEL_FLAG'

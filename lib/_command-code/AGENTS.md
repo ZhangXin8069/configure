@@ -21,7 +21,9 @@ Command Code 跨平台安装与用户级一键配置目录。所有脚本手动�
   `commandcode-goat`、DeepSeek V4.1 Flash、max、1M 上下文和 yolo；支持
   `cm --goal <objective>` / `cm goal <objective|status|clear>` 原生 goal，
   `--max-turns` 作为 goal 预算。`bin/agent*` 的 `gt` 快捷词为 `cl/op/co`
-  提供同一 Provider API。
+  提供同一 Provider API。`cm pay`/`cm go` 走 BYOK：启动器把
+  `agent-config.json` 中 `commandcode.byok=true` 的途径幂等合并进
+  `~/.commandcode/providers.json`，模型以 `<途径>/<模型>` 传给 `--model`。
 
 官方依据：
 

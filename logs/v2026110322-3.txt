@@ -1,0 +1,83 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 22:46:11 +0800
+批次: cm-byok-20261103
+主任务: cm 系列接入 deepseek-pay/opencode-go BYOK 供应商（Vercel 文档方案）
+触发原因: 任务完成
+摘要: cm pay/go 通过 providers.json 接入 BYOK，模型按 <途径>/<模型> 寻址；Unix/Windows 双端与回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 调研与可行性验证
+- 目标: 让 cm/cms 通过 Command Code BYOK 接入本库 deepseek-pay（pay）与 opencode-go（go）途径
+- 命令/操作: 读取 Vercel AI Gateway 的 Command Code 文档、Command Code BYOK 官方 schema、agent.sh/agent-runtime.ps1 现有 cm 分支
+- 关键输出: 官方 schema 为 ~/.commandcode/providers.json，字段 name/baseURL/apiKey/models；model 以 <provider>/<model> 寻址
+- 退出码: 0
+- 证据与判断: 临时 HOME 写入 providers.json 后，`command-code --local-only --list-models` 列出 opencode-go/deepseek-v4.1-flash；`--model opencode-go/deepseek-v4.1-flash` 被路由到上游
+
+### S2 — 实现
+- 目标: Unix/Windows 双端支持 cm go/pay，并保持 gt 默认行为
+- 命令/操作: 修改 agent-config.json 增加 providers.<途径>.commandcode.byok；agent-custom.json.refer 增加 commandcode 默认模型/强度；agent.sh 新增 _commandcode_apply_providers 与模型前缀；agent-runtime.ps1 新增 Set-CommandCodeProviders 与等价逻辑；同步 AGENTS.md/setup.md
+- 关键输出: providers.json 合并保留用户其他条目，apiKey 仅写 $ENV_KEY，按 endpoint 映射 anthropic-messages/openai-responses，缓存补齐 contextWindow/reasoningEfforts
+- 退出码: 0
+- 证据与判断: bash -n、JSON 解析、真实 CLI 加载均通过
+
+### S3 — 回归
+- 目标: 覆盖 cm 默认 gt、go、pay、[1m] 后缀与 Windows 静态契约
+- 命令/操作: bash agent.test.sh；bash agent-windows.test.sh；真实 command-code --list-models
+- 关键输出: Unix 全量测试全 PASS（新增 cm go/pay/[1m] 三例）；Windows 静态契约 PASS（本机无 pwsh，解析器检查跳过）；真实 CLI 无 provider 告警
+- 退出码: 0
+- 证据与判断: 功能与回归均达标
+
+## 验证与证据
+
+- bash -n agent.sh agent.test.sh agent-windows.test.sh：通过
+- python3 -m json.tool agent-config.json / agent-custom.json.refer：通过
+- bash agent.test.sh：全量 PASS，含“cm go 使用 BYOK providers.json 与 opencode-go/ 模型前缀”“cm pay 使用 deepseek-pay/ 模型前缀”“cm BYOK 模型剥离 [1m] 上下文后缀”
+- bash agent-windows.test.sh：PASS；本机无 powershell.exe/pwsh.exe，未执行 PowerShell Parser
+- 真实 Command Code 1.88.2：加载生成的 providers.json 后 --list-models 列出 deepseek-pay/* 与 opencode-go/*，stderr 无告警
+- 模型寻址：继承 goat 模型、已带前缀、模糊模型三种输入均得到单一正确 <途径>/<模型>
+- 未验证项：Windows 运行时实际执行（无 PowerShell）；BYOK 上游真实请求（需真实 key）
+
+## 变更与产物
+
+- bin/agent-config.json：deepseek-pay/opencode-go 增加 commandcode.byok 标记
+- bin/agent-custom.json.refer：为 pay/go 增加 commandcode 默认模型 deepseek-v4.1-flash 与强度 max
+- bin/agent.sh：新增 _commandcode_apply_providers；cm 接受 pay/go/gt；BYOK 模型前缀与 [1m] 剥离；按途径校验 key
+- bin/agent-runtime.ps1：新增 ConvertTo-PositiveIntValue/Set-CommandCodeProviders；cm 途径校验、模型前缀、key 提示、BYOK 横幅
+- bin/agent.test.sh：run_launcher cm 透传 OPENCODE_GO_API_KEY/DEEPSEEK_PAY_API_KEY；新增 3 个 BYOK 回归
+- bin/agent-windows.test.sh：新增 Windows BYOK 静态契约
+- bin/AGENTS.md、AGENTS.md、lib/_command-code/AGENTS.md、lib/_command-code/setup.md：同步说明
+
+## 风险、限制与下一步
+
+- 风险: providers.json 由启动器覆盖管理两个已知 provider 条目；若用户手工修改同名条目会被同步覆盖
+- 限制: BYOK 需 Command Code 账户可用（官方文档含 login 步骤）；未设置对应 API key 时仅告警，实际请求会 401
+- 限制: contextWindow/reasoningEfforts 依赖本地模型目录缓存；缓存缺失时退回静态配置
+- 下一步: 用户可用真实 key 执行 `cm go deepseek-v4.1-flash` 或 `cm pay` 做一次真实上游冒烟
+- 未提交: 本次改动未暂存、未提交、未推送
+
+## 用户输入指令
+
+cm系列可以接入本库的go与pay供应商,参考{https://vercel.com/docs/ai-gateway/coding-agents/command-code},进行修改升级
+
+## Agent 全文报告
+
+--- report begin ---
+已完成 cm 系列对 go/pay 的 BYOK 接入。
+
+改动内容：
+1. agent-config.json 为 deepseek-pay/opencode-go 增加 commandcode.byok 标记；agent-custom.json.refer 增加 commandcode 默认模型 deepseek-v4.1-flash、强度 max。
+2. agent.sh 新增 _commandcode_apply_providers：按官方 schema 幂等合并 ~/.commandcode/providers.json（保留其他条目，apiKey 仅写 $ENV_KEY 引用，messages/responses 端点分别映射 anthropic-messages/openai-responses，缓存补齐 contextWindow/reasoningEfforts）。cm 现接受 pay/go/gt，BYOK 模型以 <途径>/<模型> 传给 --model，并剥离 [1m] 后缀。
+3. agent-runtime.ps1 实现等价的 Set-CommandCodeProviders、途径校验、模型前缀与 key 提示。
+4. 同步 bin/AGENTS.md、根 AGENTS.md、lib/_command-code/AGENTS.md 与 setup.md，并新增 Unix/Windows 回归测试。
+
+验证结果：
+- bash agent.test.sh 全量 PASS（新增 cm go、cm pay、[1m] 三例）。
+- bash agent-windows.test.sh PASS；本机无 pwsh，PowerShell Parser 检查跳过。
+- 真实 command-code 1.88.2 加载生成的 providers.json 后，--list-models 正确列出 deepseek-pay/* 与 opencode-go/* 且无告警。
+- bash -n 与 JSON 解析通过；git diff --check 干净。
+
+后续步骤：用真实 key 执行 `cm go deepseek-v4.1-flash` 或 `cm pay` 做一次上游冒烟。改动未提交。
+--- report end ---

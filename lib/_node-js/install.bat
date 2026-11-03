@@ -68,9 +68,16 @@ if /i "%PROCESSOR_ARCHITECTURE%"=="ARM64" set "NODE_ARCH=arm64"
 if /i "%PROCESSOR_ARCHITEW6432%"=="ARM64" set "NODE_ARCH=arm64"
 
 set "NODE_VERSION_FULL="
+if "%TARGET_VERSION%"=="%TARGET_MAJOR%" goto :resolve_latest_version
+set "NODE_VERSION_FULL=%TARGET_VERSION%"
+goto :resolved_version
+
+:resolve_latest_version
 for /f "usebackq delims=" %%v in (`powershell -NoProfile -NonInteractive -Command "$c=(Invoke-WebRequest -UseBasicParsing 'https://nodejs.org/dist/latest-v%TARGET_MAJOR%.x/SHASUMS256.txt').Content; if ($c -match 'node-v([0-9]+\.[0-9]+\.[0-9]+)-win-%NODE_ARCH%\.zip') { $Matches[1] }"`) do set "NODE_VERSION_FULL=%%v"
+
+:resolved_version
 if not defined NODE_VERSION_FULL (
-    echo ERROR: failed to resolve Node.js %TARGET_MAJOR%.x for win-%NODE_ARCH%.
+    echo ERROR: failed to resolve Node.js %TARGET_VERSION% for win-%NODE_ARCH%.
     echo Check the version or your network/proxy settings.
     exit /b 1
 )

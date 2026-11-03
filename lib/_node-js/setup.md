@@ -57,8 +57,8 @@ export NVM_DIR="$HOME/.nvm"
 nvm use 22
 ```
 
-nvm 安装器需要 `git`，或设置 `METHOD=script` 后使用 `curl`/`wget`。完整环境变量与上游行为见
-<https://github.com/nvm-sh/nvm#installing-and-updating>。
+nvm 安装器需要 `git` 或 `curl`/`wget`；可用 `METHOD=git` 或 `METHOD=script` 强制安装方式。
+上游行为见 <https://github.com/nvm-sh/nvm#installing-and-updating>。
 
 ## HPC 无 root：官方二进制
 

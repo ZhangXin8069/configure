@@ -40,6 +40,9 @@
       "models_auth": "bearer",
       "models_metadata_provider": "deepseek",
       "supported_strengths": [ "high", "max" ],
+      "commandcode": {
+        "byok": true
+      },
       "models": {
         "deepseek-v4-pro": {},
         "deepseek-v4.1-flash": {},
@@ -61,6 +64,9 @@
       "models_auth": "none",
       "models_metadata_provider": "opencode-go",
       "supported_strengths": [ "none", "low", "medium", "high", "xhigh", "max", "ultra" ],
+      "commandcode": {
+        "byok": true
+      },
       "codex": {
         "bridge_models": [ "deepseek-*" ],
         "bridge_protocol": "chat_completions",

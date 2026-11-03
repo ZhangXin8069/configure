@@ -1757,6 +1757,7 @@ function Show-Usage {
     Write-Host '模型：显式指定途径时（快捷词 pay|go|gt 或各 agent 的 *_PROVIDER 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX,COMMANDCODE}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cm Goal：cm --goal <objective> 或 cm goal <objective|status|clear>；--max-turns 同时作为原生 /goal 预算。'
+    Write-Host 'cm BYOK：pay/go 自动合并 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入；默认仍为 gt。'
     Write-Host 'cl/op/cm 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
 
@@ -2533,6 +2534,146 @@ function Set-CommandCodeStatusline {
     Write-Utf8 $target (($config | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
 }
 
+function ConvertTo-PositiveIntValue {
+    param($Value)
+
+    if ($null -eq $Value) { return 0 }
+    $number = 0
+    if ([int]::TryParse([string]$Value, [ref]$number) -and $number -gt 0) { return $number }
+    return 0
+}
+
+# Command Code BYOK providers：把 agent-config.json 中标记 commandcode.byok 的途径
+# 合并进 ~/.commandcode/providers.json（保留用户其他条目）。模型元数据优先取本地
+# 模型目录缓存补齐 contextWindow/reasoningEfforts，缓存缺失时用静态配置。
+function Set-CommandCodeProviders {
+    $providersConfig = $script:AgentConfig.providers
+    $homeRoot = Get-HomeRoot
+    if ($null -eq $providersConfig -or [string]::IsNullOrWhiteSpace($homeRoot)) { return }
+    $target = Join-Path (Join-Path $homeRoot '.commandcode') 'providers.json'
+    $root = [ordered]@{}
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+        try {
+            $existing = Get-Content -LiteralPath $target -Raw -Encoding UTF8 | ConvertFrom-Json
+            if ($null -eq $existing -or $existing -is [System.Array]) { throw 'root is not an object' }
+            foreach ($property in $existing.PSObject.Properties) {
+                $root[$property.Name] = $property.Value
+            }
+        } catch {
+            Write-ErrorLine "###$($script:LauncherName): warning: Command Code providers.json 无法解析，未修改：$target###"
+            return
+        }
+    }
+    $providerNode = [ordered]@{}
+    if ($null -ne $root['provider'] -and $root['provider'] -isnot [System.Array]) {
+        foreach ($property in $root['provider'].PSObject.Properties) {
+            $providerNode[$property.Name] = $property.Value
+        }
+    }
+    $allowedEfforts = @('low', 'medium', 'high', 'xhigh', 'max')
+    $changed = $false
+    foreach ($providerProperty in $providersConfig.PSObject.Properties) {
+        $providerName = $providerProperty.Name
+        $provider = $providerProperty.Value
+        if ($null -eq $provider -or $null -eq $provider.commandcode -or
+            -not [bool]$provider.commandcode.byok) { continue }
+        $baseUrl = [string]$provider.base_url
+        $envKey = [string]$provider.env_key
+        if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($envKey) -or
+            $null -eq $provider.models) { continue }
+        $baseUrl = $baseUrl.TrimEnd('/')
+        $modelsNode = [ordered]@{}
+        $cacheModels = $null
+        $cachePath = Get-ModelCatalogCachePath $providerName
+        if (Test-Path -LiteralPath $cachePath -PathType Leaf) {
+            try {
+                $cache = Get-Content -LiteralPath $cachePath -Raw -Encoding UTF8 | ConvertFrom-Json
+                if ($null -ne $cache) { $cacheModels = $cache.models }
+            } catch {}
+        }
+        foreach ($modelProperty in $provider.models.PSObject.Properties) {
+            $modelId = $modelProperty.Name
+            $metadata = $modelProperty.Value
+            $cacheModel = if ($null -ne $cacheModels) { $cacheModels.$modelId } else { $null }
+            $model = [ordered]@{}
+            $endpoint = if ($null -ne $metadata) { [string]$metadata.endpoint } else { '' }
+            if ($endpoint -eq 'messages') {
+                $model['api'] = 'anthropic-messages'
+                $anthropicUrl = [string]$provider.anthropic_base_url
+                if (-not [string]::IsNullOrWhiteSpace($anthropicUrl)) {
+                    $model['baseURL'] = $anthropicUrl.TrimEnd('/')
+                }
+            } elseif ($endpoint -eq 'responses') {
+                $model['api'] = 'openai-responses'
+            }
+            $contextWindow = ConvertTo-PositiveIntValue $(if ($null -ne $metadata) { $metadata.context_window } else { $null })
+            if ($contextWindow -le 0 -and $null -ne $cacheModel) {
+                $contextWindow = ConvertTo-PositiveIntValue $cacheModel.context_window
+            }
+            if ($contextWindow -le 0 -and $null -ne $cacheModel -and $null -ne $cacheModel.limit) {
+                $contextWindow = ConvertTo-PositiveIntValue $cacheModel.limit.context
+            }
+            if ($contextWindow -gt 0) { $model['contextWindow'] = $contextWindow }
+            $maxOutput = ConvertTo-PositiveIntValue $(if ($null -ne $metadata) { $metadata.max_output } else { $null })
+            if ($maxOutput -le 0 -and $null -ne $cacheModel -and $null -ne $cacheModel.limit) {
+                $maxOutput = ConvertTo-PositiveIntValue $cacheModel.limit.output
+            }
+            if ($maxOutput -gt 0) { $model['maxOutput'] = $maxOutput }
+            $effortValues = @()
+            if ($null -ne $metadata -and $null -ne $metadata.supported_strengths) {
+                $effortValues = @($metadata.supported_strengths)
+            } elseif ($null -ne $cacheModel -and $null -ne $cacheModel.supported_strengths) {
+                $effortValues = @($cacheModel.supported_strengths)
+            } else {
+                $effortValues = @($provider.supported_strengths)
+            }
+            $efforts = @()
+            foreach ($value in $effortValues) {
+                $level = ([string]$value).Trim().ToLowerInvariant()
+                if ($allowedEfforts -contains $level -and -not ($efforts -contains $level)) {
+                    $efforts += $level
+                }
+            }
+            if ($efforts.Count -gt 0) { $model['reasoningEfforts'] = $efforts }
+            $displayName = ''
+            if ($null -ne $metadata -and -not [string]::IsNullOrWhiteSpace([string]$metadata.name)) {
+                $displayName = [string]$metadata.name
+            } elseif ($null -ne $cacheModel -and -not [string]::IsNullOrWhiteSpace([string]$cacheModel.name)) {
+                $displayName = [string]$cacheModel.name
+            }
+            if (-not [string]::IsNullOrWhiteSpace($displayName)) { $model['name'] = $displayName }
+            $modelsNode[$modelId] = $model
+        }
+        if ($modelsNode.Count -eq 0) { continue }
+        $displayProviderName = [string]$provider.label
+        if ([string]::IsNullOrWhiteSpace($displayProviderName)) { $displayProviderName = $providerName }
+        $entry = [ordered]@{
+            name = $displayProviderName
+            baseURL = $baseUrl
+            apiKey = '$' + $envKey
+            models = $modelsNode
+        }
+        $oldJson = if ($null -ne $providerNode[$providerName]) {
+            $providerNode[$providerName] | ConvertTo-Json -Depth 30 -Compress
+        } else { '' }
+        $newJson = $entry | ConvertTo-Json -Depth 30 -Compress
+        if ($oldJson -ne $newJson) {
+            $providerNode[$providerName] = $entry
+            $changed = $true
+        }
+    }
+    if (-not $changed) { return }
+    $root['provider'] = $providerNode
+    $parent = Split-Path -Parent $target
+    if (-not [string]::IsNullOrWhiteSpace($parent)) {
+        New-Item -ItemType Directory -Force -Path $parent | Out-Null
+    }
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+        Copy-Item -LiteralPath $target -Destination ($target + '.bak.' + (Get-Date -Format 'yyyyMMdd-HHmmss')) -Force
+    }
+    Write-Utf8Atomic $target (($root | ConvertTo-Json -Depth 40) + [Environment]::NewLine)
+}
+
 function Get-CommandCodeSessionId {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
@@ -2561,17 +2702,30 @@ function Run-CommandCode {
     }
     if ([string]::IsNullOrWhiteSpace($executable)) { return 127 }
 
-    if (-not [string]::IsNullOrWhiteSpace($env:COMMANDCODE_GOAT_API_KEY)) {
-        if (-not [string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY) -and
-            $env:COMMAND_CODE_API_KEY -ne $env:COMMANDCODE_GOAT_API_KEY) {
-            Write-ErrorLine "###$($script:LauncherName): warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###"
+    $effectiveProvider = $script:ProviderOverride
+    if ([string]::IsNullOrWhiteSpace($effectiveProvider)) {
+        $effectiveProvider = [string]$script:AgentConfig.agents.commandcode.provider
+    }
+    if ($effectiveProvider -eq 'commandcode-goat') {
+        if (-not [string]::IsNullOrWhiteSpace($env:COMMANDCODE_GOAT_API_KEY)) {
+            if (-not [string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY) -and
+                $env:COMMAND_CODE_API_KEY -ne $env:COMMANDCODE_GOAT_API_KEY) {
+                Write-ErrorLine "###$($script:LauncherName): warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###"
+            }
+            $env:COMMAND_CODE_API_KEY = $env:COMMANDCODE_GOAT_API_KEY
+        } elseif ([string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY)) {
+            Write-ErrorLine "###$($script:LauncherName): warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###"
         }
-        $env:COMMAND_CODE_API_KEY = $env:COMMANDCODE_GOAT_API_KEY
-    } elseif ([string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY)) {
-        Write-ErrorLine "###$($script:LauncherName): warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###"
+    } else {
+        $keyVariable = [string]$script:AgentConfig.providers.$effectiveProvider.env_key
+        if (-not [string]::IsNullOrWhiteSpace($keyVariable) -and
+            [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($keyVariable))) {
+            Write-ErrorLine "###$($script:LauncherName): warning: $keyVariable 未设置；请先 source ~/env-key.sh，否则 $effectiveProvider 请求会 401###"
+        }
     }
 
     Set-CommandCodeStatusline
+    Set-CommandCodeProviders
     $prompt = Build-Prompt
     if ($null -eq $prompt) { return $script:FailureCode }
     $agentConfig = $script:AgentConfig.agents.commandcode
@@ -2594,7 +2748,11 @@ function Run-CommandCode {
 
     Write-Host '============================================================'
     Write-Host "  Command Code: $($script:ModelName) | effort=$($script:Reasoning) | permission=$permissionMode"
-    Write-Host "  provider: $effectiveProvider | context=1000000"
+    if ($effectiveProvider -eq 'commandcode-goat') {
+        Write-Host "  provider: $effectiveProvider | context=1000000"
+    } else {
+        Write-Host "  provider: $effectiveProvider (BYOK) | context=per-model"
+    }
     Write-Host "  run: $($script:RunId)"
     Write-Host "  log: $($script:LogFile)"
     Write-Host "  state: $($script:ManifestFile)"
@@ -3333,8 +3491,9 @@ function Parse-Arguments {
         Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|gt 或 agent-custom.json agents.$agentKey.provider）###"
         return $false
     }
-    if ($script:Agent -eq 'commandcode' -and $providerForModel -ne 'commandcode-goat') {
-        Fail-Parse "###$($script:LauncherName): ERROR: cm 仅支持途径 commandcode-goat（快捷词 gt），当前为 '$providerForModel'###"
+    if ($script:Agent -eq 'commandcode' -and
+        $providerForModel -notin @('commandcode-goat', 'deepseek-pay', 'opencode-go')) {
+        Fail-Parse "###$($script:LauncherName): ERROR: cm 仅支持途径 commandcode-goat（gt）/ deepseek-pay（pay）/ opencode-go（go），当前为 '$providerForModel'###"
         return $false
     }
     if ($script:Agent -eq 'claude') {
@@ -3452,6 +3611,13 @@ function Parse-Arguments {
         return $false
     }
     $script:Model = [string]$selection.Model
+    if ($script:Agent -eq 'commandcode' -and $providerForModel -ne 'commandcode-goat') {
+        $script:Model = $script:Model -replace '\[[^\]]+\]$', ''
+        $modelPrefix = if ($script:Model.Contains('/')) { $script:Model.Split('/')[0] } else { '' }
+        if ($modelPrefix -ne $providerForModel) {
+            $script:Model = "$providerForModel/$($script:Model)"
+        }
+    }
     $script:ModelName = "$($script:Model)$modelLabel"
     if ([string]$selection.ModelMatch -eq 'fuzzy') {
         $script:ModelName += '（模型匹配）'

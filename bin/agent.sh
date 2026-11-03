@@ -5,6 +5,8 @@
 #   op  → OpenCode（默认 build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
 #   cm  → Command Code（TUI；驱动：--print NDJSON → --session 续链）
+#         途径 gt=commandcode-goat（原生 Provider API）；pay/go 走 BYOK：
+#         自动合并 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传给 --model
 #   cms → Command Code HPC/secure 入口（agents.commandcode.secure_binary）
 #   ops → OpenCode HPC/secure 入口（agents.opencode.secure_binary 部署路径，缺失时自动完整复制）
 #   cos → Codex HPC/secure 入口（agents.codex.secure_binary 部署路径，缺失时自动完整复制）
@@ -877,6 +879,172 @@ finally:
 PY
 }
 
+# Command Code BYOK providers：把 agent-config.json 中标记 commandcode.byok 的途径
+# 合并进 ~/.commandcode/providers.json（保留用户其他条目）。模型元数据优先取本地
+# 模型目录缓存补齐 contextWindow/reasoningEfforts，缓存缺失时用静态配置。
+_commandcode_apply_providers() {
+    local _target="${HOME:?HOME is required}/.commandcode/providers.json"
+    local _cache_dir="${AGENT_DATA_ROOT:-${TMPDIR:-/tmp}}/cache/provider-models"
+    "${_AGENT_PYTHON:-python3}" - \
+        "$_AGENT_CONFIG_FILE" "$_AGENT_CUSTOM_CONFIG_FILE" "$_target" "$_cache_dir" <<'PY'
+import json
+import os
+import re
+import shutil
+import sys
+import tempfile
+import time
+
+base_path, custom_path, target_path, cache_dir = sys.argv[1:5]
+ALLOWED_EFFORTS = ["low", "medium", "high", "xhigh", "max"]
+
+
+def merge(base, override):
+    if isinstance(base, dict) and isinstance(override, dict):
+        result = dict(base)
+        for key, value in override.items():
+            result[key] = merge(result.get(key), value)
+        return result
+    return override
+
+
+def positive_int(value):
+    try:
+        number = int(value)
+    except (TypeError, ValueError):
+        return 0
+    return number if number > 0 else 0
+
+
+def normalize_efforts(values):
+    result = []
+    for value in values if isinstance(values, list) else []:
+        level = str(value).strip().lower()
+        if level in ALLOWED_EFFORTS and level not in result:
+            result.append(level)
+    return result
+
+
+def cache_models(provider_name):
+    safe = re.sub(r"[^A-Za-z0-9._-]", "-", provider_name) or "provider"
+    path = os.path.join(cache_dir, safe + ".json")
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+    except Exception:
+        return {}
+    models = data.get("models") if isinstance(data, dict) else None
+    return models if isinstance(models, dict) else {}
+
+
+with open(base_path, encoding="utf-8") as handle:
+    base_config = json.load(handle)
+with open(custom_path, encoding="utf-8") as handle:
+    custom_config = json.load(handle)
+config = merge(base_config, custom_config)
+providers = config.get("providers") if isinstance(config.get("providers"), dict) else {}
+wanted = {}
+for provider_name, provider in providers.items():
+    if not isinstance(provider, dict):
+        continue
+    byok = provider.get("commandcode")
+    if not isinstance(byok, dict) or not byok.get("byok"):
+        continue
+    base_url = str(provider.get("base_url") or "").strip().rstrip("/")
+    env_key = str(provider.get("env_key") or "").strip()
+    models = provider.get("models")
+    if not base_url or not env_key or not isinstance(models, dict):
+        continue
+    cached = cache_models(provider_name)
+    entry = {
+        "name": str(provider.get("label") or provider_name),
+        "baseURL": base_url,
+        "apiKey": "$" + env_key,
+        "models": {},
+    }
+    for model_id, metadata in models.items():
+        metadata = metadata if isinstance(metadata, dict) else {}
+        cached_model = cached.get(model_id) if isinstance(cached.get(model_id), dict) else {}
+        model = {}
+        endpoint = str(metadata.get("endpoint") or "").strip().lower()
+        if endpoint == "messages":
+            model["api"] = "anthropic-messages"
+            anthropic_url = str(provider.get("anthropic_base_url") or "").strip().rstrip("/")
+            if anthropic_url:
+                model["baseURL"] = anthropic_url
+        elif endpoint == "responses":
+            model["api"] = "openai-responses"
+        context_window = positive_int(
+            metadata.get("context_window")
+            or cached_model.get("context_window")
+            or (cached_model.get("limit") or {}).get("context")
+        )
+        if context_window:
+            model["contextWindow"] = context_window
+        max_output = positive_int(
+            metadata.get("max_output")
+            or (cached_model.get("limit") or {}).get("output")
+        )
+        if max_output:
+            model["maxOutput"] = max_output
+        efforts = normalize_efforts(
+            metadata.get("supported_strengths")
+            or cached_model.get("supported_strengths")
+            or provider.get("supported_strengths")
+        )
+        if efforts:
+            model["reasoningEfforts"] = efforts
+        display_name = str(metadata.get("name") or cached_model.get("name") or "").strip()
+        if display_name:
+            model["name"] = display_name
+        entry["models"][model_id] = model
+    if entry["models"]:
+        wanted[provider_name] = entry
+
+if not wanted:
+    raise SystemExit(0)
+
+try:
+    with open(target_path, encoding="utf-8") as handle:
+        target = json.load(handle)
+    if not isinstance(target, dict):
+        raise ValueError("root is not an object")
+except FileNotFoundError:
+    target = {}
+except Exception as error:
+    print(f"###{os.environ.get('_NAME', 'cm')}: warning: 无法更新 Command Code providers.json: {target_path}: {error}###", file=sys.stderr)
+    raise SystemExit(1)
+
+existing = target.get("provider")
+if not isinstance(existing, dict):
+    existing = {}
+changed = False
+for provider_name, entry in wanted.items():
+    if existing.get(provider_name) != entry:
+        existing[provider_name] = entry
+        changed = True
+if not changed:
+    raise SystemExit(0)
+
+target["provider"] = existing
+parent = os.path.dirname(target_path)
+os.makedirs(parent, mode=0o700, exist_ok=True)
+if os.path.exists(target_path):
+    backup = f"{target_path}.bak.{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
+    shutil.copy2(target_path, backup)
+fd, tmp_path = tempfile.mkstemp(prefix=".providers.", dir=parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(target, handle, ensure_ascii=False, sort_keys=True, indent=2)
+        handle.write("\n")
+    os.chmod(tmp_path, 0o600)
+    os.replace(tmp_path, target_path)
+finally:
+    if os.path.exists(tmp_path):
+        os.unlink(tmp_path)
+PY
+}
+
 _commandcode_extract_session_id() {
     local _log="$1"
     [[ -r "$_log" ]] || return 1
@@ -959,10 +1127,8 @@ run_commandcode() {
 
     while (( $# )); do
         case "$1" in
-            gt|commandcode-goat) PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
-            pay|go|deepseek-pay|opencode-go)
-                echo "###${_NAME}: ERROR: cm 只使用 Command Code 自有 provider；请使用 gt（commandcode-goat）或不指定途径###" >&2
-                exit 64;;
+            gt|commandcode-goat|pay|go|deepseek-pay|opencode-go)
+                PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
@@ -982,10 +1148,11 @@ run_commandcode() {
             --accept-edits) PERMISSION_MODE=accept-edits; shift;;
             --yolo) PERMISSION_MODE=yolo; shift;;
             --help)
-                echo "用法: ${_NAME} [gt] [MODEL] [STRENGTH] [--model MODEL] [--effort LEVEL] [-file PATH] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--effort LEVEL] [-file PATH] [-time DUR]"
                 echo "默认: gt=commandcode-goat，模型=DeepSeek V4.1 Flash，强度=max，上下文=1M，权限=yolo。"
+                echo "BYOK: pay=deepseek-pay / go=opencode-go，自动合并进 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入。"
                 echo "Goal: ${_NAME} --goal <objective> 或 ${_NAME} goal <objective|status|clear>（预算由 --max-turns 控制）。"
-                echo "认证: 先 source ~/env-key.sh；COMMANDCODE_GOAT_API_KEY 会映射为 COMMAND_CODE_API_KEY。"
+                echo "认证: 先 source ~/env-key.sh；gt 使用 COMMANDCODE_GOAT_API_KEY（映射为 COMMAND_CODE_API_KEY），pay/go 分别使用 DEEPSEEK_PAY_API_KEY/OPENCODE_GO_API_KEY。"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]。"
                 echo "权限: [--permission-mode default|plan|accept-edits|yolo|dont-ask] [--plan] [--accept-edits] [--yolo]。"
                 echo "不给驱动选项时进入 Command Code TUI；给出 -file/-time/--once 时进入驱动模式。"
@@ -1030,10 +1197,12 @@ run_commandcode() {
     if ! MAX_RUNTIME_RAW="$(_parse_runtime_limit "$MAX_RUNTIME_RAW")"; then echo "###${_NAME}: ERROR: --max-runtime 格式无效###" >&2; exit 64; fi
 
     local _cc_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_COMMANDCODE_PROVIDER:-commandcode-goat}}")"
-    if [[ "${_cc_provider}" != "commandcode-goat" ]]; then
-        echo "###${_NAME}: ERROR: cm 仅支持途径 commandcode-goat（快捷词 gt），当前为 '${_cc_provider}'###" >&2
-        exit 64
-    fi
+    case "${_cc_provider}" in
+        commandcode-goat|deepseek-pay|opencode-go) ;;
+        *)
+            echo "###${_NAME}: ERROR: cm 仅支持途径 commandcode-goat（gt）/ deepseek-pay（pay）/ opencode-go（go），当前为 '${_cc_provider}'###" >&2
+            exit 64;;
+    esac
     local PROVIDER_EXPLICIT=0
     [[ -n "${PROVIDER_OVERRIDE}" ]] && PROVIDER_EXPLICIT=1
     local _cc_agent_model="${_CFG_AGENTS_COMMANDCODE_MODEL:-}"
@@ -1057,6 +1226,13 @@ run_commandcode() {
     local _cc_model_rc=$?
     if (( _cc_model_rc != 0 )); then exit "${_cc_model_rc}"; fi
     MODEL_ID="${AGENT_MODEL_RESOLVED_MODEL}"; EFFORT="${AGENT_MODEL_RESOLVED_STRENGTH}"
+    if [[ "${_cc_provider}" != "commandcode-goat" ]]; then
+        [[ "${MODEL_ID}" =~ ^(.*)\[[^]]+\]$ ]] && MODEL_ID="${BASH_REMATCH[1]}"
+        case "${MODEL_ID}" in
+            "${_cc_provider}"/*) ;;
+            *) MODEL_ID="${_cc_provider}/${MODEL_ID}" ;;
+        esac
+    fi
     MODEL_NAME="${MODEL_ID}${_cc_model_label}"
     [[ "${AGENT_MODEL_RESOLVED_MATCH}" == "fuzzy" ]] && MODEL_NAME+="（模型匹配）"
     case "${PERMISSION_MODE}" in default|plan|accept-edits|yolo|dont-ask|standard|auto-accept|bypass) ;; *) echo "###${_NAME}: ERROR: 非法权限模式 '${PERMISSION_MODE}'###" >&2; exit 64;; esac
@@ -1087,15 +1263,29 @@ run_commandcode() {
     unset _git_root _workspace_root
     _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "$EFFORT" ""
 
-    if [[ -n "${COMMANDCODE_GOAT_API_KEY:-}" ]]; then
-        if [[ -n "${COMMAND_CODE_API_KEY:-}" && "${COMMAND_CODE_API_KEY}" != "${COMMANDCODE_GOAT_API_KEY}" ]]; then
-            echo "###${_NAME}: warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###" >&2
+    if [[ "${_cc_provider}" == "commandcode-goat" ]]; then
+        if [[ -n "${COMMANDCODE_GOAT_API_KEY:-}" ]]; then
+            if [[ -n "${COMMAND_CODE_API_KEY:-}" && "${COMMAND_CODE_API_KEY}" != "${COMMANDCODE_GOAT_API_KEY}" ]]; then
+                echo "###${_NAME}: warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###" >&2
+            fi
+            export COMMAND_CODE_API_KEY="${COMMANDCODE_GOAT_API_KEY}"
+        elif [[ -z "${COMMAND_CODE_API_KEY:-}" ]]; then
+            echo "###${_NAME}: warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###" >&2
         fi
-        export COMMAND_CODE_API_KEY="${COMMANDCODE_GOAT_API_KEY}"
-    elif [[ -z "${COMMAND_CODE_API_KEY:-}" ]]; then
-        echo "###${_NAME}: warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###" >&2
+    else
+        local _cc_env_var _cc_env_name=""
+        _cc_env_var="_CFG_PROVIDERS_$(_cfg_provider_key "${_cc_provider}")_ENV_KEY"
+        _cc_env_name="${!_cc_env_var:-}"
+        if [[ -n "${_cc_env_name}" ]]; then
+            if [[ -n "${!_cc_env_name:-}" ]]; then
+                export "${_cc_env_name}"
+            else
+                echo "###${_NAME}: warning: ${_cc_env_name} 未设置；请先 source ~/env-key.sh，否则 ${_cc_provider} 请求会 401###" >&2
+            fi
+        fi
     fi
     _commandcode_apply_statusline || echo "###${_NAME}: warning: statusline 配置未更新，继续使用现有 Command Code 配置###" >&2
+    _commandcode_apply_providers || echo "###${_NAME}: warning: providers.json 未更新，继续使用现有 Command Code provider 配置###" >&2
 
     local _cc_trust="${_CFG_AGENTS_COMMANDCODE_TRUST:-true}" _cc_skip_onboarding="${_CFG_AGENTS_COMMANDCODE_SKIP_ONBOARDING:-true}"
     local -a _CC_PERMISSION_ARGS _CC_BASE_ARGS _CC_SKILL_ARGS _CC_ADD_DIR_ARGS=()
@@ -1117,7 +1307,11 @@ run_commandcode() {
 
     echo "============================================================"
     echo "  Command Code: ${MODEL_NAME} | effort=${EFFORT} | permission=${PERMISSION_MODE}"
-    echo "  provider: ${_cc_provider} | context=1000000"
+    if [[ "${_cc_provider}" == "commandcode-goat" ]]; then
+        echo "  provider: ${_cc_provider} | context=1000000"
+    else
+        echo "  provider: ${_cc_provider} (BYOK) | context=per-model"
+    fi
     echo "  run: ${AGENT_RUN_ID}"
     echo "  log: ${LOG_FILE}"
     echo "  state: ${AGENT_MANIFEST_FILE}"

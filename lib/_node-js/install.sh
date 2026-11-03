@@ -33,7 +33,7 @@ usage() {
   NODE_VERSION   默认目标版本（默认: 22）
   NVM_DIR        nvm 安装目录（默认: \$HOME/.nvm；设置 XDG_CONFIG_HOME 时为 \$XDG_CONFIG_HOME/nvm）
   PROFILE        写入 nvm 加载语句的 shell 配置；/dev/null 表示不修改
-  METHOD         nvm 安装方式: git（默认，需 git）或 script（需 curl/wget）
+  METHOD         nvm 安装方式: git（需 git）或 script（需 curl/wget）；未设置时自动选择
 
 要求:
   Bash 3.2+；安装时需要 git 或 curl/wget，以及访问 nodejs.org 与 GitHub 的网络。

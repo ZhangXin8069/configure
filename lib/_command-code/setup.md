@@ -30,8 +30,9 @@ lib\_node-js\install.bat --check
 lib\_node-js\install.bat
 ```
 
-`_node-js/setup.md` 包含 HPC 无 root、module/conda、官方二进制、nvm、npm 全局前缀和排障说明。
-Command Code 安装器在 Node.js 缺失或过旧时会退出并提示上述入口，不会自动修改 Node.js 环境。
+[`../_node-js/setup.md`](../_node-js/setup.md) 包含 HPC 无 root、module/conda、官方二进制、nvm、
+npm 全局前缀和排障说明。Command Code 安装器在 Node.js 缺失或过旧时会退出并提示上述入口，不会
+自动修改 Node.js 环境。
 
 ## 安装
 
@@ -104,7 +105,7 @@ command-code -p "explain this repository"
 
 | 项 | 值 |
 |---|---|
-| 供应商快捷词 | `gt` |
+| 供应商快捷词 | `gt`（默认）；`go`/`pay` 走 BYOK |
 | 供应商 | `commandcode-goat` |
 | Provider API | `https://api.commandcode.ai/provider/v1` |
 | 默认模型 | `deepseek/deepseek-v4.1-flash` |
@@ -129,6 +130,13 @@ cm goal status
 的原生 statusline 由 `bin/agent-config.json` 的 `agents.commandcode.statusline` 幂等合并到
 `~/.commandcode/config.json`。`cm` 默认 `yolo`，headless 同时显式传 `--yolo`；原生 goal
 恢复后默认是 idle，`cm --resume RUN_ID --goal <objective> --once` 会重新启动目标。
+
+`cm go` / `cm pay` 走 Command Code BYOK：启动器把 `agent-config.json` 中
+`commandcode.byok=true` 的途径（`opencode-go`、`deepseek-pay`）幂等合并进
+`~/.commandcode/providers.json`，模型以 `opencode-go/<model>`、`deepseek-pay/<model>`
+传给 `--model`。`go` 的 Anthropic-wire 模型（minimax/qwen 等）按模型写入
+`api: anthropic-messages` 与对应 `baseURL`；密钥只保留环境变量引用
+（`$OPENCODE_GO_API_KEY` / `$DEEPSEEK_PAY_API_KEY`），不落盘、不打印。
 
 ## 快速开始
 
@@ -245,6 +253,11 @@ bash lib/_command-code/config.sh \
 
 可接受的引用形式是 `$ENV_VAR`、`{env:VAR}`、`!command`；无认证本地端点使用
 `"apiKey": false`。Command Code 会拒绝 `providers.json` 中的原始 secret。
+
+`bin/cm` 启动时会把 `providers.<途径>.commandcode.byok=true` 的条目按上述 schema
+合并进 `~/.commandcode/providers.json`（保留其他条目），并从
+`data/cache/provider-models` 补齐 `contextWindow`/`reasoningEfforts`；因此
+`cm go` / `cm pay` 不需要手工复制 key 或模型表。
 
 ## 项目级配置
 
