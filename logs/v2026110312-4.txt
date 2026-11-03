@@ -1,0 +1,67 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 12:30:29 +0800
+批次: gpush-lfs-fail-fast
+主任务: 修复 gpush 分支失败后仍推送标签，并诊断 qcu 的 Git LFS 阻塞
+触发原因: 任务完成
+摘要: 分支 push 失败立即停止；qcu 缺少远端亦不存在的 LFS 对象，推送标记 blocked
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 原始失败与影响
+- 目标: 处理 `/root/qcu` 分支 `v20241023` 上 `gpush.sh` 被 GitLab 拒绝的问题。
+- 命令/操作: 分析用户提供的完整输出并检查 `/root/qcu` 分支、远端、LFS 指针与本地 hook。
+- 关键输出: 分支 push 因 `GitLab: LFS objects are missing` 被 pre-receive hook 拒绝；随后工具仍执行 `push --tags`，重复传输约 121.69 MiB，并按标签逐项拒绝。
+- 退出码: gpush 返回失败状态。
+- 证据与判断: 分支与标签 push 存在严格依赖，分支失败后标签推送没有意义且会造成额外网络与远端负载。
+
+### S2 — gpush 根因与修复
+- 命令/操作: 检查 `bin/gpush.sh` 与 `bin/gpush.test.sh`；新增分支 push 失败用例；修改分支失败控制流。
+- 关键输出: `gpush.sh` 原先累计 `PUSH_FAILED` 后无条件继续标签 push；修复后分支 push 失败立即输出 `tag push skipped` 并退出，不再调用 tags push。
+- 退出码: 0。
+- 证据与判断: 新测试验证分支失败时不存在 `push --recurse-submodules=no origin --tags` 调用，原标签 push 失败传播测试仍通过。
+
+### S3 — qcu LFS 诊断
+- 命令/操作: 检查 Git LFS 版本、pre-push hook、LFS 指针、缓存与远端对象；执行只读 `git lfs fetch --all origin`。
+- 关键输出: 唯一 LFS 指针为 `python/PyQuda-v2024/tests/bin/chroma`，OID `8595c485b9c110422125d7b25744f023fbc4ed37522ece7016eb34fee7ad8871`，大小 8,568,512 bytes；本地缓存不存在；远端 LFS 返回 404 `Object does not exist on the server or you don't have access`。
+- 退出码: `git lfs fetch --all origin` 返回 2。
+- 证据与判断: 阻塞不是 hook 未安装或 locale 问题；LFS 服务端与本地都没有所需对象，必须从其他克隆/备份恢复真实文件或获得显式授权后处理历史。
+
+## 验证与证据
+- `bash -n bin/gpush.sh bin/gpush.test.sh`：通过。
+- `bash bin/gpush.test.sh`：通过，覆盖分支失败跳过标签、标签失败传播、commit 失败、detached HEAD、子模块边界。
+- `form-audit --strict --quiet`：通过。
+- `configure-check.sh`：通过，仅有既有插件 manifest 警告。
+- `git diff --check`：通过。
+- `/root/qcu` 工作树保持 clean，仅分支 ahead 1；未通过 `--no-verify`、历史改写或伪造 LFS 对象绕过远端限制。
+
+## 变更与产物
+- 文件: `bin/gpush.sh`、`bin/gpush.test.sh`、`bin/AGENTS.md`。
+- 产物: 分支 push 失败后的 fail-fast 交付语义。
+- 未改动范围: 未修改 `/root/qcu` 历史、LFS 配置、hook 或工作树；未推送 qcu。
+
+## 风险、限制与下一步
+- 风险: 若真实 LFS 对象无法恢复，当前 `v20241023` 及其历史无法通过远端 LFS 门禁。
+- 阻塞: `chroma` 的 LFS 对象在远端返回 404，无法通过 fetch 恢复。
+- 下一步: 从其他含该对象的克隆/备份恢复后执行 `git lfs push --all origin`；若对象已永久丢失，则需用户明确授权后评估移除该历史对象的破坏性方案。
+
+## 用户输入指令
+➜ /root/qcu git:(v20241023) gpush.sh
+Repo:    /root/qcu
+Branch:  v20241023
+Nothing to commit.
+remote: GitLab: LFS objects are missing. Ensure LFS is properly set up or try a manual "git lfs push --all".
+ ! [remote rejected] v20241023 -> v20241023 (pre-receive hook declined)
+ERROR: branch push failed: v20241023
+随后 gpush 仍执行 tag push，传输约 121.69 MiB，全部 bug/dev/stab/test 等标签均因同一 LFS 缺失被拒绝，最后输出 `ERROR: tag push failed`。
+
+## Agent 全文报告
+--- report begin ---
+✓ 修复完成（工具侧），仓库交付 blocked
+根因: `gpush.sh` 在分支 push 失败后仍无条件推送全部标签，导致重复大流量失败；`/root/qcu` 另有远端与本地均缺失的 Git LFS 对象。
+改动: 分支 push 失败现在立即退出并跳过标签；新增回归用例；同步 `bin/AGENTS.md`。
+验证: `bash -n`、gpush 全量测试、form audit、configure-check、diff check 均通过。
+阻塞: `python/PyQuda-v2024/tests/bin/chroma` 对应 LFS OID `8595c485b9c110422125d7b25744f023fbc4ed37522ece7016eb34fee7ad8871`，远端返回 404，无法 fetch；未绕过 hook，也未改写 qcu 历史。
+下一步: 从其他克隆或备份恢复该 8,568,512 byte 对象后执行 `git lfs push --all origin`，再重跑修复后的 `gpush.sh`。
+状态: blocked
+--- report end ---

@@ -69,6 +69,54 @@ grep -Fqx 'push-locale=C/C' "${TEST_DIR}/git.log" || {
     _fail "git push 未同时使用 POSIX LANG/LC_ALL"
 }
 
+_test_branch_push_failure_skips_tags() {
+    local root="${TEST_DIR}/branch-push-failure"
+    local fake_bin="${root}/bin"
+    local output="${root}/output.log"
+    local log="${root}/git.log"
+    local status
+
+    mkdir -p "${fake_bin}" "${root}/repo"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'printf "%s\n" "$*" >> "${FAKE_GIT_LOG:?}"' \
+        'case "$*" in' \
+        '    "rev-parse --show-toplevel") printf "%s\n" "${FAKE_REPO_ROOT:?}" ;;' \
+        '    "ls-files --stage -z") ;;' \
+        '    "add -A -- ."|"diff --cached --quiet --ignore-submodules=all") ;;' \
+        '    "symbolic-ref --quiet --short HEAD") printf "main\n" ;;' \
+        '    "push --recurse-submodules=no origin main") exit 1 ;;' \
+        '    "push --recurse-submodules=no origin --tags") ;;' \
+        '    *) exit 1 ;;' \
+        'esac' >"${fake_bin}/git"
+    chmod +x "${fake_bin}/git"
+
+    set +e
+    PATH="${fake_bin}:${PATH}" \
+    FAKE_GIT_LOG="${log}" \
+    FAKE_REPO_ROOT="${root}/repo" \
+        bash "${_PATH}/gpush.sh" >"${output}" 2>&1
+    status=$?
+    set -e
+
+    ((status != 0)) || {
+        cat "${output}" >&2
+        _fail "分支 push 失败后 gpush 仍返回 0"
+    }
+    grep -Fq 'ERROR: branch push failed: main; tag push skipped.' "${output}" || {
+        cat "${output}" >&2
+        _fail "分支 push 失败后缺少跳过标签推送的明确提示"
+    }
+    ! grep -Fq 'push --recurse-submodules=no origin --tags' "${log}" || {
+        cat "${log}" >&2
+        _fail "分支 push 失败后仍尝试推送标签"
+    }
+    ! grep -Fq 'ERROR: tag push failed' "${output}" || {
+        cat "${output}" >&2
+        _fail "分支 push 失败后仍报告标签推送失败"
+    }
+}
+
 _test_does_not_recurse_into_submodules() {
     local root="${TEST_DIR}/no-submodule-push"
     local sub_remote="${root}/sub-remote.git"
@@ -250,5 +298,6 @@ _test_detached_head_is_rejected() {
 _test_does_not_recurse_into_submodules
 _test_commit_failure_aborts_before_push
 _test_detached_head_is_rejected
+_test_branch_push_failure_skips_tags
 
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

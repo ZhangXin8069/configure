@@ -1123,3 +1123,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## gpush-lfs-fail-fast - final - 2026-11-03 12:30:29 +0800
+- 主任务: 修复 gpush 分支失败后仍推送标签，并诊断 qcu 的 Git LFS 阻塞
+- 日志文件: logs/v2026110312-4.txt
+- 文件大小: 4768 bytes
+- 触发原因: 任务完成
+- 关键内容: 分支 push 失败立即停止；qcu 缺少远端亦不存在的 LFS 对象，推送标记 blocked
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

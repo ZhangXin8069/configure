@@ -120,20 +120,16 @@ else
     exit 1
 fi
 
-# Push current branch to its upstream (or origin)
-PUSH_FAILED=0
+# Push current branch to its upstream (or origin). Tags depend on the branch
+# reaching the remote, so a failed branch push must stop the delivery attempt.
 if ! _git_remote push --recurse-submodules=no origin "$BRANCH"; then
-    echo "ERROR: branch push failed: $BRANCH" >&2
-    PUSH_FAILED=1
+    echo "ERROR: branch push failed: $BRANCH; tag push skipped." >&2
+    exit 1
 fi
 
 # Push tags
 if ! _git_remote push --recurse-submodules=no origin --tags; then
     echo "ERROR: tag push failed" >&2
-    PUSH_FAILED=1
-fi
-
-if (( PUSH_FAILED != 0 )); then
     exit 1
 fi
 
