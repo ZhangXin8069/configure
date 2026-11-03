@@ -1,0 +1,69 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-03 23:43:51 +0800
+批次: S1-S6
+主任务: 测试子代理派发功能
+触发原因: 阶段成果
+摘要: 验证原生与 agent-dispatch.sh 两条派发通道，定位并修复 cm 分支 result 恒空缺陷
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 确认环境与两条派发通道
+- 目标: 测试子代理派发能力是否可用
+- 命令/操作: 读取 `/root/configure/skills/dispatch/SKILL.md`；确认 `bin/agent-dispatch.sh` 可执行；读取父级路由环境
+- 关键输出: AGENT_PARENT_AGENT=commandcode; AGENT_PARENT_PROVIDER=opencode-go; AGENT_PARENT_MODEL=opencode-go/deepseek-v4.1-flash; AGENT_PARENT_STRENGTH=max; AGENT_PARENT_CWD=/root
+- 退出码: 0
+- 证据与判断: 原生 agent 工具与 agent-dispatch.sh 两条通道均在位
+
+### S2 — 原生 agent 工具探针
+- 命令/操作: agent(general) 执行算术 + pwd/uname + 模型自报
+- 关键输出: CALC=391; CWD=/root; PLATFORM=Linux; MODEL=unknown; TOKEN=DISPATCH-OK-原生
+- 退出码: 0；duration_ms=7688
+- 证据与判断: 原生通道可正常派发并回收结构化结果
+
+### S3 — agent-dispatch.sh 继承派发（发现缺陷）
+- 命令/操作: `agent-dispatch.sh --timeout 5m --task ...`
+- 关键输出: ok=true, state=finished, exit_code=0, run_id=20261103T233437.xt5jjT，但 `result` 为空
+- 证据与判断: 子代理实际已执行（日志中 finalText=CALC=637...），仅结果回传缺失
+
+### S4 — 根因定位
+- 命令/操作: 核查 run 日志、`bin/agent.sh` 的 run_commandcode 分支与 dispatcher 结果解析
+- 关键输出: dispatcher 优先读 AGENT_DISPATCH_OUTPUT_FILE；为空时仅从 codex 风格 `agent_message` 事件回退；cm 分支把 `-p --output-format json` 全量追加进 LOG_FILE，从未写结果文件
+- 证据与判断: 根因在 run_commandcode 未回传 finalText，非并发或认证问题
+
+### S5 — 并行与隔离验证
+- 命令/操作: 两条 agent-dispatch.sh 同响应并行派发（PAR-A / PAR-B），另测 --cwd 覆盖、参数校验
+- 关键输出: 两个独立 run_id（...TioBgK / ...Bf0PUM），均 ok=true、state=finished；日志 finalText 分别为 PAR-A / PAR-B；参数缺失返回 exit 64 并给出明确错误
+- 证据与判断: 并发隔离与路由继承正常
+
+### S6 — 修复与复验
+- 命令/操作: 在 bin/agent.sh 新增 `_commandcode_capture_dispatch_result`，从 run_end.result.finalText / 顶层 finalText 取最后一条写入 AGENT_DISPATCH_OUTPUT_FILE；在 once 模式收尾调用
+- 关键输出: JSON 模式 result='FIXED-JSON'；--text 模式输出单行 FIXED-TEXT
+- 退出码: 0
+- 证据与判断: 缺陷修复，两种输出模式均恢复干净结果
+
+## 验证与证据
+- 测试/检查: `bash -n bin/agent.sh`；`bash agent-dispatch.test.sh`；`bash agent.test.sh`；`git diff --check`
+- 结果: 语法通过；dispatch 测试 PASS；agent 全量回归 EXIT=0 全部 PASS；diff 无空白错误
+- 未验证项: co/cl/op 三条通道未做真实派发复验（本次环境父路由为 cm，仅验证 cm 分支）；未提交 Git
+
+## 变更与产物
+- 文件: bin/agent.sh（+35 行，仅新增函数与一处调用）
+- 产物: 无新增文件；测试临时 run 目录位于 configure/data/runs/
+- 未改动范围: agent-dispatch.sh、skills、logs 中其他任务的未提交文件
+
+## 风险、限制与下一步
+- 风险: `_commandcode_capture_dispatch_result` 依赖 JSON 日志结构，若上游改字段名需同步调整
+- 阻塞: 无
+- 下一步: 如需全通道确认，可用 `--agent co/cl/op` 各跑一次最小探针
+
+## Agent 全文报告
+--- report begin ---
+派发能力已实测通过，并顺带修好一个真实缺陷。
+
+通道一（原生 agent 工具）：正常。子代理返回 CALC=391 / CWD=/root / PLATFORM=Linux。
+通道二（agent-dispatch.sh）：可正常派发、完整继承父路由（commandcode + opencode-go/deepseek-v4.1-flash + effort=max + cwd=/root），并发两路各自独立 run_id 且互不干扰，--cwd 覆盖与参数校验均正常。
+
+发现的缺陷：cm 子代理虽执行成功，但 dispatcher 返回的 result 恒为空。根因是 run_commandcode 把 `-p --output-format json` 的全部输出追加进日志，从未写入 AGENT_DISPATCH_OUTPUT_FILE，而 dispatcher 的回退解析只识别 codex 的 agent_message 事件。已新增 _commandcode_capture_dispatch_result，从 run_end.result.finalText 提取最后一条最终文本写回结果文件。复验：JSON 模式 result='FIXED-JSON'，--text 模式输出单行 FIXED-TEXT；agent-dispatch.test.sh 与 agent.test.sh 全部 PASS。
+--- report end ---

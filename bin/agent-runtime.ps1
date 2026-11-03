@@ -2674,6 +2674,22 @@ function Set-CommandCodeProviders {
     Write-Utf8Atomic $target (($root | ConvertTo-Json -Depth 40) + [Environment]::NewLine)
 }
 
+function Test-CommandCodeAccountKeyPresent {
+    if (-not [string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY)) { return $true }
+    $homeDir = $env:HOME
+    if ([string]::IsNullOrWhiteSpace($homeDir)) { $homeDir = $env:USERPROFILE }
+    if ([string]::IsNullOrWhiteSpace($homeDir)) { return $false }
+    $authPath = Join-Path (Join-Path $homeDir '.commandcode') 'auth.json'
+    if (-not (Test-Path -LiteralPath $authPath -PathType Leaf)) { return $false }
+    try {
+        $auth = Get-Content -LiteralPath $authPath -Raw -Encoding UTF8 | ConvertFrom-Json
+    } catch {
+        return $false
+    }
+    $key = [string]$auth.apiKey
+    return -not [string]::IsNullOrWhiteSpace($key)
+}
+
 function Get-CommandCodeSessionId {
     param([Parameter(Mandatory = $true)][string]$Path)
     if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
@@ -2713,14 +2729,23 @@ function Run-CommandCode {
                 Write-ErrorLine "###$($script:LauncherName): warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###"
             }
             $env:COMMAND_CODE_API_KEY = $env:COMMANDCODE_GOAT_API_KEY
-        } elseif ([string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY)) {
-            Write-ErrorLine "###$($script:LauncherName): warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###"
+        } elseif (-not (Test-CommandCodeAccountKeyPresent)) {
+            Write-ErrorLine "###$($script:LauncherName): warning: 未找到 Command Code 账号凭据；请先 source ~/env-key.sh（COMMANDCODE_GOAT_API_KEY）或运行一次 command-code login，否则 CLI 会停在登录门###"
         }
     } else {
         $keyVariable = [string]$script:AgentConfig.providers.$effectiveProvider.env_key
         if (-not [string]::IsNullOrWhiteSpace($keyVariable) -and
             [string]::IsNullOrWhiteSpace([Environment]::GetEnvironmentVariable($keyVariable))) {
             Write-ErrorLine "###$($script:LauncherName): warning: $keyVariable 未设置；请先 source ~/env-key.sh，否则 $effectiveProvider 请求会 401###"
+        }
+        # BYOK 只替换模型通路，CLI 仍需 Command Code 账号凭据才会越过登录门。
+        if (-not (Test-CommandCodeAccountKeyPresent)) {
+            if (-not [string]::IsNullOrWhiteSpace($env:COMMANDCODE_GOAT_API_KEY)) {
+                $env:COMMAND_CODE_API_KEY = $env:COMMANDCODE_GOAT_API_KEY
+                Write-ErrorLine "###$($script:LauncherName): note: 未找到 Command Code 账号凭据，已用 COMMANDCODE_GOAT_API_KEY 作为账号认证（BYOK 模型请求仍走 $effectiveProvider）###"
+            } else {
+                Write-ErrorLine "###$($script:LauncherName): warning: 途径 '$effectiveProvider' 使用 BYOK，但未找到 Command Code 账号凭据；CLI 会停在登录门。请运行一次 command-code login，或在 ~/env-key.sh 设置 COMMAND_CODE_API_KEY###"
+            }
         }
     }
 

@@ -1276,3 +1276,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## S1-S5 - final - 2026-11-03 23:40:30 +0800
+- 主任务: 诊断 cm go 落入 Command Code 登录门 + env-key.sh 禁止 Git 跟踪加固
+- 日志文件: logs/v2026-11-03-23.txt
+- 文件大小: 6105 bytes
+- 触发原因: 任务完成
+- 关键内容: 定位账号认证门根因并实测修复路径；补齐全局 ignore 与 pre-commit 双层密钥防护
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## S1-S6 - stage - 2026-11-03 23:43:51 +0800
+- 主任务: 测试子代理派发功能
+- 日志文件: logs/v202611032343.txt
+- 文件大小: 4637 bytes
+- 触发原因: 阶段成果
+- 关键内容: 验证原生与 agent-dispatch.sh 两条派发通道，定位并修复 cm 分支 result 恒空缺陷
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## S1-S5 - final - 2026-11-03 23:50:57 +0800
+- 主任务: 修复 cm go 在无 auth.json 机器上停在 Command Code 登录门
+- 日志文件: logs/v2026-11-03-23-2.txt
+- 文件大小: 5849 bytes
+- 触发原因: 任务完成
+- 关键内容: 定位账号认证门与模型通路解耦的根因；Linux/Windows 双端补齐账号凭据兜底与告警；88 项测试全绿
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

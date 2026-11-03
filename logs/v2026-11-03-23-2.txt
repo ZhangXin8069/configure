@@ -1,0 +1,74 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 23:50:57 +0800
+批次: S1-S5
+主任务: 修复 cm go 在无 auth.json 机器上停在 Command Code 登录门
+触发原因: 任务完成
+摘要: 定位账号认证门与模型通路解耦的根因；Linux/Windows 双端补齐账号凭据兜底与告警；88 项测试全绿
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 复现另一台机器的登录门现象
+- 目标: 让 `cm go` 在无 `~/.commandcode/auth.json` 的机器上不再停在 Command Code 登录页
+- 命令/操作: 隔离 HOME + `providers.json` 副本，`cm go` 与裸 `command-code` 双路径复现
+- 关键输出: `✔ Ready to log in` / `Sign in to Command Code` / `Paste a valid API key below`
+- 证据与判断: 与用户贴出的现象逐字一致，确认可稳定复现
+
+### S2 — 定位根因：账号认证门与模型通路解耦
+- 命令/操作: 读取 `command-code` v1.88.2 的 `cli.mjs` 启动链
+- 关键输出: 交互式启动 `await SJ()` → `requireAuth` → `ensureAuthenticated` → `ensureCommandAuthenticated`；`getCommandAuthKey` = `COMMAND_CODE_API_KEY` 环境变量 > `auth.json.apiKey`；`isLocalOnly()` 不参与该门
+- 证据与判断: BYOK 的 `providers.json` 只决定模型路由，不提供账号身份；启动器仅 `gt` 分支把 `COMMANDCODE_GOAT_API_KEY` 映射为 `COMMAND_CODE_API_KEY`，`go`/`pay` 分支缺该兜底 → 根因确定
+
+### S3 — 验证 goat key 可作为账号凭据
+- 命令/操作: 隔离 HOME、无 auth.json，仅设 `COMMAND_CODE_API_KEY=$COMMANDCODE_GOAT_API_KEY`
+- 关键输出: TUI 直接进入 `⌘ CMD` 主界面，不再出现登录门
+- 证据与判断: 该 key 为 `user_` 前缀账号级凭据，与 `gt` 现有用法一致，可安全复用
+
+### S4 — 实现：脚本与 PowerShell 双端补齐
+- 文件: bin/agent.sh:1113-1131（新增 `_commandcode_account_key_present`）、bin/agent.sh:1320-1350（认证注入分支）、bin/agent-runtime.ps1:2677-2691（新增 `Test-CommandCodeAccountKeyPresent`）、bin/agent-runtime.ps1:2709-2734（认证注入分支）
+- 行为: gt 与 BYOK 统一先判账号凭据（环境变量 > auth.json）；BYOK 缺凭据且有 goat key 时自动兜底并打印 note；完全无凭据时提前告警，不再静默卡登录门
+- 证据与判断: 同一语义两端一次实现，避免 Windows/Linux 行为漂移
+
+### S5 — 回归与端到端验证
+- 命令/操作: `bash bin/agent.test.sh`；`bash bin/agent-windows.test.sh`；隔离 HOME 端到端 `cm go`
+- 关键输出: agent.test.sh exit=0，88 项 PASS，0 FAIL；Windows 静态契约 PASS（无 PowerShell，Parser 跳过）
+- 端到端: 有 goat key → `note: ...已用 COMMANDCODE_GOAT_API_KEY 作为账号认证` 且直接进入 TUI；无凭据 → `warning: ...CLI 会停在登录门`
+- 证据与判断: 修复生效且无回归
+
+## 验证与证据
+- 测试/检查: `bash -n` 语法；agent.test.sh 全量 88 项；agent-windows.test.sh 静态契约；PowerShell 函数括号配平静态校验；`git diff --check`
+- 结果: 全部通过；新增 3 个用例（兜底注入 / 无凭据告警 / auth.json 已存在不注入）均 PASS
+- 未验证项: PowerShell 实际执行（当前环境无 pwsh/powershell）；另一台机器真实修复后结果
+
+## 变更与产物
+- 文件: bin/agent.sh、bin/agent-runtime.ps1、bin/agent.test.sh
+- 产物: 增量 135 insertions / 4 deletions
+- 未改动范围: 上一轮已加的 `/root/.config/git/ignore` 与 `.git/hooks/pre-commit` 未变；未暂存、未提交、未推送
+
+## 风险、限制与下一步
+- 风险: goat key 兜底仅解决登录门，Command Code 账号配额/订阅仍按该 key 计；PowerShell 侧未实机执行
+- 阻塞: 无
+- 下一步: 在另一台机器 `git pull` 后 source `~/env-key.sh` 再 `cm go`；或直接跑一次 `command-code login` 落盘 auth.json
+
+## 用户输入指令
+- 再次贴出另一台机器 `cm go` 停在 Command Code 登录（粘贴 API key）的完整终端输出，要求解决
+- 前序硬性约束：「env-key.sh 绝不能被 Git 跟踪」（本轮未触碰该文件）
+
+## Agent 全文报告
+--- report begin ---
+问题不是 BYOK 配置不对，而是 Command Code 的账号认证门与模型通路是解耦的两件事：`cm go` 只把 `opencode-go` 写进 `providers.json` 并加 `--skip-onboarding`，但 CLI 交互式启动会无条件执行 `requireAuth → ensureAuthenticated`，只认 `COMMAND_CODE_API_KEY` 环境变量或 `~/.commandcode/auth.json` 的 `apiKey`。`--local-only` 不豁免这道门（已实测：无 key 报 Not authenticated，假 key 报 Authentication failed）。
+
+根因在启动器的分支不对称：只有 `gt` 分支把 `COMMANDCODE_GOAT_API_KEY` 映射为 `COMMAND_CODE_API_KEY`，`go`/`pay` 分支只注入各自的 BYOK 推理密钥，账号凭据缺兜底，所以另一台机器在无 auth.json 时必停在登录页。
+
+已修复（Linux + Windows 两端同步）：
+- 新增账号凭据探测 `_commandcode_account_key_present` / `Test-CommandCodeAccountKeyPresent`，顺序与 CLI 一致：环境变量 > auth.json.apiKey；
+- BYOK 通路缺账号凭据时，若有 `COMMANDCODE_GOAT_API_KEY` 则自动作账号认证并打印 note（模型请求仍走 opencode-go）；
+- 完全无凭据时提前告警"CLI 会停在登录门"，不再静默卡住。
+
+验证：agent.test.sh 全量 88 项 PASS / 0 FAIL（含新增 3 个用例）；Windows 静态契约 PASS；隔离 HOME 端到端复现确认——有 goat key 直接进 TUI，无凭据给出明确告警。
+
+另一台机器只需 `git pull` 后 `source ~/env-key.sh`（其中已有 COMMANDCODE_GOAT_API_KEY）再 `cm go`，即可不再弹登录页。若想用独立账号而非 goat key，跑一次 `command-code login` 落盘 auth.json 也可。
+
+`env-key.sh` 未被触碰，仍不在任何 Git 仓库内。
+--- report end ---

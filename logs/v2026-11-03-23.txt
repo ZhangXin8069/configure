@@ -1,0 +1,78 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 23:40:30 +0800
+批次: S1-S5
+主任务: 诊断 cm go 落入 Command Code 登录门 + env-key.sh 禁止 Git 跟踪加固
+触发原因: 任务完成
+摘要: 定位账号认证门根因并实测修复路径；补齐全局 ignore 与 pre-commit 双层密钥防护
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 复现：另一台机器 `cm go` 落到交互登录
+- 目标: 定位 `cm go` 为何未直接进 TUI 而是弹出 Command Code 登录/paste API key
+- 命令/操作: 定位 `cm -> /root/configure/bin/agent.sh`；核验 `~/.commandcode/{auth.json,providers.json,config.json}` 结构
+- 关键输出: auth.json 含 apiKey/userId/userName/keyName/authenticatedAt；providers.json 含 deepseek-pay 与 opencode-go
+- 证据与判断: 本机 `auth.json` 存在 → 登录门通过；另一台机器缺少账号凭据
+
+### S2 — 定位 Command Code 认证门实现
+- 命令/操作: 在 `/root/.local/lib/node_modules/command-code/dist/cli.mjs`（v1.88.2）定位登录门
+- 关键输出: 交互式启动路径 `await SJ()` → `requireAuth` → `ensureAuthenticated` → `ensureCommandAuthenticated`；`getCommandAuthKey` 先读 `COMMAND_CODE_API_KEY` 环境变量(uo)，再读 `auth.json` 的 apiKey；`checkExistingAuth` 判定 `Ready to log in`
+- 证据与判断: `isLocalOnly()` 未参与认证门判定；`--local-only` 不是免登录开关
+
+### S3 — 隔离 HOME 实机验证认证门
+- 命令/操作: 临时 HOME + `providers.json` 副本，分别测 TUI/print 两条路径
+- 关键输出: 无 auth.json 时 TUI 输出 `✔ Ready to log in`/`Sign in to Command Code`；`-p --local-only` 且无 key → `Not authenticated`；假 key → `Authentication failed`
+- 证据与判断: 账号认证不可被 BYOK/local-only 绕过，必须先通过 `cmd login` 或提供 `COMMAND_CODE_API_KEY`
+
+### S4 — 验证可行修复路径
+- 命令/操作: 隔离 HOME + 真实账号密钥 `COMMAND_CODE_API_KEY` + `OPENCODE_GO_API_KEY`
+- 关键输出: print 模式返回 `{"type":"result","subtype":"success",... "finalText":"ok"}`；TUI 直接进入 `Command Code v1.88.2 · opencode-go/deepseek-v4.1-flash`
+- 证据与判断: 两个入口均越过登录门；BYOK 请求正常路由
+
+### S5 — 密钥文件 Git 防跟踪加固
+- 命令/操作: 审计 `/root` 非 Git 仓库、`env-key.sh` 未被任何仓库跟踪；加固 `/root/.config/git/ignore`；新增 `/root/configure/.git/hooks/pre-commit`
+- 关键输出: 全局忽略前 `git add -A` 会捕获 `env-key.sh`；加固后 check-ignore 命中；负向验证：仓库内 `!env-key.sh` 否定规则与 `git add -f` 仍可绕过 → 由 pre-commit 兜底
+- 证据与判断: 三层防护闭环；实测含密钥提交 exit=1，正常提交 exit=0
+
+## 验证与证据
+- 测试/检查: 隔离 HOME 认证矩阵（TUI/print × 无key/假key/真key）；`bash -n` hook 语法；临时仓库 commit 拦截实测；已跟踪 2672 文件真实密钥值扫描
+- 结果: 认证根因确证；修复路径实测通过；防泄漏三层验证通过；已跟踪文件无密钥命中
+- 未验证项: 另一台机器实际执行修复后的端到端结果（需在其机器上执行）
+
+## 变更与产物
+- 文件: `/root/.config/git/ignore`（新增 env-key 系列全局忽略）；`/root/configure/.git/hooks/pre-commit`（新增密钥提交拦截）
+- 产物: 上述两个本地文件
+- 未改动范围: `/root/env-key.sh` 内容未读取未修改；`agent.sh` 未改动；无 Git 暂存/提交/推送
+
+## 风险、限制与下一步
+- 风险: `git add -f` 可绕过 ignore，需依赖 hook；hook 为仓库本地配置，不随仓库分发
+- 阻塞: 无
+- 下一步: 在另一台机器执行 `source ~/env-key.sh` 后补授权 key，或直接完成一次 `cmd login`
+
+## 用户输入指令
+- 汇报另一台机器 `cm go` 弹出 Command Code 登录（粘贴 API key）的现象，要求给出定位与处理
+- 补充硬性约束：「env-key.sh 绝不能被 Git 跟踪」
+
+## Agent 全文报告
+--- report begin ---
+结论：这不是 `cm` 启动器或 BYOK 配置的问题，而是 Command Code CLI 自身的账号认证门。`cm go` 只是把 `opencode-go` 合并进 `~/.commandcode/providers.json` 并以 `--skip-onboarding` 启动，它不提供 Command Code 账号凭据。
+
+已确认的机制（CLI v1.88.2）：交互式启动无条件执行 `requireAuth → ensureAuthenticated → ensureCommandAuthenticated`；密钥来源先取环境变量 `COMMAND_CODE_API_KEY`，再读 `~/.commandcode/auth.json` 的 `apiKey`。`isLocalOnly()` 不参与这道门，因此 `--local-only` 不能免登录。
+
+隔离 HOME 实测：无 `auth.json` 时 TUI 必然显示 `✔ Ready to log in / Sign in to Command Code`；`-p --local-only` 无 key 报 `Not authenticated`，假 key 报 `Authentication failed`；补上真实账号密钥后，print 与 TUI 两条路径都直接通过。
+
+另一台机器的处理（任选其一）：
+1) 正常登录一次：`command-code login`（或 `cmd login`），完成后 auth.json 落盘即永久生效；
+2) 或继续用环境变量：在 `~/env-key.sh` 增加 `export COMMAND_CODE_API_KEY='<账号 key>'` 后 `source ~/env-key.sh`。注意这必须是 Command Code 账号 key（`user_` 前缀），BYOK 的 `OPENCODE_GO_API_KEY` 不能替代。
+
+关于 env-key.sh 的硬性约束，当前状态是安全的：`/root` 不是 Git 仓库，`env-key.sh` 不在任何仓库内，也未被跟踪；已跟踪的 2672 个文件中未扫到任何真实密钥值。
+
+已补两道防线：
+- `/root/.config/git/ignore` 增加 `env-key.sh`、`env-key.*`、`.env-key`、`.env-key.*` 全局忽略；
+- `/root/configure/.git/hooks/pre-commit` 拦截任何含密钥文件名的提交，专门兜住 `git add -f` 与仓库内 `!` 否定规则这两条绕过路径。
+
+实测：加固前 `git add -A` 会捕获 `env-key.sh`；加固后 check-ignore 全部命中，`normal.sh` 不受影响；hook 对含密钥提交返回 exit=1，移除后正常提交 exit=0。
+
+未验证项：另一台机器执行修复后的端到端结果，需在其机器上确认。
+--- report end ---

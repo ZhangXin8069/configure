@@ -1260,6 +1260,47 @@ assert 'commandcode-goat' not in providers
 PY
 printf 'PASS: cm go 使用 BYOK providers.json 与 opencode-go/ 模型前缀\n'
 
+# BYOK 只替换模型通路，Command Code CLI 仍需账号凭据才会越过登录门。
+cm_acct_fallback_before=$(wc -l < "$call_log")
+set +e
+cm_acct_fallback_output=$(COMMANDCODE_GOAT_API_KEY=test-account-key OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cm "$fake_commandcode" go --once 2>&1)
+cm_acct_fallback_status=$?
+set -e
+(( cm_acct_fallback_status == 0 )) || fail "cm go 账号凭据兜底失败：$cm_acct_fallback_output"
+assert_contains "$cm_acct_fallback_output" '已用 COMMANDCODE_GOAT_API_KEY 作为账号认证'
+cm_acct_fallback_new=$(tail -n +$((cm_acct_fallback_before + 1)) "$call_log")
+assert_contains "$cm_acct_fallback_new" 'commandcode-env key=test-account-key'
+printf 'PASS: cm go 缺账号凭据时用 COMMANDCODE_GOAT_API_KEY 兜底\n'
+
+cm_acct_missing_before=$(wc -l < "$call_log")
+set +e
+cm_acct_missing_output=$(OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cm "$fake_commandcode" go --once 2>&1)
+cm_acct_missing_status=$?
+set -e
+(( cm_acct_missing_status == 0 )) || fail "cm go 缺凭据路径失败：$cm_acct_missing_output"
+assert_contains "$cm_acct_missing_output" 'CLI 会停在登录门'
+printf 'PASS: cm go 完全无账号凭据时给出登录门告警\n'
+
+mkdir -p "$commandcode_home/.commandcode"
+printf '%s\n' '{"apiKey":"stored-account-key","userName":"tester"}' >"$commandcode_home/.commandcode/auth.json"
+cm_acct_file_before=$(wc -l < "$call_log")
+set +e
+cm_acct_file_output=$(OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cm "$fake_commandcode" go --once 2>&1)
+cm_acct_file_status=$?
+set -e
+(( cm_acct_file_status == 0 )) || fail "cm go auth.json 路径失败：$cm_acct_file_output"
+case "$cm_acct_file_output" in
+    *'已用 COMMANDCODE_GOAT_API_KEY 作为账号认证'*) fail 'auth.json 已存在时不应再注入兜底账号凭据' ;;
+    *'CLI 会停在登录门'*) fail 'auth.json 已存在时不应告警登录门' ;;
+esac
+cm_acct_file_new=$(tail -n +$((cm_acct_file_before + 1)) "$call_log")
+assert_contains "$cm_acct_file_new" 'commandcode-env key='
+rm -f "$commandcode_home/.commandcode/auth.json"
+printf 'PASS: cm go 已登录（auth.json）时不注入兜底凭据\n'
+
 cm_pay_before=$(wc -l < "$call_log")
 set +e
 cm_pay_output=$(DEEPSEEK_PAY_API_KEY=test-pay-key \

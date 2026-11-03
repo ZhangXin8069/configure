@@ -417,6 +417,43 @@ _opencode_session_from_output() {
     sed -n 's/.*"sessionID":"\([A-Za-z0-9_-]*\)".*/\1/p' "${_file}" | head -1
 }
 
+# 派发结果回传：opencode --format json 的 stdout 是事件流，最终回答分散在
+# {"type":"text","part":{"text":...}} 事件里；拼接后写入派发结果文件。
+_opencode_final_text() {
+    local _file="${1:-}"
+    [[ -r "${_file}" ]] || return 1
+    "${_AGENT_PYTHON:-python3}" - "$_file" <<'PY'
+import json
+import sys
+
+chunks = []
+with open(sys.argv[1], encoding="utf-8", errors="replace") as handle:
+    for line in handle:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+        if not isinstance(event, dict) or event.get("type") != "text":
+            continue
+        part = event.get("part")
+        text = part.get("text") if isinstance(part, dict) else None
+        if isinstance(text, str) and text:
+            chunks.append(text)
+sys.stdout.write("".join(chunks))
+PY
+}
+
+_opencode_capture_dispatch_result() {
+    local _events="${1:-}" _capture="${AGENT_DISPATCH_OUTPUT_FILE:-}" _text=""
+    [[ -n "$_capture" && -n "$_events" ]] || return 0
+    _text="$(_opencode_final_text "$_events" 2>/dev/null)" || return 0
+    [[ -n "$_text" ]] && printf '%s' "$_text" >"$_capture"
+    return 0
+}
+
 _opencode_session_from_log() {
     local _file="${1:-}" _sid=""
     [[ -r "${_file}" ]] || return 1
@@ -1076,6 +1113,60 @@ raise SystemExit(1)
 PY
 }
 
+# 派发结果回传：Command Code 的 --output-format json 把最终回答放在
+# run_end.result.finalText（末行 result 事件亦有顶层 finalText），取最后一条写入派发结果文件。
+_commandcode_capture_dispatch_result() {
+    local _log="$1" _capture="${AGENT_DISPATCH_OUTPUT_FILE:-}" _text=""
+    [[ -n "$_capture" && -r "$_log" ]] || return 0
+    _text="$("${_AGENT_PYTHON:-python3}" - "$_log" <<'PY'
+import json
+import sys
+
+text = ""
+with open(sys.argv[1], encoding="utf-8", errors="replace") as handle:
+    for line in handle:
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+        candidates = []
+        if isinstance(event, dict):
+            candidates.append(event.get("finalText"))
+            for payload in (event, event.get("event")):
+                if isinstance(payload, dict):
+                    result = payload.get("result")
+                    if isinstance(result, dict):
+                        candidates.append(result.get("finalText"))
+        for candidate in candidates:
+            if isinstance(candidate, str) and candidate:
+                text = candidate
+sys.stdout.write(text)
+PY
+)" || return 0
+    [[ -n "$_text" ]] && printf '%s' "$_text" >"$_capture"
+    return 0
+}
+
+# Command Code 账号认证：gt 与 BYOK 通路在 CLI 启动时（含 TUI）都要求账号凭据，
+# 缺失即停在交互式登录门（Ready to log in / Sign in to Command Code）。
+# 凭据来源与 CLI 一致：COMMAND_CODE_API_KEY 环境变量 > ~/.commandcode/auth.json 的 apiKey。
+_commandcode_account_key_present() {
+    [[ -n "${COMMAND_CODE_API_KEY:-}" ]] && return 0
+    local _auth="${HOME:-}/.commandcode/auth.json"
+    [[ -r "$_auth" ]] || return 1
+    "${_AGENT_PYTHON:-python3}" - "$_auth" <<'PY' 2>/dev/null
+import json
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as handle:
+        data = json.load(handle)
+except Exception:
+    raise SystemExit(1)
+raise SystemExit(0 if isinstance(data, dict) and str(data.get("apiKey") or "").strip() else 1)
+PY
+}
+
 _commandcode_lookup_session_id() {
     local _state_python _tool _dump
     _state_python="$(command -v "${AGENT_STATE_PYTHON:-python3}" 2>/dev/null || true)"
@@ -1269,8 +1360,8 @@ run_commandcode() {
                 echo "###${_NAME}: warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###" >&2
             fi
             export COMMAND_CODE_API_KEY="${COMMANDCODE_GOAT_API_KEY}"
-        elif [[ -z "${COMMAND_CODE_API_KEY:-}" ]]; then
-            echo "###${_NAME}: warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###" >&2
+        elif ! _commandcode_account_key_present; then
+            echo "###${_NAME}: warning: 未找到 Command Code 账号凭据；请先 source ~/env-key.sh（COMMANDCODE_GOAT_API_KEY）或运行一次 command-code login，否则 CLI 会停在登录门###" >&2
         fi
     else
         local _cc_env_var _cc_env_name=""
@@ -1281,6 +1372,16 @@ run_commandcode() {
                 export "${_cc_env_name}"
             else
                 echo "###${_NAME}: warning: ${_cc_env_name} 未设置；请先 source ~/env-key.sh，否则 ${_cc_provider} 请求会 401###" >&2
+            fi
+        fi
+        # BYOK 只替换模型通路，CLI 仍需 Command Code 账号凭据才会越过登录门。
+        # COMMANDCODE_GOAT_API_KEY 本身就是账号级凭据（user_ 前缀），缺失时按 gt 同样的语义兜底。
+        if ! _commandcode_account_key_present; then
+            if [[ -n "${COMMANDCODE_GOAT_API_KEY:-}" ]]; then
+                export COMMAND_CODE_API_KEY="${COMMANDCODE_GOAT_API_KEY}"
+                echo "###${_NAME}: note: 未找到 Command Code 账号凭据，已用 COMMANDCODE_GOAT_API_KEY 作为账号认证（BYOK 模型请求仍走 ${_cc_provider}）###" >&2
+            else
+                echo "###${_NAME}: warning: 途径 '${_cc_provider}' 使用 BYOK，但未找到 Command Code 账号凭据；CLI 会停在登录门。请运行一次 command-code login，或在 ~/env-key.sh 设置 COMMAND_CODE_API_KEY###" >&2
             fi
         fi
     fi
@@ -1376,6 +1477,7 @@ run_commandcode() {
             if "$_COMMAND_CODE_BIN" -p "$_cc_text" --session "$_cc_sid" "${_CC_RESUME_BASE[@]}" >>"${LOG_FILE}" 2>&1; then _agent_runtime_turn_success; else _cc_rc=$?; _agent_runtime_turn_failure; fi
         fi
         if (( _cc_rc == 0 )); then _agent_runtime_mark finished "once 模式"; fi
+        _commandcode_capture_dispatch_result "${LOG_FILE}"
         echo "logs -> ${LOG_FILE}"
         return "${_cc_rc}"
     fi
@@ -2522,6 +2624,7 @@ PYEOF
                 if (( _drv_rc == 0 )); then
                     _agent_runtime_turn_success
                     _agent_runtime_mark finished "resume once"
+                    _opencode_capture_dispatch_result "${_OPENCODE_EVENTS_FILE:-}"
                     echo "logs -> ${LOG_FILE}"
                     return 0
                 fi
@@ -2530,6 +2633,7 @@ PYEOF
                 return "${_drv_rc}"
             fi
             _agent_runtime_should_stop 0 || true
+            _opencode_capture_dispatch_result "${_OPENCODE_EVENTS_FILE:-}"
             echo "logs -> ${LOG_FILE}"
             return 0
         fi
