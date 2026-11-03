@@ -1249,3 +1249,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## 20261103T215147.WxfSEc - final - 2026-11-03 22:07:31 +0800
+- 主任务: 为 install.sh 增加 Node.js 22+ 安装指南（HPC 无 root）
+- 日志文件: logs/v2026110322.txt
+- 文件大小: 5210 bytes
+- 触发原因: 任务完成
+- 关键内容: setup.md 新增 HPC 友好的 Node.js 安装指南，install.sh 错误提示指向指南；回归通过并推送 56e9fa5 + dev53
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
