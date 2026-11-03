@@ -15,8 +15,10 @@ Command Code 跨平台安装与用户级一键配置目录。所有脚本手动�
   未知字段保留、dry-run 和参数校验。
 - `setup.md` — Quickstart、安装、认证、taste/import/update、配置、权限、BYOK、项目级配置与排障说明。
 - Agent 集成 — 仓库 `bin/cm`（Command Code）与 `bin/cms`（secure）默认使用
-  `commandcode-goat`、DeepSeek V4.1 Flash、max 和 1M 上下文；`bin/agent*` 的
-  `gt` 快捷词为 `cl/op/co` 提供同一 Provider API。
+  `commandcode-goat`、DeepSeek V4.1 Flash、max、1M 上下文和 yolo；支持
+  `cm --goal <objective>` / `cm goal <objective|status|clear>` 原生 goal，
+  `--max-turns` 作为 goal 预算。`bin/agent*` 的 `gt` 快捷词为 `cl/op/co`
+  提供同一 Provider API。
 
 官方依据：
 

@@ -78,6 +78,7 @@ $script:MaxRuntime = 0
 $script:Interval = 30
 $script:Once = $false
 $script:ResumeRunId = ''
+$script:GoalObjective = ''
 $script:DriveFile = ''
 $script:StopFileArg = ''
 $script:Drive = $false
@@ -1750,11 +1751,12 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host "用法：$($script:LauncherName) [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL] [--goal OBJECTIVE]"
     Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 cl.bat gt）。'
     Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
     Write-Host '模型：显式指定途径时（快捷词 pay|go|gt 或各 agent 的 *_PROVIDER 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX,COMMANDCODE}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
+    Write-Host 'cm Goal：cm --goal <objective> 或 cm goal <objective|status|clear>；--max-turns 同时作为原生 /goal 预算。'
     Write-Host 'cl/op/cm 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
 
@@ -2575,15 +2577,18 @@ function Run-CommandCode {
     $agentConfig = $script:AgentConfig.agents.commandcode
     $permissionMode = [Environment]::GetEnvironmentVariable('COMMANDCODE_PERMISSION_MODE')
     if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = [string]$agentConfig.permission_mode }
-    if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = 'default' }
+    if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = 'yolo' }
     $trust = $true
     if ($null -ne $agentConfig.trust) { $trust = [bool]$agentConfig.trust }
     $skipOnboarding = $true
     if ($null -ne $agentConfig.skip_onboarding) { $skipOnboarding = [bool]$agentConfig.skip_onboarding }
 
+    $permissionArgs = if ($permissionMode -in @('yolo', 'bypass')) { @('--yolo') } else { @('--permission-mode', $permissionMode) }
     $baseArgs = New-Object System.Collections.Generic.List[string]
-    $baseArgs.AddRange([string[]]@('--model', $script:Model, '--effort', $script:Reasoning,
-        '--permission-mode', $permissionMode, '--no-auto-update'))
+    $baseArgs.AddRange([string[]](@('--model', $script:Model, '--effort', $script:Reasoning) + $permissionArgs + @('--no-auto-update')))
+    if (-not [string]::IsNullOrWhiteSpace($script:GoalObjective)) {
+        $baseArgs.AddRange([string[]]@('--max-turns', [string]$script:MaxTurns))
+    }
     if ($trust) { $baseArgs.Add('--trust') }
     if ($skipOnboarding) { $baseArgs.Add('--skip-onboarding') }
 
@@ -2599,10 +2604,14 @@ function Run-CommandCode {
     } else {
         Write-Host '  mode: TUI interactive'
     }
+    if (-not [string]::IsNullOrWhiteSpace($script:GoalObjective)) {
+        Write-Host "  goal: $($script:GoalObjective) | native /goal | budget=$($script:MaxTurns)"
+    }
     Write-Host '============================================================'
 
     if (-not $script:Drive) {
-        $tuiArgs = @($baseArgs.ToArray()) + @('--name', $script:RunId, $prompt)
+        $initialPrompt = if ([string]::IsNullOrWhiteSpace($script:GoalObjective)) { $prompt } else { "/goal $($script:GoalObjective)" }
+        $tuiArgs = @($baseArgs.ToArray()) + @('--name', $script:RunId, $initialPrompt)
         Turn-Begin
         $rc = Invoke-Logged $executable $tuiArgs $true
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
@@ -2611,10 +2620,14 @@ function Run-CommandCode {
 
     $sessionId = $script:SessionId
     $resumeBase = @('--output-format', 'json', '--skip-onboarding', '--no-auto-update',
-        '--model', $script:Model, '--effort', $script:Reasoning, '--permission-mode', $permissionMode)
+        '--model', $script:Model, '--effort', $script:Reasoning) + $permissionArgs
+    if (-not [string]::IsNullOrWhiteSpace($script:GoalObjective)) {
+        $resumeBase += @('--max-turns', [string]$script:MaxTurns)
+    }
     if ([string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
         Turn-Begin
-        $initialArgs = @('-p', $prompt) + @($baseArgs.ToArray()) + @('--output-format', 'json')
+        $initialPrompt = if ([string]::IsNullOrWhiteSpace($script:GoalObjective)) { $prompt } else { "/goal $($script:GoalObjective)" }
+        $initialArgs = @('-p', $initialPrompt) + @($baseArgs.ToArray()) + @('--output-format', 'json')
         & $executable @initialArgs *>> $script:LogFile
         $rc = $LASTEXITCODE
         if ($null -eq $rc) { $rc = 0 }
@@ -2633,6 +2646,15 @@ function Run-CommandCode {
     } elseif ([string]::IsNullOrWhiteSpace($sessionId)) {
         Write-ErrorLine "###$($script:LauncherName): ERROR: 可恢复会话没有 session_id，驱动终止###"
         return 1
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId) -and
+        -not [string]::IsNullOrWhiteSpace($script:GoalObjective)) {
+        $turnArgs = @('-p', "/goal $($script:GoalObjective)", '--session', $sessionId) + @resumeBase
+        Turn-Begin
+        & $executable @turnArgs *>> $script:LogFile
+        $rc = $LASTEXITCODE
+        if ($rc -eq 0) { Turn-Success } else { Turn-Failure; return $rc }
     }
 
     if (-not [string]::IsNullOrWhiteSpace($script:DriveFile)) {
@@ -3064,6 +3086,7 @@ function Parse-Arguments {
     $commandCodeEffortEnvOverride = $commandCodeEffortOverride
     $modelFlagExplicit = $false
     $strengthFlagExplicit = $false
+    $goalObjective = ''
     $modelFromPositional = $false
     $positional = New-Object System.Collections.Generic.List[string]
     $sandbox = [Environment]::GetEnvironmentVariable('CODEX_SANDBOX')
@@ -3073,7 +3096,13 @@ function Parse-Arguments {
     $drive = $false
     $once = ([Environment]::GetEnvironmentVariable('AGENT_ONCE') -eq '1')
     $maxTurnsRaw = [Environment]::GetEnvironmentVariable('AGENT_MAX_TURNS')
-    if ([string]::IsNullOrWhiteSpace($maxTurnsRaw)) { $maxTurnsRaw = '100' }
+    if ([string]::IsNullOrWhiteSpace($maxTurnsRaw)) {
+        $maxTurnsRaw = if ($script:Agent -eq 'commandcode' -and $null -ne $agentConfig.goal_turn_budget) {
+            [string]$agentConfig.goal_turn_budget
+        } else {
+            '100'
+        }
+    }
     $maxRuntimeRaw = [Environment]::GetEnvironmentVariable('AGENT_MAX_RUNTIME')
     if ([string]::IsNullOrWhiteSpace($maxRuntimeRaw)) { $maxRuntimeRaw = '0' }
     $stopFileArg = [Environment]::GetEnvironmentVariable('AGENT_STOP_PATH')
@@ -3133,6 +3162,16 @@ function Parse-Arguments {
                 $commandCodeEffortOverride = [string]$cliArgs[++$i]
                 $script:ReasoningExplicit = $true
                 $strengthFlagExplicit = $true
+                continue
+            }
+            '--goal' {
+                if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少目标描述"; break }
+                $goalObjective = [string]$cliArgs[++$i]
+                continue
+            }
+            'goal' {
+                if ($i + 1 -ge $cliArgs.Count) { $errorMessage = 'goal 缺少 objective|status|clear'; break }
+                $goalObjective = [string]$cliArgs[++$i]
                 continue
             }
             '--sandbox' {
@@ -3266,6 +3305,7 @@ function Parse-Arguments {
     $script:DriveFile = $driveFile
     $script:StopFileArg = $stopFileArg
     $script:ResumeRunId = $resumeRunId
+    $script:GoalObjective = $goalObjective
     $script:ProviderOverride = $providerOverride
     # 是否由用户显式指定途径（命令行快捷词或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量，
     # 两者一视同仁）：决定两层默认谁优先——显式时 providers 层优先，否则 agent 层优先。

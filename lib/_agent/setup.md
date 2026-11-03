@@ -135,8 +135,9 @@ cm --model <模型> --effort max
 
 包含 `[1m]` 的模型名必须加引号，避免被 Zsh 当作通配符。
 
-`cm`/`cms` 默认使用 `gt=commandcode-goat`、`deepseek/deepseek-v4.1-flash`、`max` 和
-1M 上下文。使用前先激活 key：
+`cm`/`cms` 默认使用 `gt=commandcode-goat`、`deepseek/deepseek-v4.1-flash`、`max`、
+1M 上下文和 `yolo`。原生 goal 使用 `cm --goal <objective>` 或
+`cm goal <objective|status|clear>`，`--max-turns` 控制 goal 预算。使用前先激活 key：
 
 ```bash
 source ~/env-key.sh

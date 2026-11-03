@@ -1231,3 +1231,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## commandcode-goal - final - 2026-11-03 21:29:38 +0800
+- 主任务: 将 cm 默认权限改为 yolo 并增加类 Codex 的原生 goal 模式
+- 日志文件: logs/v2026110321-3.txt
+- 文件大小: 3796 bytes
+- 触发原因: 任务完成
+- 关键内容: cm 默认 yolo，新增 --goal/goal 入口、goal 预算与恢复语义，真实冒烟通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

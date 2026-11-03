@@ -1187,6 +1187,7 @@ cm_run_id=$(printf '%s\n' "$cm_output" | sed -n 's/^  run: //p' | head -1)
 cm_run="$data/runs/$cm_run_id"
 assert_contains "$cm_output" 'Command Code: deepseek/deepseek-v4.1-flash（agent 默认） | effort=max'
 assert_contains "$cm_output" 'provider: commandcode-goat | context=1000000'
+assert_contains "$cm_output" 'permission=yolo'
 assert_file_contains "$cm_run/manifest.env" 'agent=commandcode'
 assert_file_contains "$cm_run/manifest.env" 'launcher=cm'
 assert_file_contains "$cm_run/manifest.env" 'model=deepseek/deepseek-v4.1-flash'
@@ -1194,7 +1195,7 @@ assert_file_contains "$cm_run/manifest.env" 'reasoning_effort=max'
 assert_file_contains "$cm_run/manifest.env" 'session_id=session-commandcode'
 assert_file_contains "$cm_run/manifest.env" 'state=finished'
 cm_new=$(tail -n +$((cm_before + 1)) "$call_log")
-assert_contains "$cm_new" '--model deepseek/deepseek-v4.1-flash --effort max --permission-mode default --no-auto-update --trust --skip-onboarding'
+assert_contains "$cm_new" '--model deepseek/deepseek-v4.1-flash --effort max --yolo --no-auto-update --trust --skip-onboarding'
 assert_contains "$cm_new" 'commandcode-env key=test-goat-key'
 python3 - "$commandcode_home/.commandcode/config.json" <<'PY' || fail 'cm statusline 未按官方 schema 写入'
 import json
@@ -1209,6 +1210,19 @@ ids = [item['id'] for item in statusline['items']]
 assert 'model-reasoning' in ids and 'context-used' in ids and 'git-branch' in ids
 PY
 printf 'PASS: cm 默认模型/强度、1M 上下文、key 映射、manifest 与原生 statusline\n'
+
+cm_goal_before=$(wc -l < "$call_log")
+set +e
+cm_goal_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" --goal 'get the test suite green' --once 2>&1)
+cm_goal_status=$?
+set -e
+(( cm_goal_status == 0 )) || fail "cm goal 失败：$cm_goal_output"
+assert_contains "$cm_goal_output" 'goal: get the test suite green | native /goal | budget=100'
+cm_goal_new=$(tail -n +$((cm_goal_before + 1)) "$call_log")
+assert_contains "$cm_goal_new" '-p /goal get the test suite green --model deepseek/deepseek-v4.1-flash'
+assert_contains "$cm_goal_new" '--yolo --no-auto-update --max-turns 100 --trust --skip-onboarding'
+printf 'PASS: cm 原生 /goal 模式、yolo 与 goal turn budget\n'
 
 switch_op_go_glm_before=$(wc -l < "$call_log")
 set +e

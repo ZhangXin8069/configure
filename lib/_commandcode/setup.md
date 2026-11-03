@@ -90,6 +90,8 @@ command-code -p "explain this repository"
 | 默认模型 | `deepseek/deepseek-v4.1-flash` |
 | 推理强度 | `max` |
 | 上下文 | `1000000` |
+| 权限模式 | `yolo` |
+| Goal 预算 | `--max-turns`，默认 100 |
 
 使用前在当前 shell 激活环境变量，不要回显 key：
 
@@ -97,13 +99,16 @@ command-code -p "explain this repository"
 source ~/env-key.sh
 cm
 cm --once --max-turns 1
+cm --goal 'get the test suite green'
+cm goal status
 ```
 
 `cm` 会把 `COMMANDCODE_GOAT_API_KEY` 仅在本进程映射为 Command Code CLI 使用的
 `COMMAND_CODE_API_KEY`。`cl gt`、`op gt`、`co gt` 复用同一 Provider API；其中
 `cl gt` 默认 Claude Sonnet 4.6，`op/co gt` 默认 DeepSeek V4.1 Flash。Command Code
 的原生 statusline 由 `bin/agent-config.json` 的 `agents.commandcode.statusline` 幂等合并到
-`~/.commandcode/config.json`。
+`~/.commandcode/config.json`。`cm` 默认 `yolo`，headless 同时显式传 `--yolo`；原生 goal
+恢复后默认是 idle，`cm --resume RUN_ID --goal <objective> --once` 会重新启动目标。
 
 ## 快速开始
 

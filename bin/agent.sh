@@ -944,12 +944,12 @@ run_commandcode() {
     local MODEL_ENV_OVERRIDE="${MODEL_OVERRIDE}"
     local EFFORT_OVERRIDE="${COMMANDCODE_EFFORT:-${COMMANDCODE_REASONING_EFFORT:-}}"
     local EFFORT_ENV_OVERRIDE="${EFFORT_OVERRIDE}"
-    local PERMISSION_MODE="${COMMANDCODE_PERMISSION_MODE:-${_CFG_AGENTS_COMMANDCODE_PERMISSION_MODE:-default}}"
-    local MODEL_ID MODEL_NAME EFFORT DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
+    local PERMISSION_MODE="${COMMANDCODE_PERMISSION_MODE:-${_CFG_AGENTS_COMMANDCODE_PERMISSION_MODE:-yolo}}"
+    local MODEL_ID MODEL_NAME EFFORT DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0 GOAL_OBJECTIVE=""
     local MODEL_EXPLICIT=0 MODEL_FLAG_EXPLICIT=0 STRENGTH_FLAG_EXPLICIT=0
     local MODEL_FROM_POSITIONAL=0 STRENGTH_FROM_POSITIONAL=0
     local -a POSITIONAL=()
-    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
+    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-${_CFG_AGENTS_COMMANDCODE_GOAL_TURN_BUDGET:-100}}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
     local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
     local RESUME_RUN_ID="${AGENT_RESUME_RUN_ID:-}"
@@ -972,12 +972,19 @@ run_commandcode() {
             --permission-mode)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少权限模式###" >&2; exit 64; fi
                 PERMISSION_MODE="$2"; shift 2;;
+            --goal)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少目标描述###" >&2; exit 64; fi
+                GOAL_OBJECTIVE="$2"; shift 2;;
+            goal)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: goal 缺少 objective|status|clear###" >&2; exit 64; fi
+                GOAL_OBJECTIVE="$2"; shift 2;;
             --plan) PERMISSION_MODE=plan; shift;;
             --accept-edits) PERMISSION_MODE=accept-edits; shift;;
             --yolo) PERMISSION_MODE=yolo; shift;;
             --help)
                 echo "用法: ${_NAME} [gt] [MODEL] [STRENGTH] [--model MODEL] [--effort LEVEL] [-file PATH] [-time DUR]"
-                echo "默认: gt=commandcode-goat，模型=DeepSeek V4.1 Flash，强度=max，上下文=1M。"
+                echo "默认: gt=commandcode-goat，模型=DeepSeek V4.1 Flash，强度=max，上下文=1M，权限=yolo。"
+                echo "Goal: ${_NAME} --goal <objective> 或 ${_NAME} goal <objective|status|clear>（预算由 --max-turns 控制）。"
                 echo "认证: 先 source ~/env-key.sh；COMMANDCODE_GOAT_API_KEY 会映射为 COMMAND_CODE_API_KEY。"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]。"
                 echo "权限: [--permission-mode default|plan|accept-edits|yolo|dont-ask] [--plan] [--accept-edits] [--yolo]。"
@@ -1091,8 +1098,13 @@ run_commandcode() {
     _commandcode_apply_statusline || echo "###${_NAME}: warning: statusline 配置未更新，继续使用现有 Command Code 配置###" >&2
 
     local _cc_trust="${_CFG_AGENTS_COMMANDCODE_TRUST:-true}" _cc_skip_onboarding="${_CFG_AGENTS_COMMANDCODE_SKIP_ONBOARDING:-true}"
-    local -a _CC_BASE_ARGS _CC_SKILL_ARGS _CC_ADD_DIR_ARGS=()
-    _CC_BASE_ARGS=(--model "$MODEL_ID" --effort "$EFFORT" --permission-mode "$PERMISSION_MODE" --no-auto-update)
+    local -a _CC_PERMISSION_ARGS _CC_BASE_ARGS _CC_SKILL_ARGS _CC_ADD_DIR_ARGS=()
+    case "${PERMISSION_MODE}" in
+        yolo|bypass) _CC_PERMISSION_ARGS=(--yolo) ;;
+        *) _CC_PERMISSION_ARGS=(--permission-mode "$PERMISSION_MODE") ;;
+    esac
+    _CC_BASE_ARGS=(--model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}" --no-auto-update)
+    [[ -n "${GOAL_OBJECTIVE}" ]] && _CC_BASE_ARGS+=(--max-turns "$MAX_TURNS_RAW")
     case "${_cc_trust}" in false|0|off) ;; *) _CC_BASE_ARGS+=(--trust);; esac
     case "${_cc_skip_onboarding}" in false|0|off) ;; *) _CC_BASE_ARGS+=(--skip-onboarding);; esac
     for _dir in "${_agent_config_dirs[@]}" "${_workspace_skill_roots[@]}"; do
@@ -1111,16 +1123,19 @@ run_commandcode() {
     echo "  state: ${AGENT_MANIFEST_FILE}"
     if (( _SECURE )); then echo "  launcher: secure/HPC"; fi
     if (( DRIVE_MODE )); then echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s"; else echo "  mode: TUI interactive"; fi
+    [[ -n "${GOAL_OBJECTIVE}" ]] && echo "  goal: ${GOAL_OBJECTIVE} | native /goal | budget=${MAX_TURNS_RAW}"
     echo "============================================================"
 
     if (( ! DRIVE_MODE )); then
-        local -a _CC_TUI_ARGS=("${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --name "$AGENT_RUN_ID" "$PROMPT")
+        local _cc_initial_prompt="$PROMPT"
+        [[ -n "${GOAL_OBJECTIVE}" ]] && _cc_initial_prompt="/goal ${GOAL_OBJECTIVE}"
+        local -a _CC_TUI_ARGS=("${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --name "$AGENT_RUN_ID" "$_cc_initial_prompt")
         local _cc_recovery_json='[]'
         if command -v python3 >/dev/null 2>&1; then
             _cc_recovery_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
                 "$_COMMAND_CODE_BIN" -p "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。" \
                 --session "{session_id}" --output-format json --skip-onboarding --no-auto-update \
-                --model "$MODEL_ID" --effort "$EFFORT" --permission-mode "$PERMISSION_MODE")"
+                --model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}")"
         fi
         _agent_runtime_turn_begin
         _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
@@ -1134,10 +1149,13 @@ run_commandcode() {
 
     if _agent_runtime_stop_file_requested; then echo "logs -> ${LOG_FILE}"; return 0; fi
     local _cc_sid="${AGENT_SESSION_ID:-}" _cc_rc=0 _cc_text=""
-    local -a _CC_RESUME_BASE=(--output-format json --skip-onboarding --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" --permission-mode "$PERMISSION_MODE")
+    local -a _CC_RESUME_BASE=(--output-format json --skip-onboarding --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}")
+    [[ -n "${GOAL_OBJECTIVE}" ]] && _CC_RESUME_BASE+=(--max-turns "$MAX_TURNS_RAW")
     if [[ -z "${RESUME_RUN_ID}" ]]; then
         _agent_runtime_turn_begin
-        if "$_COMMAND_CODE_BIN" -p "$PROMPT" "${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --output-format json >>"${LOG_FILE}" 2>&1; then _cc_rc=0; else _cc_rc=$?; fi
+        local _cc_initial_prompt="$PROMPT"
+        [[ -n "${GOAL_OBJECTIVE}" ]] && _cc_initial_prompt="/goal ${GOAL_OBJECTIVE}"
+        if "$_COMMAND_CODE_BIN" -p "$_cc_initial_prompt" "${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --output-format json >>"${LOG_FILE}" 2>&1; then _cc_rc=0; else _cc_rc=$?; fi
         if (( _cc_rc != 0 )); then
             _agent_runtime_turn_failure
             echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_cc_rc}），驱动终止###" >&2
@@ -1150,6 +1168,9 @@ run_commandcode() {
     elif [[ -z "$_cc_sid" ]]; then
         echo "###${_NAME}: ERROR: 可恢复会话没有 session_id，驱动终止###" >&2
         exit 1
+    fi
+    if [[ -n "${GOAL_OBJECTIVE}" && -n "${RESUME_RUN_ID}" ]]; then
+        _cc_text="/goal ${GOAL_OBJECTIVE}"
     fi
     if [[ -n "${DRIVE_FILE}" ]]; then
         if [[ ! -r "${DRIVE_FILE}" ]]; then echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2; exit 64; fi

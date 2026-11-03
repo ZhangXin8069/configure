@@ -179,11 +179,12 @@
       }
     },
     "commandcode": {
-      "permission_mode": "default",
+      "permission_mode": "yolo",
       "trust": true,
       "skip_onboarding": true,
       "auto_update": false,
       "context_window": 1000000,
+      "goal_turn_budget": 100,
       "statusline": {
         "version": 1,
         "enabled": true,

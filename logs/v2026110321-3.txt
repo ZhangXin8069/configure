@@ -1,0 +1,85 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 21:29:38 +0800
+批次: commandcode-goal
+主任务: 将 cm 默认权限改为 yolo 并增加类 Codex 的原生 goal 模式
+触发原因: 任务完成
+摘要: cm 默认 yolo，新增 --goal/goal 入口、goal 预算与恢复语义，真实冒烟通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 需求
+- `cm` 默认启用 yolo。
+- `cm` 增加类似 Codex 的 goal 模式。
+- 继续使用 `source ~/env-key.sh` 激活 `COMMANDCODE_GOAT_API_KEY`。
+
+### S2 — 官方语义
+- Command Code 原生 `/goal <objective>`、`/goal status`、`/goal clear`。
+- Goal 在 session 内持久，默认 100 turns，最大 1000。
+- `--max-turns` 同时控制交互 goal 预算与 headless run 上限。
+- Resume 后未完成 goal 默认 idle，需要重新发送 `/goal <objective>`。
+
+### S3 — 实现
+- `agent-config.json`: commandcode permission_mode 改为 yolo，新增 goal_turn_budget=100。
+- `agent.sh`: cm 默认 yolo；headless 使用显式 `--yolo`；新增 `--goal` 与 `goal` 语法；传递 `--max-turns`。
+- `agent-runtime.ps1`: Windows 同步 yolo、goal 解析、`/goal` 初始提示、预算和 resume 重启。
+- 文档同步 `AGENTS.md`、`bin/AGENTS.md`、`lib/_agent/setup.md` 与 `_commandcode` 文档。
+- 测试新增 `cm --goal` yolo 参数与预算断言。
+
+## 验证与证据
+- `bash bin/agent.test.sh`: 全量 PASS，包含 `cm 原生 /goal 模式、yolo 与 goal turn budget`。
+- `bash bin/agent-windows.test.sh`: 静态契约 PASS；无 PowerShell，Parser 跳过。
+- `bash bin/agent-dispatch.test.sh`: PASS。
+- `bash -n`、`python3 -m py_compile`、`git diff --check`、form audit、data tracking check: 通过。
+- 真实 `source ~/env-key.sh; cm --goal 'Reply with exactly YOLO_GOAL_OK. Do not use tools.' --once --max-turns 1`: 返回 `YOLO_GOAL_OK`。
+- 运行清单: agent=commandcode、launcher=cm、model=deepseek/deepseek-v4.1-flash、reasoning_effort=max、session_id 已绑定、state=finished。
+- 敏感值搜索: 未发现 key 值。
+
+## 变更与产物
+- `bin/agent-config.json`
+- `bin/agent-custom.json.refer`
+- `bin/agent.sh`
+- `bin/agent-runtime.ps1`
+- `bin/agent.test.sh`
+- `bin/agent-windows.test.sh`
+- `bin/AGENTS.md`
+- `AGENTS.md`
+- `lib/AGENTS.md`
+- `lib/_agent/setup.md`
+- `lib/_commandcode/AGENTS.md`
+- `lib/_commandcode/setup.md`
+
+## 风险、限制与下一步
+- yolo 会绕过常规权限确认，这是用户明确要求的默认行为。
+- Windows PowerShell runtime 未在本机实际运行。
+- 当前改动未暂存、未提交、未推送。
+
+## 用户输入指令
+cm应默认启用yolo模式
+
+以及类似codex的goal模式
+
+## Agent 全文报告
+--- report begin ---
+状态: finished
+
+## 改动内容
+- `cm/cms` 默认权限模式改为 `yolo`。
+- headless 不再仅传 `--permission-mode yolo`，而是显式传 `--yolo`，确保非交互写入也真正生效。
+- 新增 `cm --goal <objective>` 和 `cm goal <objective|status|clear>`。
+- `--max-turns` 作为 Command Code 原生 goal 预算，默认 100。
+- resume 未完成 goal 时重新发送 `/goal <objective>`。
+- Unix/Windows、agent 配置、帮助、测试和文档已同步。
+
+## 推理依据
+Command Code 官方 `/goal` 是 session 内持久目标，resume 后默认 idle；headless 写入需要显式 `--yolo`，仅设置 permission mode 不足。
+
+## 验证结果
+- 全量 agent 回归、dispatch、Windows 静态契约、语法、form 与数据边界检查通过。
+- 真实 goal 冒烟返回 `YOLO_GOAL_OK`，model、max、1M 上下文、session 与 finished 状态均正确。
+- PowerShell Parser 因当前主机未安装 PowerShell 跳过。
+
+## 后续步骤
+建议在原生 Windows 补一次 `cm --goal ... --once` 冒烟。当前改动未提交、未推送。
+--- report end ---
