@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Git 初始化脚本
 # 功能: 配置 git 用户名/邮箱, 生成 ed25519 SSH 密钥, 打印公钥
-# 用法: 将打印的公钥添加到 Gitee / GitHub 后, 执行 ssh -T git@gitlab.itp.ac.cn 验证
+# 用法: 将打印的公钥添加到 Gitee / GitHub 后, 执行 ssh -T git@gitee.com 验证
 
 _SRC=${BASH_SOURCE[0]:-${0}}
 case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.;; esac
@@ -37,11 +37,11 @@ cat << 'USAGE2'
   │                                                              │
   │  将上方公钥添加到 Git 平台:                                  │
   │                                                              │
-  │    Gitee:  https://gitlab.itp.ac.cn/profile/sshkeys                 │
+  │    Gitee:  https://gitee.com/profile/sshkeys                 │
   │    GitHub: https://github.com/settings/keys                  │
   │                                                              │
   │  验证连接:                                                   │
-  │    ssh -T git@gitlab.itp.ac.cn                                      │
+  │    ssh -T git@gitee.com                                      │
   │    ssh -T git@github.com                                     │
   │                                                              │
   │  常用 git alias (由 env.sh 提供):                            │

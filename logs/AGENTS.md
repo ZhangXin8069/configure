@@ -1222,3 +1222,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## form-snapshot-integrity-20261103 - final - 2026-11-03 21:24:50 +0800
+- 主任务: 恢复 form 固定快照完整性并同步本地技能镜像
+- 日志文件: logs/v2026110321-2.txt
+- 文件大小: 4153 bytes
+- 触发原因: 任务完成
+- 关键内容: 按固定 blob 恢复 configure-main 文件与四个 MANIFEST 上游 URL，验证全部快照、镜像和 Git 回归
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

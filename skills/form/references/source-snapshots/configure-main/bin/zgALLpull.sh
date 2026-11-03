@@ -9,10 +9,10 @@ ensure_repo() {
     local dir=$1 repo=$2
     if [ ! -d "${_PATH}/${dir}/.git" ]; then
         echo "### ${repo} 本地不存在，git clone ... ###"
-        if git clone "git@gitlab.itp.ac.cn:zhangxin8069/${repo}.git" "${_PATH}/${dir}" 2>/dev/null; then
+        if git clone "git@gitee.com:zhangxin8069/${repo}.git" "${_PATH}/${dir}" 2>/dev/null; then
             echo "### ${repo} 已 clone (ssh) ###"
         elif rm -rf "${_PATH}/${dir}" \
-            && git clone "https://gitlab.itp.ac.cn/zhangxin8069/${repo}.git" "${_PATH}/${dir}" 2>/dev/null; then
+            && git clone "https://gitee.com/zhangxin8069/${repo}.git" "${_PATH}/${dir}" 2>/dev/null; then
             echo "### ${repo} 已 clone (https) ###"
         else
             echo "### ${repo} clone 失败，跳过 pull ###"

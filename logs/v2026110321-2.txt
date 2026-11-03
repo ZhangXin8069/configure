@@ -1,0 +1,71 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 21:24:50 +0800
+批次: form-snapshot-integrity-20261103
+主任务: 恢复 form 固定快照完整性并同步本地技能镜像
+触发原因: 任务完成
+摘要: 按固定 blob 恢复 configure-main 文件与四个 MANIFEST 上游 URL，验证全部快照、镜像和 Git 回归
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 定位快照漂移
+- 目标: 解决 `form-snapshot-verify` 的固定快照哈希失败。
+- 命令/操作: 逐目录运行 SHA-256 校验，比较当前文件、历史内容与 MANIFEST 记录的 blob。
+- 关键输出: `configure-main` 有 8 项漂移；其余三个快照各有 1 项 MANIFEST 上游 URL 漂移。
+- 证据与判断: 漂移来自既有全局主机替换；本地对象库仍保存 MANIFEST 指向的原始 blob。
+
+### S2 — 恢复固定内容
+- 目标: 不重算哈希掩盖问题，而是恢复清单记录的上游内容。
+- 命令/操作: 从原始 blob 恢复 7 个 `configure-main` 文件，并将四个 MANIFEST 的上游 URL 恢复为清单基线。
+- 关键输出: 四个快照均通过 SHA-256、MANIFEST blob、符号链接和排除项检查。
+- 证据与判断: 恢复后的内容不含已删除旧域名；上游来源使用 Gitee 基线。
+
+### S3 — 同步与门禁
+- 目标: 同步 `.opencode/skills` 镜像并验证当前 HEAD 的 Git 功能。
+- 命令/操作: 复制 11 个快照文件到本地技能镜像；重跑 13 个 Git 脚本测试和全部仓库门禁。
+- 关键输出: `configure-check` 为 0 error，`form-snapshot-verify` 四个快照全部通过。
+- 证据与判断: 当前业务脚本的默认 `-t gitlab.itp.ac.cn` 行为与快照完整性同时成立。
+
+## 验证与证据
+- `form-snapshot-verify.sh`: PASS（4 个快照）
+- `bash bin/_git_remote_target.test.sh`: PASS
+- `bash bin/git-remote-wrappers.test.sh`: PASS
+- `bash bin/gpush.test.sh`: PASS
+- `bash bin/gpull.test.sh`: PASS
+- `bash bin/gback.test.sh`: PASS
+- `bash bin/grm-ignore.test.sh`: PASS
+- `bash bin/gpull-sub.test.sh`: PASS
+- `bash bin/gback-sub.test.sh`: PASS
+- `bash bin/zg-all-pull.test.sh`: PASS
+- `bash bin/zg-all-pull-sub.test.sh`: PASS
+- `bash bin/gz-all-push.test.sh`: PASS
+- `bash bin/zg-all-back.test.sh`: PASS
+- `bash bin/zg-all-back-sub.test.sh`: PASS
+- `form-audit.sh --root . --strict --quiet`: PASS
+- `form-data-tracking-check.sh --root . --quiet`: PASS
+- `form-large-files-check.sh --root .`: PASS
+- `tools/configure-check.sh`: errors=0，warnings=1（既有插件 manifest 警告）
+- `git diff --check`: PASS
+
+## 变更与产物
+- 文件: `skills/form/references/source-snapshots/configure-main/` 中 8 个漂移文件。
+- 文件: `pyqcd-dev15`、`pyqcu-dev89`、`lattice-qcd-at-imp.top-stab4` 的 `MANIFEST.tsv`。
+- 镜像: `.opencode/skills/form/references/source-snapshots/` 对应 11 个文件已同步。
+- 未改动范围: 不处理任何与本任务无关的工作区配置或运行时代码改动。
+
+## 风险、限制与下一步
+- 风险: 本地 `.opencode` 镜像不进入 Git，但已由 `configure-check.sh` 验证。
+- Git: 本日志形成后只暂存本任务快照文件、日志和索引，显式排除无关配置改动。
+- 下一步: 执行 data/大文件闸门、提交并推送当前分支。
+
+## 用户输入指令
+继续（按更新后的 AGENTS.md 执行固定快照完整性门禁）。
+
+## Agent 全文报告
+--- report begin ---
+已恢复 form 固定快照完整性。`configure-main`  drifted 的 8 个文件按 MANIFEST 记录的原始 blob 恢复，另外三个快照的 MANIFEST 上游 URL 也恢复为清单基线；恢复结果不含已删除的旧域名。
+
+四个固定快照现在全部通过 SHA-256、MANIFEST blob、符号链接和排除项校验。对应 `.opencode/skills` 本地镜像已同步，`configure-check` 为 0 error、1 个既有插件警告。
+
+当前 HEAD 上重新执行了 13 个 Git 功能脚本测试，全部通过；`form-audit`、data 边界、大文件和 `git diff --check` 也通过。工作区存在其他与快照任务无关的 agent 配置或运行时代码改动，本批交付将保持不动并显式排除。
+--- report end ---

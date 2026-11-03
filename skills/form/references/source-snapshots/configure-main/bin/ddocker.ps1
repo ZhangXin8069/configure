@@ -15,7 +15,7 @@ function Write-Warn { Write-Host "[WARN]  " -ForegroundColor Yellow -NoNewline; 
 function Write-Err  { Write-Host "[ERR]   " -ForegroundColor Red -NoNewline; Write-Host $args }
 function Write-Step { Write-Host "[STEP]  " -ForegroundColor Cyan -NoNewline; Write-Host $args }
 
-$SETUP_URL = "https://gitlab.itp.ac.cn/zhangxin8069/configure/raw/stab10/lib/_docker/setup.md"
+$SETUP_URL = "https://gitee.com/zhangxin8069/configure/raw/stab10/lib/_docker/setup.md"
 
 function Print-DockerInstallGuide {
     Write-Host @"
