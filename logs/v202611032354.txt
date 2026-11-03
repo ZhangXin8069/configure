@@ -1,0 +1,62 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-03 23:54:39 +0800
+批次: S7-S10
+主任务: 继续：补测 co/cl/op 派发通道并修复 op 结果回传
+触发原因: 阶段成果
+摘要: co/cl/op 三通道实测通过，修复 op 通道 result 返回原始 JSONL 的问题，全通道回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S7 — 补齐 co/cl/op 三通道真实派发复验
+- 目标: 覆盖上一阶段的未验证项（此前仅验证 cm 分支）
+- 命令/操作: 确认 codex/claude/opencode/command-code 四个二进制均存在；从 bin/agent-config.json 确认 opencode-go 具备 base_url 与 anthropic_base_url；并行 `agent-dispatch.sh --agent co|cl|op --provider opencode-go` 各派发一次最小探针
+- 关键输出: co → ok=true, state=finished, model=deepseek-v4.1-flash, result='CH-co'；cl → ok=true, result='CH-cl'；op → ok=true 但 result 为 923 字节 JSONL（step_start/text/step_finish 3 条事件）
+- 退出码: 全部 0
+- 证据与判断: co/cl 结果回传正确；op 的 result 是原始事件流而非最终文本，属同类回传缺口
+
+### S8 — op 通道回传修复
+- 命令/操作: 新增 `_opencode_final_text`（解析 `{"type":"text","part":{"text":...}}` 并按序拼接）与 `_opencode_capture_dispatch_result`（写入 AGENT_DISPATCH_OUTPUT_FILE）；在 op once 模式两个返回点（resume once 与常规 once）接入
+- 关键输出: 修复后 `--agent op` 返回 result='FIXED-OP'
+- 退出码: 0；`bash -n agent.sh` 通过
+- 证据与判断: op 通道结果回传与 cm/co/cl 对齐
+
+### S9 — 全通道最终复验与回归
+- 命令/操作: co/cl 复跑 `RECHECK-*` 探针；`bash agent.test.sh`；`bash agent-dispatch.test.sh`；`git diff --check`
+- 关键输出: co result='RECHECK-co'；cl result='RECHECK-cl'；agent.test.sh EXIT=0 且 88 个 PASS；dispatch 测试 EXIT=0；diff check 干净
+- 退出码: 0
+- 证据与判断: 四通道（cm/co/cl/op）结果回传全部返回干净最终文本，无回归
+
+### S10 — 并发提交核对
+- 命令/操作: 检查工作区状态与最近提交
+- 关键输出: 工作区已干净；改动进入 b5beb61（含 bin/agent.sh +108 行及日志），由另一并发会话提交
+- 证据与判断: 修复内容完整保留（`_commandcode_capture_dispatch_result`、`_opencode_final_text`、`_opencode_capture_dispatch_result` 均在 HEAD 中）；未回退或改写该提交
+
+## 验证与证据
+- 测试/检查: bash -n；agent.test.sh（88 PASS）；agent-dispatch.test.sh；真实派发 cm/co/cl/op 各一次以上；git diff --check
+- 结果: 全部通过；四通道 result 分别为 FIXED-JSON/FIXED-TEXT(co/cl 为 RECHECK-*)/FIXED-OP
+- 未验证项: 未测试 secure 变体（cms/cls/ops/cos）的真实派发；未推送远端
+
+## 变更与产物
+- 文件: bin/agent.sh（累计新增 `_commandcode_capture_dispatch_result`、`_opencode_final_text`、`_opencode_capture_dispatch_result` 及三处调用点）
+- 产物: 日志 logs/v202611032343.txt、本文件；测试 run 目录位于 configure/data/runs/
+- 未改动范围: agent-dispatch.sh、skills 目录、其他任务的日志
+
+## 风险、限制与下一步
+- 风险: 两个提取函数依赖各自 CLI 的 JSON 字段结构（Command Code `finalText`、opencode `part.text`），上游改字段需同步
+- 阻塞: 无
+- 下一步: 如需 secure/HPC 变体确认，可对 cms/cls/ops/cos 各跑一次 `--secure` 派发
+
+## Agent 全文报告
+--- report begin ---
+co/cl/op 三条通道补测完成，并顺带补齐了 op 通道的结果回传。
+
+初始实测：co 与 cl 正常（result 分别为 'CH-co' 与 'CH-cl'）；op 虽 ok=true、state=finished，但 result 是 923 字节的原始 JSONL 事件流，而非最终回答——最终文本藏在 {"type":"text","part":{"text":...}} 事件中。
+
+修复：新增 _opencode_final_text 按序拼接 text 事件，再由 _opencode_capture_dispatch_result 写入 AGENT_DISPATCH_OUTPUT_FILE，接入 op once 模式的两个返回点。复验 result='FIXED-OP'。
+
+最终复验：co='RECHECK-co'、cl='RECHECK-cl'；agent.test.sh 88 个用例全 PASS 且 EXIT=0；agent-dispatch.test.sh EXIT=0；git diff --check 干净。四条通道（cm/co/cl/op）现在都返回干净最终文本。
+
+补充说明：本轮改动已被另一并发会话提交进 b5beb61，工作区当前干净，修复内容完整保留在 HEAD 中，我未回退或改写该提交。
+--- report end ---

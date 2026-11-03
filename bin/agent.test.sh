@@ -99,6 +99,11 @@ if [[ "$(basename -- "$0")" == fake-commandcode.sh ]]; then
     printf '%s\t%s\n' "$0" "$*" >> "$FAKE_CALL_LOG"
     printf 'commandcode-env key=%s model=%s effort=%s\n' \
         "${COMMAND_CODE_API_KEY:-}" "${COMMANDCODE_MODEL:-}" "${COMMANDCODE_EFFORT:-}" >> "$FAKE_CALL_LOG"
+    if [[ "${FAKE_COMMANDCODE_FAIL_TUI:-0}" == 1 && "$*" != *' -p '* ]]; then
+        printf '%s\n' 'Error: Interactive mode requires a TTY terminal.' >&2
+        printf '%s\n' 'Please run this command directly in your terminal, not through a pipe or redirect.' >&2
+        exit "${FAKE_COMMANDCODE_TUI_EXIT:-3}"
+    fi
     printf '%s\n' '{"type":"event","event":{"type":"run_start","sessionId":"session-commandcode"}}'
     printf '%s\n' '{"type":"result","subtype":"success","sessionId":"session-commandcode","finalText":"CM_OK"}'
     exit 0
@@ -1300,6 +1305,28 @@ cm_acct_file_new=$(tail -n +$((cm_acct_file_before + 1)) "$call_log")
 assert_contains "$cm_acct_file_new" 'commandcode-env key='
 rm -f "$commandcode_home/.commandcode/auth.json"
 printf 'PASS: cm go 已登录（auth.json）时不注入兜底凭据\n'
+
+# TUI 的 stderr 落在日志里；启动即退出必须把尾部错误回显到终端，否则用户只看到空屏后秒退。
+set +e
+cm_tui_fail_output=$(FAKE_COMMANDCODE_FAIL_TUI=1 \
+    run_launcher cm "$fake_commandcode" go 2>&1)
+cm_tui_fail_status=$?
+set -e
+(( cm_tui_fail_status == 3 )) || fail "cm TUI 失败退出码未透传：$cm_tui_fail_status"
+assert_contains "$cm_tui_fail_output" 'command-code 退出码 3（运行'
+assert_contains "$cm_tui_fail_output" 'Interactive mode requires a TTY terminal.'
+printf 'PASS: cm TUI 非零退出时回显日志尾部错误\n'
+
+# 退出码为 0 但启动即结束（例如交互式入口直接返回）同样要暴露日志尾部。
+set +e
+cm_tui_fast_output=$(FAKE_COMMANDCODE_FAIL_TUI=1 FAKE_COMMANDCODE_TUI_EXIT=0 \
+    run_launcher cm "$fake_commandcode" go 2>&1)
+cm_tui_fast_status=$?
+set -e
+(( cm_tui_fast_status == 0 )) || fail "cm TUI 秒退退出码异常：$cm_tui_fast_status"
+assert_contains "$cm_tui_fast_output" 'command-code 退出码 0（运行'
+assert_contains "$cm_tui_fast_output" 'Interactive mode requires a TTY terminal.'
+printf 'PASS: cm TUI 退出码 0 的秒退同样回显日志尾部\n'
 
 cm_pay_before=$(wc -l < "$call_log")
 set +e

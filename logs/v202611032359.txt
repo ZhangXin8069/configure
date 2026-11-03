@@ -1,0 +1,61 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-03 23:59:59 +0800
+批次: S11-S14
+主任务: 继续：secure/HPC 变体派发验证
+触发原因: 阶段成果
+摘要: cos/cls/ops/cms 四变体派发全部通过，确认 --secure 接口语义与 launcher 解析
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S11 — secure 变体接口确认
+- 目标: 补齐上一阶段未覆盖的 secure/HPC 变体（cos/cls/ops/cms）真实派发
+- 命令/操作: 查询 agent-config.json 的 agents.*.secure_binary（四项均为 null，缺失时由 _prepare_secure_binary 从 PATH 复制兜底）；阅读 _prepare_secure_binary 实现
+- 关键输出: secure_binary 未配置；agent-dispatch.sh 的 `--agent` 仅接受 co/cl/op/cm，secure 由独立的 `--secure` 标志选择
+- 证据与判断: 首次误用 `--agent cos` 等形式，四个变体均以 exit 64 拒绝（错误信息为 `--agent 仅支持 co/cl/op/cm`），属接口误用而非派发故障
+
+### S12 — 正确接口重测
+- 命令/操作: 并行 `agent-dispatch.sh --agent co|cl|op|cm --secure --provider opencode-go --cwd /root/configure`
+- 关键输出: co→launcher=cos ok=true state=finished result='SEC-co'；cl→launcher=cls result='SEC-cl'；op→launcher=ops result='SEC-op\n'；cm→launcher=cms result='SEC-cm'
+- 退出码: 全部 0
+- 证据与判断: 四个 secure 变体均正确解析到对应 launcher，并走通结果回传
+
+### S13 — manifest 与回归核对
+- 命令/操作: 读取四个 run 的 manifest；`bash agent.test.sh`；`bash agent-dispatch.test.sh`
+- 关键输出: run 20261103T235709.oGgLv0(cos)/HADdjI(cls)、20261103T235710.2bCr2Y(ops)/msSttY(cms) 均 state=finished；agent.test.sh EXIT=0 且 88 PASS；dispatch 测试 EXIT=0
+- 退出码: 0
+- 证据与判断: secure 通道与常规通道行为一致，无回归
+
+### S14 — 一次误测的清理说明
+- 命令/操作: 早期在 /tmp 下直接运行 `cos --once` 观察行为
+- 关键输出: codex 报 `Not inside a trusted directory and --skip-git-repo-check was not specified`，run 20261103T235609.xrjVig state=failed；在 /root/configure 重测后正常
+- 证据与判断: 该失败由 codex 的 git 目录信任检查引起，与派发链路无关；失败 run 目录保留未删除（未授权清理）
+
+## 验证与证据
+- 测试/检查: 四变体真实派发；manifest 状态核对；agent.test.sh（88 PASS）；agent-dispatch.test.sh；bash -n
+- 结果: cos/cls/ops/cms 全部 ok=true、state=finished、launcher 正确、result 为干净文本；两项回归 EXIT=0
+- 未验证项: 未推送远端；未清理误测产生的 failed run 目录
+
+## 变更与产物
+- 文件: 本轮无代码改动（仅验证）
+- 产物: 日志 logs/v202611032354.txt、本文件；新增 run 目录位于 configure/data/runs/
+- 未改动范围: 所有源码、skills、既有日志
+
+## 风险、限制与下一步
+- 风险: secure_binary 未配置时依赖从 PATH 复制，Node 类 agent（claude/opencode/command-code）的复制副本可能丢失符号链接依赖，HPC 场景建议显式配置 secure_binary
+- 阻塞: 无
+- 下一步: 子任务清单已全部覆盖；如需可清理 failed run 目录或配置显式 secure_binary
+
+## Agent 全文报告
+--- report begin ---
+secure/HPC 变体补测完成，四个变体全部通过。
+
+关键发现：agent-dispatch.sh 的 --agent 只接受 co/cl/op/cm，secure 由独立的 --secure 标志选择。我第一次用 --agent cos 等写法，四个全部以 exit 64 报「--agent 仅支持 co/cl/op/cm」——是接口误用，不是派发故障。
+
+按正确接口重测：--agent co/cl/op/cm --secure，launcher 分别解析为 cos/cls/ops/cms，全部 ok=true、state=finished，result 分别为 SEC-co / SEC-cl / SEC-op / SEC-cm。四个 run 的 manifest 状态均为 finished。
+
+回归：agent.test.sh 88 个用例全 PASS（EXIT=0），agent-dispatch.test.sh EXIT=0。
+
+另有一次性误测需说明：早期我在 /tmp 下直接跑 cos --once，因 codex 的 git 目录信任检查报错（run 20261103T235609.xrjVig state=failed）；换到 /root/configure 后正常。该失败 run 目录我未删除（属于未授权的破坏性操作）。
+--- report end ---

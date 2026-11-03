@@ -1433,11 +1433,22 @@ run_commandcode() {
                 --model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}")"
         fi
         _agent_runtime_turn_begin
+        local _cc_tui_started=$SECONDS
         _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
         local _run_rc=$?
+        local _cc_tui_elapsed=$(( SECONDS - _cc_tui_started ))
         if (( _run_rc == 0 )); then _agent_runtime_turn_success; else _agent_runtime_turn_failure; fi
         local _cc_sid="$(_commandcode_lookup_session_id || true)"
         [[ -n "$_cc_sid" ]] && _agent_runtime_set_session "$_cc_sid" ""
+        # TUI 的 stderr 落在日志里；启动即退出时把尾部错误回显到终端，否则用户只看到空屏后秒退。
+        if (( _run_rc != 0 )) || (( _cc_tui_elapsed < 5 )); then
+            local _cc_tail=""
+            _cc_tail="$(tail -n 5 "${LOG_FILE}" 2>/dev/null | sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | tr -d '\r')"
+            if [[ -n "${_cc_tail//[[:space:]]/}" ]]; then
+                echo "###${_NAME}: command-code 退出码 ${_run_rc}（运行 ${_cc_tui_elapsed}s），日志尾部：###" >&2
+                printf '%s\n' "${_cc_tail}" | sed 's/^/  /' >&2
+            fi
+        fi
         echo "logs -> ${LOG_FILE}"
         return "${_run_rc}"
     fi
