@@ -1,0 +1,102 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 20:23:13 +0800
+批次: commandcode
+主任务: 在 lib/_commandcode 建立 Command Code 安装、配置、测试与文档
+触发原因: 任务完成
+摘要: 仿照 _opencode 完成 Command Code 目录，官方接口核对与隔离回归通过
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 需求与边界
+- 目标: 参考官方 quickstart，仿照 `lib/_opencode`，在 `lib/_commandcode` 编写内容。
+- 约束: 不提交、不推送、不改系统配置；不访问任务无关文件；原始密钥不入库。
+- 身份与路由: `{代码}`；`auto_route=all`，使用 auto、all、log、form、rule。
+
+### S2 — 官方资料核对
+- 命令: 读取 `https://commandcode.ai/docs/quickstart`、`/settings`、`/permissions`、`/byok`。
+- 结果: 四页均返回 HTTP 200。
+- 关键事实: Node.js >= 22；全局 npm 包 `command-code`；Linux/macOS/WSL 别名 `cmd`，原生 Windows 别名 `cmdc`。
+- 配置边界: `~/.commandcode/config.json` 是个人偏好；`~/.commandcode/settings.json` 是用户级行为设置；`auth.json` 禁止手工管理；BYOK 只能保存环境变量或命令引用。
+- npm 元数据: `command-code@1.88.2`，engines `node >=22`，bin 包含 `cmd`、`cmdc`、`command-code`、`commandcode`。
+
+### S3 — 实现
+- 新增 Linux/macOS/WSL 安装器：检查 Node 22、调用 npm 全局安装、验证全局 bin。
+- 新增原生 Windows 安装器：使用 `cmdc`/`command-code`，不修改用户 PATH。
+- 新增幂等配置器：默认 dry-run；分别合并个人偏好和用户级设置；备份、原子替换、0600、保留未知字段、规则去重。
+- 新增隔离安装测试和配置测试。
+- 新增 `AGENTS.md` 与 `setup.md`，记录安装、认证、权限、BYOK、项目级配置、验证和回滚。
+
+### S4 — 复查与修正
+- 发现并修正: 配置器先校验两份 JSON 再写盘，避免第二份损坏时单边更新。
+- 加固: 增加 `umask 077`，去掉不必要的 GNU 风格路径参数，增加真正的二次幂等断言。
+- 补充: 安装器不只做语法检查，还通过假 Node/npm 验证默认版、最新版、显式版本与错误参数。
+
+## 验证与证据
+
+- `bash -n install.sh config.sh install.test.sh config.test.sh`: exit 0。
+- `bash install.test.sh`: PASS，覆盖 `1.88.2`、`latest`、`v1.88.2`、帮助和错误参数。
+- `bash config.test.sh`: PASS，覆盖 dry-run、两份 JSON、权限去重、未知字段保留、文件权限、二次幂等与非法值。
+- `form-audit.sh --root /root/configure --strict --quiet`: exit 0。
+- `form-data-tracking-check.sh --root /root/configure --quiet`: exit 0。
+- `git diff --check`: exit 0。
+- 尾随空白、冲突标记、TODO/FIXME 检查: 无命中。
+- 官方四页链接检查: 均为 HTTP 200。
+- 未验证: 原生 Windows `install.bat` 的实际执行、真实全局 npm 安装、浏览器登录和真实 API 调用；这些操作会改变用户环境或依赖凭据，未执行。
+
+## 变更与产物
+
+- `lib/_commandcode/AGENTS.md`
+- `lib/_commandcode/install.sh`
+- `lib/_commandcode/install.bat`
+- `lib/_commandcode/install.test.sh`
+- `lib/_commandcode/config.sh`
+- `lib/_commandcode/config.test.sh`
+- `lib/_commandcode/setup.md`
+
+## 风险、限制与下一步
+
+- `install.bat` 仅做静态检查，需在原生 Windows 上做一次 `install.bat --help` 和无凭据安装冒烟。
+- 默认固定版本 `1.88.2` 会过期；需要跟踪上游时使用 `--new` 或显式版本。
+- 当前工作区仅新增 `lib/_commandcode/`，未暂存、未提交、未推送。
+- 下一步可由用户审查后单独授权暂存、提交与推送。
+
+## 用户输入指令
+
+参考"https://commandcode.ai/docs/quickstart",仿照{../opencode},编写此目录下的内容
+
+## Agent 全文报告
+
+--- report begin ---
+状态: finished
+
+## 改动内容
+
+已在 `/root/configure/lib/_commandcode` 建立完整目录：
+
+- `install.sh`：Linux/macOS/WSL 安装，校验 Node.js 22+，默认安装 `command-code@1.88.2`，`--new` 安装最新版。
+- `install.bat`：原生 Windows 安装，使用 `cmdc`/`command-code`，不修改用户 PATH。
+- `config.sh`：默认 dry-run，`--apply` 才写盘；分别合并 `~/.commandcode/config.json` 和 `~/.commandcode/settings.json`，保留未知字段、去重权限规则、备份并原子替换。
+- `install.test.sh`、`config.test.sh`：隔离测试安装路由、配置合并、权限、未知字段、文件权限和幂等性。
+- `AGENTS.md`、`setup.md`：安装、认证、权限、BYOK、项目级配置、验证与回滚说明。
+
+## 推理依据
+
+- 依据官方 quickstart、settings、permissions 和 BYOK 文档确定路径、命令别名、配置分层和密钥边界。
+- 仿照 `_opencode` 的“安装器 + 幂等配置器 + 隔离测试 + setup 文档”结构，但不复用不适用于 Command Code 的 OpenCode 配置键。
+- 配置器不接收原始 API key，避免把凭据写入版本库或 JSON。
+
+## 验证结果
+
+- `bash -n install.sh config.sh install.test.sh config.test.sh`：通过。
+- `bash install.test.sh`：PASS。
+- `bash config.test.sh`：PASS。
+- `form-audit.sh --strict --quiet`、数据边界检查、`git diff --check`：均通过。
+- 官方四个文档链接：HTTP 200。
+- 原生 Windows 实际执行、真实 npm 全局安装、浏览器登录和真实 API 调用未执行，避免修改用户环境或使用凭据。
+
+## 后续步骤
+
+当前新增目录未暂存、未提交、未推送。需要时可单独审查并授权提交。
+--- report end ---

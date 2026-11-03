@@ -1,0 +1,98 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 21:14:22 +0800
+批次: commandcode-agent
+主任务: 新增 gt:commandcode-goat 供应商策略与 cm/cms Command Code agent
+触发原因: 任务完成
+摘要: 完成 gt 策略、cm/cms 启动器、Command Code statusline、认证映射、会话恢复与真实冒烟
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 需求与范围
+- 目标: 在 agent 系列新增 `gt:commandcode-goat`，key 为 `COMMANDCODE_GOAT_API_KEY`，base URL 为 `https://api.commandcode.ai/provider/v1`。
+- 扩展: 新增 `cm`（commandcode）agent 与 `cms` secure 变体，默认 DeepSeek V4.1 Flash、max、1M 上下文。
+- 约束: 参考现有 cl/op/co 的模型、权限、statusline、驱动、resume、dispatch 和 Windows 路径；使用前 source `~/env-key.sh`；不提交、不推送。
+
+### S2 — 官方接口核对
+- 读取 `https://commandcode.ai/docs`、`/provider`、`/reference/cli`、`/reference/slash-commands`、`/settings`。
+- Provider API 端点: `/v1/chat/completions`、`/v1/responses`、`/v1/messages`、`/v1/models`。
+- Command Code provider id 为 `commandcode`，CLI 认证环境变量为 `COMMAND_CODE_API_KEY`。
+- 原生 statusline 使用 `config.json.statusline` 的 `version/enabled/items` schema。
+- 实时 model 接口确认 `deepseek/deepseek-v4.1-flash` context_length=1000000。
+
+### S3 — 实现
+- `agent-config.json`: 新增 commandcode-goat provider、模型元数据、原生 statusline 和 commandcode agent 默认机制参数。
+- `agent-custom.json.refer`: 新增 gt 默认模型/强度，`cm` 使用 deepseek/deepseek-v4.1-flash、max、1M。
+- `agent.sh`: 新增 gt alias、cm/cms 分发、Command Code TUI/headless/resume、key 映射、skill/add-dir 注入和 statusline 幂等合并。
+- `agent-runtime.ps1` / `agent.bat`: 新增 Windows commandcode 分支、gt alias、statusline 合并和 cm/cms 入口。
+- `agent-model-catalog.py`: 保留 vendor-qualified model id，并正确添加 OpenCode provider 前缀。
+- `agent-dispatch.sh`、`agent-resume.sh`、`agent-session-state.py`、`agent-tui-watch.py`: 增加 commandcode 派发、身份、session 发现和恢复支持。
+- `bin/cm`、`bin/cms` 及 Windows `.bat` 软链接已创建；`.gitignore` 已保留对应入口。
+
+### S4 — 文档
+- 更新根 `AGENTS.md`、`bin/AGENTS.md`、`lib/AGENTS.md`、`lib/_agent/setup.md`、`lib/_commandcode/AGENTS.md` 和 `lib/_commandcode/setup.md`。
+- 明确 `source ~/env-key.sh`、key 只在进程内映射、不落盘、不打印。
+
+## 验证与证据
+- `bash bin/agent.test.sh`: 全量 PASS，覆盖 cl/op/co/cm、gt、V2 provider 注入、模型 ID、1M 上下文和原生 statusline。
+- `bash bin/agent-dispatch.test.sh`: PASS，含 `--agent cm --provider gt --effort max`。
+- `bash tools/agent-resume.test.sh`: PASS。
+- `python3 tools/agent-session-state.test.py`: 13 tests PASS。
+- `python3 tools/agent-tui-watch.test.py`: 9 tests PASS。
+- `bash bin/agent-windows.test.sh`: 静态契约 PASS；当前主机无 PowerShell，Parser 跳过。
+- `bash bin/give_git_ignore.test.sh`: PASS；dry-run 保留 `bin/cm`、`bin/cms`。
+- `bash -n`、`python3 -m py_compile`、`git diff --check`、form audit、data tracking check: 全通过。
+- 真实 `source ~/env-key.sh; cm --once --max-turns 1`: 返回 `CM_OK`，manifest 为 agent=commandcode、launcher=cm、model=deepseek/deepseek-v4.1-flash、reasoning_effort=max、state=finished，并绑定 session。
+- 真实 `cm --resume <run-id> --once`: 成功复用原生 session。
+- statusline: `version=1`，包含 model-reasoning/context-used/cwd/git-branch/session-name/permission-mode 等官方项目，并保留原有 `reasoningEffort` 等未知字段。
+- 敏感值检查: 工作区与运行日志均未出现 key 值。
+
+## 变更与产物
+- Provider/config: `bin/agent-config.json`、`bin/agent-custom.json.refer`。
+- Agent/runtime: `bin/agent.sh`、`bin/agent-runtime.sh`、`bin/agent-runtime.ps1`、`bin/agent.bat`、`bin/agent-dispatch.sh`、`bin/agent-model-catalog.py`。
+- 恢复/状态: `tools/agent-resume.sh`、`tools/agent-session-state.py`、`tools/agent-tui-watch.py`。
+- 入口: `bin/cm`、`bin/cms`、`bin/cm.bat`、`bin/cms.bat`。
+- 测试与文档: agent 系列测试、根/bin/lib AGENTS 与 setup 文档。
+
+## 风险、限制与下一步
+- Windows PowerShell runtime 仅完成静态契约，需在原生 Windows 执行一次真实 `cm --once`。
+- 实际运行产生的工作日志位于 data/runs，不属于 Git 数据边界。
+- 当前改动未暂存、未提交、未推送；已有日志工作区改动保留未动。
+
+## 用户输入指令
+参考本库的agent系列的供应商配置(例如go:opencode-go), 编写新的供应商策略gt:commandcode-goat,其中key为环境变量中的COMMANDCODE_GOAT_API_KEY,base_url为https://api.commandcode.ai/provider/v1,参考文档为https://commandcode.ai/docs
+
+同时添加新的agent(别名为cm,即commandcode),配置完美对应已有agent(例如codex的statusline等等等)
+
+注意source ~/env-key.sh来激活key
+
+其默认模型设置为 DeepSeek V4.1 Flash (max),上下文1M,更多部分参考已有agent系列中的设置
+
+## Agent 全文报告
+--- report begin ---
+状态: finished
+
+## 改动内容
+- 新增 `gt:commandcode-goat`，key 读取 `COMMANDCODE_GOAT_API_KEY`，base URL 为 `https://api.commandcode.ai/provider/v1`。
+- 新增 `cm` Command Code agent、`cms` secure 变体和对应 Windows 入口。
+- `cm` 默认 `deepseek/deepseek-v4.1-flash`、`max`、1M 上下文；`cl gt` 使用 Claude Sonnet 4.6，`op/co gt` 使用 DeepSeek V4.1 Flash。
+- Command Code statusline 按官方 `config.json.statusline` schema 幂等写入，保留已有配置。
+- 增加真实 key 映射、session/resume、dispatch、agent 状态发现和恢复支持。
+- 更新安装、agent 配置与使用文档，明确执行 `source ~/env-key.sh`。
+
+## 推理依据
+- Command Code Provider API 的 Claude 模型只接受 `/messages`，因此 `cl gt` 不能默认 DeepSeek；`co/op/cm` 使用支持 Responses/Chat 的 DeepSeek V4.1 Flash。
+- 模型 ID 含 vendor slash（`deepseek/...`），必须与 OpenCode provider prefix（`commandcode/`）分开处理。
+- Command Code CLI 自身读取 `COMMAND_CODE_API_KEY`，因此只在启动器进程内从用户指定的 `COMMANDCODE_GOAT_API_KEY` 映射，避免落盘。
+
+## 验证结果
+- 真实 `cm --once` 返回 `CM_OK`，manifest 显示正确 agent/model/strength/session/state。
+- 真实 `cm --resume` 成功。
+- `bin/agent.test.sh` 全量通过；dispatch、resume、session-state、TUI watcher、Windows 静态契约和 ignore 测试通过。
+- form、data tracking、diff、语法、Python compile 与敏感值检查通过。
+- Windows PowerShell Parser 因当前主机没有 PowerShell 而跳过。
+
+## 后续步骤
+当前改动未暂存、未提交、未推送。建议在原生 Windows 补一次 `source` 等价 key 注入后的 `cm --once` 冒烟，再按审查结果决定是否提交。
+--- report end ---

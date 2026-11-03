@@ -9,6 +9,7 @@ rem  Distribution by filename:
 rem    cl[ s ].bat -> Claude Code
 rem    op[ s ].bat -> OpenCode
 rem    co[ s ].bat -> Codex
+rem    cm[ s ].bat -> Command Code
 rem  The implementation lives in agent-runtime.ps1 so that state,
 rem  locking, JSON events and bounded drive semantics remain testable.
 rem ============================================================
@@ -34,10 +35,15 @@ if /i "%_NAME%"=="cos.bat" (
     set "_AGENT=codex"
     set "_SECURE=1"
 )
+if /i "%_NAME%"=="cm.bat"  set "_AGENT=commandcode"
+if /i "%_NAME%"=="cms.bat" (
+    set "_AGENT=commandcode"
+    set "_SECURE=1"
+)
 
 if not defined _AGENT (
-    echo 用法：将 agent.bat 复制或链接为 cl.bat、op.bat、co.bat
-    echo HPC 变体：cls.bat、ops.bat、cos.bat
+    echo 用法：将 agent.bat 复制或链接为 cl.bat、op.bat、co.bat、cm.bat
+    echo HPC 变体：cls.bat、ops.bat、cos.bat、cms.bat
     exit /b 1
 )
 

@@ -89,7 +89,8 @@ def static_model_entries(provider):
         model_id = str(model_id or "").strip()
         if not model_id:
             return
-        model_id = model_id.split("/", 1)[-1]
+        # Keep vendor-qualified model ids such as deepseek/deepseek-v4.1-flash.
+        # Provider-qualified ids are stripped later by strip_provider_prefix().
         existing = entries.setdefault(model_id, {"id": model_id})
         if isinstance(metadata, dict):
             existing.update(metadata)
@@ -587,9 +588,10 @@ def resolve_strength(entry, requested, provider):
 def final_model_id(agent, provider_name, provider, model_id):
     if agent != "opencode":
         return model_id
-    if "/" in model_id:
-        return model_id
     provider_id = str(provider.get("opencode_provider_id") or provider_name)
+    prefix = model_id.split("/", 1)[0] if "/" in model_id else ""
+    if prefix and prefix in {provider_name, provider_id}:
+        return model_id
     return "%s/%s" % (provider_id, model_id)
 
 

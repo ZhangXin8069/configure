@@ -1,6 +1,6 @@
 {
   "schema": "agent-config/v1",
-  "description": "agent 系列（cl/op/co）通用配置：模型提供途径目录、模型发现/缓存、状态栏与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
+  "description": "agent 系列（cl/op/co/cm）通用配置：模型提供途径目录、模型发现/缓存、状态栏与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
   "model_discovery": {
     "enabled": true,
     "cache_ttl_seconds": 21600,
@@ -96,6 +96,42 @@
         "qwen3.7-plus": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" },
         "qwen3.6-plus": { "endpoint": "messages", "npm": "@ai-sdk/anthropic" }
       }
+    },
+    "commandcode-goat": {
+      "label": "Command Code GOAT 订阅（Provider API）",
+      "env_key": "COMMANDCODE_GOAT_API_KEY",
+      "base_url": "https://api.commandcode.ai/provider/v1",
+      "anthropic_base_url": "https://api.commandcode.ai/provider",
+      "anthropic_auth": "api_key",
+      "wire_api": "responses",
+      "supports_websockets": false,
+      "opencode_provider_id": "commandcode",
+      "models_url": "https://api.commandcode.ai/provider/v1/models",
+      "models_auth": "none",
+      "models_metadata_provider": "commandcode",
+      "supported_strengths": [ "low", "medium", "high", "xhigh", "max" ],
+      "codex": {
+        "unsupported_models": [ "claude-*" ],
+        "unsupported_reason": "Command Code Provider API 的 Claude 模型仅支持 /messages"
+      },
+      "models": {
+        "deepseek/deepseek-v4.1-flash": {
+          "context_window": 1000000,
+          "supported_strengths": [ "low", "high", "max" ]
+        },
+        "deepseek/deepseek-v4-pro": {
+          "context_window": 1000000,
+          "supported_strengths": [ "low", "medium", "high", "max" ]
+        },
+        "gpt-6-sol": {
+          "context_window": 1050000,
+          "supported_strengths": [ "low", "medium", "high", "xhigh", "max" ]
+        },
+        "claude-sonnet-4-6": {
+          "context_window": 1000000,
+          "supported_strengths": [ "low", "medium", "high", "max" ]
+        }
+      }
     }
   },
   "agents": {
@@ -112,7 +148,8 @@
       "autoupdate": false,
       "key_providers": [
         "deepseek-pay",
-        "opencode-go"
+        "opencode-go",
+        "commandcode-goat"
       ]
     },
     "codex": {
@@ -139,6 +176,33 @@
         "features": {
           "fast_mode": "false"
         }
+      }
+    },
+    "commandcode": {
+      "permission_mode": "default",
+      "trust": true,
+      "skip_onboarding": true,
+      "auto_update": false,
+      "context_window": 1000000,
+      "statusline": {
+        "version": 1,
+        "enabled": true,
+        "items": [
+          { "id": "model-reasoning", "enabled": true },
+          { "id": "context-used", "enabled": true },
+          { "id": "cwd", "enabled": true },
+          { "id": "git-branch", "enabled": true },
+          { "id": "session-name", "enabled": true },
+          { "id": "version", "enabled": true },
+          { "id": "permission-mode", "enabled": true },
+          { "id": "ide", "enabled": true },
+          { "id": "pull-request", "enabled": true },
+          { "id": "taste", "enabled": true },
+          { "id": "background-tasks", "enabled": true },
+          { "id": "hints", "enabled": true },
+          { "id": "legacy-mods", "enabled": true },
+          { "id": "phase-model", "enabled": true }
+        ]
       }
     }
   }

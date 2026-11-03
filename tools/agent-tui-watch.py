@@ -23,7 +23,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Watch a live agent TUI for a completed failed turn."
     )
-    parser.add_argument("--agent", choices=("codex", "claude", "opencode"), required=True)
+    parser.add_argument("--agent", choices=("codex", "claude", "opencode", "commandcode"), required=True)
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--cwd", required=True)
     parser.add_argument("--created-at", default="")

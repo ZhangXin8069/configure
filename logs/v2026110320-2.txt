@@ -1,0 +1,87 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 20:37:05 +0800
+批次: commandcode-path-alignment
+主任务: 完善 Command Code 安装配置并统一 agent 路径
+触发原因: 任务完成
+摘要: 修正为 $HOME/.local/bin 统一路径，补齐 quickstart 文档与隔离回归
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 需求与身份路由
+- 目标: 参考 Command Code 官方 quickstart，仿照 `lib/_opencode` 完善 `lib/_commandcode`，并修正版本化 Node PATH 约定。
+- 身份: `{代码}`。
+- 技能: `auto`、`all`、`form`、`log`、`rule`。
+- 约束: 不提交、不推送；不修改系统配置；不覆盖并发日志；不记录真实凭据。
+
+### S2 — 上下文与官方依据
+- 只读核对 `lib/_opencode`、`lib/_codex` 和当前 `lib/_commandcode` 实现。
+- 提取官方 quickstart、settings、permissions、BYOK 与 CLI reference 正文。
+- 确认 Node.js >= 22、npm 包 `command-code@1.88.2`、别名 `command-code/cmd/cmdc/commandcode`。
+- 确认 `login`、`status --json`、`-p/--print`、`--trust`、`/import`、`learn-taste`、`update` 均为官方入口。
+
+### S3 — 路径修正与实现
+- 将 Unix npm 全局前缀固定为 `$HOME/.local`，最终入口统一为 `$HOME/.local/bin`。
+- 将 Windows 安装前缀统一为 `%USERPROFILE%\.local\bin`。
+- 保留默认固定版本、`--new` 和显式版本语义。
+- 按 `_opencode`/`_codex` 模式幂等写入 shell 或用户 PATH。
+- 更新安装测试，覆盖统一前缀、PATH 不重复、Node 20 拒绝和版本选择。
+- 更新 `AGENTS.md` 与 `setup.md`，补充 quickstart、taste、import、update 和正确 PATH 写法。
+
+### S4 — 最终验收
+- 全部 Shell 语法检查通过。
+- 安装与配置测试均通过。
+- 真实 npm 临时前缀安装验证四个命令入口均返回 `1.88.2`。
+- form 审计、数据边界检查、尾随空白与冲突标记检查通过。
+
+## 验证与证据
+- `bash -n install.sh config.sh install.test.sh config.test.sh`: exit 0。
+- `bash install.test.sh`: PASS。
+- `bash config.test.sh`: PASS。
+- 真实 npm 安装: `command-code/cmd/cmdc/commandcode --version` 均输出 `1.88.2`。
+- `form-audit.sh --strict --quiet`: exit 0。
+- `form-data-tracking-check.sh --root /root/configure --quiet`: exit 0。
+- `rg` 检查版本化 Node 路径、尾随空白和冲突标记: 无命中。
+- 未验证: 原生 Windows `install.bat` 运行时；当前环境无 `cmd.exe`、Wine 或 PowerShell。
+- 残余失败: `form-snapshot-verify.sh --quiet` 报告 8 个 `configure-main` SHA-256 不匹配；本次未修改快照目录，未越界处理。
+
+## 变更与产物
+- `lib/_commandcode/install.sh`
+- `lib/_commandcode/install.bat`
+- `lib/_commandcode/install.test.sh`
+- `lib/_commandcode/setup.md`
+- `lib/_commandcode/AGENTS.md`
+- `lib/_commandcode/config.sh` 与 `config.test.sh` 已复核通过。
+- 未暂存、未提交、未推送。
+
+## 风险、限制与下一步
+- 需要在原生 Windows 执行 `install.bat --help` 和无凭据安装冒烟。
+- 真实 npm 验证目录为 `/tmp/commandcode-real-install.zbk3Yb`，约 193 MB；受本次安全策略限制未删除。
+- 既有 `form-snapshot-verify` 失败需由快照维护任务单独处理。
+
+## 用户输入指令
+参考"https://commandcode.ai/docs/quickstart",仿照{../opencode},编写此目录下的内容,其中" export PATH="/root/.local/node-v24.21.0/bin:$PATH""不对,路径应与其他agent保持一致
+
+## Agent 全文报告
+--- report begin ---
+状态: finished
+
+## 改动内容
+已完善 `lib/_commandcode` 的安装、配置、测试与文档。Unix 安装器现在通过 npm `--prefix "$HOME/.local"` 安装，最终入口统一为 `$HOME/.local/bin/command-code`；Windows 使用 `%USERPROFILE%\.local\bin`。两侧安装器均按其他 agent 的约定幂等注册 PATH，不再依赖版本化 Node 目录。安装测试新增统一前缀、PATH 去重和 Node.js 版本闸门覆盖；`setup.md` 与目录 `AGENTS.md` 已同步正确路径及 quickstart 的 trust、taste、import、update 流程。
+
+## 推理依据
+`_opencode`、`_codex` 均以 `$HOME/.local/bin` 为稳定入口，而当前 npm 默认 prefix 是版本化 Node 目录。将 npm prefix 设为其父目录 `$HOME/.local` 后，npm 生成的四个命令软链接自然落在统一入口目录，既可复现，也避免把本机 Node 版本写死。Command Code 的 quickstart、settings、permissions、BYOK 与 CLI reference 已用于核对命令、配置键和别名。
+
+## 验证结果
+- `bash -n install.sh config.sh install.test.sh config.test.sh`：通过。
+- `bash install.test.sh`：PASS，覆盖默认/latest/显式版本、统一安装路径、PATH 幂等与 Node 20 拒绝。
+- `bash config.test.sh`：PASS，覆盖 dry-run、配置分层、权限、未知字段、文件权限与幂等。
+- 真实 npm 临时前缀安装：`command-code`、`cmd`、`cmdc`、`commandcode` 均返回 `1.88.2`。
+- form 审计与数据边界检查：通过。
+- 原生 Windows 运行时未验证，当前环境没有 `cmd.exe`、Wine 或 PowerShell。
+- `form-snapshot-verify.sh` 报告既有 `configure-main` 哈希不匹配；本次未修改快照目录，未处理该范围外问题。
+
+## 后续步骤
+目录尚未暂存、提交或推送。需要时可在原生 Windows 补做 `install.bat --help` 与无凭据安装冒烟；临时 npm 验证目录 `/tmp/commandcode-real-install.zbk3Yb` 约 193 MB，可在确认后清理。
+--- report end ---

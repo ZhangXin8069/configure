@@ -1,9 +1,11 @@
 #!/usr/bin/env bash
-# 统一 agent 启动器：cl/cls/op/co/ops/cos 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
+# 统一 agent 启动器：cl/cls/op/co/cm/ops/cos/cms 软链接分发（cpupower.sh 模式，按 $_NAME 区分）
 #   cl  → Claude Code（默认 deepseek-pay 途径的 Anthropic 兼容端点；TUI 权限模式见配置；驱动：claude -p → --resume 链）
 #   cls → Claude Code HPC/secure 入口（agents.claude.secure_binary 部署路径，缺失时自动完整复制）
 #   op  → OpenCode（默认 build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
+#   cm  → Command Code（TUI；驱动：--print NDJSON → --session 续链）
+#   cms → Command Code HPC/secure 入口（agents.commandcode.secure_binary）
 #   ops → OpenCode HPC/secure 入口（agents.opencode.secure_binary 部署路径，缺失时自动完整复制）
 #   cos → Codex HPC/secure 入口（agents.codex.secure_binary 部署路径，缺失时自动完整复制）
 # prompt 单一来源：同目录 agent-prompt.txt（模板含 ${HOME}/${_PWD} 占位符；op 另支持 ${LIST_FILE}）
@@ -15,9 +17,9 @@
 #   消除 Codex ≥0.154 的「Model metadata ... not found」告警；缓存于 data/cache，可用 CODEX_MODEL_CATALOG 覆盖
 
 # ---- 脚本定位：AGENT_SCRIPT_DIR 可在 /dev/fd/3 等场景注入真实目录；缺失时回退 BASH_SOURCE ----
-# 软链接调用（把 cl/op/co 链到 PATH 中其他目录）时解析出脚本真实位置，否则同目录的
+# 软链接调用（把 cl/op/co/cm 链到 PATH 中其他目录）时解析出脚本真实位置，否则同目录的
 # agent-runtime.sh / agent-config.json / agent-prompt.txt 都找不到；_NAME 仍取调用名，
-# 身份（cl/op/co）不受解析影响。readlink 不带 -f，兼容 macOS/HPC 老环境。
+# 身份（cl/op/co/cm）不受解析影响。readlink 不带 -f，兼容 macOS/HPC 老环境。
 _SRC=${BASH_SOURCE[0]:-${0}}
 _SRC_REAL="${_SRC}"
 case "${_SRC}" in
@@ -46,10 +48,12 @@ case "${_NAME}" in
     cls)  _AGENT=claude;   _SECURE=1;;
     op)   _AGENT=opencode; _SECURE=0;;
     co)   _AGENT=codex;    _SECURE=0;;
+    cm)   _AGENT=commandcode; _SECURE=0;;
     ops)  _AGENT=opencode; _SECURE=1;;
     cos)  _AGENT=codex;    _SECURE=1;;
+    cms)  _AGENT=commandcode; _SECURE=1;;
     *)
-        echo "Usage: ln -s agent.sh {cl|cls|op|co|ops|cos}"
+        echo "Usage: ln -s agent.sh {cl|cls|op|co|cm|ops|cos|cms}"
         exit 1;;
 esac
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
@@ -225,7 +229,7 @@ _export_parent_context() {
     export AGENT_PARENT_APPROVAL="${_approval}"
 }
 
-# 终端编码兜底：cl/op/co 的 TUI 依赖 UTF-8 locale，但启动器可能来自
+# 终端编码兜底：cl/op/co/cm 的 TUI 依赖 UTF-8 locale，但启动器可能来自
 # 未 source env.sh 的 SSH/IDE/非登录 shell（LANG=C，或 LANG 指向未生成的 locale）。
 # 这里用 `locale charmap` 实测，而不是只看 LANG 字符串是否含 UTF-8。
 _AGENT_UTF8_LOCALE=""
@@ -461,6 +465,7 @@ _provider_alias() {
     case "$1" in
         pay) printf 'deepseek-pay\n';;
         go)  printf 'opencode-go\n';;
+        gt)  printf 'commandcode-goat\n';;
         *)   printf '%s\n' "$1";;
     esac
 }
@@ -798,6 +803,391 @@ _terminate() {
 trap '_interrupt' INT
 trap '_terminate' TERM
 
+# Command Code 原生 statusline：只合并 agents.commandcode.statusline，保留用户其余配置。
+# 官方 schema 位于 ~/.commandcode/config.json；若用户已有更高版本布局则保持只读不改。
+_commandcode_apply_statusline() {
+    local _target="${HOME:?HOME is required}/.commandcode/config.json"
+    "${_AGENT_PYTHON:-python3}" - \
+        "$_AGENT_CONFIG_FILE" "$_AGENT_CUSTOM_CONFIG_FILE" "$_target" <<'PY'
+import json
+import os
+import shutil
+import sys
+import tempfile
+import time
+
+base_path, custom_path, target_path = sys.argv[1:4]
+
+def merge(base, override):
+    if isinstance(base, dict) and isinstance(override, dict):
+        result = dict(base)
+        for key, value in override.items():
+            result[key] = merge(result.get(key), value)
+        return result
+    return override
+
+with open(base_path, encoding="utf-8") as handle:
+    base = json.load(handle)
+with open(custom_path, encoding="utf-8") as handle:
+    custom = json.load(handle)
+config = merge(base, custom)
+statusline = (((config.get("agents") or {}).get("commandcode") or {}).get("statusline"))
+if not isinstance(statusline, dict):
+    raise SystemExit(0)
+
+try:
+    with open(target_path, encoding="utf-8") as handle:
+        target = json.load(handle)
+    if not isinstance(target, dict):
+        raise ValueError("root is not an object")
+except FileNotFoundError:
+    target = {}
+except Exception as error:
+    print(f"###{os.environ.get('_NAME', 'cm')}: warning: 无法更新 Command Code statusline: {target_path}: {error}###", file=sys.stderr)
+    raise SystemExit(1)
+
+old = target.get("statusline")
+try:
+    old_version = int(old.get("version", 0)) if isinstance(old, dict) else 0
+    new_version = int(statusline.get("version", 1))
+except (TypeError, ValueError):
+    old_version = 0
+    new_version = 1
+if old_version > new_version:
+    raise SystemExit(0)
+if old == statusline:
+    raise SystemExit(0)
+
+parent = os.path.dirname(target_path)
+os.makedirs(parent, mode=0o700, exist_ok=True)
+if os.path.exists(target_path):
+    backup = f"{target_path}.bak.{time.strftime('%Y%m%d-%H%M%S')}-{os.getpid()}"
+    shutil.copy2(target_path, backup)
+target["statusline"] = statusline
+fd, tmp_path = tempfile.mkstemp(prefix=".config.", dir=parent)
+try:
+    with os.fdopen(fd, "w", encoding="utf-8") as handle:
+        json.dump(target, handle, ensure_ascii=False, sort_keys=True, indent=2)
+        handle.write("\n")
+    os.chmod(tmp_path, 0o600)
+    os.replace(tmp_path, target_path)
+finally:
+    if os.path.exists(tmp_path):
+        os.unlink(tmp_path)
+PY
+}
+
+_commandcode_extract_session_id() {
+    local _log="$1"
+    [[ -r "$_log" ]] || return 1
+    "${_AGENT_PYTHON:-python3}" - "$_log" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8", errors="replace") as handle:
+    for line in handle:
+        try:
+            event = json.loads(line)
+        except Exception:
+            continue
+        values = [event.get("sessionId")]
+        nested = event.get("event")
+        if isinstance(nested, dict):
+            values.append(nested.get("sessionId"))
+            result = nested.get("result")
+            if isinstance(result, dict):
+                values.append(result.get("sessionId"))
+                state = result.get("nextState")
+                if isinstance(state, dict):
+                    values.append(state.get("sessionId"))
+        for value in values:
+            if isinstance(value, str) and value:
+                print(value)
+                raise SystemExit(0)
+raise SystemExit(1)
+PY
+}
+
+_commandcode_lookup_session_id() {
+    local _state_python _tool _dump
+    _state_python="$(command -v "${AGENT_STATE_PYTHON:-python3}" 2>/dev/null || true)"
+    _tool="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}/tools/agent-session-state.py"
+    [[ -n "$_state_python" && -r "$_tool" ]] || return 1
+    _dump="$("$_state_python" "$_tool" --agent commandcode \
+        --run-id "$AGENT_RUN_ID" --cwd "$_PWD" --created-at "${AGENT_CREATED_AT:-}" \
+        --data-dir "${AGENT_COMMANDCODE_DATA_DIR:-${HOME:-}/.commandcode}" 2>/dev/null || true)"
+    printf '%s\n' "$_dump" | sed -n 's/^session_id=//p' | head -n 1
+}
+
+# =====================================================================
+# Command Code 分支（cm/cms）：TUI 或 --print NDJSON 驱动链
+# =====================================================================
+run_commandcode() {
+    local _COMMAND_CODE_BIN="${COMMAND_CODE_BIN:-}"
+    if (( _SECURE )) && [[ -z "${_COMMAND_CODE_BIN}" && -n "${_CFG_AGENTS_COMMANDCODE_SECURE_BINARY:-}" ]]; then
+        _COMMAND_CODE_BIN="$(_prepare_secure_binary commandcode "${_CFG_AGENTS_COMMANDCODE_SECURE_BINARY}" COMMAND_CODE_BIN)" || exit $?
+    fi
+    if [[ -z "${_COMMAND_CODE_BIN}" ]]; then _COMMAND_CODE_BIN="$(command -v command-code 2>/dev/null || true)"; fi
+    if [[ -z "${_COMMAND_CODE_BIN}" ]]; then _COMMAND_CODE_BIN="$(command -v cmdc 2>/dev/null || true)"; fi
+    if [[ -z "${_COMMAND_CODE_BIN}" ]]; then _COMMAND_CODE_BIN="$(command -v cmd 2>/dev/null || true)"; fi
+    if [[ -z "${_COMMAND_CODE_BIN}" ]]; then
+        _agent_runtime_ensure_agent commandcode || true
+        _COMMAND_CODE_BIN="$(_agent_runtime_locate_binary command-code || true)"
+    fi
+    if [[ -z "${_COMMAND_CODE_BIN}" ]]; then
+        echo "###${_NAME}: ERROR: 未找到 command-code，请安装 Command Code 或设置 COMMAND_CODE_BIN###" >&2
+        exit 127
+    fi
+
+    local PROVIDER_OVERRIDE="${COMMANDCODE_PROVIDER:-}"
+    local MODEL_OVERRIDE="${COMMANDCODE_MODEL:-}"
+    local MODEL_ENV_OVERRIDE="${MODEL_OVERRIDE}"
+    local EFFORT_OVERRIDE="${COMMANDCODE_EFFORT:-${COMMANDCODE_REASONING_EFFORT:-}}"
+    local EFFORT_ENV_OVERRIDE="${EFFORT_OVERRIDE}"
+    local PERMISSION_MODE="${COMMANDCODE_PERMISSION_MODE:-${_CFG_AGENTS_COMMANDCODE_PERMISSION_MODE:-default}}"
+    local MODEL_ID MODEL_NAME EFFORT DRIVE_FILE="" DRIVE_INTERVAL="" DRIVE_MODE=0
+    local MODEL_EXPLICIT=0 MODEL_FLAG_EXPLICIT=0 STRENGTH_FLAG_EXPLICIT=0
+    local MODEL_FROM_POSITIONAL=0 STRENGTH_FROM_POSITIONAL=0
+    local -a POSITIONAL=()
+    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-100}"
+    local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
+    local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
+    local RESUME_RUN_ID="${AGENT_RESUME_RUN_ID:-}"
+    local ONCE_MODE="${AGENT_ONCE:-0}"
+    [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
+    [[ -n "${EFFORT_OVERRIDE}" ]] && STRENGTH_FLAG_EXPLICIT=1
+
+    while (( $# )); do
+        case "$1" in
+            gt|commandcode-goat) PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
+            pay|go|deepseek-pay|opencode-go)
+                echo "###${_NAME}: ERROR: cm 只使用 Command Code 自有 provider；请使用 gt（commandcode-goat）或不指定途径###" >&2
+                exit 64;;
+            --model|-model)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
+                MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
+            --effort|--reasoning-effort)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
+                EFFORT_OVERRIDE="$2"; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
+            --permission-mode)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少权限模式###" >&2; exit 64; fi
+                PERMISSION_MODE="$2"; shift 2;;
+            --plan) PERMISSION_MODE=plan; shift;;
+            --accept-edits) PERMISSION_MODE=accept-edits; shift;;
+            --yolo) PERMISSION_MODE=yolo; shift;;
+            --help)
+                echo "用法: ${_NAME} [gt] [MODEL] [STRENGTH] [--model MODEL] [--effort LEVEL] [-file PATH] [-time DUR]"
+                echo "默认: gt=commandcode-goat，模型=DeepSeek V4.1 Flash，强度=max，上下文=1M。"
+                echo "认证: 先 source ~/env-key.sh；COMMANDCODE_GOAT_API_KEY 会映射为 COMMAND_CODE_API_KEY。"
+                echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]。"
+                echo "权限: [--permission-mode default|plan|accept-edits|yolo|dont-ask] [--plan] [--accept-edits] [--yolo]。"
+                echo "不给驱动选项时进入 Command Code TUI；给出 -file/-time/--once 时进入驱动模式。"
+                exit 0;;
+            -file|--file)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
+                DRIVE_FILE="$2"; DRIVE_MODE=1; shift 2;;
+            -time|--time)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
+                _ti_raw="$2"; DRIVE_MODE=1; shift 2;;
+            --once) ONCE_MODE=1; DRIVE_MODE=1; shift;;
+            --max-turns)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少回合数###" >&2; exit 64; fi
+                MAX_TURNS_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --max-runtime)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少时长参数###" >&2; exit 64; fi
+                MAX_RUNTIME_RAW="$2"; DRIVE_MODE=1; shift 2;;
+            --stop-file)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
+                STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
+            --resume)
+                if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
+                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
+            -*) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法见 ${_NAME} --help）###" >&2; exit 64;;
+            *) POSITIONAL+=("$1"); shift;;
+        esac
+    done
+
+    if (( ${#POSITIONAL[@]} > 0 )) && [[ -z "${MODEL_ENV_OVERRIDE}" && ${MODEL_FLAG_EXPLICIT} == 0 ]]; then
+        MODEL_OVERRIDE="${POSITIONAL[0]}"; MODEL_EXPLICIT=1; MODEL_FROM_POSITIONAL=1
+    fi
+    if (( ${#POSITIONAL[@]} > 1 )) && [[ -z "${EFFORT_ENV_OVERRIDE}" && ${STRENGTH_FLAG_EXPLICIT} == 0 ]]; then
+        EFFORT_OVERRIDE="${POSITIONAL[1]}"; STRENGTH_FROM_POSITIONAL=1
+    fi
+    if (( ${#POSITIONAL[@]} > 2 )); then echo "###${_NAME}: ERROR: 位置参数过多（最多为 [供应商] [模型] [强度]）###" >&2; exit 64; fi
+    if [[ -n "${_ti_raw:-}" ]]; then
+        if ! DRIVE_INTERVAL="$(_parse_interval "$_ti_raw")"; then echo "###${_NAME}: ERROR: --time '${_ti_raw}' 格式无效###" >&2; exit 64; fi
+    fi
+    unset _ti_raw
+    [[ -n "${DRIVE_INTERVAL}" ]] || DRIVE_INTERVAL=30
+    if ! MAX_TURNS_RAW="$(_parse_nonnegative_integer "$MAX_TURNS_RAW")"; then echo "###${_NAME}: ERROR: --max-turns 必须是非负整数###" >&2; exit 64; fi
+    if ! MAX_RUNTIME_RAW="$(_parse_runtime_limit "$MAX_RUNTIME_RAW")"; then echo "###${_NAME}: ERROR: --max-runtime 格式无效###" >&2; exit 64; fi
+
+    local _cc_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_COMMANDCODE_PROVIDER:-commandcode-goat}}")"
+    if [[ "${_cc_provider}" != "commandcode-goat" ]]; then
+        echo "###${_NAME}: ERROR: cm 仅支持途径 commandcode-goat（快捷词 gt），当前为 '${_cc_provider}'###" >&2
+        exit 64
+    fi
+    local PROVIDER_EXPLICIT=0
+    [[ -n "${PROVIDER_OVERRIDE}" ]] && PROVIDER_EXPLICIT=1
+    local _cc_agent_model="${_CFG_AGENTS_COMMANDCODE_MODEL:-}"
+    local _cc_provider_model="$(_cfg_provider_default_model "$_cc_provider" commandcode)"
+    local _cc_model_label="（途径默认）"
+    if [[ -n "${MODEL_OVERRIDE}" ]]; then MODEL_ID="${MODEL_OVERRIDE}"; _cc_model_label="（override）"
+    elif (( PROVIDER_EXPLICIT )) && [[ -n "${_cc_provider_model}" ]]; then MODEL_ID="${_cc_provider_model}"
+    elif [[ -n "${_cc_agent_model}" ]]; then MODEL_ID="${_cc_agent_model}"; _cc_model_label="（agent 默认）"
+    else MODEL_ID="${_cc_provider_model}"; fi
+    if [[ -z "${MODEL_ID}" ]]; then echo "###${_NAME}: ERROR: 途径 '${_cc_provider}' 未定义 commandcode 默认模型###" >&2; exit 64; fi
+    local _cc_agent_effort="${_CFG_AGENTS_COMMANDCODE_STRENGTH:-}"
+    local _cc_provider_effort="$(_cfg_provider_default_strength "$_cc_provider" commandcode)"
+    if (( PROVIDER_EXPLICIT )) && [[ -n "${_cc_provider_effort}" ]]; then EFFORT="${_cc_provider_effort}"
+    elif [[ -n "${_cc_agent_effort}" ]]; then EFFORT="${_cc_agent_effort}"
+    else EFFORT="${_cc_provider_effort}"; fi
+    [[ -n "${EFFORT}" ]] || EFFORT=max
+    [[ -n "${EFFORT_OVERRIDE}" ]] && EFFORT="${EFFORT_OVERRIDE}"
+    local _cc_assert_model_match=0
+    (( MODEL_FROM_POSITIONAL )) && _cc_assert_model_match=1
+    _agent_model_resolve_catalog commandcode "${_cc_provider}" "${MODEL_ID}" "${EFFORT}" "${_cc_assert_model_match}"
+    local _cc_model_rc=$?
+    if (( _cc_model_rc != 0 )); then exit "${_cc_model_rc}"; fi
+    MODEL_ID="${AGENT_MODEL_RESOLVED_MODEL}"; EFFORT="${AGENT_MODEL_RESOLVED_STRENGTH}"
+    MODEL_NAME="${MODEL_ID}${_cc_model_label}"
+    [[ "${AGENT_MODEL_RESOLVED_MATCH}" == "fuzzy" ]] && MODEL_NAME+="（模型匹配）"
+    case "${PERMISSION_MODE}" in default|plan|accept-edits|yolo|dont-ask|standard|auto-accept|bypass) ;; *) echo "###${_NAME}: ERROR: 非法权限模式 '${PERMISSION_MODE}'###" >&2; exit 64;; esac
+
+    local _runtime_mode=tui
+    (( DRIVE_MODE )) && _runtime_mode=drive
+    [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
+    AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_REASONING="${EFFORT}"
+    AGENT_RUNTIME_VARIANT=""
+    _agent_runtime_start_or_resume commandcode "$MODEL_ID" "$_runtime_mode" \
+        "${AGENT_ROLE:-solo-agent}" "${AGENT_TIER:-standard}" "${AGENT_POSTURE:-frontier-orchestrator}" \
+        "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 1 0 || exit $?
+    MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"; EFFORT="${AGENT_RUNTIME_REASONING:-$EFFORT}"
+    _export_parent_context "${_cc_provider}" "${MODEL_ID}" "${EFFORT}"
+    _load_prompt
+
+    local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
+    local -a _agent_config_dirs _workspace_skill_roots _SEEN_SKILL_PATHS=()
+    _agent_config_dirs=("${_configure_agent_root}/skills" "${_configure_agent_root}/tools" "${_configure_agent_root}/hooks" "${_configure_agent_root}/plugins")
+    _workspace_root="${_PWD}"
+    if _git_root="$(git -C "${_PWD}" rev-parse --show-toplevel 2>/dev/null)"; then [[ -n "${_git_root}" ]] && _workspace_root="${_git_root}"; fi
+    _workspace_skill_roots=("${_PWD}/skills" "${_PWD}/.codex/skills" "${_PWD}/.commandcode/skills")
+    if [[ "${_workspace_root}" != "${_PWD}" ]]; then _workspace_skill_roots+=("${_workspace_root}/skills" "${_workspace_root}/.codex/skills" "${_workspace_root}/.commandcode/skills"); fi
+    _append_agent_config_dirs "全局 Agent 配置目录（按需读取）" "${_agent_config_dirs[@]}"
+    _append_skill_list "全局技能（${_agent_config_dirs[0]}）" "${_agent_config_dirs[0]}"
+    _append_skill_list "当前工作目录技能（${_PWD}）" "${_workspace_skill_roots[@]}"
+    unset _git_root _workspace_root
+    _agent_runtime_append_prompt_contract "$_runtime_mode" "$MODEL_ID" "$EFFORT" ""
+
+    if [[ -n "${COMMANDCODE_GOAT_API_KEY:-}" ]]; then
+        if [[ -n "${COMMAND_CODE_API_KEY:-}" && "${COMMAND_CODE_API_KEY}" != "${COMMANDCODE_GOAT_API_KEY}" ]]; then
+            echo "###${_NAME}: warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###" >&2
+        fi
+        export COMMAND_CODE_API_KEY="${COMMANDCODE_GOAT_API_KEY}"
+    elif [[ -z "${COMMAND_CODE_API_KEY:-}" ]]; then
+        echo "###${_NAME}: warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###" >&2
+    fi
+    _commandcode_apply_statusline || echo "###${_NAME}: warning: statusline 配置未更新，继续使用现有 Command Code 配置###" >&2
+
+    local _cc_trust="${_CFG_AGENTS_COMMANDCODE_TRUST:-true}" _cc_skip_onboarding="${_CFG_AGENTS_COMMANDCODE_SKIP_ONBOARDING:-true}"
+    local -a _CC_BASE_ARGS _CC_SKILL_ARGS _CC_ADD_DIR_ARGS=()
+    _CC_BASE_ARGS=(--model "$MODEL_ID" --effort "$EFFORT" --permission-mode "$PERMISSION_MODE" --no-auto-update)
+    case "${_cc_trust}" in false|0|off) ;; *) _CC_BASE_ARGS+=(--trust);; esac
+    case "${_cc_skip_onboarding}" in false|0|off) ;; *) _CC_BASE_ARGS+=(--skip-onboarding);; esac
+    for _dir in "${_agent_config_dirs[@]}" "${_workspace_skill_roots[@]}"; do
+        [[ -d "$_dir" ]] || continue
+        _CC_ADD_DIR_ARGS+=(--add-dir "$_dir")
+    done
+    if [[ -d "${_agent_config_dirs[0]}" ]]; then _CC_SKILL_ARGS+=(--skill "${_agent_config_dirs[0]}"); fi
+    for _dir in "${_workspace_skill_roots[@]}"; do [[ -d "$_dir" ]] && _CC_SKILL_ARGS+=(--skill "$_dir"); done
+    unset _dir
+
+    echo "============================================================"
+    echo "  Command Code: ${MODEL_NAME} | effort=${EFFORT} | permission=${PERMISSION_MODE}"
+    echo "  provider: ${_cc_provider} | context=1000000"
+    echo "  run: ${AGENT_RUN_ID}"
+    echo "  log: ${LOG_FILE}"
+    echo "  state: ${AGENT_MANIFEST_FILE}"
+    if (( _SECURE )); then echo "  launcher: secure/HPC"; fi
+    if (( DRIVE_MODE )); then echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s"; else echo "  mode: TUI interactive"; fi
+    echo "============================================================"
+
+    if (( ! DRIVE_MODE )); then
+        local -a _CC_TUI_ARGS=("${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --name "$AGENT_RUN_ID" "$PROMPT")
+        local _cc_recovery_json='[]'
+        if command -v python3 >/dev/null 2>&1; then
+            _cc_recovery_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
+                "$_COMMAND_CODE_BIN" -p "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。" \
+                --session "{session_id}" --output-format json --skip-onboarding --no-auto-update \
+                --model "$MODEL_ID" --effort "$EFFORT" --permission-mode "$PERMISSION_MODE")"
+        fi
+        _agent_runtime_turn_begin
+        _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
+        local _run_rc=$?
+        if (( _run_rc == 0 )); then _agent_runtime_turn_success; else _agent_runtime_turn_failure; fi
+        local _cc_sid="$(_commandcode_lookup_session_id || true)"
+        [[ -n "$_cc_sid" ]] && _agent_runtime_set_session "$_cc_sid" ""
+        echo "logs -> ${LOG_FILE}"
+        return "${_run_rc}"
+    fi
+
+    if _agent_runtime_stop_file_requested; then echo "logs -> ${LOG_FILE}"; return 0; fi
+    local _cc_sid="${AGENT_SESSION_ID:-}" _cc_rc=0 _cc_text=""
+    local -a _CC_RESUME_BASE=(--output-format json --skip-onboarding --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" --permission-mode "$PERMISSION_MODE")
+    if [[ -z "${RESUME_RUN_ID}" ]]; then
+        _agent_runtime_turn_begin
+        if "$_COMMAND_CODE_BIN" -p "$PROMPT" "${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --output-format json >>"${LOG_FILE}" 2>&1; then _cc_rc=0; else _cc_rc=$?; fi
+        if (( _cc_rc != 0 )); then
+            _agent_runtime_turn_failure
+            echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_cc_rc}），驱动终止###" >&2
+            exit "${_cc_rc}"
+        fi
+        _agent_runtime_turn_success
+        _cc_sid="$(_commandcode_extract_session_id "$LOG_FILE" 2>/dev/null || true)"
+        if [[ -z "$_cc_sid" ]]; then echo "###${_NAME}: ERROR: 无法从 ${LOG_FILE} 提取 sessionId，驱动终止###" >&2; exit 1; fi
+        _agent_runtime_set_session "$_cc_sid" ""
+    elif [[ -z "$_cc_sid" ]]; then
+        echo "###${_NAME}: ERROR: 可恢复会话没有 session_id，驱动终止###" >&2
+        exit 1
+    fi
+    if [[ -n "${DRIVE_FILE}" ]]; then
+        if [[ ! -r "${DRIVE_FILE}" ]]; then echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2; exit 64; fi
+        _cc_text="$(tr -d '\r' < "$DRIVE_FILE")"
+    fi
+    if (( ONCE_MODE )); then
+        if [[ -n "${_cc_text}" ]]; then
+            _agent_runtime_turn_begin
+            if "$_COMMAND_CODE_BIN" -p "$_cc_text" --session "$_cc_sid" "${_CC_RESUME_BASE[@]}" >>"${LOG_FILE}" 2>&1; then _agent_runtime_turn_success; else _cc_rc=$?; _agent_runtime_turn_failure; fi
+        fi
+        if (( _cc_rc == 0 )); then _agent_runtime_mark finished "once 模式"; fi
+        echo "logs -> ${LOG_FILE}"
+        return "${_cc_rc}"
+    fi
+    local _nudges=0 _fails=0
+    if [[ -n "${_cc_text}" ]]; then
+        _agent_runtime_turn_begin
+        if "$_COMMAND_CODE_BIN" -p "$_cc_text" --session "$_cc_sid" "${_CC_RESUME_BASE[@]}" >>"${LOG_FILE}" 2>&1; then _agent_runtime_turn_success; _nudges=$((_nudges + 1)); else _agent_runtime_turn_failure; _fails=$((_fails + 1)); fi
+        _cc_text=""
+    fi
+    while :; do
+        _agent_runtime_should_stop "$_nudges" && break
+        sleep "$DRIVE_INTERVAL"
+        _agent_runtime_should_stop "$_nudges" && break
+        _agent_runtime_turn_begin
+        if "$_COMMAND_CODE_BIN" -p "继续" --session "$_cc_sid" "${_CC_RESUME_BASE[@]}" >>"${LOG_FILE}" 2>&1; then
+            _agent_runtime_turn_success; _nudges=$((_nudges + 1)); _fails=0
+            echo "---- drive: 继续 #${_nudges} ok $(date "+%F-%T") ----"
+        else
+            _cc_rc=$?; _agent_runtime_turn_failure; _fails=$((_fails + 1))
+            echo "###${_NAME}: warning: 继续发送失败 ${_fails}/3（退出码 ${_cc_rc}）###" >&2
+            if (( _fails >= 3 )); then _agent_runtime_mark blocked "连续 3 次继续失败" "${_cc_rc}"; echo "logs -> ${LOG_FILE}"; return 1; fi
+        fi
+    done
+    echo "logs -> ${LOG_FILE}"
+    return 0
+}
+
 # =====================================================================
 # Claude Code 分支（cl/cls）：TUI 或 -p/--resume 驱动链；模型旗标与 op/co 一致
 # =====================================================================
@@ -849,7 +1239,7 @@ run_claude() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.claude 与 agents.claude.model 互为一层，高优先层缺值回退另一层。
@@ -874,14 +1264,14 @@ run_claude() {
     [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|deepseek-pay|opencode-go)
+            pay|go|gt|deepseek-pay|opencode-go|commandcode-goat)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go（如 ${_NAME} go）。"
+                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 ${_NAME} gt）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
@@ -907,7 +1297,7 @@ run_claude() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -951,7 +1341,7 @@ run_claude() {
     # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go。
     local _cl_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}")"
     if [[ -z "${_cl_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gt、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CLAUDE_PROVIDER 环境变量，两者一视同仁）：
@@ -1039,6 +1429,7 @@ run_claude() {
         case "${_cl_provider}" in
             deepseek-pay) _cl_provider_hint=pay;;
             opencode-go) _cl_provider_hint=go;;
+            commandcode-goat) _cl_provider_hint=gt;;
         esac
         echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Claude 的 Anthropic Messages 协议：${AGENT_MODEL_RESOLVED_CLAUDE_UNSUPPORTED_REASON:-该模型不支持 /v1/messages}###" >&2
         echo "###${_NAME}: hint: 请改用 'op ${_cl_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
@@ -1403,7 +1794,7 @@ run_opencode() {
     fi
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.opencode 与 agents.opencode.model 互为一层，高优先层缺值回退另一层。
@@ -1430,7 +1821,7 @@ run_opencode() {
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|deepseek-pay|opencode-go)
+            pay|go|gt|deepseek-pay|opencode-go|commandcode-goat)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -1439,8 +1830,8 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
                 VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go（如 ${_NAME} go）。"
+                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 ${_NAME} gt）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
@@ -1466,7 +1857,7 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -1515,7 +1906,7 @@ run_opencode() {
     # 两层皆空时启动报错。
     local _op_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}")"
     if [[ -z "${_op_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gt、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 OPENCODE_PROVIDER 环境变量，两者一视同仁）
@@ -1650,11 +2041,17 @@ run_opencode() {
     if (( _op_v2 )); then
         OPENCODE_CONFIG_CONTENT="$("${_AGENT_PYTHON:-python3}" - \
             "${_OP_AGENT}" "${MODEL_ID}" "${VARIANT}" "${_op_update}" \
-            "${_CFG_AGENTS_OPENCODE_LSP:-true}" <<'PYEOF'
+            "${_CFG_AGENTS_OPENCODE_LSP:-true}" "${_op_provider_json}" <<'PYEOF'
 import json
 import sys
 
-agent, model, variant, update, lsp = sys.argv[1:6]
+agent, model, variant, update, lsp, providers_raw = sys.argv[1:7]
+try:
+    providers = json.loads(providers_raw or "{}")
+except Exception:
+    providers = {}
+if not isinstance(providers, dict):
+    providers = {}
 model_ref = model if not variant else model + "#" + variant
 config = {
     "$schema": "https://opencode.ai/config.json",
@@ -1663,7 +2060,7 @@ config = {
     "default_agent": agent,
     "model": model,
     "agents": {agent: {"model": model_ref}},
-    "providers": {},
+    "providers": providers,
 }
 print(json.dumps(config, ensure_ascii=False, separators=(",", ":")))
 PYEOF
@@ -2212,7 +2609,7 @@ run_codex() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL]
+    # 用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL]
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
@@ -2240,7 +2637,7 @@ run_codex() {
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|deepseek-pay|opencode-go)
+            pay|go|gt|deepseek-pay|opencode-go|commandcode-goat)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -2272,15 +2669,15 @@ run_codex() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go（如 ${_NAME} go）。"
+                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 ${_NAME} gt）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -2329,7 +2726,7 @@ run_codex() {
     # 两层皆空时启动报错。
     local _cx_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}")"
     if [[ -z "${_cx_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gt、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CODEX_PROVIDER_ID 环境变量，两者一视同仁）
@@ -2391,6 +2788,7 @@ run_codex() {
         case "${_cx_provider}" in
             deepseek-pay) _cx_provider_hint=pay;;
             opencode-go) _cx_provider_hint=go;;
+            commandcode-goat) _cx_provider_hint=gt;;
         esac
         echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Codex Responses 协议：${AGENT_MODEL_RESOLVED_CODEX_UNSUPPORTED_REASON:-该模型不支持 /responses}###" >&2
         echo "###${_NAME}: hint: 请改用 'op ${_cx_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
@@ -2768,6 +3166,7 @@ case "${_AGENT}" in
     claude)   run_claude "$@";;
     opencode) run_opencode "$@";;
     codex)    run_codex "$@";;
+    commandcode) run_commandcode "$@";;
 esac
 _rc=$?
 unset PROMPT _PWD

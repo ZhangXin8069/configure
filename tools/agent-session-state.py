@@ -78,7 +78,7 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Read-only local session lookup by the configure run id."
     )
-    parser.add_argument("--agent", choices=("codex", "claude", "opencode"), default="codex")
+    parser.add_argument("--agent", choices=("codex", "claude", "opencode", "commandcode"), default="codex")
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--cwd", required=True)
     parser.add_argument("--created-at", default="")
@@ -141,6 +141,13 @@ def resolve_opencode_data_dir(explicit: str) -> Path:
         return Path(configured).expanduser()
     xdg = os.environ.get("XDG_DATA_HOME")
     return (Path(xdg).expanduser() if xdg else Path.home() / ".local" / "share") / "opencode"
+
+
+def resolve_commandcode_data_dir(explicit: str) -> Path:
+    if explicit:
+        return Path(explicit).expanduser()
+    configured = os.environ.get("AGENT_COMMANDCODE_DATA_DIR", "")
+    return Path(configured).expanduser() if configured else Path.home() / ".commandcode"
 
 
 def resolve_opencode_state_db(explicit_db: str, explicit_dir: str) -> Path | None:
@@ -705,6 +712,122 @@ def lookup_opencode(args: argparse.Namespace, created_at: datetime | None) -> tu
     }, "found"
 
 
+def commandcode_session_match(
+    path: Path,
+    marker: str,
+    cwd: str,
+    max_bytes: int,
+) -> dict[str, Any] | None:
+    consumed = 0
+    session_id = path.stem
+    session_cwd = ""
+    timestamp: datetime | None = None
+    try:
+        with path.open(encoding="utf-8", errors="replace") as stream:
+            for line in stream:
+                consumed += len(line.encode("utf-8", errors="replace"))
+                if consumed > max_bytes:
+                    break
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+                if not isinstance(event, dict):
+                    continue
+                if event.get("type") == "session":
+                    session_cwd = str(event.get("cwd") or "")
+                    session_id = str(event.get("id") or session_id)
+                    timestamp = event_timestamp(event.get("timestamp"))
+                    continue
+                if event.get("type") != "message":
+                    continue
+                message = event.get("message")
+                if not isinstance(message, dict) or message.get("role") != "user":
+                    continue
+                text = content_text(message.get("content"))
+                if marker not in text:
+                    continue
+                if session_cwd and session_cwd != cwd:
+                    return None
+                if not SESSION_ID_RE.fullmatch(session_id):
+                    return None
+                return {
+                    "session_id": session_id,
+                    "state_path": path.resolve(),
+                    "source": "commandcode-session-jsonl",
+                    "timestamp": timestamp,
+                }
+    except OSError:
+        return None
+    return None
+
+
+def commandcode_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool, bool, bool, str]:
+    for line in iter_reverse_lines(path, max_bytes):
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, UnicodeError):
+            continue
+        if not isinstance(event, dict) or event.get("type") != "message":
+            continue
+        message = event.get("message")
+        if not isinstance(message, dict):
+            continue
+        role = str(message.get("role") or "")
+        if role == "user":
+            return False, False, False, False, "in_progress"
+        if role != "assistant":
+            return False, False, False, False, "unknown"
+        meta = message.get("meta") if isinstance(message.get("meta"), dict) else {}
+        text = content_text(message.get("content"))
+        error = meta.get("error") if meta else None
+        failure_text = error if error else text
+        transient = error_is_transient(failure_text)
+        overflow = error_is_context_overflow(failure_text)
+        failure = bool(error) or transient or overflow
+        return True, transient, overflow, failure, "completed"
+    return False, False, False, False, "unknown"
+
+
+def lookup_commandcode(args: argparse.Namespace, created_at: datetime | None) -> tuple[int, dict[str, Any] | None, str]:
+    data_root = resolve_commandcode_data_dir(args.data_dir)
+    projects = data_root / "projects"
+    if not projects.is_dir():
+        return 3, None, "commandcode_projects_missing"
+    marker = f"run_id={args.run_id}"
+    candidates: list[dict[str, Any]] = []
+    start_ms = int(created_at.timestamp() * 1000) if created_at is not None else 0
+    for path in projects.glob("*/*.jsonl"):
+        if path.name.endswith(".checkpoints.jsonl"):
+            continue
+        try:
+            if created_at is not None and int(path.stat().st_mtime * 1000) < start_ms - int(CREATED_AT_WINDOW.total_seconds() * 1000):
+                continue
+        except OSError:
+            continue
+        match = commandcode_session_match(path, marker, args.cwd, args.scan_bytes)
+        if match is None:
+            continue
+        timestamp = match.pop("timestamp", None)
+        distance = abs(int(timestamp.timestamp() * 1000) - start_ms) if timestamp and created_at else 0
+        match["distance_ms"] = distance
+        completion_found, transient, context_overflow, failure_found, turn_state = commandcode_completion_error(
+            match["state_path"], args.scan_bytes
+        )
+        match["transient_failure"] = 1 if transient else 0
+        match["context_overflow"] = 1 if context_overflow else 0
+        match["failure_found"] = 1 if failure_found else 0
+        match["completion_found"] = 1 if completion_found else 0
+        match["turn_state"] = turn_state
+        candidates.append(match)
+    if not candidates:
+        return 3, None, "commandcode_session_not_found"
+    candidates.sort(key=lambda item: int(item["distance_ms"]))
+    if len(candidates) > 1 and candidates[0]["distance_ms"] == candidates[1]["distance_ms"]:
+        return 4, None, "commandcode_session_ambiguous"
+    return 0, candidates[0], "found"
+
+
 def clean_output_value(value: Any) -> str:
     if value is None:
         return ""
@@ -747,6 +870,7 @@ def main(argv: list[str] | None = None) -> int:
         "codex": lookup_codex,
         "claude": lookup_claude,
         "opencode": lookup_opencode,
+        "commandcode": lookup_commandcode,
     }[args.agent]
     code, report, reason = lookup(args, created_at)
     if report is None:

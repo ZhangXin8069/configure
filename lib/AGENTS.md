@@ -41,6 +41,7 @@
 | `_linux/` | Linux 包、Swap、调频、电源和系统入口 |
 | `_mac/` | macOS 更新、Gatekeeper、Keychain 与维护脚本 |
 | `_opencode/` | OpenCode 安装、V1/V2 配置分流与插件 |
+| `_commandcode/` | Command Code 安装、用户级配置、Provider API 与原生 statusline |
 | `_package/` | APT/Python 清单和随库可执行资源 |
 | `_shell/` | Bash/Zsh/oh-my-zsh 部署、启动链和本机覆盖 |
 | `_slurm/` | Slurm 用户命令与 DCU 作业模板 |

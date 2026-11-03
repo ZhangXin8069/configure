@@ -30,6 +30,7 @@ EOF
 make_fake op
 make_fake co
 make_fake cl
+make_fake cm
 make_fake cos
 mkdir -p "$test_root/data/runs/fake-run"
 printf 'state=finished\n' > "$test_root/data/runs/fake-run/manifest.env"
@@ -76,6 +77,19 @@ output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
     "$test_root/agent-dispatch.sh" --agent cl --provider go \
     --model glm-5.3-flash --strength low --no-secure --task 'cl override' --json)
 grep -Fq -- '--once go glm-5.3-flash low' "$FAKE_ARGS"
+
+output=$(AGENT_PARENT_AGENT=codex AGENT_PARENT_PROVIDER=go \
+    AGENT_PARENT_MODEL=glm-5.3-flash AGENT_PARENT_STRENGTH=high \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent cm --provider gt \
+    --model deepseek/deepseek-v4.1-flash --strength max --no-secure --task 'cm override' --json)
+printf '%s' "$output" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["launcher"]=="cm" and x["agent"]=="cm" and x["provider"]=="gt"
+assert x["model"]=="deepseek/deepseek-v4.1-flash" and x["strength"]=="max"
+' || { printf 'FAIL: cm 派发 JSON 不正确：%s\n' "$output" >&2; exit 1; }
+grep -Fq -- '--once gt --model deepseek/deepseek-v4.1-flash --effort max' "$FAKE_ARGS"
 
 output=$(AGENT_PARENT_AGENT=codex AGENT_PARENT_LAUNCHER=cos \
     AGENT_PARENT_PROVIDER=go AGENT_PARENT_MODEL=glm-5.3-flash \

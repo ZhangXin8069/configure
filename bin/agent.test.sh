@@ -16,6 +16,8 @@ trap cleanup EXIT HUP INT TERM
 
 # 屏蔽宿主环境导出的真实 key/模型变量，保证断言确定性（测试内显式前缀赋值仍可覆盖）
 unset DEEPSEEK_PAY_API_KEY OPENCODE_GO_API_KEY OPENCODE_API_KEY DEEPSEEK_API_KEY \
+      COMMANDCODE_GOAT_API_KEY COMMAND_CODE_API_KEY COMMANDCODE_MODEL COMMANDCODE_EFFORT \
+      COMMANDCODE_REASONING_EFFORT COMMANDCODE_PROVIDER COMMAND_CODE_BIN \
       ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
       ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL \
       CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL CLAUDE_MODEL OPENCODE_MODEL OPENCODE_VARIANT \
@@ -93,6 +95,14 @@ case "$(basename -- "$0")" in
         fi
         ;;
 esac
+if [[ "$(basename -- "$0")" == fake-commandcode.sh ]]; then
+    printf '%s\t%s\n' "$0" "$*" >> "$FAKE_CALL_LOG"
+    printf 'commandcode-env key=%s model=%s effort=%s\n' \
+        "${COMMAND_CODE_API_KEY:-}" "${COMMANDCODE_MODEL:-}" "${COMMANDCODE_EFFORT:-}" >> "$FAKE_CALL_LOG"
+    printf '%s\n' '{"type":"event","event":{"type":"run_start","sessionId":"session-commandcode"}}'
+    printf '%s\n' '{"type":"result","subtype":"success","sessionId":"session-commandcode","finalText":"CM_OK"}'
+    exit 0
+fi
 printf '%s\t%s\n' "$0" "$*" >> "$FAKE_CALL_LOG"
 if [[ "${FAKE_FAIL_RESUMES:-0}" == 1 &&
       "$(basename -- "$0")" == fake-codex.sh &&
@@ -188,13 +198,16 @@ fake_codex=$(make_fake fake-codex)
 fake_opencode=$(make_fake fake-opencode)
 fake_opencode_v2=$(make_fake fake-opencode-v2)
 fake_claude=$(make_fake fake-claude)
+fake_commandcode=$(make_fake fake-commandcode)
+commandcode_home="$test_root/commandcode-home"
+mkdir -p "$commandcode_home"
 
 python3 - "$script_dir/agent-config.json" "$script_dir/agent-custom.json.refer" <<'PY' \
-    || fail 'agent 配置仍包含 pay/go 之外的供应商'
+    || fail 'agent 配置供应商集合不符合预期'
 import json
 import sys
 
-expected = {'deepseek-pay', 'opencode-go'}
+expected = {'deepseek-pay', 'opencode-go', 'commandcode-goat'}
 for path in sys.argv[1:]:
     with open(path, encoding='utf-8') as handle:
         config = json.load(handle)
@@ -203,7 +216,7 @@ with open(sys.argv[1], encoding='utf-8') as handle:
     base = json.load(handle)
 assert set(base['agents']['opencode']['key_providers']) == expected
 PY
-printf 'PASS: agent 供应商集合仅保留 deepseek-pay/opencode-go\n'
+printf 'PASS: agent 供应商集合包含 deepseek-pay/opencode-go/commandcode-goat\n'
 
 if ! python3 "$script_dir/agent-protocol-bridge.test.py" >/dev/null 2>&1; then
     fail 'agent-protocol-bridge.py 协议测试失败（单独运行该测试查看详情）'
@@ -298,6 +311,20 @@ run_launcher() {
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
             DEEPSEEK_API_KEY= \
+            "$test_root/$name" "$@") ;;
+        cm) (cd "$repo/nested" && \
+            HOME="$commandcode_home" \
+            AGENT_DATA_DIR="$launcher_data" AGENT_SCRIPT_DIR="$script_root" \
+            AGENT_MODEL_DISCOVERY="${AGENT_MODEL_DISCOVERY:-0}" \
+            AGENT_AUTO_RESUME="${AGENT_AUTO_RESUME:-1}" \
+            AGENT_RESUME_DELAY="${AGENT_RESUME_DELAY:-10}" \
+            FAKE_CALL_LOG="$call_log" \
+            COMMAND_CODE_BIN="$binary" \
+            COMMANDCODE_PROVIDER="${COMMANDCODE_PROVIDER:-}" \
+            COMMANDCODE_MODEL="${COMMANDCODE_MODEL:-}" \
+            COMMANDCODE_EFFORT="${COMMANDCODE_EFFORT:-}" \
+            COMMANDCODE_GOAT_API_KEY="${COMMANDCODE_GOAT_API_KEY:-}" \
+            COMMAND_CODE_API_KEY="${COMMAND_CODE_API_KEY:-}" \
             "$test_root/$name" "$@") ;;
         *) fail "未知测试 launcher：$name" ;;
     esac
@@ -529,7 +556,8 @@ assert c["default_agent"]=="build"
 assert c["update"]=="disable"
 assert c["model"]=="opencode-go/deepseek-v4.1-flash"
 assert c["agents"]["build"]["model"]=="opencode-go/deepseek-v4.1-flash#max"
-assert c["providers"]=={}
+assert set(c["providers"])=={"deepseek","opencode-go"}
+assert c["providers"]["opencode-go"]["options"]["apiKey"]=="{env:OPENCODE_GO_API_KEY}"
 ' || fail "OpenCode V2 原生配置不正确：$v2_config_json"
 
 v2_tui_before=$(wc -l < "$call_log")
@@ -1108,6 +1136,80 @@ assert_file_contains "$call_log" 'codex-opencode-keys go=test-go-key api=test-go
 assert_file_contains "$call_log" 'parent-context launcher=co agent=codex provider=opencode-go model=deepseek-v4.1-flash strength=max secure=0'
 printf 'PASS: 快捷词 co go 切换 opencode-go 途径（Codex 原生会话头）\n'
 
+switch_cl_gt_before=$(wc -l < "$call_log")
+set +e
+switch_cl_gt_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cl "$fake_claude" gt --once 2>&1)
+switch_cl_gt_status=$?
+set -e
+(( switch_cl_gt_status == 0 )) || fail "cl gt 失败：$switch_cl_gt_output"
+switch_cl_gt_new=$(tail -n +$((switch_cl_gt_before + 1)) "$call_log")
+assert_contains "$switch_cl_gt_new" 'ANTHROPIC_BASE_URL=https://api.commandcode.ai/provider'
+assert_contains "$switch_cl_gt_new" 'ANTHROPIC_MODEL=claude-sonnet-4-6'
+assert_contains "$switch_cl_gt_new" 'ANTHROPIC_API_KEY=test-goat-key'
+printf 'PASS: 快捷词 cl gt 切换 Command Code GOAT Messages 途径\n'
+
+switch_op_gt_before=$(wc -l < "$call_log")
+set +e
+switch_op_gt_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher op "$fake_opencode" gt --once 2>&1)
+switch_op_gt_status=$?
+set -e
+(( switch_op_gt_status == 0 )) || fail "op gt 失败：$switch_op_gt_output"
+switch_op_gt_new=$(tail -n +$((switch_op_gt_before + 1)) "$call_log")
+assert_contains "$switch_op_gt_new" '"apiKey":"{env:COMMANDCODE_GOAT_API_KEY}"'
+assert_contains "$switch_op_gt_new" '"model":"commandcode/deepseek/deepseek-v4.1-flash","variant":"max"'
+printf 'PASS: 快捷词 op gt 使用 commandcode provider 与 DeepSeek 模型 ID\n'
+
+switch_co_gt_before=$(wc -l < "$call_log")
+set +e
+switch_co_gt_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher co "$fake_codex" gt --once 2>&1)
+switch_co_gt_status=$?
+set -e
+(( switch_co_gt_status == 0 )) || fail "co gt 失败：$switch_co_gt_output"
+switch_co_gt_new=$(tail -n +$((switch_co_gt_before + 1)) "$call_log")
+assert_contains "$switch_co_gt_new" '--model deepseek/deepseek-v4.1-flash'
+assert_contains "$switch_co_gt_new" 'model_provider="commandcode-goat"'
+assert_contains "$switch_co_gt_new" 'model_providers.commandcode-goat.base_url="https://api.commandcode.ai/provider/v1"'
+assert_contains "$switch_co_gt_new" 'model_providers.commandcode-goat.env_key="COMMANDCODE_GOAT_API_KEY"'
+assert_contains "$switch_co_gt_new" 'model_providers.commandcode-goat.wire_api="responses"'
+printf 'PASS: 快捷词 co gt 使用 Command Code Provider API Responses 途径\n'
+
+cm_before=$(wc -l < "$call_log")
+set +e
+cm_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" --once 2>&1)
+cm_status=$?
+set -e
+(( cm_status == 0 )) || fail "cm 默认运行失败：$cm_output"
+cm_run_id=$(printf '%s\n' "$cm_output" | sed -n 's/^  run: //p' | head -1)
+cm_run="$data/runs/$cm_run_id"
+assert_contains "$cm_output" 'Command Code: deepseek/deepseek-v4.1-flash（agent 默认） | effort=max'
+assert_contains "$cm_output" 'provider: commandcode-goat | context=1000000'
+assert_file_contains "$cm_run/manifest.env" 'agent=commandcode'
+assert_file_contains "$cm_run/manifest.env" 'launcher=cm'
+assert_file_contains "$cm_run/manifest.env" 'model=deepseek/deepseek-v4.1-flash'
+assert_file_contains "$cm_run/manifest.env" 'reasoning_effort=max'
+assert_file_contains "$cm_run/manifest.env" 'session_id=session-commandcode'
+assert_file_contains "$cm_run/manifest.env" 'state=finished'
+cm_new=$(tail -n +$((cm_before + 1)) "$call_log")
+assert_contains "$cm_new" '--model deepseek/deepseek-v4.1-flash --effort max --permission-mode default --no-auto-update --trust --skip-onboarding'
+assert_contains "$cm_new" 'commandcode-env key=test-goat-key'
+python3 - "$commandcode_home/.commandcode/config.json" <<'PY' || fail 'cm statusline 未按官方 schema 写入'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    config = json.load(handle)
+statusline = config['statusline']
+assert statusline['version'] == 1
+assert statusline['enabled'] is True
+ids = [item['id'] for item in statusline['items']]
+assert 'model-reasoning' in ids and 'context-used' in ids and 'git-branch' in ids
+PY
+printf 'PASS: cm 默认模型/强度、1M 上下文、key 映射、manifest 与原生 statusline\n'
+
 switch_op_go_glm_before=$(wc -l < "$call_log")
 set +e
 switch_op_go_glm_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher op "$fake_opencode" go glm5.3-flash --once 2>&1)
@@ -1619,7 +1721,7 @@ printf 'PASS: 部署内 data 不可用时回退 ${HOME}/configure/data（占位�
 # 环境里没有 agent 可执行文件时自动安装
 # （新机器、非 root 服务器、只读共享部署首次使用）
 # =====================================================================
-# 受限 PATH：真实 PATH 去掉所有含 agent 可执行文件的目录。本机已装三系
+# 受限 PATH：真实 PATH 去掉所有含 agent 可执行文件的目录。本机已装各系
 # （~/.local/bin），不去掉就构造不出「环境里没有对应 agent 可执行文件」这个前置条件；
 # 保留其余目录，使启动器所需的 python3/wc/tee 等工具仍可用。
 make_min_path() {
@@ -1660,7 +1762,7 @@ EOF
 done
 
 # 在部署内伪造 lib/_<组件>/install.sh：默认把二进制装入 \${HOME}/.local/bin
-# （与三系真实安装脚本的默认位置一致），并记录每次调用
+# （与各 agent 真实安装脚本的默认位置一致），并记录每次调用
 make_install_sh() { # 部署根 agent 名 [退出码]
     local root="$1" agent="$2" rc="${3:-0}" sub=""
     case "$agent" in

@@ -104,6 +104,7 @@ Claude Code 的 `install.sh` 当前固定安装到 `~/.local/bin`，没有同类
 claude --version 2>/dev/null || true
 opencode --version 2>/dev/null || true
 codex --version 2>/dev/null || true
+command-code --version 2>/dev/null || true
 ```
 
 认证仍由各 CLI 自己完成，例如 `codex login`。启动器不代替登录流程。
@@ -117,6 +118,10 @@ co go deepseek-v4.1-flash max
 cl pay 'deepseek-pro[1m]'
 op pay
 op go
+cl gt
+co gt
+cm gt
+cm --once --max-turns 1
 ```
 
 传统参数仍具有最高优先级：
@@ -125,9 +130,17 @@ op go
 co --model <模型> --reasoning-effort max
 op --model <provider/model> --variant max
 cl --model <模型>
+cm --model <模型> --effort max
 ```
 
 包含 `[1m]` 的模型名必须加引号，避免被 Zsh 当作通配符。
+
+`cm`/`cms` 默认使用 `gt=commandcode-goat`、`deepseek/deepseek-v4.1-flash`、`max` 和
+1M 上下文。使用前先激活 key：
+
+```bash
+source ~/env-key.sh
+```
 
 ## 无人值守驱动
 
@@ -186,9 +199,9 @@ Windows 只能在 PowerShell/cmd 环境做真实运行验证；Unix 主机可对
 
 ## 排障顺序
 
-1. 运行 `command -v claude opencode codex`。
+1. 运行 `command -v claude opencode codex command-code`。
 2. 检查目标 key 是否在当前 Shell 中可见，但不要在日志中打印值。
 3. 运行 `python3 -m json.tool bin/agent-custom.json`。
-4. 用 `co go --once` 等最小组合验证单个途径。
+4. 用 `co go --once`、`cm --once --max-turns 1` 等最小组合验证单个途径。
 5. 查看 `data/runs/<run-id>/manifest.env` 与 `events.jsonl`。
 6. secure 入口失败时设置对应的 `*_BIN` 覆盖过期路径。

@@ -326,6 +326,16 @@ recover_session_ids() {
                 fi
             fi
             ;;
+        commandcode)
+            if [[ -z "$_session_id" && -r "$_log_file" ]]; then
+                id=$(grep -oE '"sessionId"[[:space:]]*:[[:space:]]*"[A-Za-z0-9._-]+"' "$_log_file" 2>/dev/null |
+                    head -1 | sed -E 's/.*"sessionId"[[:space:]]*:[[:space:]]*"//; s/"$//')
+                if [[ "$id" =~ ^[A-Za-z0-9._-]+$ ]]; then
+                    _discovered_session=$id
+                    _session_id=$id
+                fi
+            fi
+            ;;
         *)
             return 1
             ;;
@@ -389,7 +399,7 @@ inspect_run() {
     _agent=$(manifest_value "$manifest" agent)
     _launcher=$(manifest_value "$manifest" launcher)
     case "${_agent}:${_launcher}" in
-        codex:co|codex:cos|opencode:op|opencode:ops|claude:cl|claude:cls) ;;
+        codex:co|codex:cos|opencode:op|opencode:ops|claude:cl|claude:cls|commandcode:cm|commandcode:cms) ;;
         *) _reason=invalid_identity; return 1;;
     esac
 
@@ -719,6 +729,7 @@ run_launcher() {
             codex) [[ -z "$provider" ]] || export CODEX_PROVIDER_ID="$provider";;
             opencode) [[ -z "$provider" ]] || export OPENCODE_PROVIDER="$provider";;
             claude) [[ -z "$provider" ]] || export CLAUDE_PROVIDER="$provider";;
+            commandcode) ;;
         esac
         if (( use_setsid )); then
             exec setsid "$launcher_path" "$@"
@@ -897,6 +908,10 @@ perform_context_handoff() {
                 [[ -z "$_reasoning" ]] || handoff_args+=("$_reasoning")
             fi
             ;;
+        commandcode)
+            [[ -z "$_model" ]] || handoff_args+=(--model "$_model")
+            [[ -z "$_reasoning" ]] || handoff_args+=(--effort "$_reasoning")
+            ;;
     esac
 
     handoff_attempted_at=$(date '+%Y-%m-%dT%H:%M:%S%z')
@@ -1005,6 +1020,10 @@ case "$_agent" in
             launcher_args+=("$_model")
             [[ -z "$_reasoning" ]] || launcher_args+=("$_reasoning")
         fi
+        ;;
+    commandcode)
+        [[ -z "$_model" ]] || launcher_args+=(--model "$_model")
+        [[ -z "$_reasoning" ]] || launcher_args+=(--effort "$_reasoning")
         ;;
 esac
 

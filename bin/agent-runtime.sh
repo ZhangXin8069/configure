@@ -105,7 +105,7 @@ _agent_runtime_run_tui_watched() {
     local recover_command_json="${2:-}"
     [[ $# -gt 1 ]] && shift 2
     case "$agent" in
-        codex|claude|opencode) ;;
+        codex|claude|opencode|commandcode) ;;
         *) "$@"; return $?;;
     esac
     [[ $# -gt 0 ]] || return 2
@@ -137,6 +137,9 @@ _agent_runtime_run_tui_watched() {
         opencode)
             state_db="${AGENT_OPENCODE_STATE_DB:-}"
             data_dir="${AGENT_OPENCODE_DATA_DIR:-${OPENCODE_DATA_HOME:-}}"
+            ;;
+        commandcode)
+            data_dir="${AGENT_COMMANDCODE_DATA_DIR:-}"
             ;;
     esac
     local watch_log=""
@@ -443,7 +446,7 @@ _agent_runtime_configure_root() {
 
 # ---- 缺失可执行文件的自动安装 ----
 # 换机、非 root 服务器、全新容器等场景下，agent CLI 往往还没装。此时按 agent 系列约定
-# 运行部署内 lib/_<组件>/install.sh（三系脚本均默认装入 ${HOME}/.local/bin，不需要 root），
+# 运行部署内 lib/_<组件>/install.sh（各 agent 脚本均默认装入 ${HOME}/.local/bin，不需要 root），
 # 成功后再把安装目录前置到当前进程 PATH，使调用方随后的 command -v 立即命中并继续执行。
 # 安装在本进程内完成，无需 re-exec：调用方随后照常解析二进制、生成 secure_binary、启动。
 # 开关：AGENT_AUTO_INSTALL=0 关闭；AGENT_INSTALL_DIR 覆盖安装目录（默认 ${HOME}/.local/bin）。
@@ -459,13 +462,14 @@ _agent_runtime_locate_binary() {
     esac
 }
 
-# agent 名 → 部署内安装脚本路径：claude→_claude-code、opencode→_opencode、codex→_codex
+# agent 名 → 部署内安装脚本路径
 _agent_runtime_agent_install_script() {
     local agent="${1:-}" sub=""
     case "$agent" in
         claude) sub="_claude-code";;
         opencode) sub="_opencode";;
         codex) sub="_codex";;
+        commandcode) sub="_commandcode";;
         *) return 1;;
     esac
     local root="${AGENT_CONFIGURE_ROOT:-}"
@@ -493,13 +497,22 @@ _agent_runtime_prepend_path_dir() {
 _agent_runtime_ensure_agent() {
     local agent="${1:-}"
     [[ -n "$agent" ]] || return 1
-    _agent_runtime_locate_binary "$agent" >/dev/null 2>&1 && return 0
+    local -a names=("$agent")
+    if [[ "$agent" == commandcode ]]; then
+        names=(command-code cmdc cmd)
+    fi
+    local name=""
+    for name in "${names[@]}"; do
+        _agent_runtime_locate_binary "$name" >/dev/null 2>&1 && return 0
+    done
 
     local install_dir="${AGENT_INSTALL_DIR:-}"
     [[ -n "$install_dir" ]] || install_dir="${HOME:+${HOME}/.local/bin}"
     if [[ -n "$install_dir" ]]; then
         _agent_runtime_prepend_path_dir "$install_dir" || true
-        _agent_runtime_locate_binary "$agent" >/dev/null 2>&1 && return 0
+        for name in "${names[@]}"; do
+            _agent_runtime_locate_binary "$name" >/dev/null 2>&1 && return 0
+        done
     fi
 
     local label="${_NAME:-agent}"
@@ -541,10 +554,12 @@ _agent_runtime_ensure_agent() {
         _agent_runtime_prepend_path_dir "$install_dir" || true
     fi
     local found=""
-    if found="$(_agent_runtime_locate_binary "$agent")"; then
-        printf '###%s: %s 安装完成：%s###\n' "$label" "$agent" "$found" >&2
-        return 0
-    fi
+    for name in "${names[@]}"; do
+        if found="$(_agent_runtime_locate_binary "$name")"; then
+            printf '###%s: %s 安装完成：%s###\n' "$label" "$agent" "$found" >&2
+            return 0
+        fi
+    done
     printf '###%s: ERROR: 安装脚本已执行，但仍未找到 %s（安装目录可能不在 %s，请检查上方安装输出）###\n' \
         "$label" "$agent" "${install_dir:-PATH}" >&2
     return 1

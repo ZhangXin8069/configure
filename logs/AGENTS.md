@@ -1195,3 +1195,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## commandcode - final - 2026-11-03 20:23:13 +0800
+- 主任务: 在 lib/_commandcode 建立 Command Code 安装、配置、测试与文档
+- 日志文件: logs/v2026110320.txt
+- 文件大小: 5562 bytes
+- 触发原因: 任务完成
+- 关键内容: 仿照 _opencode 完成 Command Code 目录，官方接口核对与隔离回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## commandcode-path-alignment - final - 2026-11-03 20:37:05 +0800
+- 主任务: 完善 Command Code 安装配置并统一 agent 路径
+- 日志文件: logs/v2026110320-2.txt
+- 文件大小: 5468 bytes
+- 触发原因: 任务完成
+- 关键内容: 修正为 $HOME/.local/bin 统一路径，补齐 quickstart 文档与隔离回归
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## commandcode-agent - final - 2026-11-03 21:14:22 +0800
+- 主任务: 新增 gt:commandcode-goat 供应商策略与 cm/cms Command Code agent
+- 日志文件: logs/v2026110321.txt
+- 文件大小: 7008 bytes
+- 触发原因: 任务完成
+- 关键内容: 完成 gt 策略、cm/cms 启动器、Command Code statusline、认证映射、会话恢复与真实冒烟
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

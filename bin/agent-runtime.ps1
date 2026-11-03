@@ -324,13 +324,14 @@ function Get-ConfigEnvironmentValue {
     return $value
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go；完整途径名原样返回
+# 供应商快捷词：pay→deepseek-pay、go→opencode-go、gt→commandcode-goat
 function Resolve-ProviderAlias {
     param([string]$Value)
 
     switch ($Value) {
         'pay' { return 'deepseek-pay' }
         'go' { return 'opencode-go' }
+        'gt' { return 'commandcode-goat' }
         default { return $Value }
     }
 }
@@ -378,7 +379,7 @@ function Add-ModelCatalogEntry {
     )
 
     if ([string]::IsNullOrWhiteSpace($ModelId)) { return }
-    $ModelId = ($ModelId -split '/', 2)[-1]
+    # Preserve vendor-qualified ids (deepseek/...) and only strip provider prefixes in resolution.
     $strengths = New-Object System.Collections.Generic.List[string]
     $entry = [ordered]@{
         id                  = $ModelId
@@ -988,6 +989,13 @@ function Resolve-AgentModelSelection {
         $providerId = [string]$provider.opencode_provider_id
         if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = $ProviderName }
         $model = "$providerId/$model"
+    } elseif ($AgentName -eq 'opencode' -and $model -match '/') {
+        $providerId = [string]$provider.opencode_provider_id
+        if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = $ProviderName }
+        $prefix = ($model -split '/', 2)[0]
+        if ($prefix -ne $ProviderName -and $prefix -ne $providerId) {
+            $model = "$providerId/$model"
+        }
     }
     $entry = $models.PSObject.Properties[$modelBase]
     if ($null -ne $entry) { $entry = $entry.Value }
@@ -1023,7 +1031,7 @@ function Resolve-AgentModelSelection {
     }
 }
 
-# OpenCode V1 provider 注入块：仅注入 key 环境变量存在的内置途径
+# OpenCode provider 注入块：V1/V2 均只注入 key 环境变量存在的内置途径
 function Get-OpenCodeProviderConfig {
     $result = [ordered]@{}
     $agentConfig = $script:AgentConfig.agents.opencode
@@ -1742,12 +1750,12 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
-    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go（如 cl.bat go）。'
+    Write-Host "用法：$($script:LauncherName) [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL]"
+    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 cl.bat gt）。'
     Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
-    Write-Host '模型：显式指定途径时（快捷词 pay|go 或 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX}_MODEL 恒为最高。'
+    Write-Host '模型：显式指定途径时（快捷词 pay|go|gt 或各 agent 的 *_PROVIDER 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX,COMMANDCODE}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
-    Write-Host 'cl/op 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
+    Write-Host 'cl/op/cm 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
 
 function Invoke-Logged {
@@ -1808,6 +1816,8 @@ function Get-AgentInstallScript {
         'claude' { $sub = '_claude-code' }
         'opencode' { $sub = '_opencode' }
         'codex' { $sub = '_codex' }
+        'commandcode' { $sub = '_commandcode' }
+        'command-code' { $sub = '_commandcode' }
         default { return '' }
     }
     $root = Get-ConfigureRoot
@@ -2334,7 +2344,7 @@ function Run-OpenCode {
             default_agent   = $agentName
             model           = $script:Model
             agents          = $agentBlock
-            providers       = [ordered]@{}
+            providers       = Get-OpenCodeProviderConfig
         }
     } else {
         $agentBlock = [ordered]@{}
@@ -2482,6 +2492,191 @@ function Run-OpenCode {
             }
         }
     }
+}
+
+function Set-CommandCodeStatusline {
+    $agentConfig = $script:AgentConfig.agents.commandcode
+    $effectiveProvider = $script:ProviderOverride
+    if ([string]::IsNullOrWhiteSpace($effectiveProvider)) { $effectiveProvider = [string]$agentConfig.provider }
+    if ($null -eq $agentConfig -or $null -eq $agentConfig.statusline) { return }
+    $homeRoot = Get-HomeRoot
+    if ([string]::IsNullOrWhiteSpace($homeRoot)) { return }
+    $target = Join-Path (Join-Path $homeRoot '.commandcode') 'config.json'
+    $config = [ordered]@{}
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+        try {
+            $existing = Get-Content -LiteralPath $target -Raw -Encoding UTF8 | ConvertFrom-Json
+            foreach ($property in $existing.PSObject.Properties) {
+                $config[$property.Name] = $property.Value
+            }
+        } catch {
+            Write-ErrorLine "###$($script:LauncherName): warning: Command Code config.json 无法解析，statusline 未修改：$target###"
+            return
+        }
+    }
+    $wanted = $agentConfig.statusline
+    $existingStatusline = $config['statusline']
+    try {
+        $oldVersion = if ($null -ne $existingStatusline) { [int]$existingStatusline.version } else { 0 }
+        $newVersion = [int]$wanted.version
+        if ($oldVersion -gt $newVersion) { return }
+    } catch {}
+    $existingJson = if ($null -eq $existingStatusline) { '' } else { $existingStatusline | ConvertTo-Json -Depth 12 -Compress }
+    $wantedJson = $wanted | ConvertTo-Json -Depth 12 -Compress
+    if ($existingJson -eq $wantedJson) { return }
+    if (Test-Path -LiteralPath $target -PathType Leaf) {
+        Copy-Item -LiteralPath $target -Destination ($target + '.bak.' + (Get-Date -Format 'yyyyMMdd-HHmmss')) -Force
+    }
+    $config['statusline'] = $wanted
+    Write-Utf8 $target (($config | ConvertTo-Json -Depth 20) + [Environment]::NewLine)
+}
+
+function Get-CommandCodeSessionId {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { return '' }
+    foreach ($line in Get-Content -LiteralPath $Path -Encoding UTF8) {
+        if ([string]::IsNullOrWhiteSpace($line)) { continue }
+        try { $event = $line | ConvertFrom-Json } catch { continue }
+        $value = [string]$event.sessionId
+        if ([string]::IsNullOrWhiteSpace($value) -and $null -ne $event.event) {
+            $value = [string]$event.event.sessionId
+            if ([string]::IsNullOrWhiteSpace($value) -and $null -ne $event.event.result) {
+                $value = [string]$event.event.result.sessionId
+            }
+        }
+        if (-not [string]::IsNullOrWhiteSpace($value)) { return $value }
+    }
+    return ''
+}
+
+function Run-CommandCode {
+    $executable = Resolve-Executable 'COMMAND_CODE_BIN' 'command-code' 'commandcode'
+    if ([string]::IsNullOrWhiteSpace($executable)) {
+        foreach ($candidate in @('cmdc', 'cmd')) {
+            $command = Get-Command $candidate -ErrorAction SilentlyContinue | Select-Object -First 1
+            if ($null -ne $command) { $executable = [string]$command.Source; break }
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($executable)) { return 127 }
+
+    if (-not [string]::IsNullOrWhiteSpace($env:COMMANDCODE_GOAT_API_KEY)) {
+        if (-not [string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY) -and
+            $env:COMMAND_CODE_API_KEY -ne $env:COMMANDCODE_GOAT_API_KEY) {
+            Write-ErrorLine "###$($script:LauncherName): warning: COMMAND_CODE_API_KEY 与 COMMANDCODE_GOAT_API_KEY 不一致，已按 gt 策略使用后者###"
+        }
+        $env:COMMAND_CODE_API_KEY = $env:COMMANDCODE_GOAT_API_KEY
+    } elseif ([string]::IsNullOrWhiteSpace($env:COMMAND_CODE_API_KEY)) {
+        Write-ErrorLine "###$($script:LauncherName): warning: COMMANDCODE_GOAT_API_KEY 未设置；请先 source ~/env-key.sh，否则请求会 401###"
+    }
+
+    Set-CommandCodeStatusline
+    $prompt = Build-Prompt
+    if ($null -eq $prompt) { return $script:FailureCode }
+    $agentConfig = $script:AgentConfig.agents.commandcode
+    $permissionMode = [Environment]::GetEnvironmentVariable('COMMANDCODE_PERMISSION_MODE')
+    if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = [string]$agentConfig.permission_mode }
+    if ([string]::IsNullOrWhiteSpace($permissionMode)) { $permissionMode = 'default' }
+    $trust = $true
+    if ($null -ne $agentConfig.trust) { $trust = [bool]$agentConfig.trust }
+    $skipOnboarding = $true
+    if ($null -ne $agentConfig.skip_onboarding) { $skipOnboarding = [bool]$agentConfig.skip_onboarding }
+
+    $baseArgs = New-Object System.Collections.Generic.List[string]
+    $baseArgs.AddRange([string[]]@('--model', $script:Model, '--effort', $script:Reasoning,
+        '--permission-mode', $permissionMode, '--no-auto-update'))
+    if ($trust) { $baseArgs.Add('--trust') }
+    if ($skipOnboarding) { $baseArgs.Add('--skip-onboarding') }
+
+    Write-Host '============================================================'
+    Write-Host "  Command Code: $($script:ModelName) | effort=$($script:Reasoning) | permission=$permissionMode"
+    Write-Host "  provider: $effectiveProvider | context=1000000"
+    Write-Host "  run: $($script:RunId)"
+    Write-Host "  log: $($script:LogFile)"
+    Write-Host "  state: $($script:ManifestFile)"
+    if ($script:Secure -eq '1') { Write-Host '  launcher: secure/HPC' }
+    if ($script:Drive) {
+        Write-Host "  drive mode: ON | interval=$($script:Interval)s | max-turns=$($script:MaxTurns) | max-runtime=$($script:MaxRuntime)s"
+    } else {
+        Write-Host '  mode: TUI interactive'
+    }
+    Write-Host '============================================================'
+
+    if (-not $script:Drive) {
+        $tuiArgs = @($baseArgs.ToArray()) + @('--name', $script:RunId, $prompt)
+        Turn-Begin
+        $rc = Invoke-Logged $executable $tuiArgs $true
+        if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
+        return $rc
+    }
+
+    $sessionId = $script:SessionId
+    $resumeBase = @('--output-format', 'json', '--skip-onboarding', '--no-auto-update',
+        '--model', $script:Model, '--effort', $script:Reasoning, '--permission-mode', $permissionMode)
+    if ([string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+        Turn-Begin
+        $initialArgs = @('-p', $prompt) + @($baseArgs.ToArray()) + @('--output-format', 'json')
+        & $executable @initialArgs *>> $script:LogFile
+        $rc = $LASTEXITCODE
+        if ($null -eq $rc) { $rc = 0 }
+        if ($rc -ne 0) {
+            Turn-Failure
+            Write-ErrorLine "###$($script:LauncherName): ERROR: prompt 回合失败（退出码 $rc），驱动终止###"
+            return $rc
+        }
+        Turn-Success
+        $sessionId = Get-CommandCodeSessionId $script:LogFile
+        if ([string]::IsNullOrWhiteSpace($sessionId)) {
+            Write-ErrorLine "###$($script:LauncherName): ERROR: 无法从 $($script:LogFile) 提取 sessionId，驱动终止###"
+            return 1
+        }
+        Set-Session $sessionId ''
+    } elseif ([string]::IsNullOrWhiteSpace($sessionId)) {
+        Write-ErrorLine "###$($script:LauncherName): ERROR: 可恢复会话没有 session_id，驱动终止###"
+        return 1
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($script:DriveFile)) {
+        if (-not (Test-Path -LiteralPath $script:DriveFile -PathType Leaf)) {
+            Write-ErrorLine "###$($script:LauncherName): ERROR: --file '$($script:DriveFile)' 不存在或不可读###"
+            return 64
+        }
+        $text = (Get-Content -LiteralPath $script:DriveFile -Raw -Encoding UTF8).Replace("`r", '')
+        Turn-Begin
+        $turnArgs = @('-p', $text, '--session', $sessionId) + @resumeBase
+        & $executable @turnArgs *>> $script:LogFile
+        $rc = $LASTEXITCODE
+        if ($rc -eq 0) { Turn-Success } else { Turn-Failure; return $rc }
+    }
+    if ($script:Once) {
+        Mark-State 'finished' 'once 模式' ''
+        return 0
+    }
+    $nudges = 0
+    $fails = 0
+    while ($true) {
+        if (Should-Stop $nudges) { break }
+        Start-Sleep -Seconds $script:Interval
+        if (Should-Stop $nudges) { break }
+        Turn-Begin
+        $turnArgs = @('-p', '继续', '--session', $sessionId) + @resumeBase
+        & $executable @turnArgs *>> $script:LogFile
+        $rc = $LASTEXITCODE
+        if ($rc -eq 0) {
+            Turn-Success
+            $nudges++
+            $fails = 0
+            Write-Host "---- drive: 继续 #$nudges ok $(Get-Date -Format 'yyyy-MM-dd-HH:mm:ss') ----"
+        } else {
+            Turn-Failure
+            $fails++
+            Write-ErrorLine "###$($script:LauncherName): warning: 继续发送失败 $fails/3（退出码 $rc）###"
+            if ($fails -ge 3) {
+                Mark-State 'blocked' '连续 3 次继续失败' $rc
+                return 1
+            }
+        }
+    }
+    return 0
 }
 
 function Get-CodexModelCatalogPath {
@@ -2838,6 +3033,7 @@ function Parse-Arguments {
     $modelVariable = switch ($script:Agent) {
         'claude' { 'CLAUDE_MODEL' }
         'opencode' { 'OPENCODE_MODEL' }
+        'commandcode' { 'COMMANDCODE_MODEL' }
         default { 'CODEX_MODEL' }
     }
     $modelOverride = [Environment]::GetEnvironmentVariable($modelVariable)
@@ -2846,6 +3042,7 @@ function Parse-Arguments {
     $providerVariable = switch ($script:Agent) {
         'claude' { 'CLAUDE_PROVIDER' }
         'opencode' { 'OPENCODE_PROVIDER' }
+        'commandcode' { 'COMMANDCODE_PROVIDER' }
         default { 'CODEX_PROVIDER_ID' }
     }
     $providerOverride = [Environment]::GetEnvironmentVariable($providerVariable)
@@ -2860,6 +3057,11 @@ function Parse-Arguments {
     $reasoningOverride = [Environment]::GetEnvironmentVariable('CODEX_REASONING_EFFORT')
     $reasoningEnvOverride = $reasoningOverride
     $claudeStrengthOverride = ''
+    $commandCodeEffortOverride = [Environment]::GetEnvironmentVariable('COMMANDCODE_EFFORT')
+    if ([string]::IsNullOrWhiteSpace($commandCodeEffortOverride)) {
+        $commandCodeEffortOverride = [Environment]::GetEnvironmentVariable('COMMANDCODE_REASONING_EFFORT')
+    }
+    $commandCodeEffortEnvOverride = $commandCodeEffortOverride
     $modelFlagExplicit = $false
     $strengthFlagExplicit = $false
     $modelFromPositional = $false
@@ -2882,7 +3084,7 @@ function Parse-Arguments {
     $errorMessage = ''
     for ($i = 0; $i -lt $cliArgs.Count; $i++) {
         $option = [string]$cliArgs[$i]
-        if ($option -in @('pay', 'go', 'deepseek-pay', 'opencode-go')) {
+        if ($option -in @('pay', 'go', 'gt', 'deepseek-pay', 'opencode-go', 'commandcode-goat')) {
             $providerOverride = Resolve-ProviderAlias $option
             continue
         }
@@ -2914,9 +3116,21 @@ function Parse-Arguments {
                 continue
             }
             '--reasoning-effort' {
-                if ($script:Agent -ne 'codex') { $errorMessage = '--reasoning-effort 只支持 co.bat'; break }
+                if ($script:Agent -notin @('codex', 'commandcode')) { $errorMessage = '--reasoning-effort 只支持 co.bat/cm.bat'; break }
                 if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少等级参数"; break }
-                $reasoningOverride = [string]$cliArgs[++$i]
+                if ($script:Agent -eq 'commandcode') {
+                    $commandCodeEffortOverride = [string]$cliArgs[++$i]
+                } else {
+                    $reasoningOverride = [string]$cliArgs[++$i]
+                    $script:ReasoningExplicit = $true
+                }
+                $strengthFlagExplicit = $true
+                continue
+            }
+            '--effort' {
+                if ($script:Agent -ne 'commandcode') { $errorMessage = '--effort 只支持 cm.bat'; break }
+                if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少等级参数"; break }
+                $commandCodeEffortOverride = [string]$cliArgs[++$i]
                 $script:ReasoningExplicit = $true
                 $strengthFlagExplicit = $true
                 continue
@@ -3014,6 +3228,12 @@ function Parse-Arguments {
                     $script:VariantExplicit = $true
                 }
             }
+            'commandcode' {
+                if ([string]::IsNullOrWhiteSpace($commandCodeEffortEnvOverride)) {
+                    $commandCodeEffortOverride = $positionalStrength
+                    $script:ReasoningExplicit = $true
+                }
+            }
             default {
                 if ([string]::IsNullOrWhiteSpace($reasoningEnvOverride)) {
                     $reasoningOverride = $positionalStrength
@@ -3061,7 +3281,7 @@ function Parse-Arguments {
         $script:Posture = if ($script:Agent -eq 'codex') { 'frontier-orchestrator' } else { 'deep-worker' }
     }
 
-    # 途径来自命令行快捷词（pay/go）、{CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量
+    # 途径来自命令行快捷词（pay/go/gt）、各 agent 的 *_PROVIDER 环境变量
     #（env 值已在 2109-2115 过别名规整），或个性化配置 agents.<agent>.provider。
     # 三者中前两者属「显式选途径」，决定两层默认谁优先。
     $providerForModel = if (-not [string]::IsNullOrWhiteSpace($providerOverride)) {
@@ -3070,7 +3290,11 @@ function Parse-Arguments {
         [string]$agentConfig.provider
     }
     if ([string]::IsNullOrWhiteSpace($providerForModel)) {
-        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go 或 agent-custom.json agents.$agentKey.provider）###"
+        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|gt 或 agent-custom.json agents.$agentKey.provider）###"
+        return $false
+    }
+    if ($script:Agent -eq 'commandcode' -and $providerForModel -ne 'commandcode-goat') {
+        Fail-Parse "###$($script:LauncherName): ERROR: cm 仅支持途径 commandcode-goat（快捷词 gt），当前为 '$providerForModel'###"
         return $false
     }
     if ($script:Agent -eq 'claude') {
@@ -3110,6 +3334,8 @@ function Parse-Arguments {
         $agentLegacyStrength = [string]$agentConfig.reasoning
     } elseif ($script:Agent -eq 'opencode') {
         $agentLegacyStrength = [string]$agentConfig.variant
+    } elseif ($script:Agent -eq 'commandcode') {
+        $agentLegacyStrength = ''
     } else {
         $agentLegacyStrength = [string]$agentConfig.env.CLAUDE_CODE_EFFORT_LEVEL
     }
@@ -3125,6 +3351,9 @@ function Parse-Arguments {
     if ($script:Agent -eq 'claude' -and -not [string]::IsNullOrWhiteSpace($claudeStrengthOverride)) {
         $pickedStrength = $claudeStrengthOverride
     }
+    if ($script:Agent -eq 'commandcode' -and -not [string]::IsNullOrWhiteSpace($commandCodeEffortOverride)) {
+        $pickedStrength = $commandCodeEffortOverride
+    }
     $resolvedReasoning = if ($script:Agent -eq 'codex') {
         if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) { $reasoningOverride } else { $pickedStrength }
     } else { '' }
@@ -3132,9 +3361,11 @@ function Parse-Arguments {
         if (-not [string]::IsNullOrWhiteSpace($variantOverride)) { $variantOverride } else { $pickedStrength }
     } else { '' }
     $resolvedClaudeStrength = if ($script:Agent -eq 'claude') { $pickedStrength } else { '' }
+    $resolvedCommandCodeEffort = if ($script:Agent -eq 'commandcode') { $pickedStrength } else { '' }
     $strengthQuery = switch ($script:Agent) {
         'codex' { $resolvedReasoning }
         'opencode' { $resolvedVariant }
+        'commandcode' { $resolvedCommandCodeEffort }
         default { $resolvedClaudeStrength }
     }
     try {
@@ -3160,6 +3391,7 @@ function Parse-Arguments {
         $providerHint = switch ($providerForModel) {
             'deepseek-pay' { 'pay' }
             'opencode-go' { 'go' }
+            'commandcode-goat' { 'gt' }
             default { $providerForModel }
         }
         Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Codex Responses 协议：$($selection.CodexUnsupportedReason)###"
@@ -3171,6 +3403,7 @@ function Parse-Arguments {
         $providerHint = switch ($providerForModel) {
             'deepseek-pay' { 'pay' }
             'opencode-go' { 'go' }
+            'commandcode-goat' { 'gt' }
             default { $providerForModel }
         }
         Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Claude 的 Anthropic Messages 协议：$($selection.ClaudeUnsupportedReason)###"
@@ -3186,6 +3419,7 @@ function Parse-Arguments {
     switch ($script:Agent) {
         'codex' { $script:Reasoning = [string]$selection.Strength }
         'opencode' { $script:Variant = [string]$selection.Strength }
+        'commandcode' { $script:Reasoning = [string]$selection.Strength }
         default { $script:ClaudeStrength = [string]$selection.Strength }
     }
     if (-not [string]::IsNullOrWhiteSpace($reasoningOverride)) {
@@ -3233,6 +3467,7 @@ try {
                 'claude' { $script:ExitCode = Run-Claude }
                 'opencode' { $script:ExitCode = Run-OpenCode }
                 'codex' { $script:ExitCode = Run-Codex }
+                'commandcode' { $script:ExitCode = Run-CommandCode }
                 default { $script:ExitCode = 64 }
             }
         }

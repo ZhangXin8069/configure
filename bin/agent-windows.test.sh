@@ -39,7 +39,7 @@ assert_contains "$script_dir/agent-statusline.ps1" 'rate_limits.seven_day'
 assert_contains "$script_dir/agent-statusline.ps1" 'fast_mode'
 
 for mapping in \
-    'cl.bat' 'cls.bat' 'op.bat' 'ops.bat' 'co.bat' 'cos.bat'; do
+    'cl.bat' 'cls.bat' 'op.bat' 'ops.bat' 'co.bat' 'cos.bat' 'cm.bat' 'cms.bat'; do
     assert_contains "$bat" "$mapping"
 done
 assert_contains "$bat" 'agent-runtime.ps1'
@@ -57,6 +57,8 @@ for contract in \
     'function Merge-JsonNode' \
     'function Import-AgentConfig' \
     'function Get-OpenCodeProviderConfig' \
+    'function Run-CommandCode' \
+    'function Set-CommandCodeStatusline' \
     'function Get-ModelCatalogCachePath' \
     'function Update-ProviderModelCatalog' \
     'function Resolve-AgentModelSelection' \
@@ -96,7 +98,7 @@ assert_contains "$runtime" 'function New-ClaudeSettingsFile'
 assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
 assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$script:Model, \$prompt"
 assert_contains "$runtime" 'Resolve-ProviderAlias'
-assert_contains "$runtime" "'pay', 'go', 'deepseek-pay', 'opencode-go'"
+assert_contains "$runtime" "'pay', 'go', 'gt', 'deepseek-pay', 'opencode-go', 'commandcode-goat'"
 assert_not_contains "$runtime" 'opencode-zen'
 assert_contains "$runtime" 'Get-AgentProtocolCompatibility'
 assert_contains "$runtime" 'CodexWireApi'
@@ -139,6 +141,10 @@ assert_contains "$runtime" '$providerWebsockets'
 assert_contains "$runtime" 'check_for_update_on_startup'
 assert_contains "$runtime" 'DISABLE_AUTOUPDATER'
 assert_contains "$runtime" 'OPENCODE_AUTOUPDATE'
+assert_contains "$runtime" 'COMMANDCODE_GOAT_API_KEY'
+assert_contains "$runtime" 'COMMAND_CODE_API_KEY'
+assert_contains "$runtime" 'context=1000000'
+assert_contains "$runtime" 'statusline'
 assert_contains "$runtime" 'autoupdate'
 assert_contains "$runtime" "'\$schema'"
 assert_contains "$runtime" 'https://opencode.ai/config.json'
@@ -167,6 +173,7 @@ for contract in \
     "'_claude-code'" \
     "'_opencode'" \
     "'_codex'" \
+    "'_commandcode'" \
     "'install.bat', 'install.ps1', 'install.sh'" \
     'AGENT_AUTO_INSTALL' \
     'AGENT_AUTO_INSTALL_DONE' \

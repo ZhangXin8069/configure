@@ -10,8 +10,8 @@ _usage() {
 用法: agent-dispatch.sh [OPTIONS]
   --task TEXT             子任务正文（必填，除非使用 --task-file）
   --task-file PATH        从文件读取子任务正文
-  --agent co|cl|op        默认继承父 agent；无父上下文时默认 co
-  --provider NAME         默认继承父 provider；可传 pay/go 或完整名
+  --agent co|cl|op|cm     默认继承父 agent；无父上下文时默认 co
+  --provider NAME         默认继承父 provider；可传 pay/go/gt 或完整名
   --model MODEL           默认继承父最终模型
   --strength LEVEL        默认继承父最终强度
   --cwd DIR               默认继承父工作目录
@@ -101,7 +101,8 @@ case "${_agent}" in
     co|codex) _agent=co;;
     cl|claude) _agent=cl;;
     op|opencode) _agent=op;;
-    *) _fail "--agent 仅支持 co/cl/op";;
+    cm|commandcode) _agent=cm;;
+    *) _fail "--agent 仅支持 co/cl/op/cm";;
 esac
 
 if (( _agent_overridden )) && (( ! _secure_overridden )); then
@@ -115,9 +116,11 @@ case "${_agent}:${_secure}" in
     co:1) _launcher=cos;;
     cl:1) _launcher=cls;;
     op:1) _launcher=ops;;
+    cm:1) _launcher=cms;;
     co:0) _launcher=co;;
     cl:0) _launcher=cl;;
     op:0) _launcher=op;;
+    cm:0) _launcher=cm;;
 esac
 
 [[ -x "${_PATH}/${_launcher}" ]] || _fail "launcher 不存在或不可执行：${_PATH}/${_launcher}"
@@ -150,6 +153,10 @@ case "${_agent}" in
             local_args+=("${_model}")
             [[ -n "${_strength}" ]] && local_args+=("${_strength}")
         fi
+        ;;
+    cm)
+        [[ -n "${_model}" ]] && local_args+=(--model "${_model}")
+        [[ -n "${_strength}" ]] && local_args+=(--effort "${_strength}")
         ;;
 esac
 
