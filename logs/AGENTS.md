@@ -1078,3 +1078,21 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## locale-recovery - final - 2026-11-03 09:55:00 +0800
+- 主任务: 修复 LC_ALL=C.utf8 locale 告警
+- 日志文件: logs/v2026110309.txt
+- 文件大小: 5000 bytes
+- 触发原因: 任务完成
+- 关键内容: env.sh 改为实测 locale charmap，修复失效 LC_ALL 并在无 UTF-8 locale 时回退 C
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## gpush-locale - final - 2026-11-03 10:05:03 +0800
+- 主任务: 修复 gpush 两次 git push 的 setlocale 告警
+- 日志文件: logs/v2026110310.txt
+- 文件大小: 4859 bytes
+- 触发原因: 任务完成
+- 关键内容: 两次 git push 固定 LC_ALL=C，避免 SSH 远端 sh 拒绝本地 UTF-8 locale
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

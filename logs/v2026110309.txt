@@ -1,0 +1,76 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 09:55:00 +0800
+批次: locale-recovery
+主任务: 修复 LC_ALL=C.utf8 locale 告警
+触发原因: 任务完成
+摘要: env.sh 改为实测 locale charmap，修复失效 LC_ALL 并在无 UTF-8 locale 时回退 C
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与根因
+- 目标: 定位 `sh: warning: setlocale: LC_ALL: cannot change locale (C.utf8)` 的仓库侧来源。
+- 命令/操作: 检查当前 locale、`locale -a`、`env.sh` 与相关测试；在 Bash 中构造 `LANG=C.UTF-8`、`LC_ALL=C.utf8.configure-test-missing` 后 source `env.sh`。
+- 关键输出: 修复前 charmap 降级为 `ANSI_X3.4-1968`，失效 `LC_ALL` 被原样保留。
+- 退出码: 0（诊断命令成功复现错误状态）。
+- 证据与判断: 原实现仅在 `LANG` 字符串看似 UTF-8 时跳过检测，没有验证 `LC_ALL`/`LC_CTYPE` 是否实际有效；这正是根因。
+
+### S2 — 回归先行与最小修复
+- 目标: 先建立失败用例，再修复 locale 探测。
+- 命令/操作: 在 `env.test.sh` 增加失效 `LC_ALL` 回归；在 `env.sh` 用 `locale charmap` 实测当前编码，逐个探测 UTF-8 locale，全部不可用时回退 `C`。
+- 关键输出: 新增用例在修复前按预期失败；修复后 Bash 与 zsh 均通过。
+- 退出码: 修复前 `bash env.test.sh` 为 1；修复后为 0。
+- 证据与判断: 修复覆盖与用户报告一致的“合法 LANG + 失效 LC_ALL”路径。
+
+### S3 — 验证与文档同步
+- 目标: 验证真实子 shell 编码和仓库交付格式。
+- 命令/操作: 运行 `bash -n env.sh env.test.sh`、`bash env.test.sh`、form 审计、快照校验、数据边界检查、`tools/configure-check.sh` 与 `git diff --check`；同步 `AGENTS.md` 的 locale 契约。
+- 关键输出: 测试、审计和差量检查均通过；configure-check 仅保留既有 plugins manifest 警告。
+- 退出码: 全部为 0。
+- 证据与判断: 修复未破坏 shell 加载、别名、Git 大文件审计或技能镜像。
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh env.test.sh`。
+- 结果: 通过，退出码 0。
+- 测试/检查: `bash env.test.sh`。
+- 结果: 通过；Bash 与 zsh 均验证失效 `LC_ALL` 自动恢复，子 `sh` 的 charmap 为 UTF-8 且无新增告警。
+- 测试/检查: form/snapshot/data/configure/diff 闸门。
+- 结果: 全部通过；`tools/configure-check.sh` 仅报告仓库既有的 plugins 无 manifest 警告。
+- 未验证项: 无法撤回一个已经继承失效变量并已完成初始化的父 Shell 在启动时已经打印的一次告警；source 修复后，后续子进程使用有效 locale。
+
+## 变更与产物
+- 文件: `env.sh:48-65`，以实际 charmap 验证 locale，探测有效 UTF-8 候选并增加 `C` 兜底。
+- 文件: `env.test.sh:340-359`，增加 Bash/zsh 失效 `LC_ALL` 回归。
+- 文件: `AGENTS.md:11`，同步新的 locale 检测契约。
+- 产物: 本最终日志。
+- 未改动范围: 未修改系统级 locale、未提交、未推送。
+
+## 风险、限制与下一步
+- 风险: 无 UTF-8 locale 的系统会回退到 `C`，避免告警但中文显示能力受限。
+- 阻塞: 无。
+- 下一步: 在当前终端执行 `source /root/configure/env.sh` 或新开 shell，使父进程环境立即切到有效 locale。
+
+## 用户输入指令
+sh: warning: setlocale: LC_ALL: cannot change locale (C.utf8): No such file or directory
+
+## Agent 全文报告
+--- report begin ---
+状态：finished
+
+根因：`env.sh` 原先只要看到 `LANG` 字符串包含 UTF-8 就跳过检测，但真正生效的 `LC_ALL`/`LC_CTYPE` 可能无效或覆盖 `LANG`，因此失效的 `LC_ALL=C.utf8` 会被原样传给子 shell。
+
+改动内容：
+- `env.sh:48`：改为使用 `locale charmap` 验证当前实际编码。
+- `env.sh:54`：逐个实测 `C.UTF-8`、`C.utf8`、`en_US.UTF-8`、`en_US.utf8`、`zh_CN.UTF-8`、`zh_CN.utf8`。
+- `env.sh:62`：系统无可用 UTF-8 locale 时回退 `C`，避免继续保留无效 locale。
+- `env.test.sh:340`：新增合法 `LANG` + 失效 `LC_ALL` 回归，覆盖 Bash、zsh 及子 `sh`。
+- `AGENTS.md:11`：同步 locale 检测契约。
+
+验证结果：
+- `bash -n env.sh env.test.sh`：通过。
+- `bash env.test.sh`：通过；Bash 与 zsh 均确认失效 `LC_ALL` 自动恢复。
+- 手工回归：失效值恢复为 `LANG=C.UTF-8 LC_ALL=C.UTF-8`，子 `sh` 的 `locale charmap` 返回 `UTF-8`；有效 `zh_CN.utf8` 保持不变。
+- form 审计、快照校验、数据边界检查、`tools/configure-check.sh`、`git diff --check`：均通过；configure-check 仅有既有的 plugins manifest 警告。
+
+限制：对于已经继承失效 locale 且已启动的父 Shell，它可能已经打印过一次初始化告警；配置无法撤回这条历史输出。source 修复后的子进程环境已验证干净。当前终端执行 `source /root/configure/env.sh`，或新开 shell，即可完成切换。未修改系统 locale，未提交或推送。
+--- report end ---

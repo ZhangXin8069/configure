@@ -30,6 +30,9 @@ case "$*" in
     "push --recurse-submodules=no origin --tags") exit 1 ;;
     *) exit 1 ;;
 esac
+if [[ ${1:-} == push ]]; then
+    printf 'push-locale=%s\n' "${LC_ALL:-}" >> "${FAKE_GIT_LOG}"
+fi
 SH
 chmod +x "${TEST_DIR}/bin/git"
 
@@ -60,6 +63,10 @@ grep -Fqx 'push --recurse-submodules=no origin main' "${TEST_DIR}/git.log" || {
 grep -Fqx 'push --recurse-submodules=no origin --tags' "${TEST_DIR}/git.log" || {
     cat "${TEST_DIR}/git.log" >&2
     _fail "标签 push 未显式禁用子模块递归"
+}
+grep -Fqx 'push-locale=C' "${TEST_DIR}/git.log" || {
+    cat "${TEST_DIR}/git.log" >&2
+    _fail "git push 未使用 POSIX 通用 locale"
 }
 
 _test_does_not_recurse_into_submodules() {

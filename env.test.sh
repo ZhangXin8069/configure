@@ -337,6 +337,27 @@ _check_screen_helpers() {
     _assert_line "$output" 'screen'
 }
 
+_check_locale_recovery() {
+    local shell_path=$1
+    local harness_stderr_file=$test_root/locale-harness.err
+    local stderr_file=$test_root/locale-recovery.err
+    local output
+
+    output=$(_clean_env_shell "$shell_path" "/usr/bin:/bin" -c '
+        export LC_ALL=C.utf8.configure-test-missing
+        . "$1" 2>/dev/null
+        [[ "$LC_ALL" != "C.utf8.configure-test-missing" ]] || exit 21
+        [[ "$(locale charmap 2>/dev/null)" == "UTF-8" ]] || exit 22
+        sh -c "locale charmap" 2>>"$2"
+        printf "locale-recovered\n"
+    ' configure-env-locale "$env_file" "$stderr_file" 2>"$harness_stderr_file") ||
+        _fail "$shell_path 未修复失效的 LC_ALL，实际输出：$output；Harness 告警：$(<"$harness_stderr_file")；子 shell 告警：$(<"$stderr_file")"
+    _assert_line "$output" 'UTF-8'
+    _assert_line "$output" 'locale-recovered'
+    [[ ! -s "$stderr_file" ]] ||
+        _fail "$shell_path locale 修复后仍有告警：$(<"$stderr_file")"
+}
+
 _check_env_loading_guard() {
     local shell_path=$1
     local clean_bin=$2
@@ -454,6 +475,9 @@ main() {
     for shell_path in "${shell_paths[@]}"; do
         _check_env_loading_guard "$shell_path" "$clean_bin" "$conflict_bin"
         printf '通过：%s 的重复 source、marker 撤销与冲突告警暂停加载\n' "$shell_path"
+
+        _check_locale_recovery "$shell_path"
+        printf '通过：%s 的失效 LC_ALL 自动恢复\n' "$shell_path"
 
         _check_screen_helpers "$shell_path" "$fake_screen"
         printf '通过：%s 的 screen 别名、标题、重连与缺失降级\n' "$shell_path"

@@ -8,7 +8,7 @@
 
 1. 将 `bin/`、`~/.local/bin` 等前置到 `PATH`（**防重复**：已含仓库 `bin` 前缀则跳过，可安全多次 source）
 2. 设置 `LD_LIBRARY_PATH`（仓库 `lib/` 优先，防重复规则同 PATH）
-3. 检测 UTF-8 locale：`LANG` 已是 UTF-8 时跳过；否则单 `grep -im1` 查 `C.UTF-8`/`en_US.UTF-8`
+3. 检测 UTF-8 locale：以 `locale charmap` 实测当前有效编码（不只看 `LANG`，避免失效的 `LC_ALL`/`LC_CTYPE` 覆盖）；非 UTF-8 时逐个实测 `C.UTF-8`/`C.utf8`/`en_US.UTF-8`/`en_US.utf8`/`zh_CN.UTF-8`/`zh_CN.utf8`，均不可用则回退 `C`，避免 setlocale 告警
 4. source `lib/_git_aliases.sh`（git 别名；zsh 专有别名 `gk/gke/globurl/gtl/gup*` 按 `$ZSH_VERSION` 分支定义，bash 下自动补 `git_current_branch`/`git_main_branch`/`git_develop_branch` 与 `ggu` 函数兜底）
 5. 定义两 shell 通用别名（导航/grep/ls 系/常用工具；screen 会话 `scn`、`scl`、`scr` 使用 `SSH_SCREEN_NAME` 或 `SSH_CLIENT` 客户端地址，`scw` 等价于 `screen -wipe`；`history=omz_history` 仅 zsh 下定义，`which-command` 保留 zsh 默认）
 

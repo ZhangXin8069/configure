@@ -1,0 +1,88 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 10:05:03 +0800
+批次: gpush-locale
+主任务: 修复 gpush 两次 git push 的 setlocale 告警
+触发原因: 任务完成
+摘要: 两次 git push 固定 LC_ALL=C，避免 SSH 远端 sh 拒绝本地 UTF-8 locale
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 复现与调用链定位
+- 目标: 定位 `gpush.sh` 仍出现 locale 告警的原因。
+- 命令/操作: 检查 `/root/Draft/PyQCU` 中 `gpush.sh` 的解析路径、两次 push 实现、当前 locale 与 `sh` 行为。
+- 关键输出: `gpush.sh` 解析为 `/root/configure/bin/gpush.sh`；脚本依次执行分支 push 与 tags push，与两条 `Everything up-to-date` 和两条告警一一对应。
+- 退出码: 0。
+- 证据与判断: 告警不是来自 commit 阶段，而是 Git/SSH 子进程继承 `LC_ALL` 后由远端或目标 `sh` 初始化 locale 时产生。
+
+### S2 — 失败回归
+- 目标: 固定 push 子进程应使用可移植 locale。
+- 命令/操作: 在 `bin/gpush.test.sh` 的 fake git 中记录两次 push 实际收到的 `LC_ALL`。
+- 关键输出: 修复前记录为 `push-locale=C.UTF-8`，测试失败。
+- 退出码: 1。
+- 证据与判断: 原实现未隔离交互 shell 的 UTF-8 locale，Git 子进程会将其继续传给 SSH/远端 shell。
+
+### S3 — 最小修复
+- 目标: 仅修复传输层 locale，不改变交互 shell 的 UTF-8 配置。
+- 命令/操作: 两次 `git push` 均改为 `LC_ALL=C git push ...`，并在 `bin/AGENTS.md` 同步说明。
+- 关键输出: fake git 记录两次 `push-locale=C`，`bin/gpush.test.sh` 通过。
+- 退出码: 0。
+- 证据与判断: POSIX `C` locale 在所有目标 shell 中可用，且 push 输出不需要本地化文本。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gpush.sh bin/gpush.test.sh env.sh env.test.sh`。
+- 结果: 通过，退出码 0。
+- 测试/检查: `bash bin/gpush.test.sh`。
+- 结果: 通过，退出码 0。
+- 测试/检查: `bash env.test.sh`。
+- 结果: Bash 与 zsh locale 恢复及既有 shell 回归通过，退出码 0。
+- 测试/检查: Gitee SSH 分支与 tags 两次 `git push --dry-run`，各设 20 秒硬超时。
+- 结果: 均返回 `Everything up-to-date`，无 setlocale 告警，退出码 0。
+- 测试/检查: form 审计、快照校验、数据边界、`tools/configure-check.sh`、`git diff --check`。
+- 结果: 全部通过；configure-check 仅保留既有 plugins manifest 警告。
+- 未验证项: 未执行实际远端引用更新，避免产生非必要网络副作用；只读 dry-run 已完成真实 SSH 路径验证。
+
+## 变更与产物
+- 文件: `bin/gpush.sh:118-130`，分支和标签 push 固定 `LC_ALL=C`。
+- 文件: `bin/gpush.test.sh:33-34,67-70`，新增 Git push 子进程 locale 断言。
+- 文件: `bin/AGENTS.md:25`，同步 gpush 行为说明。
+- 产物: 本最终日志。
+- 未改动范围: 未修改系统 locale，未提交，未推送，未修改远端引用。
+
+## 风险、限制与下一步
+- 风险: push 阶段的 Git 文案固定为英文；不影响 refs、认证或传输语义。
+- 阻塞: 无。
+- 下一步: 在 `/root/Draft/PyQCU` 重新运行 `gpush.sh`。无改动时两次 push 应只输出 `Everything up-to-date`，不再出现 setlocale 警告。
+
+## 用户输入指令
+➜ /root/Draft/PyQCU git:(main) gpush.sh
+###gpush.sh is running...:2026-11-03-10-02-27###
+Repo:    /root/Draft/PyQCU
+Branch:  main
+Nothing to commit.
+sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Everything up-to-date
+sh: warning: setlocale: LC_ALL: cannot change locale (C.UTF-8)
+Everything up-to-date
+###gpush.sh is done......:2026-11-03-10-02-29###
+
+## Agent 全文报告
+--- report begin ---
+状态：finished
+
+根因：`gpush.sh` 的两次 `git push` 继承了交互 shell 的 `LC_ALL=C.UTF-8`。Git/SSH 将该变量继续传给远端 shell，而远端环境没有同名 locale，因此每次 push 的 `sh` 都打印 setlocale 警告。两处告警与脚本的两次 push 精确对应。
+
+改动内容：
+- `bin/gpush.sh`：分支 push 和 tags push 均使用 `LC_ALL=C`。
+- `bin/gpush.test.sh`：记录并断言两次 push 子进程的 `LC_ALL=C`。
+- `bin/AGENTS.md`：同步 gpush 的传输层 locale 策略。
+
+验证结果：
+- `bash -n bin/gpush.sh bin/gpush.test.sh env.sh env.test.sh`：通过。
+- `bash bin/gpush.test.sh`：通过。
+- `bash env.test.sh`：通过。
+- 对 `/root/Draft/PyQCU` 的真实 Gitee SSH 分支与 tags `git push --dry-run`：两次均只输出 `Everything up-to-date`，无 locale 告警。
+- form、快照、数据边界、configure-check、`git diff --check`：通过。
+
+副作用范围：仅 Git push 子进程改用 POSIX `C` locale，交互 shell 仍保持 UTF-8。未修改系统 locale、未实际推送、未提交。现在可直接在 `/root/Draft/PyQCU` 重新运行 `gpush.sh`。
+--- report end ---
