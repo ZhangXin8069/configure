@@ -83,12 +83,16 @@ bash ~/configure/bin/grm-ignore.sh -n
 | 命令 | 行为 | 建议 |
 |---|---|---|
 | `gpull.sh` | 自动识别 `origin` 为 HTTPS、SSH 或本地路径；fetch 后仅允许 fast-forward，旧版 Git 回退到兼容 stash 流程；分叉历史在 stash/rebase 前停止；detached HEAD 仅在提交已包含于唯一可判定的远端默认分支时恢复为跟踪分支 | 可用于日常同步并保留 tracked 工作区改动；建议先检查 `git status --short --branch` |
-| `gpush.sh` | 仓库包含 `data/` 时先运行数据边界检查；随后 `git add -A`、无信息校验地以时间戳提交、推送当前分支和全部标签 | 仅用于个人快照仓库，不用于需要审查的提交；data 检查失败会阻止暂存、提交和推送 |
+| `gpush.sh` | 仓库包含 `data/` 时先运行数据边界检查；随后 `git add -A`、无信息校验地以时间戳提交、推送当前分支和全部标签；`-f/--force` 仅强制更新远端标签 | 仅用于个人快照仓库，不用于需要审查的提交；data 检查失败会阻止暂存、提交和推送 |
 | `give_git_ignore.sh` | 按当前工作区生成根和子目录 `.gitignore`，保留已有点文件、扩展名与精确入口 | 先用 `-n` 预览；默认会备份，`-f` 才直接覆盖 |
 | `grm-ignore.sh` | 从全部 Git 历史永久删除被忽略文件，默认覆盖远程并 GC | 仅限明确授权的新 clone；普通 `git pull` 无法恢复协作 |
 | `gback.sh` | fetch 最新 upstream；先 stash 本地提交与工作区，保存已注册子模块指针；子模块内部有未提交状态时中止；确认 stash 后才 `reset --hard` 并 `clean -fdx` | 强制对齐但保留 stash；未注册 gitlink 不参与子模块遍历，不会自动 pop |
 | `gpristine` 别名 | `git reset --hard && git clean -force -dfx` | 会删除未跟踪和忽略文件 |
 | `gwipe` 别名 | `git reset --hard && git clean -force -df` | 会删除未跟踪文件，但保留忽略文件 |
+
+当远端已有同名但内容不同的标签时，普通 `gpush.sh` 会被拒绝。确认本地标签应覆盖远端后，
+可使用 `gpush.sh -f`；该选项只对标签推送追加 `--force`，当前分支仍执行普通快进推送，
+不会因标签冲突而顺带覆盖分支历史。
 
 `gback.sh` 会把当前分支的本地分叉和全部工作区状态放入新的 `stash@{0}`，然后才清理工作区。若 stash 失败或 stash 后仍有残留文件，脚本会中止 reset。恢复时可查看 `git stash show --include-untracked -p stash@{0}`，或用 `git stash branch <new-branch> stash@{0}` 重建原分支。其他本地分支和标签不会被删除。
 
@@ -119,6 +123,7 @@ bash -n bin/git_init.sh
 bash -n bin/give_git_ignore.sh
 bash -n bin/grm-ignore.sh
 bash -n bin/gpush.sh
+bash bin/gpush.test.sh
 bash -n bin/gpull.sh
 bash -n bin/gback.sh
 bash -n bin/gback.test.sh

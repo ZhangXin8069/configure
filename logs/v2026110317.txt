@@ -1,0 +1,85 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-03 17:43:37 +0800
+批次: gpush-force-tags-20261103
+主任务: 为 gpush.sh 增加 -f/--force 强制更新远端标签
+触发原因: 任务完成
+摘要: 已实现仅对远端标签强制更新，补充组合参数、失败路径和真实本地裸远端回归，并同步文档；未执行真实 force push。
+Git 根目录: /root/configure
+
+## 关键日志
+### S1 — 需求与根因
+- 目标: 为 `/root/configure/bin/gpush.sh` 增加 `-f/--force`，处理 Gitee 远端已存在同名标签时的拒绝。
+- 关键输出: 原错误为远端 `bug*`、`dev*`、`stab*`、`test*` 标签均已存在，普通 `push --tags` 被拒绝。
+- 证据与判断: 分支已 up-to-date，失败发生在标签更新；因此强制语义应只作用于标签，避免顺带覆盖当前分支历史。
+
+### S2 — 测试驱动实现
+- 命令/操作: 先新增 `gpush.sh --force` 红测，实测返回 64 并报 `ERROR: Unknown argument: --force`。
+- 命令/操作: 修改参数解析与标签 push，增加 `-f/--force`，将 `--force` 仅追加到 `origin --tags` 调用。
+- 关键输出: 组合调用 `gpush.sh -t gitee.com -f` 可正常进入两项 push；输出明确提示远端标签可能被改写。
+- 退出码: 红测 1；实现后功能测试 0。
+
+### S3 — 回归与边界
+- 命令/操作: 运行 shell 语法、gpush 全量测试、远程目标包装器测试、聚合 push 测试、form 结构审计、configure 镜像检查、data 边界检查与 `git diff --check`。
+- 关键输出: 全部通过；真实本地裸远端夹具验证普通模式保留远端旧标签，`-f` 后远端标签指向本地新目标。
+- 未通过项: 全库快照校验报告 8 个既有 SHA-256 不匹配，均位于未修改的快照基线文件，不含本次改动文件；快照工作树本身无 Git 修改。
+
+## 验证与证据
+- 测试/检查: `bash -n bin/gpush.sh bin/gpush.test.sh`
+- 测试/检查: `bash bin/gpush.test.sh`
+- 测试/检查: `bash bin/git-remote-wrappers.test.sh`
+- 测试/检查: `bash bin/gz-all-push.test.sh`
+- 测试/检查: `bash skills/form/scripts/form-audit.sh --root . --strict --quiet`
+- 测试/检查: `bash tools/configure-check.sh`
+- 测试/检查: `bash skills/form/scripts/form-data-tracking-check.sh --root . --quiet`
+- 测试/检查: `git diff --check`
+- 结果: 上述检查退出码均为 0。
+- 未验证项: `form-snapshot-verify.sh --quiet` 失败；失败项是既有 `configure-main` 快照中的 `MANIFEST.tsv`、`ddocker*`、`ggitee*`、`git_init.sh`、`zgALLpull.sh` 等 8 项，未修改该快照。
+
+## 变更与产物
+- 文件: `bin/gpush.sh`
+- 文件: `bin/gpush.test.sh`
+- 文件: `bin/AGENTS.md`
+- 文件: `lib/_git/setup.md`
+- 产物: `-f/--force` 参数、帮助文本、单元/集成回归与风险说明。
+- 未改动范围: 未提交、未推送、未执行真实 force push，未改写 `/root/qcu` 远端标签。
+
+## 风险、限制与下一步
+- 风险: `-f` 会覆盖远端同名标签，调用者必须确认本地标签是正确的目标。
+- 限制: 当前分支仍保持普通快进推送，`-f` 不提供分支历史覆盖能力。
+- 阻塞: 无。
+- 下一步: 在 `/root/qcu` 复查标签差异后运行 `gpush.sh -t gitee.com -f`。
+
+## 用户输入指令
+错误上下文：在 `/root/qcu` 的 `v20241023` 分支执行 `gpush.sh -t gitee.com`，分支已同步，但 `bug*`、`dev*`、`stab*`、`test*` 等远端标签均已存在并被拒绝。
+用户要求原文：`为本库的push提供强制推送选项'-f'`
+
+## Agent 全文报告
+--- report begin ---
+状态：finished
+
+改动内容
+- `bin/gpush.sh` 新增 `-f/--force`，可与 `-t [DOMAIN]` 任意组合。
+- `-f/--force` 仅给标签推送增加 `--force`；当前分支仍是普通快进推送。
+- `bin/gpush.test.sh` 覆盖参数组合、普通标签冲突、命令构造和真实本地裸远端标签强制更新。
+- 同步更新 `bin/AGENTS.md` 与 `lib/_git/setup.md`。
+
+推理依据
+远端输出显示当前分支已经 up-to-date，失败集中在已存在的标签。将强制范围限制在 `--tags` 可以直接解决该场景，同时避免无关分支历史被覆盖；运行时也会打印“remote tags may be rewritten”提示。
+
+验证结果
+- `bash -n bin/gpush.sh bin/gpush.test.sh`：通过。
+- `bash bin/gpush.test.sh`：通过，含真实本地裸远端回归。
+- `bin/git-remote-wrappers.test.sh`、`bin/gz-all-push.test.sh`：通过。
+- form 严格审计、configure 镜像检查、data 边界检查、`git diff --check`：通过。
+- 全库快照校验仍有 8 个既有基线 SHA-256 不匹配；失败项不是本次改动文件，快照工作树无修改。
+
+后续步骤
+在 `/root/qcu` 确认本地标签确实需要覆盖远端后执行：
+
+```bash
+gpush.sh -t gitee.com -f
+```
+
+本次未提交、未推送，也未对真实远端执行 force push。
+--- report end ---

@@ -117,6 +117,111 @@ _test_branch_push_failure_skips_tags() {
     }
 }
 
+_test_force_option_forces_tags_only() {
+    local root="${TEST_DIR}/force-tags"
+    local fake_bin="${root}/bin"
+    local output="${root}/output.log"
+    local log="${root}/git.log"
+    local status
+
+    mkdir -p "${fake_bin}" "${root}/repo"
+    printf '%s\n' \
+        '#!/usr/bin/env bash' \
+        'printf "%s\n" "$*" >> "${FAKE_GIT_LOG:?}"' \
+        'case "$*" in' \
+        '    "rev-parse --show-toplevel") printf "%s\n" "${FAKE_REPO_ROOT:?}" ;;' \
+        '    "ls-files --stage -z") ;;' \
+        '    "add -A -- ."|"diff --cached --quiet --ignore-submodules=all") ;;' \
+        '    "symbolic-ref --quiet --short HEAD") printf "main\n" ;;' \
+        '    "push --recurse-submodules=no origin main") ;;' \
+        '    "push --recurse-submodules=no --force origin --tags") ;;' \
+        '    *) exit 1 ;;' \
+        'esac' >"${fake_bin}/git"
+    chmod +x "${fake_bin}/git"
+
+    set +e
+    PATH="${fake_bin}:${PATH}" \
+    FAKE_GIT_LOG="${log}" \
+    FAKE_REPO_ROOT="${root}/repo" \
+        bash "${_PATH}/gpush.sh" -t gitee.com -f >"${output}" 2>&1
+    status=$?
+    set -e
+
+    ((status == 0)) || {
+        cat "${output}" >&2
+        _fail "--force 应允许强制更新远端标签"
+    }
+    grep -Fq 'Remote target: gitee.com' "${output}" || {
+        cat "${output}" >&2
+        _fail "--force 应可与 -t gitee.com 组合使用"
+    }
+    grep -Fq 'Tags:    force-update enabled' "${output}" || {
+        cat "${output}" >&2
+        _fail "--force 缺少远端标签可能被改写的提示"
+    }
+    grep -Fqx 'push --recurse-submodules=no origin main' "${log}" || {
+        cat "${log}" >&2
+        _fail "--force 不应改变当前分支的普通推送"
+    }
+    grep -Fqx 'push --recurse-submodules=no --force origin --tags' "${log}" || {
+        cat "${log}" >&2
+        _fail "--force 未将 --force 应用于标签推送"
+    }
+    ! grep -Fqx 'push --recurse-submodules=no --force origin main' "${log}" || {
+        cat "${log}" >&2
+        _fail "--force 不应强制推送当前分支"
+    }
+}
+
+_test_force_updates_divergent_remote_tag() {
+    local root="${TEST_DIR}/force-tag-integration"
+    local remote="${root}/remote.git"
+    local repo="${root}/repo"
+    local first
+    local second
+    local status
+
+    git init -q --bare "${remote}"
+    git -C "${remote}" symbolic-ref HEAD refs/heads/main
+    git init -q -b main "${repo}"
+    git -C "${repo}" config user.name gpush-test
+    git -C "${repo}" config user.email gpush-test@example.invalid
+    printf 'one\n' >"${repo}/tracked.txt"
+    git -C "${repo}" add tracked.txt
+    git -C "${repo}" commit -q -m initial
+    first=$(git -C "${repo}" rev-parse HEAD)
+    git -C "${repo}" tag release "${first}"
+    git -C "${repo}" remote add origin "${remote}"
+    git -C "${repo}" push -q -u origin main
+    git -C "${repo}" push -q origin release
+
+    printf 'two\n' >"${repo}/tracked.txt"
+    git -C "${repo}" commit -q -am second
+    second=$(git -C "${repo}" rev-parse HEAD)
+    git -C "${repo}" tag -f release "${second}" >/dev/null
+
+    set +e
+    (
+        cd "${repo}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpush.sh"
+    ) >"${root}/without-force.log" 2>&1
+    status=$?
+    set -e
+    ((status != 0)) || _fail "远端标签分叉时普通 gpush 应失败"
+    [[ "$(git --git-dir="${remote}" rev-parse refs/tags/release)" == "${first}" ]] \
+        || _fail "普通 gpush 不应改写远端标签"
+
+    (
+        cd "${repo}"
+        GIT_CONFIG_NOSYSTEM=1 GIT_CONFIG_GLOBAL=/dev/null bash "${_PATH}/gpush.sh" -f
+    ) >"${root}/with-force.log" 2>&1 || {
+        cat "${root}/with-force.log" >&2
+        _fail "-f 未能强制更新分叉的远端标签"
+    }
+    [[ "$(git --git-dir="${remote}" rev-parse refs/tags/release)" == "${second}" ]] \
+        || _fail "-f 后远端标签未指向本地新目标"
+}
+
 _test_does_not_recurse_into_submodules() {
     local root="${TEST_DIR}/no-submodule-push"
     local sub_remote="${root}/sub-remote.git"
@@ -299,5 +404,7 @@ _test_does_not_recurse_into_submodules
 _test_commit_failure_aborts_before_push
 _test_detached_head_is_rejected
 _test_branch_push_failure_skips_tags
+_test_force_option_forces_tags_only
+_test_force_updates_divergent_remote_tag
 
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

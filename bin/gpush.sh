@@ -16,7 +16,7 @@ source "${_PATH}/_git_remote_target.sh"
 
 _usage() {
     cat <<'EOF'
-Usage: gpush.sh [-t [DOMAIN]] [-h]
+Usage: gpush.sh [-t [DOMAIN]] [-f] [-h]
 
 Stage parent-repository changes, commit them, and push the current branch and
 tags. No remote host override is applied unless -t/--target is specified.
@@ -25,6 +25,7 @@ Options:
 EOF
     _git_remote_target_usage_line
     cat <<'EOF'
+  -f, --force            Force-update remote tags; branch pushes remain fast-forward-only.
   -h, --help             Show this help.
 EOF
 }
@@ -34,11 +35,17 @@ if (( _GIT_REMOTE_HELP_REQUESTED )); then
     _usage
     exit 0
 fi
-if (( ${#_GIT_REMOTE_REMAINING_ARGS[@]} > 0 )); then
-    echo "ERROR: Unknown argument: ${_GIT_REMOTE_REMAINING_ARGS[0]}" >&2
-    _usage >&2
-    exit 64
-fi
+_FORCE_TAG_PUSH=0
+for _ARG in "${_GIT_REMOTE_REMAINING_ARGS[@]}"; do
+    case "${_ARG}" in
+        -f|--force) _FORCE_TAG_PUSH=1 ;;
+        *)
+            echo "ERROR: Unknown argument: ${_ARG}" >&2
+            _usage >&2
+            exit 64
+            ;;
+    esac
+done
 _git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" || exit $?
 
 # Locate the git repository root (works from any subdirectory)
@@ -61,6 +68,11 @@ if [[ -z "${BRANCH}" ]]; then
     exit 1
 fi
 echo "Branch:  ${BRANCH}"
+_TAG_PUSH_FORCE_ARGS=()
+if (( _FORCE_TAG_PUSH )); then
+    _TAG_PUSH_FORCE_ARGS=(--force)
+    echo "Tags:    force-update enabled (remote tags may be rewritten)"
+fi
 
 _submodule_paths() {
     local entry
@@ -163,8 +175,9 @@ if ! _git_remote push --recurse-submodules=no origin "$BRANCH"; then
     exit 1
 fi
 
-# Push tags
-if ! _git_remote push --recurse-submodules=no origin --tags; then
+# Push tags. Force mode is intentionally limited to tags so the current branch
+# retains its normal fast-forward safety check.
+if ! _git_remote push --recurse-submodules=no "${_TAG_PUSH_FORCE_ARGS[@]}" origin --tags; then
     echo "ERROR: tag push failed" >&2
     exit 1
 fi

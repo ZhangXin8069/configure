@@ -1159,3 +1159,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## gpush-force-tags-20261103 - final - 2026-11-03 17:43:37 +0800
+- 主任务: 为 gpush.sh 增加 -f/--force 强制更新远端标签
+- 日志文件: logs/v2026110317.txt
+- 文件大小: 4891 bytes
+- 触发原因: 任务完成
+- 关键内容: 已实现仅对远端标签强制更新，补充组合参数、失败路径和真实本地裸远端回归，并同步文档；未执行真实 force push。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
