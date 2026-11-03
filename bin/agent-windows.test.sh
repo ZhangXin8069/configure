@@ -175,9 +175,9 @@ for contract in \
     'function Add-AgentPathEntry' \
     'function Install-AgentExecutable' \
     "'_claude-code'" \
-    "'_opencode'" \
+    "'_open-code'" \
     "'_codex'" \
-    "'_commandcode'" \
+    "'_command-code'" \
     "'install.bat', 'install.ps1', 'install.sh'" \
     'AGENT_AUTO_INSTALL' \
     'AGENT_AUTO_INSTALL_DONE' \

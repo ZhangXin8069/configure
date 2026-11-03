@@ -1,4 +1,4 @@
-# AGENTS.md — _opencode
+# AGENTS.md — _open-code
 
 OpenCode 跨平台安装与一键配置脚本（不部署到 `$HOME`，手动运行；按二进制主版本分流 V1/V2 配置）：
 

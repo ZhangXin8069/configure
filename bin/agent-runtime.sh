@@ -467,9 +467,9 @@ _agent_runtime_agent_install_script() {
     local agent="${1:-}" sub=""
     case "$agent" in
         claude) sub="_claude-code";;
-        opencode) sub="_opencode";;
+        opencode) sub="_open-code";;
         codex) sub="_codex";;
-        commandcode) sub="_commandcode";;
+        commandcode) sub="_command-code";;
         *) return 1;;
     esac
     local root="${AGENT_CONFIGURE_ROOT:-}"

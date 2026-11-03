@@ -9,6 +9,7 @@ set "PACKAGE_NAME=command-code"
 set "DEFAULT_VERSION=1.88.2"
 set "INSTALL_DIR=%USERPROFILE%\.local\bin"
 if defined COMMAND_CODE_INSTALL_DIR set "INSTALL_DIR=%COMMAND_CODE_INSTALL_DIR%"
+for %%i in ("%~dp0..\_node-js\install.bat") do set "NODE_INSTALLER=%%~fi"
 
 if /i "%~1"=="--help" goto :usage
 if /i "%~1"=="-h" goto :usage
@@ -34,12 +35,14 @@ if "!VERSION:~0,1!"=="v" set "VERSION=!VERSION:~1!"
 
 where node >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: Node.js was not found. Install Node.js 22 or newer.
+    echo ERROR: Node.js was not found. Install Node.js 22 or newer first:
+    echo   "%NODE_INSTALLER%"
     exit /b 1
 )
 where npm >nul 2>&1
 if errorlevel 1 (
-    echo ERROR: npm was not found. Install Node.js 22 or newer.
+    echo ERROR: npm was not found. Install Node.js 22 or newer first:
+    echo   "%NODE_INSTALLER%"
     exit /b 1
 )
 
@@ -50,7 +53,8 @@ if not defined NODE_MAJOR (
     exit /b 1
 )
 if !NODE_MAJOR! LSS 22 (
-    echo ERROR: Command Code requires Node.js 22 or newer.
+    echo ERROR: Command Code requires Node.js 22 or newer. Upgrade with:
+    echo   "%NODE_INSTALLER%"
     exit /b 1
 )
 
@@ -114,6 +118,7 @@ echo   --new         Install the latest npm release
 echo   -h, --help    Show this help
 echo.
 echo Requires Node.js 22 or newer and npm.
+echo Node.js installer: "%NODE_INSTALLER%"
 echo Install directory: %INSTALL_DIR%
 echo Override with COMMAND_CODE_INSTALL_DIR.
 exit /b 0

@@ -5,17 +5,17 @@
 Linux / macOS：
 
 ```bash
-bash lib/_opencode/install.sh
-bash lib/_opencode/install.sh 2.2.0
-bash lib/_opencode/install.sh --new
+bash lib/_open-code/install.sh
+bash lib/_open-code/install.sh 2.2.0
+bash lib/_open-code/install.sh --new
 ```
 
 Windows：
 
 ```bat
-lib\_opencode\install.bat
-lib\_opencode\install.bat 2.2.0
-lib\_opencode\install.bat --new
+lib\_open-code\install.bat
+lib\_open-code\install.bat 2.2.0
+lib\_open-code\install.bat --new
 ```
 
 安装脚本默认版本为 `2.2.0`，默认目录为 `$HOME/.local/bin` 或 `%USERPROFILE%\.local\bin`。可通过 `OPENCODE_INSTALL_DIR` 覆盖目录。
@@ -45,8 +45,8 @@ https://opencode.ai/files/bin
 
 ```bash
 opencode --version
-bash lib/_opencode/config.sh --check
-bash lib/_opencode/config.sh --help
+bash lib/_open-code/config.sh --check
+bash lib/_open-code/config.sh --help
 ```
 
 macOS 默认 Bash 3.2 执行 `--help` 时，帮助文本中的非 ASCII 标点会让未加花括号的变量名解析失败。应使用 Bash 4+；只读状态检查可使用 `--check`。
@@ -54,7 +54,7 @@ macOS 默认 Bash 3.2 执行 `--help` 时，帮助文本中的非 ASCII 标点�
 默认 dry-run：
 
 ```bash
-bash lib/_opencode/config.sh \
+bash lib/_open-code/config.sh \
   --model <provider/model> \
   --small-model <provider/model> \
   --theme dark \
@@ -68,8 +68,8 @@ bash lib/_opencode/config.sh \
 ## 插件
 
 ```bash
-bash lib/_opencode/config.sh --list-plugins
-bash lib/_opencode/config.sh --plugin <package>
+bash lib/_open-code/config.sh --list-plugins
+bash lib/_open-code/config.sh --plugin <package>
 ```
 
 `--plugin` 只把包名写入配置，不执行安装。V1 插件 API 与 V2 不兼容，安装前确认插件明确声明支持目标主版本。
@@ -81,7 +81,7 @@ OpenCode 可通过统一启动器注入 provider 与 API key。凭据应放在 `
 ## 回归测试
 
 ```bash
-bash lib/_opencode/config.test.sh
+bash lib/_open-code/config.test.sh
 ```
 
 测试使用临时 `XDG_CONFIG_HOME`、隔离的假 `PATH` 和临时目录，覆盖 V2 原生结构、V1 兼容分支与 `--check`。当前测试没有单独设置临时 `HOME`，因此不会隔离用户 `~/.config` 之外的 HOME 级状态。运行需要 `python3`。
@@ -89,9 +89,9 @@ bash lib/_opencode/config.test.sh
 ## 验证
 
 ```bash
-bash -n lib/_opencode/install.sh
-bash -n lib/_opencode/config.sh
-bash -n lib/_opencode/config.test.sh
-bash lib/_opencode/config.test.sh
+bash -n lib/_open-code/install.sh
+bash -n lib/_open-code/config.sh
+bash -n lib/_open-code/config.test.sh
+bash lib/_open-code/config.test.sh
 opencode --version
 ```

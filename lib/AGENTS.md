@@ -32,6 +32,7 @@
 | `_clash/` | Clash 离线归档、解压检查和代理启用边界 |
 | `_claude-code/` | Claude Code / cc-switch 安装、配置、离线下载和卸载 |
 | `_codex/` | Codex CLI 安装、配置、provider 协议与认证 |
+| `_command-code/` | Command Code 安装、用户级配置、Provider API 与原生 statusline（Node.js 见 `_node-js/`） |
 | `_commands/` | `bin/` 用户命令总索引及跨主题风险说明 |
 | `_deepseek/` | DeepSeek 的 Claude Code、Codex 与桌面端配置 |
 | `_docker/` | Docker Desktop、GPU、镜像和容器生命周期 |
@@ -40,8 +41,8 @@
 | `_git/` | Git 身份、别名、忽略模板和辅助命令风险 |
 | `_linux/` | Linux 包、Swap、调频、电源和系统入口 |
 | `_mac/` | macOS 更新、Gatekeeper、Keychain 与维护脚本 |
-| `_opencode/` | OpenCode 安装、V1/V2 配置分流与插件 |
-| `_commandcode/` | Command Code 安装、用户级配置、Provider API 与原生 statusline |
+| `_node-js/` | Node.js 22+ 安装、版本检查与 Windows 用户级安装 |
+| `_open-code/` | OpenCode 安装、V1/V2 配置分流与插件 |
 | `_package/` | APT/Python 清单和随库可执行资源 |
 | `_shell/` | Bash/Zsh/oh-my-zsh 部署、启动链和本机覆盖 |
 | `_slurm/` | Slurm 用户命令与 DCU 作业模板 |

@@ -1781,7 +1781,7 @@ make_install_sh() { # 部署根 agent 名 [退出码]
     local root="$1" agent="$2" rc="${3:-0}" sub=""
     case "$agent" in
         claude) sub="_claude-code";;
-        opencode) sub="_opencode";;
+        opencode) sub="_open-code";;
         codex) sub="_codex";;
     esac
     mkdir -p "$root/lib/$sub"

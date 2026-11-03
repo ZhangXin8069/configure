@@ -163,4 +163,4 @@ fi
 help_output="$(run_config --help)"
 assert_contains "$help_output" '--permission-mode MODE'
 
-printf 'PASS: _commandcode config.sh 个人偏好、权限规则、幂等合并与隔离校验\n'
+printf 'PASS: _command-code config.sh 个人偏好、权限规则、幂等合并与隔离校验\n'

@@ -5,6 +5,10 @@
 
 set -euo pipefail
 
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+node_installer="$script_dir/../_node-js/install.sh"
+node_setup="$script_dir/../_node-js/setup.md"
+
 package_name="command-code"
 default_version="1.88.2"
 install_dir="${COMMAND_CODE_INSTALL_DIR:-${HOME:?HOME is required}/.local/bin}"
@@ -20,7 +24,9 @@ usage() {
 
 要求:
   Node.js >= 22、npm、可访问 npm registry。
-  Node.js 安装指南见 setup.md（含 HPC 无 root 场景）。
+  Node.js 缺失或过旧时先运行:
+    bash $node_installer
+  详细说明见 $node_setup
 安装目录:
   $install_dir
 
@@ -58,12 +64,12 @@ case "$(uname -s)" in
         ;;
 esac
 
-command -v node >/dev/null 2>&1 || die "未找到 node；请先安装 Node.js 22 或更新版本（安装指南见 setup.md「Node.js 安装指南」）"
-command -v npm >/dev/null 2>&1 || die "未找到 npm；请先安装 Node.js 22 或更新版本（安装指南见 setup.md「Node.js 安装指南」）"
+command -v node >/dev/null 2>&1 || die "未找到 node；请先运行 bash \"$node_installer\"（说明见 \"$node_setup\"）"
+command -v npm >/dev/null 2>&1 || die "未找到 npm；请先运行 bash \"$node_installer\"（说明见 \"$node_setup\"）"
 
 node_major="$(node -p 'Number(process.versions.node.split(".")[0])')"
 if [ "$node_major" -lt 22 ]; then
-    die "当前 Node.js 为 $(node --version)，Command Code 要求 Node.js 22 或更新版本（升级方法见 setup.md「Node.js 安装指南」）"
+    die "当前 Node.js 为 $(node --version)，Command Code 要求 Node.js 22 或更新版本；请运行 bash \"$node_installer\" 升级（说明见 \"$node_setup\"）"
 fi
 
 argument="${1:-}"

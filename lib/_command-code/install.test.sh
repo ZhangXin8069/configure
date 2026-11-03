@@ -100,14 +100,16 @@ fi
 if run_install --unknown >/dev/null 2>&1; then
     fail '未知选项应失败'
 fi
-if FAKE_NODE_MAJOR=20 run_install >/dev/null 2>&1; then
+if old_node_output="$(FAKE_NODE_MAJOR=20 run_install 2>&1)"; then
     fail 'Node.js 20 应失败'
 fi
+assert_contains "$old_node_output" '_node-js/install.sh'
 
 help_output="$(run_install --help)"
 assert_contains "$help_output" 'Node.js >= 22'
+assert_contains "$help_output" '_node-js/install.sh'
 assert_contains "$help_output" 'COMMAND_CODE_INSTALL_DIR'
 
 [ "$(grep -Fc "export PATH=\"$install_dir:\$PATH\"" "$home_dir/.zshrc")" = 1 ] || fail 'PATH 写入应幂等'
 
-printf 'PASS: _commandcode install.sh 版本选择、统一安装路径与 PATH 幂等流程\n'
+printf 'PASS: _command-code install.sh 版本选择、统一安装路径与 PATH 幂等流程\n'

@@ -49,7 +49,7 @@ mklink /H cos.bat agent.bat
 
 ```bat
 lib\_codex\install.bat
-lib\_opencode\install.bat
+lib\_open-code\install.bat
 ```
 
 Claude Code 使用 `lib\_claude-code\cc-v20260706.ps1`。DeepSeek Codex 配置管理器使用 `lib\_deepseek\codex-deepseek-setup.ps1`。

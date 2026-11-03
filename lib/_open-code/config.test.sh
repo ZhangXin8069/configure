@@ -85,4 +85,4 @@ config_home="$test_root/config"
 check_output="$(run_config --check)"
 assert_contains "$check_output" '配置模式: OpenCode V2'
 
-printf 'PASS: _opencode config.sh V2 原生配置与 V1 兼容分支\n'
+printf 'PASS: _open-code config.sh V2 原生配置与 V1 兼容分支\n'

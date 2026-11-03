@@ -1816,10 +1816,10 @@ function Get-AgentInstallScript {
 
     switch ($AgentName) {
         'claude' { $sub = '_claude-code' }
-        'opencode' { $sub = '_opencode' }
+        'opencode' { $sub = '_open-code' }
         'codex' { $sub = '_codex' }
-        'commandcode' { $sub = '_commandcode' }
-        'command-code' { $sub = '_commandcode' }
+        'commandcode' { $sub = '_command-code' }
+        'command-code' { $sub = '_command-code' }
         default { return '' }
     }
     $root = Get-ConfigureRoot

@@ -73,7 +73,7 @@ export OPENCODE_GO_API_KEY='<真实密钥>'
 | Agent | 稳定目录 | 安装脚本 |
 |---|---|---|
 | Claude Code | `lib/_claude-code/` | Linux/macOS 自动安装使用 `install.sh`；Windows 的 `cc-v20260706.ps1` 需手动运行 |
-| OpenCode | `lib/_opencode/` | `install.sh` / `install.bat` |
+| OpenCode | `lib/_open-code/` | `install.sh` / `install.bat` |
 | Codex | `lib/_codex/` | `install.sh` / `install.bat` |
 
 关闭自动安装：
