@@ -10,10 +10,11 @@ for _arg in "$@"; do
     case "${_arg}" in
         -h|--help)
             cat <<'EOF'
-Usage: gz-all-push.sh
+Usage: gz-all-push.sh [gpush options]
 
 Run every gz-*-push.sh script in this directory in filename order. At least two
 matching child scripts are required.
+The -t/--target remote override supported by gpush.sh is forwarded unchanged.
 EOF
             exit 0
             ;;

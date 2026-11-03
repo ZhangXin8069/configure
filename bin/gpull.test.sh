@@ -251,6 +251,7 @@ _test_wrapper_propagates_failure() {
     cp "${_PATH}/zg-configure-pull.sh" "${wrapper_bin}/"
     cp "${_PATH}/gpull.sh" "${wrapper_bin}/"
     cp "${_PATH}/_git_lock.sh" "${wrapper_bin}/"
+    cp "${_PATH}/_git_remote_target.sh" "${wrapper_bin}/"
     git init -q --bare "${wrapper_remote}"
     git -C "${wrapper_remote}" symbolic-ref HEAD refs/heads/main
     git init -q "${wrapper_root}"

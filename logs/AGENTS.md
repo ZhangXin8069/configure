@@ -1141,3 +1141,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## git-remote-target-20261103 - final - 2026-11-03 16:02:41 +0800
+- 主任务: 为所有实际联网 Git 脚本增加单次 -t 远程域名切换
+- 日志文件: logs/v2026110316.txt
+- 文件大小: 5550 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增共享临时远程域名重写层，接入基础脚本、子模块脚本、批量包装器与回归测试
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -9,6 +9,40 @@ if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd
 _NAME=${_SRC##*/}
 echo "###${_NAME} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
+if [[ ! -r "${_PATH}/_git_remote_target.sh" ]]; then
+    echo "ERROR: Missing Git remote target helper: ${_PATH}/_git_remote_target.sh" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/_git_remote_target.sh"
+
+_usage() {
+    cat <<'EOF'
+Usage: gpull.sh [-t [DOMAIN]] [-h]
+
+Safely fast-forward the parent repository without updating submodules. Existing
+remote URLs are preserved unless -t/--target is specified.
+
+Options:
+EOF
+    _git_remote_target_usage_line
+    cat <<'EOF'
+  -h, --help             Show this help.
+EOF
+}
+
+_git_remote_target_parse_args "$@" || exit $?
+if (( _GIT_REMOTE_HELP_REQUESTED )); then
+    _usage
+    exit 0
+fi
+if (( ${#_GIT_REMOTE_REMAINING_ARGS[@]} > 0 )); then
+    echo "ERROR: Unknown argument: ${_GIT_REMOTE_REMAINING_ARGS[0]}" >&2
+    _usage >&2
+    exit 64
+fi
+_git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" || exit $?
+
 # Locate the git repository root (works from any subdirectory)
 REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
     echo "ERROR: Not inside a git repository."

@@ -9,7 +9,7 @@
 # 强烈建议：在全新 clone 的副本中执行，并先 -n 预览。
 # 依赖：git-filter-repo（pip install git-filter-repo / brew install git-filter-repo）
 #
-# 用法: grm-ignore.sh [-n] [-y] [--keep-backup] [-r REMOTE] [--no-push] [--no-gc]
+# 用法: grm-ignore.sh [-n] [-y] [--keep-backup] [-r REMOTE] [-t [DOMAIN]] [--no-push] [--no-gc]
 #   -n, --dry-run   仅列出将被删除的文件，不做任何修改
 #   -y, --yes       跳过交互确认（不建议）
 #   --keep-backup   重写前打包备份到 backup.<ts>.bundle
@@ -24,6 +24,34 @@ case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.
 if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
+
+if [[ ! -r "${_PATH}/_git_remote_target.sh" ]]; then
+    echo "ERROR: Missing Git remote target helper: ${_PATH}/_git_remote_target.sh" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/_git_remote_target.sh"
+
+_usage() {
+    cat <<'EOF'
+Usage: grm-ignore.sh [-n] [-y] [--keep-backup] [-r REMOTE] [-t [DOMAIN]] [--no-push] [--no-gc]
+
+Rewrite tracked ignore violations out of all history and optionally force-push.
+Existing remote URLs are preserved unless -t/--target is specified.
+
+Options:
+  -n, --dry-run    List matching files without rewriting or pushing.
+  -y, --yes        Skip interactive confirmation.
+  --keep-backup    Bundle all refs before rewriting.
+  -r, --remote     Remote name to push (default: origin).
+  --no-push        Rewrite locally without pushing.
+  --no-gc          Skip local garbage collection.
+EOF
+    _git_remote_target_usage_line
+    cat <<'EOF'
+  -h, --help       Show this help.
+EOF
+}
 
 # ===== 依赖检查 =====
 command -v git >/dev/null || { echo "ERROR: git 未安装"; exit 1; }
@@ -41,7 +69,7 @@ cd "$REPO_ROOT"
 echo "Repo: ${REPO_ROOT}"
 
 # ===== 参数解析 =====
-DRY=0; YES=0; KEEP_BACKUP=0; DO_PUSH=1; DO_GC=1; REMOTE_NAME="origin"
+DRY=0; YES=0; KEEP_BACKUP=0; DO_PUSH=1; DO_GC=1; REMOTE_NAME="origin"; _TARGET=
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -n|--dry-run)  DRY=1; shift ;;
@@ -56,7 +84,27 @@ while [[ $# -gt 0 ]]; do
                 exit 1
             fi
             REMOTE_NAME="$2"; shift 2 ;;
-        -h|--help)     sed -n '2,25p' "$0"; exit 0 ;;
+        -t|--target)
+            shift
+            if (( $# > 0 )) && [[ "$1" != -* ]]; then
+                _TARGET=$1
+                shift
+            else
+                _TARGET=${_GIT_REMOTE_DEFAULT_TARGET}
+            fi
+            _git_remote_target_validate "${_TARGET}" || exit $?
+            ;;
+        --target=*|-t=*)
+            _TARGET=${1#*=}
+            _git_remote_target_validate "${_TARGET}" || exit $?
+            shift
+            ;;
+        -t?*)
+            _TARGET=${1#-t}
+            _git_remote_target_validate "${_TARGET}" || exit $?
+            shift
+            ;;
+        -h|--help)     _usage; exit 0 ;;
         *) echo "Unknown arg: $1" >&2; exit 1 ;;
     esac
 done
@@ -390,6 +438,7 @@ fi
 # ===== [5/6] 强制推送 =====
 if (( DO_PUSH == 1 )) && [[ -n "$REMOTE_URL" ]]; then
     echo "[5/6] 强制推送所有分支与标签到 ${REMOTE_NAME} ..."
+    _git_remote_target_apply "${_TARGET}" || exit $?
     LANG=C LC_ALL=C git push --force "$REMOTE_NAME" --all
     LANG=C LC_ALL=C git push --force "$REMOTE_NAME" --tags
     echo "  提示：远端仍存在的旧分支/标签（本地已无同名者）不会被自动删除。"

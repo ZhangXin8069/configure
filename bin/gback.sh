@@ -26,6 +26,41 @@ _git_remote() {
     LANG=C LC_ALL=C git "$@"
 }
 
+if [[ ! -r "${_PATH}/_git_remote_target.sh" ]]; then
+    echo "ERROR: Missing Git remote target helper: ${_PATH}/_git_remote_target.sh" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/_git_remote_target.sh"
+
+_usage() {
+    cat <<'EOF'
+Usage: gback.sh [-t [DOMAIN]] [-h]
+
+Preserve local state in a stash, then force-align the current branch to its
+latest upstream. Existing remote URLs are preserved unless -t/--target is
+specified.
+
+Options:
+EOF
+    _git_remote_target_usage_line
+    cat <<'EOF'
+  -h, --help             Show this help.
+EOF
+}
+
+_git_remote_target_parse_args "$@" || exit $?
+if (( _GIT_REMOTE_HELP_REQUESTED )); then
+    _usage
+    exit 0
+fi
+if (( ${#_GIT_REMOTE_REMAINING_ARGS[@]} > 0 )); then
+    echo "ERROR: Unknown argument: ${_GIT_REMOTE_REMAINING_ARGS[0]}" >&2
+    _usage >&2
+    exit 64
+fi
+_git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" || exit $?
+
 BRANCH=$(git symbolic-ref --quiet --short HEAD 2>/dev/null || true)
 if [[ -z "${BRANCH}" || "${BRANCH}" == "HEAD" ]]; then
     echo "ERROR: HEAD 处于游离状态，请先检出分支。"

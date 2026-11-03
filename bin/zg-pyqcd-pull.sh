@@ -10,7 +10,7 @@ if [[ ${1:-} == --print-repo-path ]]; then
 fi
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 pushd "${_REPO_PATH}" >/dev/null || exit 1
-bash "${_PATH}/gpull.sh"
+bash "${_PATH}/gpull.sh" "$@"
 _STATUS=$?
 popd >/dev/null || exit 1
 echo "###${_NAME} in ${_PATH} is done......:$(date "+%Y-%m-%d-%H-%M-%S")###"

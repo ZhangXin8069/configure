@@ -16,9 +16,17 @@ fi
 _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
+if [[ ! -r "${_PATH}/_git_remote_target.sh" ]]; then
+    echo "ERROR: Missing Git remote target helper: ${_PATH}/_git_remote_target.sh" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/_git_remote_target.sh"
+
 _INIT=0
 _RECURSIVE=0
 _DRY_RUN=0
+_TARGET=
 _FILTERS=()
 
 _usage() {
@@ -38,6 +46,7 @@ Options:
   --dry-run    Print actions without initializing, fetching, or pulling.
   -h, --help   Show this help.
 EOF
+    _git_remote_target_usage_line
 }
 
 while (( $# > 0 )); do
@@ -45,6 +54,24 @@ while (( $# > 0 )); do
         --init) _INIT=1 ;;
         --recursive) _RECURSIVE=1 ;;
         --dry-run) _DRY_RUN=1 ;;
+        -t|--target)
+            shift
+            if (( $# > 0 )) && [[ "$1" != -* ]]; then
+                _TARGET=$1
+                shift
+            else
+                _TARGET=${_GIT_REMOTE_DEFAULT_TARGET}
+            fi
+            _git_remote_target_validate "${_TARGET}" || exit $?
+            ;;
+        --target=*|-t=*)
+            _TARGET=${1#*=}
+            _git_remote_target_validate "${_TARGET}" || exit $?
+            ;;
+        -t?*)
+            _TARGET=${1#-t}
+            _git_remote_target_validate "${_TARGET}" || exit $?
+            ;;
         --path)
             shift
             if (( $# == 0 )); then
@@ -76,6 +103,8 @@ while (( $# > 0 )); do
     esac
     shift
 done
+
+_git_remote_target_apply "${_TARGET}" || exit $?
 
 _REPO_ROOT=$(git rev-parse --show-toplevel 2>/dev/null) || {
     echo "ERROR: Not inside a Git work tree." >&2
@@ -170,6 +199,11 @@ _pull_submodule() {
     local old_head
     local new_head
     local recurse_args=(--recursive)
+    local -a pull_args=()
+
+    if [[ -n "${_TARGET}" ]]; then
+        pull_args+=(-t "${_TARGET}")
+    fi
 
     if ! _validate_submodule_path "${path}"; then
         echo "ERROR: Refusing unsafe submodule path '${path}' from .gitmodules." >&2
@@ -215,7 +249,7 @@ _pull_submodule() {
         if ! (
             cd "${submodule}" \
                 && GPULL_DETACHED_MODE="${GPULL_SUB_DETACHED_MODE:-${GPULL_DETACHED_MODE:-back}}" \
-                    bash "${_GPULL}"
+                    bash "${_GPULL}" "${pull_args[@]}"
         ); then
             echo "ERROR: Pull failed for submodule ${path}." >&2
             return 1
@@ -231,6 +265,7 @@ _pull_submodule() {
     if (( _RECURSIVE )) && [[ -f "${submodule}/.gitmodules" ]]; then
         (( _INIT )) && recurse_args+=(--init)
         (( _DRY_RUN )) && recurse_args+=(--dry-run)
+        [[ -n "${_TARGET}" ]] && recurse_args+=(-t "${_TARGET}")
         if ! (cd "${submodule}" && bash "${_PATH}/${_NAME}" "${recurse_args[@]}"); then
             echo "ERROR: Nested submodule pull failed under ${path}." >&2
             return 1

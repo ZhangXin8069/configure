@@ -39,6 +39,7 @@ _make_fixture() {
     mkdir -p "${wrapper_bin}" "${fixture}/configure/.git"
     cp "${_PATH}/zg-all-pull.sh" "${wrapper_bin}/"
     cp "${_PATH}/_all_series.sh" "${wrapper_bin}/"
+    cp "${_PATH}/_git_remote_target.sh" "${wrapper_bin}/"
     _write_child "${wrapper_bin}/zg-configure-pull.sh" "${fixture}/configure" configure
     _write_child "${wrapper_bin}/zg-pyqcd-pull.sh" "${fixture}/PyQCD" pyqcd
     _write_child "${wrapper_bin}/zg-pyqcu-pull.sh" "${fixture}/PyQCU" pyqcu
@@ -128,6 +129,28 @@ _test_auto_falls_back_to_https() {
         || _fail "auto 模式应在 SSH 失败后回退两个 HTTPS clone"
 }
 
+_test_explicit_target_controls_clone_host() {
+    local fixture="${TEST_DIR}/target"
+    local wrapper_bin="${fixture}/configure/bin"
+    local fake_bin="${TEST_DIR}/target-bin"
+    local clone_log="${TEST_DIR}/target-clone.log"
+    local event_log="${TEST_DIR}/target-events.log"
+
+    _make_fixture "${fixture}"
+    _make_fake_git "${fake_bin}" https
+
+    PATH="${fake_bin}:${PATH}" \
+        GIT_CLONE_LOG="${clone_log}" \
+        EVENT_LOG="${event_log}" \
+        ZG_GIT_PROTOCOL=https \
+        bash "${wrapper_bin}/zg-all-pull.sh" -t github.com > "${TEST_DIR}/target.log" 2>&1
+
+    [[ "$(grep -Fc 'clone https://github.com/zhangxin8069/' "${clone_log}")" -eq 2 ]] \
+        || _fail "-t github.com 未控制缺失仓库的 clone 域名"
+    grep -Fq 'Remote target: github.com' "${TEST_DIR}/target.log" \
+        || _fail "缺少临时远程目标提示"
+}
+
 _test_requires_multiple_matching_children() {
     local fixture="${TEST_DIR}/minimum"
     local wrapper_bin="${fixture}/configure/bin"
@@ -159,6 +182,7 @@ _test_help_is_non_mutating() {
 main() {
     _test_forced_https_clone_and_filename_order
     _test_auto_falls_back_to_https
+    _test_explicit_target_controls_clone_host
     _test_requires_multiple_matching_children
     _test_help_is_non_mutating
 }

@@ -10,11 +10,12 @@ for _arg in "$@"; do
     case "${_arg}" in
         -h|--help)
             cat <<'EOF'
-Usage: zg-all-back.sh
+Usage: zg-all-back.sh [gback options]
 
 Run every zg-*-back.sh script in this directory in filename order. Each child
 uses gback.sh to preserve local state before aligning its repository to upstream.
 At least two matching child scripts are required.
+The -t/--target remote override supported by gback.sh is forwarded unchanged.
 EOF
             exit 0
             ;;

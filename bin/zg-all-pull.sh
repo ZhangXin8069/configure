@@ -6,28 +6,35 @@ case "${_SRC}" in */*) _DIR=${_SRC%/*}; [ -z "${_DIR}" ] && _DIR="/";; *) _DIR=.
 if [[ "${_DIR}" == /* ]]; then _PATH="${_DIR}"; else _PATH=$(cd "${_DIR}" && pwd); fi
 _NAME=${_SRC##*/}
 
+if [[ ! -r "${_PATH}/_git_remote_target.sh" ]]; then
+    echo "ERROR: Missing Git remote target helper: ${_PATH}/_git_remote_target.sh" >&2
+    exit 1
+fi
+# shellcheck source=/dev/null
+source "${_PATH}/_git_remote_target.sh"
+
 _usage() {
     cat <<'EOF'
-Usage: zg-all-pull.sh
+Usage: zg-all-pull.sh [options]
 
 Clone missing sibling repositories and run every zg-*-pull.sh script in this
 directory in filename order. At least two matching child scripts are required.
 Set ZG_GIT_PROTOCOL=auto|ssh|https to select the clone protocol.
 EOF
+    _git_remote_target_usage_line
 }
 
-for _arg in "$@"; do
-    case "${_arg}" in
-        -h|--help)
-            _usage
-            exit 0
-            ;;
-    esac
-done
+_git_remote_target_parse_args "$@" || exit $?
+if (( _GIT_REMOTE_HELP_REQUESTED )); then
+    _usage
+    exit 0
+fi
+_git_remote_target_apply "${_GIT_REMOTE_SELECTED_TARGET}" || exit $?
 
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 _CLONE_PROTOCOL=${ZG_GIT_PROTOCOL:-auto}
+_CLONE_HOST=${_GIT_REMOTE_SELECTED_TARGET:-${_GIT_REMOTE_DEFAULT_TARGET}}
 case "${_CLONE_PROTOCOL}" in
     auto|https|ssh) ;;
     *)
@@ -51,8 +58,8 @@ _is_git_checkout() {
 
 _clone_url() {
     case "$1" in
-        https) printf 'https://code.itp.ac.cn/zhangxin8069/%s.git\n' "$2" ;;
-        ssh) printf 'git@code.itp.ac.cn:zhangxin8069/%s.git\n' "$2" ;;
+        https) printf 'https://%s/zhangxin8069/%s.git\n' "${_CLONE_HOST}" "$2" ;;
+        ssh) printf 'git@%s:zhangxin8069/%s.git\n' "${_CLONE_HOST}" "$2" ;;
     esac
 }
 

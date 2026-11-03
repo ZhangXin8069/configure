@@ -82,13 +82,13 @@ _test_dry_run_only_forwards_to_children() {
 
     _make_fixture "${fixture}"
     EVENT_LOG="${event_log}" \
-        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" --dry-run --path refer/example \
+        bash "${fixture}/configure/bin/zg-all-pull-sub.sh" -t github.com --dry-run --path refer/example \
         > "${TEST_DIR}/dry-run.log" 2>&1
 
     ! grep -Fqx 'parent-all' "${event_log}" || _fail "任何模式都不应执行父仓库 pull"
-    grep -Fqx 'configure:--dry-run --path refer/example' "${event_log}" \
+    grep -Fqx 'configure:-t github.com --dry-run --path refer/example' "${event_log}" \
         || _fail "configure 参数未透传"
-    grep -Fqx 'pyqcu:--dry-run --path refer/example' "${event_log}" \
+    grep -Fqx 'pyqcu:-t github.com --dry-run --path refer/example' "${event_log}" \
         || _fail "PyQCU 参数未透传"
 }
 

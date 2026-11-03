@@ -16,7 +16,8 @@ repository branches, indexes, commits, and worktrees are not restored or
 otherwise checked. Child scripts are discovered from zg-*-back-sub.sh in this
 directory; at least two are required.
 
-Options and positional paths supported by gback-sub.sh are forwarded unchanged.
+Options and positional paths supported by gback-sub.sh, including -t/--target,
+are forwarded unchanged.
 --dry-run only shows the submodule restore plan.
 EOF
 }

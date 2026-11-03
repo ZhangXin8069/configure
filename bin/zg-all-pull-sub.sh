@@ -20,7 +20,8 @@ Parent repository branches, indexes, commits, and worktrees are not pulled.
 
 Repository child scripts are discovered from zg-*-pull-sub.sh in this directory;
 at least two matching scripts must exist. Matches run sequentially by filename.
-Options and positional paths supported by gpull-sub.sh are forwarded unchanged.
+Options and positional paths supported by gpull-sub.sh, including -t/--target,
+are forwarded unchanged.
 --dry-run only shows the submodule update plan.
 EOF
 }
