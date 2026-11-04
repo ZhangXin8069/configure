@@ -809,6 +809,21 @@ if find "$repo" -maxdepth 1 -name '.agent.*' -print | grep -q .; then
 fi
 printf 'PASS: 工作目录无运行时垃圾\n'
 
+# ---- 提示词硬约束：关键闸门不得在重构中丢失 ----
+prompt_file="$script_dir/agent-prompt.txt"
+[[ -r "$prompt_file" ]] || fail "prompt 单一来源缺失：$prompt_file"
+for anchor in '请求不阻塞任务推进' '五类必须显式确认的操作' '输出前自查清单' '冲突裁决' \
+              '身份体系' '思维方法论' '诚实原则' '访问边界' '通用运行契约'; do
+    assert_file_contains "$prompt_file" "$anchor"
+done
+assert_file_contains "$prompt_file" '一律按【请求不阻塞】直接执行，不得询问'
+assert_file_contains "$prompt_file" '本地 `git commit`、`git push`、创建本地标签'
+case "$(cat -- "$prompt_file")" in
+    *'${CONFIGURE_ROOT}'*) ;;
+    *) fail 'prompt 丢失 ${CONFIGURE_ROOT} 占位符' ;;
+esac
+printf 'PASS: 提示词保留请求不阻塞闸门、五类例外与自查清单\n'
+
 # ---- 配置文件加载：agent-custom.json 替代 refer、坏配置报错 ----
 alt_dir="$test_root/altbin"
 mkdir -p "$alt_dir"
