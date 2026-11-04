@@ -1339,3 +1339,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## S1-S5 - final - 2026-11-04 10:02:34 +0800
+- 主任务: 统一 _node-js 安装器稳定入口到 HOME/.local/bin
+- 日志文件: logs/v2026-11-04-10.txt
+- 文件大小: 5901 bytes
+- 触发原因: 任务完成
+- 关键内容: Unix 软链 + Windows 稳定入口 shim；修复自指软链回归；7 项安装测试全绿
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

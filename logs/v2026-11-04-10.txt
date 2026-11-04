@@ -1,0 +1,68 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-04 10:02:34 +0800
+批次: S1-S5
+主任务: 统一 _node-js 安装器稳定入口到 HOME/.local/bin
+触发原因: 任务完成
+摘要: Unix 软链 + Windows 稳定入口 shim；修复自指软链回归；7 项安装测试全绿
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 定位不一致
+- 目标: 让 `_node-js` 安装的 node/npm/npx 与其它 `lib/_*` 一致，落到 `${HOME}/.local/bin`
+- 命令/操作: 对比 `_codex/install.sh`、`_claude-code/install.sh`、`_command-code/install.bat` 与 `_node-js/*`
+- 关键输出: `_codex` 二进制直接进 `$HOME/.local/bin`；`_claude-code` 放版本文件并软链到该目录；`_command-code`/`_codex` Windows 用 `%USERPROFILE%\.local\bin`；而 `_node-js` Unix 只把 node 留在 nvm 版本目录并要求手动 source，Windows 解压到 `%LOCALAPPDATA%\nodejs`
+- 证据与判断: `setup.md:171` 已写明约定“稳定入口放 $HOME/.local/bin，不写死版本路径”，但 `_node-js` 未实现
+
+### S2 — Unix 实现
+- 文件: lib/_node-js/install.sh
+- 改动: 新增 `link_stable_bin()`，把 node/npm/npx 软链到 `${NODE_BIN_DIR:-$HOME/.local/bin}`；该函数在“已满足”与“安装完成”两个分支都被调用；源与目标同一路径时跳过；用户自有非软链文件不覆盖；帮助文本补 `NODE_BIN_DIR` 与安装结果说明
+
+### S3 — 自身引入的 bug 与修复（重要）
+- 现象: 真实环境试跑后 `/root/.local/bin/node` 被写成指向自身的软链，功能损坏
+- 根因: 该环境 node 来源本身就是 `.local/bin`，`ln -sfn "$source" "$target"` 在源=目标时创建自指链接
+- 修复: `readlink -f` 比较源与目标真实路径，相同则跳过；已用 `ln -sfn` 手工恢复为 `/root/.local/node-v24.21.0/bin/node`，`node --version`/`npm --version` 验证正常
+- 回归: 新增“源即目标时不建立自指软链”用例
+
+### S4 — Windows 实现
+- 文件: lib/_node-js/install.bat
+- 改动: 运行时目录改为 `%USERPROFILE%\.local\node`；稳定入口 `%USERPROFILE%\.local\bin`（`NODE_BIN_DIR` 可覆盖）；node.exe 优先硬链接，失败回退绝对路径转发脚本；npm/npx 生成绝对路径转发脚本；PATH 只写稳定目录；`BIN_DIR==NODE_DIR` 时跳过硬链接段避免自指
+- 证据与判断: 与 `_command-code`/`_codex` Windows 约定统一；括号配平静态校验 37/37
+
+### S5 — 测试与文档
+- 文件: lib/_node-js/install.test.sh、lib/_node-js/AGENTS.md、lib/_node-js/setup.md
+- 测试新增: 已满足分支链接、幂等、自指保护、`NODE_BIN_DIR` 覆盖、用户自有文件不覆盖；假 nvm 安装器补齐 npm/npx
+- 文档: AGENTS.md 改写 install.sh/install.bat 两条；setup.md 的 Windows 段更新为稳定入口约定
+
+## 验证与证据
+- 测试/检查: `bash -n`；`lib/_node-js/install.test.sh` 7 项 PASS；`lib/_command-code/install.test.sh` PASS；`bin/agent.test.sh` 91 项 PASS；`configure-check` errors=0；`git diff --check`
+- 结果: 全部通过；真实环境 `--check` 与安装路径均正确，软链指向 `/root/.local/node-v24.21.0/bin/*`
+- 未验证项: install.bat 实机执行（本机无 Windows/pwsh），仅做静态与括号配平校验
+
+## 变更与产物
+- 文件: lib/_node-js/{install.sh,install.bat,install.test.sh,AGENTS.md,setup.md}
+- 未改动范围: nvm-install.sh 未动（上游原样保留）
+
+## 风险、限制与下一步
+- 风险: 硬链接在跨卷或受限权限下失败，已回退为转发脚本
+- 教训: 试跑真实环境前应先构造隔离用例；本轮曾短暂破坏本机 node 软链，已恢复并加回归
+- 下一步: 在 Windows 机器上执行 install.bat 验证硬链接与 PATH 写入
+
+## 用户输入指令
+- 贴出 Node.js 安装输出（nvm 路径 /root/.nvm/versions/node/v22.23.4/bin/node，需手动 source），要求：「安装的可执行文件应与 ~/configure/lib/_*** 中的处理一致：存放或链接到 ${HOME}/.local/bin」
+
+## Agent 全文报告
+--- report begin ---
+不一致点很清楚：`_codex` 把二进制直接放进 `$HOME/.local/bin`，`_claude-code` 放版本文件并软链到该目录，`_command-code`/`_codex` 的 Windows 安装也统一用 `%USERPROFILE%\.local\bin`；只有 `_node-js` 例外——Unix 把 node 留在 nvm 版本目录并要求手动 source，Windows 解压到 `%LOCALAPPDATA%\nodejs`。而 `setup.md` 自己就写着“稳定入口放 $HOME/.local/bin，不写死版本路径”，是脚本没实现。
+
+Unix 侧新增 `link_stable_bin()`：node/npm/npx 软链到 `${NODE_BIN_DIR:-$HOME/.local/bin}`，“已满足”和“安装完成”两个分支都执行；用户自有的非软链文件保留不覆盖。
+
+Windows 侧把运行时改到 `%USERPROFILE%\.local\node`，稳定入口 `%USERPROFILE%\.local\bin`：node.exe 优先硬链接（同卷零开销），失败回退绝对路径转发脚本；npm/npx 生成转发脚本；PATH 只写稳定目录。
+
+过程中我自己引入并修复了一个 bug：真实环境试跑时，因为该机器 node 来源本身就是 `.local/bin`，脚本把正确软链覆盖成了自指链接，node 一度不可用。已用 `ln -sfn` 恢复为 `/root/.local/node-v24.21.0/bin/node` 并验证 `node --version`/`npm --version` 正常；随后用 `readlink -f` 比较真实路径加自指保护，并补了对应回归用例。这个教训记在这里：真实环境试跑前应先构造隔离用例。
+
+验证：install.test.sh 7 项全 PASS（含新增的自指保护、幂等、NODE_BIN_DIR 覆盖、用户文件不覆盖）；_command-code 安装测试 PASS；agent.test.sh 91 项 PASS；configure-check errors=0；diff-check 通过。
+
+未验证：install.bat 无法在本机（无 Windows/pwsh）实机执行，只做了静态要素与括号配平校验（37/37）。需要在 Windows 机器上跑一次确认硬链接与 PATH 写入。
+--- report end ---

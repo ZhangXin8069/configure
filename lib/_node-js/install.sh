@@ -4,6 +4,7 @@
 # Usage: bash install.sh [VERSION|--check|-h|--help]
 # Env:   NODE_VERSION  默认目标版本（默认 22）
 #        NVM_DIR       nvm 安装目录（默认 ~/.nvm 或 $XDG_CONFIG_HOME/nvm）
+#        NODE_BIN_DIR  稳定入口目录（默认 $HOME/.local/bin），node/npm/npx 软链到此处
 #        PROFILE       写入 nvm 加载语句的 shell 配置；/dev/null 表示不修改
 #        METHOD        nvm 安装方式：git（默认）或 script
 
@@ -32,8 +33,13 @@ usage() {
 环境变量:
   NODE_VERSION   默认目标版本（默认: 22）
   NVM_DIR        nvm 安装目录（默认: \$HOME/.nvm；设置 XDG_CONFIG_HOME 时为 \$XDG_CONFIG_HOME/nvm）
+  NODE_BIN_DIR   稳定入口目录（默认: \$HOME/.local/bin），node/npm/npx 软链到此处
   PROFILE        写入 nvm 加载语句的 shell 配置；/dev/null 表示不修改
   METHOD         nvm 安装方式: git（需 git）或 script（需 curl/wget）；未设置时自动选择
+
+安装结果:
+  Node.js 运行时在 nvm 版本目录；$HOME/.local/bin/{node,npm,npx} 为指向它的软链，
+  与 lib/_codex、lib/_claude-code 的稳定入口约定一致，不把版本路径写进 PATH。
 
 要求:
   Bash 3.2+；安装时需要 git 或 curl/wget，以及访问 nodejs.org 与 GitHub 的网络。
@@ -87,6 +93,40 @@ case "$target_version" in
 esac
 target_major="${target_version%%.*}"
 
+# 与 lib/_codex、lib/_claude-code 及 setup.md 的约定一致：稳定入口放 $HOME/.local/bin，
+# 不把版本的 nvm 路径写进 PATH。node/npm/npx 软链到该目录；用户自有的非软链文件保留不动。
+link_stable_bin() {
+    local source_dir="$1"
+    [ -n "$source_dir" ] || return 0
+    [ -d "$source_dir" ] || return 0
+    local bin_dir="${NODE_BIN_DIR:-$HOME/.local/bin}"
+    if ! mkdir -p "$bin_dir" 2>/dev/null; then
+        printf '警告: 无法创建 %s，跳过稳定入口软链\n' "$bin_dir" >&2
+        return 0
+    fi
+    local tool source_tool target_tool
+    for tool in node npm npx; do
+        source_tool="$source_dir/$tool"
+        [ -x "$source_tool" ] || continue
+        target_tool="$bin_dir/$tool"
+        # 源与目标同一路径（稳定入口本身就是 node 来源）时不得建自指软链。
+        if [ "$(readlink -f "$source_tool" 2>/dev/null || printf '%s' "$source_tool")" = \
+             "$(readlink -f "$target_tool" 2>/dev/null || printf '%s' "$target_tool")" ]; then
+            continue
+        fi
+        if [ -e "$target_tool" ] && [ ! -L "$target_tool" ]; then
+            printf '跳过 %s：%s 已存在且不是软链（保留用户自有安装）\n' "$tool" "$target_tool"
+            continue
+        fi
+        ln -sfn "$source_tool" "$target_tool"
+        printf '已链接: %s -> %s\n' "$target_tool" "$source_tool"
+    done
+    case ":$PATH:" in
+        *":$bin_dir:"*) ;;
+        *) printf '提示: %s 不在当前 PATH 中，请确保登录 shell 包含它\n' "$bin_dir" ;;
+    esac
+}
+
 installed_major="$(node_major || true)"
 has_npm=0
 if command -v npm >/dev/null 2>&1; then
@@ -96,6 +136,9 @@ fi
 if [ -n "$installed_major" ] && [ "$has_npm" -eq 1 ] && [ "$installed_major" -ge "$target_major" ]; then
     installed_version="$(node --version 2>/dev/null || printf '版本未知')"
     printf 'Node.js %s 已满足要求（>= %s），npm 可用，无需安装。\n' "$installed_version" "$target_major"
+    if [ "$check_only" -eq 0 ]; then
+        link_stable_bin "$(dirname "$(command -v node)")"
+    fi
     exit 0
 fi
 
@@ -142,10 +185,14 @@ installed_version="$("$candidate" --version 2>/dev/null || true)"
 
 printf '\nNode.js 安装完成: %s\n' "$installed_version"
 printf '可执行文件: %s\n' "$candidate"
+
+link_stable_bin "$(dirname "$candidate")"
+bin_dir="${NODE_BIN_DIR:-$HOME/.local/bin}"
+
 if [ "${PROFILE:-}" = "/dev/null" ]; then
-    printf '未修改 shell 启动文件（PROFILE=/dev/null）。每次使用前执行:\n'
+    printf '\n未修改 shell 启动文件（PROFILE=/dev/null）。若 %s 已在 PATH 中，直接使用 node/npm 即可；否则执行:\n' "$bin_dir"
 else
-    printf '新的登录 shell 会自动加载 nvm；当前终端执行:\n'
+    printf '\n新的登录 shell 会自动加载 nvm，并可从 %s 使用 node/npm；当前终端执行:\n' "$bin_dir"
 fi
 printf '  export NVM_DIR="%s"\n' "$nvm_dir"
 printf '  . "$NVM_DIR/nvm.sh"\n'

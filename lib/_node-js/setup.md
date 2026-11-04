@@ -154,7 +154,10 @@ lib\_node-js\install.bat 24
 ```
 
 安装器从 <https://nodejs.org/dist/> 解析目标主版本的最新 `win-x64` / `win-arm64` zip，解压到
-`%LOCALAPPDATA%\nodejs`，把该目录幂等加入用户 PATH。默认目录可用 `NODE_INSTALL_DIR` 覆盖。
+`%USERPROFILE%\.local\node`，再在 `%USERPROFILE%\.local\bin` 生成 `node`/`npm`/`npx` 稳定入口
+（优先硬链接 `node.exe`，失败回退绝对路径转发脚本），PATH 只写入稳定入口目录。默认目录可用
+`NODE_INSTALL_DIR` / `NODE_BIN_DIR` 覆盖。与 `_command-code`、`_codex` 的 Windows 安装共用同一
+稳定入口约定，不把带版本号的目录写进 PATH。
 PATH 修改只对新终端生效，安装后请重新打开终端。
 
 也可以使用系统包管理器，例如：

@@ -2,15 +2,19 @@
 rem Install Node.js for the current user on native Windows (no admin required).
 rem Usage: install.bat [VERSION|--check|--help]
 rem Env:   NODE_VERSION        target major or full version (default 22)
-rem        NODE_INSTALL_DIR    install directory (default %LOCALAPPDATA%\nodejs)
+rem        NODE_INSTALL_DIR    runtime directory (default %USERPROFILE%\.local\node)
+rem        NODE_BIN_DIR        stable entry directory for node/npm/npx shims
+rem                            (default %USERPROFILE%\.local\bin)
 
 setlocal EnableExtensions EnableDelayedExpansion
 
 set "DEFAULT_VERSION=22"
 set "TARGET_VERSION=%DEFAULT_VERSION%"
 if defined NODE_VERSION set "TARGET_VERSION=%NODE_VERSION%"
-set "NODE_DIR=%LOCALAPPDATA%\nodejs"
+set "NODE_DIR=%USERPROFILE%\.local\node"
 if defined NODE_INSTALL_DIR set "NODE_DIR=%NODE_INSTALL_DIR%"
+set "BIN_DIR=%USERPROFILE%\.local\bin"
+if defined NODE_BIN_DIR set "BIN_DIR=%NODE_BIN_DIR%"
 set "CHECK_ONLY="
 set "ARG=%~1"
 
@@ -127,20 +131,49 @@ if not defined INSTALLED_VERSION (
 
 echo.
 echo Node.js installed: !INSTALLED_VERSION!
-echo Install directory: %NODE_DIR%
+echo Runtime directory: %NODE_DIR%
 
-echo %PATH% | find /i "%NODE_DIR%" >nul
+rem 稳定入口约定：node/npm/npx 的入口放 %USERPROFILE%\.local\bin，
+rem 与 lib\_command-code、lib\_codex 的 Windows 安装保持一致；PATH 只引用稳定目录。
+if not exist "%BIN_DIR%" mkdir "%BIN_DIR%" >nul 2>&1
+
+rem 稳定入口与运行时同一目录时无需转发，否则会得到自指脚本。
+if /i "%BIN_DIR%"=="%NODE_DIR%" goto :path_setup
+
+rem node.exe 用硬链接（同一卷内零开销）；失败则回退绝对路径转发脚本。
+for /f "usebackq delims=" %%v in (`powershell -NoProfile -NonInteractive -Command "try { New-Item -ItemType HardLink -Path '%BIN_DIR%\node.exe' -Target '%NODE_DIR%\node.exe' -Force -ErrorAction Stop | Out-Null; 'ok' } catch { 'fail' }"`) do set "LINK_RESULT=%%v"
+if not "!LINK_RESULT!"=="ok" (
+    > "%BIN_DIR%\node.cmd" echo @echo off
+    >> "%BIN_DIR%\node.cmd" echo call "%NODE_DIR%\node.exe" %%*
+)
+
+rem npm/npx 走运行时自带脚本；转发脚本用绝对路径，避免目录改名后失效。
+for %%T in (npm.cmd npx.cmd) do (
+    if exist "%NODE_DIR%\%%T" (
+        > "%BIN_DIR%\%%T" echo @echo off
+        >> "%BIN_DIR%\%%T" echo call "%NODE_DIR%\%%T" %%*
+    )
+)
+
+if not exist "%BIN_DIR%\node.exe" if not exist "%BIN_DIR%\node.cmd" (
+    echo WARNING: failed to create stable entries in "%BIN_DIR%"; falling back to "%NODE_DIR%".
+    set "BIN_DIR=%NODE_DIR%"
+)
+
+:path_setup
+
+echo %PATH% | find /i "%BIN_DIR%" >nul
 if errorlevel 1 (
     set "CUR_PATH="
     for /f "skip=2 tokens=2,*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul') do set "CUR_PATH=%%b"
     if defined CUR_PATH (
-        setx PATH "!CUR_PATH!;%NODE_DIR%" >nul
+        setx PATH "!CUR_PATH!;%BIN_DIR%" >nul
     ) else (
-        setx PATH "%NODE_DIR%" >nul
+        setx PATH "%BIN_DIR%" >nul
     )
-    echo Added "%NODE_DIR%" to user PATH ^(takes effect in new terminals^).
+    echo Added "%BIN_DIR%" to user PATH ^(takes effect in new terminals^).
 ) else (
-    echo PATH already contains "%NODE_DIR%".
+    echo PATH already contains "%BIN_DIR%".
 )
 
 echo Reopen the terminal before using node and npm.
@@ -157,6 +190,7 @@ echo   --check       Only check node/npm; do not modify anything
 echo   -h, --help    Show this help
 echo.
 echo Installs Node.js for the current user from nodejs.org.
-echo Install directory: %NODE_DIR%
-echo Override with NODE_INSTALL_DIR; target version with NODE_VERSION.
+echo Runtime directory: %NODE_DIR%
+echo Stable entries:   %BIN_DIR% ^(node/npm/npx; this is what PATH references^)
+echo Override with NODE_INSTALL_DIR / NODE_BIN_DIR; target version with NODE_VERSION.
 exit /b 0
