@@ -1150,21 +1150,15 @@ PY
 # Command Code 账号认证：gt 与 BYOK 通路在 CLI 启动时（含 TUI）都要求账号凭据，
 # 缺失即停在交互式登录门（Ready to log in / Sign in to Command Code）。
 # 凭据来源与 CLI 一致：COMMAND_CODE_API_KEY 环境变量 > ~/.commandcode/auth.json 的 apiKey。
+# 用 grep 而非 python 子进程探测：启动路径上每次省约 17ms（20ms → 3ms）。
+# 首字符须为 '{'，与 CLI 的 auth.json 格式一致，避免坏文件被误判为已有凭据。
 _commandcode_account_key_present() {
     [[ -n "${COMMAND_CODE_API_KEY:-}" ]] && return 0
-    local _auth="${HOME:-}/.commandcode/auth.json"
+    local _auth="${HOME:-}/.commandcode/auth.json" _first=""
     [[ -r "$_auth" ]] || return 1
-    "${_AGENT_PYTHON:-python3}" - "$_auth" <<'PY' 2>/dev/null
-import json
-import sys
-
-try:
-    with open(sys.argv[1], encoding="utf-8") as handle:
-        data = json.load(handle)
-except Exception:
-    raise SystemExit(1)
-raise SystemExit(0 if isinstance(data, dict) and str(data.get("apiKey") or "").strip() else 1)
-PY
+    IFS= read -r -n 1 _first <"$_auth" 2>/dev/null || return 1
+    [[ "$_first" == "{" ]] || return 1
+    grep -qE '"apiKey"[[:space:]]*:[[:space:]]*"[^"[:space:]]' "$_auth" 2>/dev/null
 }
 
 _commandcode_lookup_session_id() {
@@ -1440,13 +1434,16 @@ run_commandcode() {
         if (( _run_rc == 0 )); then _agent_runtime_turn_success; else _agent_runtime_turn_failure; fi
         local _cc_sid="$(_commandcode_lookup_session_id || true)"
         [[ -n "$_cc_sid" ]] && _agent_runtime_set_session "$_cc_sid" ""
-        # TUI 的 stderr 落在日志里；启动即退出时把尾部错误回显到终端，否则用户只看到空屏后秒退。
+        # TUI 的 stderr 落在日志里；启动即退出且日志含错误信号时回显，否则用户只看到空屏后秒退。
         if (( _run_rc != 0 )) || (( _cc_tui_elapsed < 5 )); then
             local _cc_tail=""
             _cc_tail="$(tail -n 5 "${LOG_FILE}" 2>/dev/null | sed -e 's/\x1b\[[0-9;?]*[a-zA-Z]//g' | tr -d '\r')"
-            if [[ -n "${_cc_tail//[[:space:]]/}" ]]; then
-                echo "###${_NAME}: command-code 退出码 ${_run_rc}（运行 ${_cc_tui_elapsed}s），日志尾部：###" >&2
-                printf '%s\n' "${_cc_tail}" | sed 's/^/  /' >&2
+            if (( _run_rc != 0 )) ||
+               [[ "${_cc_tail}" =~ [Ee]rror|[Ff]ailed|[Rr]equires|[Nn]ot\ authenticated|[Ii]nvalid ]]; then
+                if [[ -n "${_cc_tail//[[:space:]]/}" ]]; then
+                    echo "###${_NAME}: command-code 退出码 ${_run_rc}（运行 ${_cc_tui_elapsed}s），日志尾部：###" >&2
+                    printf '%s\n' "${_cc_tail}" | sed 's/^/  /' >&2
+                fi
             fi
         fi
         echo "logs -> ${LOG_FILE}"

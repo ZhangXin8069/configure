@@ -2682,7 +2682,14 @@ function Test-CommandCodeAccountKeyPresent {
     $authPath = Join-Path (Join-Path $homeDir '.commandcode') 'auth.json'
     if (-not (Test-Path -LiteralPath $authPath -PathType Leaf)) { return $false }
     try {
-        $auth = Get-Content -LiteralPath $authPath -Raw -Encoding UTF8 | ConvertFrom-Json
+        $raw = Get-Content -LiteralPath $authPath -Raw -Encoding UTF8
+    } catch {
+        return $false
+    }
+    # 首字符须为 '{'，坏文件不得被误判为已有凭据（与 Unix 端一致）。
+    if ([string]::IsNullOrWhiteSpace($raw) -or -not $raw.TrimStart().StartsWith('{')) { return $false }
+    try {
+        $auth = $raw | ConvertFrom-Json
     } catch {
         return $false
     }

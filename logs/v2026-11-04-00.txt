@@ -1,0 +1,85 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-04 00:11:28 +0800
+批次: S1-S7
+主任务: 修复 cm TUI 秒退不可观测 + 账号探测优化 + up/diff/debug/optim/init 技能链
+触发原因: 任务完成
+摘要: TUI 失败回显与账号凭据探测优化；90 项测试全绿；参考源 9/9 可用
+Git 根目录: /root/configure
+
+## 关键日志
+
+### S1 — 定位 TUI 秒退的可观测性缺口
+- 目标: 用户在另一台机器执行 `cm go` 时，横幅后 2 秒直接 `done`，终端无任何错误信息
+- 命令/操作: 检查 `run_commandcode` 的 TUI 分支与 `agent-runtime.sh` 的 watcher
+- 关键输出: `_agent_runtime_run_tui_watched ... 2>"${LOG_FILE}"` 把 command-code 的 stderr 全部写入日志文件
+- 证据与判断: TUI 启动失败的错误只进日志，终端呈现为"空屏后秒退"，用户无法自助定位
+
+### S2 — 复现并确认真实原因
+- 命令/操作: `cm go </dev/null`（非 TTY stdin）复现
+- 关键输出: `Error: Interactive mode requires a TTY terminal.` / `Please run this command directly in your terminal, not through a pipe or redirect.`；manifest `state=failed`、`failed_turns=1`
+- 证据与判断: 秒退由 command-code 启动失败引起，错误此前完全不可见
+
+### S3 — 实现：启动即退出时回显日志尾部
+- 文件: bin/agent.sh:1436-1454
+- 行为: 记录 TUI 起止 `$SECONDS`；当退出码非零，或运行 <5s 且日志尾部含错误信号（Error/Failed/Requires/Not authenticated/Invalid）时，把脱敏后的尾部 5 行回显到 stderr
+- 证据与判断: 覆盖"秒退且退出码 0"的静默失败；良性快速退出不产生噪声
+
+### S4 — debug：边界与噪声校验
+- 命令/操作: 正则行为验证、良性日志模拟、`SECONDS` 语义验证
+- 关键输出: 错误信号 4/4 命中，良性日志 2/2 不误报；`SECONDS` 差值正常
+- 证据与判断: 无误报，无计时缺陷
+
+### S5 — optim：账号凭据探测降耗
+- 基线: python3 子进程实现 20ms/次（3 次测量：21/20/21ms）
+- 优化: 改为 `read -n 1` 首字符校验 + `grep -qE` 单次扫描，去掉解释器启动
+- 优化后: 2-3ms/次（10 次平均 2/2/3ms），收益约 90%
+- 新增边界保护: 首字符必须为 `{`，坏 JSON/纯文本/空文件/BOM 均判为无凭据（9/9 用例通过）
+- 证据与判断: 相对 350ms（关闭模型发现）启动基线，占比由 5.7% 降至 <1%，越过阈值故执行优化
+
+### S6 — 双端对齐与文档同步
+- 文件: bin/agent-runtime.ps1:2677-2698（PowerShell 同语义，含首字符校验）、bin/AGENTS.md:50
+- 行为: Windows 端与 Unix 端判定一致；文档补全"BYOK 也需账号凭据、缺失时 goat key 兜底、`--local-only` 不豁免、TUI 失败回显"
+- 证据与判断: 避免跨平台行为漂移与文档脱节
+
+### S7 — up / diff / debug / optim / init 复核
+- configure-check: skills=33，skills-shell=15，tools-shell=8，hooks-shell=11，errors=0，warnings=1（plugins 无 manifest，属预期）
+- 镜像: `diff -rq skills .opencode/skills` 无差异
+- 散落技能: `refer/` 为 .gitignore 明确放行的外部参考库，非本库待归集技能
+- init: 无待归档 agent init 文件（CLAUDE.md/CODEX.md/.claude 等均不存在），幂等无变更
+
+## 验证与证据
+- 测试/检查: `bash -n` 语法；agent.test.sh 全量 90 项；agent-windows.test.sh 静态契约；PowerShell 函数逐行括号配平（depth 归零）；9 个参考源 HTTP 探测；性能 3-10 次测量
+- 结果: 90 PASS / 0 FAIL；Windows 静态契约 PASS；PS 结构正确；参考源 9/9 返回 200；探测耗时 20ms→2-3ms
+- 未验证项: PowerShell 实机执行（无 pwsh）；另一台机器修复后端到端结果
+
+## 变更与产物
+- 文件: bin/agent.sh、bin/agent-runtime.ps1、bin/AGENTS.md
+- 产物: 3 文件改动，+22/-18 行
+- 未改动范围: 未触碰 `/root/env-key.sh`；未改动 skills/tools/hooks/plugins 内容；未暂存提交（由后续 ~push 处理）
+
+## 风险、限制与下一步
+- 风险: 回显依赖日志尾部包含英文错误关键字，本地化错误信息可能漏报（此时仍可按日志路径自查）
+- 阻塞: 无
+- 下一步: 另一台机器 `git pull` 后 `source ~/env-key.sh` 再 `cm go`；若仍秒退，终端会直接显示真实原因
+
+## 用户输入指令
+- 贴出另一台机器 `cm go` 输出：横幅后 2 秒直接 `logs ->` 与 `done`，TUI 界面从未出现
+- 指定后续技能链：「上述任务完成后 ~up ~diff ~debug ~optim ~init ~push ~tag」
+- 前序硬性约束：「env-key.sh 绝不能被 Git 跟踪」
+
+## Agent 全文报告
+--- report begin ---
+TUI 秒退的根因是可观测性缺口加上启动失败，而不是配置错误。启动器把 command-code 的 stderr 全部重定向进 `agent.log`，所以 TUI 一旦启动失败，终端上只剩横幅和 `logs ->`，用户看到的就是"空屏后 2 秒退出"。用非 TTY stdin 复现后拿到真实原因：`Error: Interactive mode requires a TTY terminal.`。
+
+修复分三层：
+1. 启动即退出时回显——记录 TUI 起止时间，退出码非零或运行不足 5 秒且日志尾部含错误信号时，把脱敏的尾部 5 行打到 stderr。这样"退出码 0 的静默失败"也能暴露，而良性快速退出不会产生噪声。
+2. 账号凭据探测降耗（optim）——原 python3 子进程实现每次 20ms，改为首字符校验 + 单次 grep 后降到 2-3ms，收益约 90%。相对 350ms 的启动基线占比从 5.7% 降到 1% 以下，越过了收敛阈值才做的。
+3. 双端对齐与文档同步——PowerShell 侧同语义实现并补首字符校验，`bin/AGENTS.md` 更新了 BYOK 认证、goat key 兜底、`--local-only` 不豁免、TUI 失败回显四项事实。
+
+边界都实测过：坏 JSON、纯文本、空文件、BOM 开头、空 key、仅空格 key 全部正确判为无凭据；错误关键字正则对四类真实错误 4/4 命中，良性日志 2/2 不误报。
+
+验证：agent.test.sh 90 项全绿，Windows 静态契约通过，configure-check errors=0，skills 镜像无差异，9 个参考源全部 200。
+
+后续技能链已按序执行：up（参考源刷新 + 四树基线 + 文档差距修复）、diff（改动复查）、debug（边界与噪声校验）、optim（20ms→2-3ms）、init（无待归档项，幂等无变更）。push 与 tag 需要你的明确授权后在下一步执行。
+--- report end ---

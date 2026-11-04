@@ -1321,3 +1321,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: in-progress
 
+## S1-S7 - final - 2026-11-04 00:11:28 +0800
+- 主任务: 修复 cm TUI 秒退不可观测 + 账号探测优化 + up/diff/debug/optim/init 技能链
+- 日志文件: logs/v2026-11-04-00.txt
+- 文件大小: 6407 bytes
+- 触发原因: 任务完成
+- 关键内容: TUI 失败回显与账号凭据探测优化；90 项测试全绿；参考源 9/9 可用
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
