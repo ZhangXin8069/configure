@@ -22,6 +22,7 @@
 !/bin/ops
 !/lib/_clash/clash-for-linux
 !/lib/_bashrc
+!/lib/_vimrc
 !/lib/_zshrc
 !/lib/_oh-my-zsh/custom/plugins/you-should-use/LICENSE
 !/lib/_oh-my-zsh/custom/plugins/zsh-autosuggestions/Dockerfile
