@@ -11,11 +11,13 @@ _usage() {
   --task TEXT             子任务正文（必填，除非使用 --task-file）
   --task-file PATH        从文件读取子任务正文
   --agent co|cl|op|cm     默认继承父 agent；无父上下文时默认 co
+                          跨 agent 且未显式 --model/--strength 时回落目标默认
   --provider NAME         默认继承父 provider；可传 pay/go/gt 或完整名
-  --model MODEL           默认继承父最终模型
-  --strength LEVEL        默认继承父最终强度
+  --model MODEL           默认继承父最终模型（跨 agent 时需显式指定）
+  --strength LEVEL        默认继承父最终强度（跨 agent 时需显式指定）
   --cwd DIR               默认继承父工作目录
-  --timeout DUR           超时（如 30s/5m/1h；无 timeout 命令时不强制）
+  --timeout DUR           超时（如 30s/5m/1h；默认 AGENT_DISPATCH_TIMEOUT=30m，0 关闭；
+                          无 timeout 命令时不强制；超时/中断后不再拉起恢复链）
   --full                  使用完整 agent-prompt；默认使用最小子 agent prompt
                           瞬时 429/重试上限失败会自动恢复一次同一 run
   --text                  返回纯文本；默认返回 JSON
@@ -37,13 +39,15 @@ _provider="${AGENT_PARENT_PROVIDER:-}"
 _model="${AGENT_PARENT_MODEL:-}"
 _strength="${AGENT_PARENT_STRENGTH:-}"
 _cwd="${AGENT_PARENT_CWD:-$PWD}"
-_timeout=""
+_timeout="${AGENT_DISPATCH_TIMEOUT:-30m}"
 # --full 是单次派发选项；父 agent 的内部最小化状态不能污染后续默认派发。
 _minimal=1
 _format=json
 _secure="${AGENT_PARENT_SECURE:-0}"
 _agent_overridden=0
 _secure_overridden=0
+_model_overridden=0
+_strength_overridden=0
 
 while (( $# )); do
     case "$1" in
@@ -61,10 +65,10 @@ while (( $# )); do
             _provider="$2"; shift 2;;
         --model)
             (( $# >= 2 )) || _fail '--model 缺少模型'
-            _model="$2"; shift 2;;
+            _model="$2"; _model_overridden=1; shift 2;;
         --strength)
             (( $# >= 2 )) || _fail '--strength 缺少等级'
-            _strength="$2"; shift 2;;
+            _strength="$2"; _strength_overridden=1; shift 2;;
         --cwd)
             (( $# >= 2 )) || _fail '--cwd 缺少路径'
             _cwd="$2"; shift 2;;
@@ -96,6 +100,7 @@ if [[ -n "${_task_file}" ]]; then
 fi
 [[ -n "${_task}" ]] || _fail '派发任务为空'
 [[ -d "${_cwd}" ]] || _fail "--cwd 不存在：${_cwd}"
+[[ "${_timeout}" == 0 ]] && _timeout=""
 
 case "${_agent}" in
     co|codex) _agent=co;;
@@ -104,12 +109,21 @@ case "${_agent}" in
     cm|commandcode) _agent=cm;;
     *) _fail "--agent 仅支持 co/cl/op/cm";;
 esac
+case "${AGENT_PARENT_AGENT:-}" in
+    co|codex) _parent_agent=co;;
+    cl|claude) _parent_agent=cl;;
+    op|opencode) _parent_agent=op;;
+    cm|commandcode) _parent_agent=cm;;
+    *) _parent_agent="";;
+esac
+# 跨 agent 派发时，父模型/强度通常不属于目标 agent 的目录；未显式覆盖就回落到目标默认。
+if (( _agent_overridden )) && [[ -n "${_parent_agent}" && "${_parent_agent}" != "${_agent}" ]]; then
+    (( _model_overridden )) || _model=""
+    (( _strength_overridden )) || _strength=""
+fi
 
 if (( _agent_overridden )) && (( ! _secure_overridden )); then
-    case "${AGENT_PARENT_AGENT:-}" in
-        "$_agent"|codex|claude|opencode) ;;
-        *) _secure=0;;
-    esac
+    [[ -n "${_parent_agent}" && "${_parent_agent}" == "${_agent}" ]] || _secure=0
 fi
 
 case "${_agent}:${_secure}" in
@@ -157,6 +171,7 @@ case "${_agent}" in
     cm)
         [[ -n "${_model}" ]] && local_args+=(--model "${_model}")
         [[ -n "${_strength}" ]] && local_args+=(--effort "${_strength}")
+        [[ -n "${AGENT_PARENT_PERMISSION_MODE:-}" ]] && local_args+=(--permission-mode "${AGENT_PARENT_PERMISSION_MODE}")
         ;;
 esac
 
@@ -196,13 +211,15 @@ fi
 
 _resume_status=not_needed
 _resume_rc=""
-if (( _rc != 0 )) && [[ -n "${_run_id}" && -n "${_manifest}" ]]; then
+# 超时/中断是调用方的最终边界，不能再拉起无限恢复链。
+if (( _rc != 0 && _rc != 124 && _rc != 130 && _rc != 143 )) && [[ -n "${_run_id}" && -n "${_manifest}" ]]; then
     _resume_tool="${AGENT_RESUME_TOOL:-${AGENT_CONFIGURE_ROOT:-$(CDPATH= cd -- "${_PATH}/.." && pwd)}/tools/agent-resume.sh}"
     if [[ -x "${_resume_tool}" ]]; then
         _resume_data_root="${AGENT_PARENT_DATA_ROOT:-${AGENT_DATA_DIR:-}}"
         _resume_args=(--run-id "${_run_id}" --delay "${AGENT_RESUME_DELAY:-10}")
         [[ -z "${_resume_data_root}" ]] || _resume_args+=(--data-root "${_resume_data_root}")
         [[ -z "${_provider}" ]] || _resume_args+=(--provider "${_provider}")
+        _resume_args+=(--max-attempts "${AGENT_DISPATCH_RESUME_ATTEMPTS:-1}")
         set +e
         _resume_output=$(AGENT_RESUME_PROVIDER="${_provider}" \
             "${_resume_tool}" "${_resume_args[@]}" 2>&1)

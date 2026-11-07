@@ -911,6 +911,7 @@ perform_context_handoff() {
         commandcode)
             [[ -z "$_model" ]] || handoff_args+=(--model "$_model")
             [[ -z "$_reasoning" ]] || handoff_args+=(--effort "$_reasoning")
+            [[ -z "${AGENT_PARENT_PERMISSION_MODE:-}" ]] || handoff_args+=(--permission-mode "$AGENT_PARENT_PERMISSION_MODE")
             ;;
     esac
 
@@ -1024,6 +1025,7 @@ case "$_agent" in
     commandcode)
         [[ -z "$_model" ]] || launcher_args+=(--model "$_model")
         [[ -z "$_reasoning" ]] || launcher_args+=(--effort "$_reasoning")
+        [[ -z "${AGENT_PARENT_PERMISSION_MODE:-}" ]] || launcher_args+=(--permission-mode "$AGENT_PARENT_PERMISSION_MODE")
         ;;
 esac
 

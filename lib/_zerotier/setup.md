@@ -73,7 +73,7 @@ zerotier-cli peers
 docker run --cap-add=NET_ADMIN --device=/dev/net/tun ...
 ```
 
-WSL 优先启用 systemd。未启用时脚本退回手动 daemon 模式，进程生命周期可能随终端结束。
+WSL 优先启用 systemd。未启用时脚本退回手动 daemon 模式，进程生命周期可能随终端结束。WSL 2 的 systemd、网络与发行版维护见 [`../_wsl/setup.md`](../_wsl/setup.md)。
 
 ## 停止、离开和重置
 

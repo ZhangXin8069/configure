@@ -107,6 +107,8 @@ docker info
 wsl --status
 ```
 
+`wsl --status` 只确认 WSL 状态；安装、发行版导入/迁移、磁盘维护和发行版内环境见 [`../_wsl/setup.md`](../_wsl/setup.md)。
+
 ## 字体和可执行资源
 
 字体安装见 [`../_font/setup.md`](../_font/setup.md)。`lib/_package/win/*.exe` 是未在本仓库重新签名的二进制文件，运行前应检查哈希和 Authenticode 签名。

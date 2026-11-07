@@ -1202,7 +1202,7 @@ run_commandcode() {
     local MODEL_EXPLICIT=0 MODEL_FLAG_EXPLICIT=0 STRENGTH_FLAG_EXPLICIT=0
     local MODEL_FROM_POSITIONAL=0 STRENGTH_FROM_POSITIONAL=0
     local -a POSITIONAL=()
-    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-${_CFG_AGENTS_COMMANDCODE_GOAL_TURN_BUDGET:-100}}"
+    local MAX_TURNS_RAW="${AGENT_MAX_TURNS:-${_CFG_AGENTS_COMMANDCODE_GOAL_TURN_BUDGET:-1000}}"
     local MAX_RUNTIME_RAW="${AGENT_MAX_RUNTIME:-0}"
     local STOP_FILE_ARG="${AGENT_STOP_PATH:-}"
     local RESUME_RUN_ID="${AGENT_RESUME_RUN_ID:-}"
@@ -1328,11 +1328,14 @@ run_commandcode() {
     AGENT_ONCE="${ONCE_MODE}"
     AGENT_RUNTIME_REASONING="${EFFORT}"
     AGENT_RUNTIME_VARIANT=""
+    AGENT_RUNTIME_GOAL_OBJECTIVE="${GOAL_OBJECTIVE}"
     _agent_runtime_start_or_resume commandcode "$MODEL_ID" "$_runtime_mode" \
         "${AGENT_ROLE:-solo-agent}" "${AGENT_TIER:-standard}" "${AGENT_POSTURE:-frontier-orchestrator}" \
         "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 1 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"; EFFORT="${AGENT_RUNTIME_REASONING:-$EFFORT}"
+    GOAL_OBJECTIVE="${AGENT_RUNTIME_GOAL_OBJECTIVE:-$GOAL_OBJECTIVE}"
     _export_parent_context "${_cc_provider}" "${MODEL_ID}" "${EFFORT}"
+    export AGENT_PARENT_PERMISSION_MODE="${PERMISSION_MODE}"
     _load_prompt
 
     local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
@@ -1384,21 +1387,47 @@ run_commandcode() {
 
     local _cc_trust="${_CFG_AGENTS_COMMANDCODE_TRUST:-true}" _cc_skip_onboarding="${_CFG_AGENTS_COMMANDCODE_SKIP_ONBOARDING:-true}"
     local -a _CC_PERMISSION_ARGS _CC_BASE_ARGS _CC_SKILL_ARGS _CC_ADD_DIR_ARGS=()
+    local -a _CC_TRUST_ARGS=() _CC_SKIP_ARGS=() _CC_SEEN_DIRS=() _CC_SEEN_SKILLS=()
     case "${PERMISSION_MODE}" in
         yolo|bypass) _CC_PERMISSION_ARGS=(--yolo) ;;
         *) _CC_PERMISSION_ARGS=(--permission-mode "$PERMISSION_MODE") ;;
     esac
+    case "${_cc_trust}" in false|0|off) ;; *) _CC_TRUST_ARGS+=(--trust);; esac
+    case "${_cc_skip_onboarding}" in false|0|off) ;; *) _CC_SKIP_ARGS+=(--skip-onboarding);; esac
     _CC_BASE_ARGS=(--model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}" --no-auto-update)
     [[ -n "${GOAL_OBJECTIVE}" ]] && _CC_BASE_ARGS+=(--max-turns "$MAX_TURNS_RAW")
-    case "${_cc_trust}" in false|0|off) ;; *) _CC_BASE_ARGS+=(--trust);; esac
-    case "${_cc_skip_onboarding}" in false|0|off) ;; *) _CC_BASE_ARGS+=(--skip-onboarding);; esac
+    _CC_BASE_ARGS+=("${_CC_TRUST_ARGS[@]}" "${_CC_SKIP_ARGS[@]}")
     for _dir in "${_agent_config_dirs[@]}" "${_workspace_skill_roots[@]}"; do
         [[ -d "$_dir" ]] || continue
+        (( ${#_CC_SEEN_DIRS[@]} )) && _contains "$_dir" "${_CC_SEEN_DIRS[@]}" && continue
+        _CC_SEEN_DIRS+=("$_dir")
         _CC_ADD_DIR_ARGS+=(--add-dir "$_dir")
     done
-    if [[ -d "${_agent_config_dirs[0]}" ]]; then _CC_SKILL_ARGS+=(--skill "${_agent_config_dirs[0]}"); fi
-    for _dir in "${_workspace_skill_roots[@]}"; do [[ -d "$_dir" ]] && _CC_SKILL_ARGS+=(--skill "$_dir"); done
-    unset _dir
+    for _dir in "${_agent_config_dirs[0]}" "${_workspace_skill_roots[@]}"; do
+        [[ -d "$_dir" ]] || continue
+        (( ${#_CC_SEEN_SKILLS[@]} )) && _contains "$_dir" "${_CC_SEEN_SKILLS[@]}" && continue
+        _CC_SEEN_SKILLS+=("$_dir")
+        _CC_SKILL_ARGS+=(--skill "$_dir")
+    done
+    unset _dir _CC_SEEN_DIRS _CC_SEEN_SKILLS
+
+    # print (-p) 模式默认扣留 todo_write 等工具；长任务恢复至少保留待办跟踪，
+    # 需要与 TUI 完全对齐时把 headless_tools_all 设为 true。
+    local -a _CC_PRINT_ARGS=()
+    local _cc_headless_tools="${_CFG_AGENTS_COMMANDCODE_HEADLESS_TOOLS:-todo_write}"
+    local _cc_headless_tools_all="${_CFG_AGENTS_COMMANDCODE_HEADLESS_TOOLS_ALL:-false}"
+    case "${_cc_headless_tools_all}" in
+        true|1|yes|on) _CC_PRINT_ARGS+=(--tools-all) ;;
+        *) [[ -z "${_cc_headless_tools}" ]] || _CC_PRINT_ARGS+=(--tools-enable "${_cc_headless_tools}") ;;
+    esac
+    local _cc_headless_max_turns="${_CFG_AGENTS_COMMANDCODE_HEADLESS_MAX_TURNS:-1000}"
+    if ! _cc_headless_max_turns="$(_parse_nonnegative_integer "${_cc_headless_max_turns}")" ||
+       [[ "${_cc_headless_max_turns}" == 0 ]]; then
+        echo "###${_NAME}: ERROR: agents.commandcode.headless_max_turns 必须是正整数###" >&2
+        exit 64
+    fi
+    # -p 默认 100 回合即退出 8；非 goal 的驱动/恢复显式放宽，避免长回合被截断。
+    [[ -n "${GOAL_OBJECTIVE}" ]] || _CC_PRINT_ARGS+=(--max-turns "${_cc_headless_max_turns}")
 
     echo "============================================================"
     echo "  Command Code: ${MODEL_NAME} | effort=${EFFORT} | permission=${PERMISSION_MODE}"
@@ -1421,10 +1450,14 @@ run_commandcode() {
         local -a _CC_TUI_ARGS=("${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --name "$AGENT_RUN_ID" "$_cc_initial_prompt")
         local _cc_recovery_json='[]'
         if command -v python3 >/dev/null 2>&1; then
+            local _cc_recovery_prompt="继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
+            [[ -n "${GOAL_OBJECTIVE}" ]] && _cc_recovery_prompt="/goal ${GOAL_OBJECTIVE}"
+            local -a _CC_RECOVERY_ARGS=(--session "{session_id}" --output-format json "${_CC_SKIP_ARGS[@]}" \
+                "${_CC_TRUST_ARGS[@]}" --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" \
+                "${_CC_PERMISSION_ARGS[@]}" "${_CC_PRINT_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}")
+            [[ -n "${GOAL_OBJECTIVE}" ]] && _CC_RECOVERY_ARGS+=(--max-turns "$MAX_TURNS_RAW")
             _cc_recovery_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
-                "$_COMMAND_CODE_BIN" -p "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。" \
-                --session "{session_id}" --output-format json --skip-onboarding --no-auto-update \
-                --model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}")"
+                "$_COMMAND_CODE_BIN" -p "$_cc_recovery_prompt" "${_CC_RECOVERY_ARGS[@]}")"
         fi
         _agent_runtime_turn_begin
         local _cc_tui_started=$SECONDS
@@ -1452,13 +1485,13 @@ run_commandcode() {
 
     if _agent_runtime_stop_file_requested; then echo "logs -> ${LOG_FILE}"; return 0; fi
     local _cc_sid="${AGENT_SESSION_ID:-}" _cc_rc=0 _cc_text=""
-    local -a _CC_RESUME_BASE=(--output-format json --skip-onboarding --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}")
+    local -a _CC_RESUME_BASE=(--output-format json "${_CC_SKIP_ARGS[@]}" "${_CC_TRUST_ARGS[@]}" --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" "${_CC_PERMISSION_ARGS[@]}" "${_CC_PRINT_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}")
     [[ -n "${GOAL_OBJECTIVE}" ]] && _CC_RESUME_BASE+=(--max-turns "$MAX_TURNS_RAW")
     if [[ -z "${RESUME_RUN_ID}" ]]; then
         _agent_runtime_turn_begin
         local _cc_initial_prompt="$PROMPT"
         [[ -n "${GOAL_OBJECTIVE}" ]] && _cc_initial_prompt="/goal ${GOAL_OBJECTIVE}"
-        if "$_COMMAND_CODE_BIN" -p "$_cc_initial_prompt" "${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --output-format json >>"${LOG_FILE}" 2>&1; then _cc_rc=0; else _cc_rc=$?; fi
+        if "$_COMMAND_CODE_BIN" -p "$_cc_initial_prompt" "${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" "${_CC_PRINT_ARGS[@]}" --output-format json >>"${LOG_FILE}" 2>&1; then _cc_rc=0; else _cc_rc=$?; fi
         if (( _cc_rc != 0 )); then
             _agent_runtime_turn_failure
             echo "###${_NAME}: ERROR: prompt 回合失败（退出码 ${_cc_rc}），驱动终止###" >&2

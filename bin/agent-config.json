@@ -190,7 +190,10 @@
       "skip_onboarding": true,
       "auto_update": false,
       "context_window": 1000000,
-      "goal_turn_budget": 100,
+      "goal_turn_budget": 1000,
+      "headless_max_turns": 1000,
+      "headless_tools": "todo_write",
+      "headless_tools_all": false,
       "statusline": {
         "version": 1,
         "enabled": true,

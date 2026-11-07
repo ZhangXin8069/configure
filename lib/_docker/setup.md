@@ -1,6 +1,6 @@
 # Docker 开发环境操作
 
-WSL 2 的安装、`.wslconfig`、发行版导入迁移和磁盘维护见 [`wsl.md`](wsl.md)。本文只保留 Docker Desktop 与容器侧操作，避免把 WSL 发行版维护和容器数据维护混为一谈。
+WSL 2 的安装、`.wslconfig`、发行版导入迁移、磁盘维护和发行版内开发环境见 [`../_wsl/setup.md`](../_wsl/setup.md)。本文只保留 Docker Desktop 与容器侧操作，避免把 WSL 发行版维护和容器数据维护混为一谈。
 
 ## 前提
 

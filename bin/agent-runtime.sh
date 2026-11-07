@@ -250,6 +250,7 @@ _agent_runtime_write_manifest() {
         printf 'model=%s\n' "${AGENT_RUNTIME_MODEL:-}"
         printf 'reasoning_effort=%s\n' "${AGENT_RUNTIME_REASONING:-}"
         printf 'variant=%s\n' "${AGENT_RUNTIME_VARIANT:-}"
+        printf 'goal_objective=%s\n' "${AGENT_RUNTIME_GOAL_OBJECTIVE:-}"
         printf 'session_id=%s\n' "${AGENT_SESSION_ID:-}"
         printf 'thread_id=%s\n' "${AGENT_THREAD_ID:-}"
         printf 'turn=%s\n' "${AGENT_TURN:-0}"
@@ -816,6 +817,10 @@ _agent_runtime_start_or_resume() {
         if [[ "$variant_explicit" != 1 ]]; then
             manifest_value=$(_agent_runtime_read_manifest_value "$AGENT_MANIFEST_FILE" variant)
             [[ -n "$manifest_value" ]] && AGENT_RUNTIME_VARIANT="$manifest_value"
+        fi
+        if [[ -z "${AGENT_RUNTIME_GOAL_OBJECTIVE:-}" ]]; then
+            manifest_value=$(_agent_runtime_read_manifest_value "$AGENT_MANIFEST_FILE" goal_objective)
+            [[ -n "$manifest_value" ]] && AGENT_RUNTIME_GOAL_OBJECTIVE="$manifest_value"
         fi
         AGENT_RESUME_COUNT=$((AGENT_RESUME_COUNT + 1))
         mkdir -p -- "$AGENT_RUN_DIR" || return 73

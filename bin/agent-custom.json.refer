@@ -25,7 +25,8 @@
     "co 的模型元数据目录（消除三方模型「Model metadata ... not found」告警）默认按通用配置 agents.codex.model_catalog 自动生成并缓存于 data/cache；可在本文件覆盖 enabled/clone_template/display_names，或用 CODEX_MODEL_CATALOG 显式指定目录文件。",
     "OPENCODE_API_KEY 与 OPENCODE_GO_API_KEY 等价，并按 GO>API 择一后归一化到两者；默认基础设置为 go，多个不同值会告警。",
     "Command Code GOAT 快捷词为 gt，完整途径名为 commandcode-goat，key 只从 COMMANDCODE_GOAT_API_KEY 读取；base_url 固定为 Provider API https://api.commandcode.ai/provider/v1。CLI 默认使用 Claude Sonnet 4.6 走 /messages，程序化 agent 默认使用 deepseek/deepseek-v4.1-flash 走 /responses；模型目录从 /models 自动刷新。cm 默认 yolo，并支持 cm --goal <objective> / cm goal <objective> 的原生 /goal 模式。",
-    "cm 也可用 pay（deepseek-pay）/ go（opencode-go）接入本库 BYOK 途径：启动器把 providers.<途径> 中 commandcode.byok=true 的条目合并进 ~/.commandcode/providers.json（baseURL 取 base_url，apiKey 写环境变量引用，models 取静态模型表并用本地模型目录缓存补齐 contextWindow/reasoningEfforts），模型以 <途径>/<模型> 传给 --model；默认仍是 gt。"
+    "cm 也可用 pay（deepseek-pay）/ go（opencode-go）接入本库 BYOK 途径：启动器把 providers.<途径> 中 commandcode.byok=true 的条目合并进 ~/.commandcode/providers.json（baseURL 取 base_url，apiKey 写环境变量引用，models 取静态模型表并用本地模型目录缓存补齐 contextWindow/reasoningEfforts），模型以 <途径>/<模型> 传给 --model；默认仍是 gt。",
+    "cm 长任务与恢复：agents.commandcode.headless_max_turns（默认 1000）放宽 -p 单回合上限；headless_tools 默认只恢复 todo_write，headless_tools_all=true 可完全对齐 TUI 工具集；goal_objective 写入 manifest，--resume/自动恢复会重新发送 /goal，续跑同时保留 --add-dir/--skill。"
   ],
   "providers": {
     "deepseek-pay": {

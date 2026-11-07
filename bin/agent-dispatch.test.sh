@@ -2,6 +2,13 @@
 
 set -Eeuo pipefail
 
+# 屏蔽宿主 agent 的继承上下文，保证断言只反映本测试显式设置的父配置。
+unset AGENT_PARENT_LAUNCHER AGENT_PARENT_AGENT AGENT_PARENT_PROVIDER AGENT_PARENT_MODEL \
+      AGENT_PARENT_STRENGTH AGENT_PARENT_CWD AGENT_PARENT_WORKSPACE AGENT_PARENT_DATA_ROOT \
+      AGENT_PARENT_RUN_ID AGENT_PARENT_MANIFEST AGENT_PARENT_SECURE AGENT_PARENT_SANDBOX \
+      AGENT_PARENT_APPROVAL AGENT_PARENT_PERMISSION_MODE AGENT_DISPATCH_TIMEOUT \
+      AGENT_DISPATCH_RESUME_ATTEMPTS 2>/dev/null || true
+
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 test_root=$(mktemp -d "${TMPDIR:-/tmp}/agent-dispatch-test.XXXXXX")
 cleanup() {
@@ -32,6 +39,7 @@ make_fake co
 make_fake cl
 make_fake cm
 make_fake cos
+make_fake cms
 mkdir -p "$test_root/data/runs/fake-run"
 printf 'state=finished\n' > "$test_root/data/runs/fake-run/manifest.env"
 export FAKE_ARGS="$test_root/args"
@@ -91,6 +99,21 @@ assert x["model"]=="deepseek/deepseek-v4.1-flash" and x["strength"]=="max"
 ' || { printf 'FAIL: cm 派发 JSON 不正确：%s\n' "$output" >&2; exit 1; }
 grep -Fq -- '--once gt --model deepseek/deepseek-v4.1-flash --effort max' "$FAKE_ARGS"
 
+output=$(AGENT_PARENT_AGENT=commandcode AGENT_PARENT_PROVIDER=gt \
+    AGENT_PARENT_PERMISSION_MODE=accept-edits \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent cm --task 'cm permission' --json)
+grep -Fq -- '--once gt --permission-mode accept-edits' "$FAKE_ARGS"
+
+output=$(AGENT_PARENT_AGENT=commandcode AGENT_PARENT_PROVIDER=gt \
+    AGENT_PARENT_MODEL=deepseek/deepseek-v4.1-flash AGENT_PARENT_STRENGTH=high \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent co --no-secure --task 'cross agent' --json)
+grep -Fxq -- '--once gt' "$FAKE_ARGS" || {
+    printf 'FAIL: 跨 agent 未回落目标默认模型/强度：%s\n' "$(cat "$FAKE_ARGS")" >&2
+    exit 1
+}
+
 output=$(AGENT_PARENT_AGENT=codex AGENT_PARENT_LAUNCHER=cos \
     AGENT_PARENT_PROVIDER=go AGENT_PARENT_MODEL=glm-5.3-flash \
     AGENT_PARENT_STRENGTH=high AGENT_PARENT_SECURE=1 \
@@ -104,6 +127,27 @@ assert x["launcher"]=="cos" and x["agent"]=="co"
 ' || { printf 'FAIL: secure launcher 继承失败：%s\n' "$output" >&2; exit 1; }
 grep -Fq -- '--sandbox danger-full-access' "$FAKE_ARGS"
 grep -Fq -- '--ask-for-approval never' "$FAKE_ARGS"
+
+output=$(AGENT_PARENT_AGENT=commandcode AGENT_PARENT_LAUNCHER=cms \
+    AGENT_PARENT_PROVIDER=gt AGENT_PARENT_MODEL=deepseek/deepseek-v4.1-flash \
+    AGENT_PARENT_STRENGTH=max AGENT_PARENT_SECURE=1 \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent cm --task 'cm secure inherit' --json)
+printf '%s' "$output" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["launcher"]=="cms" and x["agent"]=="cm"
+' || { printf 'FAIL: cm secure launcher 继承失败：%s\n' "$output" >&2; exit 1; }
+
+output=$(AGENT_PARENT_AGENT=commandcode AGENT_PARENT_LAUNCHER=cms \
+    AGENT_PARENT_PROVIDER=gt AGENT_PARENT_SECURE=1 \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent co --task 'cross secure' --json)
+printf '%s' "$output" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["launcher"]=="co" and x["agent"]=="co"
+' || { printf 'FAIL: 跨 agent 未回落非 secure launcher：%s\n' "$output" >&2; exit 1; }
 
 printf 'say via file' > "$test_root/task-file"
 text=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \

@@ -1,0 +1,79 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-08 04:08:02 +0800
+批次: lib-wsl-20261107
+主任务: 整理 wsl-v20261107 配置文档并将 WSL 内容从 _docker 独立为 _wsl
+触发原因: 任务完成
+摘要: WSL 文档整理与 _wsl 稳定入口建立
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 基线与规范确认
+- 目标: 整理 wsl-v20261107 配置文档；将 WSL 内容从 _docker 独立为 _wsl 并丰富。
+- 命令/操作: 读取 auto/all/log/dispatch/rule 技能；读取 wsl-v20261107、_docker、_env、_ssh、_vim、_windows、_zerotier、_node-js、_commands 与根 AGENTS.md；检索全库 WSL 引用。
+- 关键输出: wsl-v20261107/setup.md 为原始命令流；_docker/wsl.md 含 10 个章节、93 处 WSL 提及。
+- 退出码: 0
+- 证据与判断: 任务拆为主 agent 整理版本快照文档、子代理独立化稳定入口，二者不改同一文件。
+
+### S2 — 任务 1：版本快照文档整理
+- 命令/操作: 重写 wsl-v20261107/setup.md；新增 wsl-v20261107/AGENTS.md。
+- 关键输出: 362 行 runbook，含环境基线、11 个操作章节、env.sh 说明、风险与回滚、交叉引用。
+- 退出码: 0
+- 证据与判断: 相对链接遍历通过；仅 ../_wsl/setup.md 在子代理完成前缺失，完成后补齐。
+
+### S3 — 任务 2：子代理派发与独立化
+- 命令/操作: `agent-dispatch.sh --task-file ... --cwd /home/zhangxin/configure/lib --timeout 20m --json`。
+- 关键输出: ok=true、agent=cm、run_id=20261108T040128.9riATt、exit_code=0、state=finished。
+- 退出码: 0
+- 证据与判断: `git mv _docker/wsl.md _wsl/setup.md`；新增 _wsl/AGENTS.md；更新 _docker、AGENTS.md、_windows、_zerotier 引用；原 10 个章节全部保留并新增“发行版内开发环境（本库）”。
+
+### S4 — 独立复核与修正
+- 命令/操作: git status、git diff --check、章节对比、相对链接遍历、代码围栏计数、尾随空白检查、旧文件名搜索、敏感字面量检查。
+- 关键输出: 无悬空链接；无 wsl.md 残留；diff --check 退出码 0；修正 2 处表述。
+- 退出码: 0
+- 证据与判断: 子代理摘要与实测一致；修正项为 iftop 别名实际生效、删除非快照来源的 init.defaultBranch 命令。
+
+## 验证与证据
+- 测试/检查: `bash -n wsl-v20261107/env.sh`；`git diff --check`；`git diff --cached --check`；链接目标逐项 `test -e`。
+- 结果: 全部通过；`_wsl/setup.md` 相对旧文件为 349 行新增、2 行替换。
+- 未验证项: 未在真实 Windows/WSL 主机执行安装、迁移、conda/QUDA 编译、StarVPN 与 sshd。
+
+## 变更与产物
+- 文件: wsl-v20261107/setup.md（重写）、wsl-v20261107/AGENTS.md（新增）、_wsl/setup.md（由 _docker/wsl.md 迁移并扩写）、_wsl/AGENTS.md（新增）、_docker/AGENTS.md、_docker/setup.md、AGENTS.md、_windows/setup.md、_zerotier/setup.md。
+- 产物: 版本快照文档 1 份、稳定入口文档 2 份。
+- 未改动范围: bin/** 既有修改、skills/**、data/**；未提交、未推送、未打标签。
+
+## 风险、限制与下一步
+- 风险: `git mv` 使重命名进入暂存区；wsl-v20261107/env.sh 的 `cd ${HOME}` 副作用已记录但未修改。
+- 阻塞: 无。
+- 下一步: 用户审阅后在目标 Windows 主机按文档验证；需要时再提交。
+
+## 用户输入指令
+1.整理用户新增内容./wsl-20261107:参考本库所有相关内容,整理此配置文档;2.(派发子代理)将wsl相关内容从_docker中独立出来,文件夹命名为_wsl,并结合本库所有相关内容丰富_wsl内容
+
+## Agent 全文报告
+--- report begin ---
+✓ finished — WSL 配置整理与 `_wsl` 独立化
+
+**改动内容**
+1. 任务 1：重写 `lib/wsl-v20261107/setup.md`，把原始命令流整理为 11 节可复现 runbook（安装迁移、Git/SSH、Miniforge/conda、netwatch、Shell、pip 源码依赖、QUDA/PyQUDA、数据盘、StarVPN、OpenSSH、验证），并新增 `wsl-v20261107/AGENTS.md` 目录契约。全部相对链接指向本库 `_wsl/_env/_shell/_vim/_git/_ssh/_node-js/_command-code/_package/_docker/_zerotier/_commands`。
+2. 任务 2（子代理）：`git mv lib/_docker/wsl.md lib/_wsl/setup.md` 保留历史，新增 `_wsl/AGENTS.md`，在原 10 个章节基础上扩写“发行版内开发环境（本库）”；更新 `_docker/AGENTS.md`、`_docker/setup.md`、根 `AGENTS.md`、`_windows/setup.md`、`_zerotier/setup.md` 的引用。
+
+**推理依据**
+- WSL 宿主生命周期与 Docker 容器数据是两类风险边界，独立目录可避免 `_docker` 文档同时承担两种确认清单。
+- 版本快照 `wsl-v20261107` 保留机器事实，稳定入口 `_wsl` 承担通用操作说明，两者互链而不重复。
+- 子代理负责 `_docker/_wsl` 域，主 agent 负责 `wsl-v20261107` 域，文件无交叉，可并行。
+
+**验证结果**
+- `git diff --check`、`git diff --cached --check`：退出码 0。
+- 所有改动文档相对链接逐项 `test -e`：无缺失。
+- `grep -rn "wsl\.md"`（排除 .git/data/logs/refer）：无残留。
+- `bash -n wsl-v20261107/env.sh`：退出码 0。
+- 章节对比：原 `_docker/wsl.md` 的 10 个章节全部保留；4 个新文档代码围栏均为偶数；无尾随空白、无敏感字面量。
+- 未验证：真实 Windows/WSL 主机上的安装、迁移、编译与 SSH 服务。
+
+**后续步骤**
+- 审阅两份入口文档；`git mv` 的重命名已进入暂存区，其余改动未暂存。需要提交时再执行；本次未提交、未推送、未打标签。
+- 若需修正 `wsl-v20261107/env.sh` 顶部的 `cd ${HOME}` 副作用，可另开任务处理。
+--- report end ---

@@ -1348,3 +1348,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## lib-wsl-20261107 - final - 2026-11-08 04:08:02 +0800
+- 主任务: 整理 wsl-v20261107 配置文档并将 WSL 内容从 _docker 独立为 _wsl
+- 日志文件: logs/v2026110804.txt
+- 文件大小: 5672 bytes
+- 触发原因: 任务完成
+- 关键内容: WSL 文档整理与 _wsl 稳定入口建立
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -35,7 +35,7 @@
 | `_command-code/` | Command Code 安装、用户级配置、Provider API 与原生 statusline（Node.js 见 `_node-js/`） |
 | `_commands/` | `bin/` 用户命令总索引及跨主题风险说明 |
 | `_deepseek/` | DeepSeek 的 Claude Code、Codex 与桌面端配置 |
-| `_docker/` | Docker Desktop、GPU、镜像和容器生命周期 |
+| `_docker/` | Docker Desktop、镜像、容器、Compose、GPU 和容器数据生命周期 |
 | `_env/` | 环境入口、机器版本快照、本机覆盖和自动恢复边界 |
 | `_font/` | Linux/Windows 字体安装、授权和刷新 |
 | `_git/` | Git 身份、别名、忽略模板和辅助命令风险 |
@@ -51,6 +51,7 @@
 | `_vim/` | Vim 部署、gitlink 插件状态、验证和回滚 |
 | `_vscode/` | VS Code Remote Server 清理与兼容入口 |
 | `_windows/` | Windows 批处理、PowerShell、PATH 与安装前提 |
+| `_wsl/` | WSL 2 安装、发行版导入/迁移、磁盘维护与发行版内开发环境 |
 | `_zerotier/` | ZeroTier 安装、授权、验证和固定网络参数 |
 
 其他稳定入口：

@@ -1242,11 +1242,44 @@ cm_goal_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
 cm_goal_status=$?
 set -e
 (( cm_goal_status == 0 )) || fail "cm goal 失败：$cm_goal_output"
-assert_contains "$cm_goal_output" 'goal: get the test suite green | native /goal | budget=100'
+assert_contains "$cm_goal_output" 'goal: get the test suite green | native /goal | budget=1000'
+cm_goal_run_id=$(printf '%s\n' "$cm_goal_output" | sed -n 's/^  run: //p' | head -1)
+cm_goal_run="$data/runs/$cm_goal_run_id"
 cm_goal_new=$(tail -n +$((cm_goal_before + 1)) "$call_log")
 assert_contains "$cm_goal_new" '-p /goal get the test suite green --model deepseek/deepseek-v4.1-flash'
-assert_contains "$cm_goal_new" '--yolo --no-auto-update --max-turns 100 --trust --skip-onboarding'
+assert_contains "$cm_goal_new" '--yolo --no-auto-update --max-turns 1000 --trust --skip-onboarding'
+assert_contains "$cm_goal_new" '--tools-enable todo_write'
+assert_file_contains "$cm_goal_run/manifest.env" 'goal_objective=get the test suite green'
 printf 'PASS: cm 原生 /goal 模式、yolo 与 goal turn budget\n'
+
+cm_goal_resume_before=$(wc -l < "$call_log")
+set +e
+cm_goal_resume_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" --resume "$cm_goal_run_id" --once 2>&1)
+cm_goal_resume_status=$?
+set -e
+(( cm_goal_resume_status == 0 )) || fail "cm goal resume 失败：$cm_goal_resume_output"
+cm_goal_resume_new=$(tail -n +$((cm_goal_resume_before + 1)) "$call_log")
+assert_contains "$cm_goal_resume_new" '-p /goal get the test suite green --session session-commandcode'
+assert_contains "$cm_goal_resume_new" '--tools-enable todo_write'
+assert_contains "$cm_goal_resume_new" '--max-turns 1000'
+printf 'PASS: cm goal 写入 manifest 并在 --resume 时重新发送 /goal\n'
+
+cm_drive_before=$(wc -l < "$call_log")
+set +e
+cm_drive_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" --time 1s --max-turns 1 2>&1)
+cm_drive_status=$?
+set -e
+(( cm_drive_status == 0 )) || fail "cm 驱动模式失败：$cm_drive_output"
+cm_drive_new=$(tail -n +$((cm_drive_before + 1)) "$call_log")
+cm_drive_resume_line=$(printf '%s\n' "$cm_drive_new" | grep -F -- '-p 继续 --session session-commandcode' | head -1)
+[[ -n "$cm_drive_resume_line" ]] || fail "cm 驱动模式未发出继续回合：$cm_drive_new"
+assert_contains "$cm_drive_resume_line" '--tools-enable todo_write'
+assert_contains "$cm_drive_resume_line" '--max-turns 1000'
+assert_contains "$cm_drive_resume_line" '--add-dir'
+assert_contains "$cm_drive_resume_line" '--skill'
+printf 'PASS: cm 继续回合保留工具、add-dir/skill 与放宽回合上限\n'
 
 cm_go_before=$(wc -l < "$call_log")
 set +e
