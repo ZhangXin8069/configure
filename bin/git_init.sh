@@ -37,11 +37,11 @@ cat << 'USAGE2'
   │                                                              │
   │  将上方公钥添加到 Git 平台:                                  │
   │                                                              │
-  │    Gitee:  https://gitlab.itp.ac.cn/profile/sshkeys                 │
+  │    Gitee:  https://gitlab.itp.ac.cn/profile/sshkeys          │
   │    GitHub: https://github.com/settings/keys                  │
   │                                                              │
   │  验证连接:                                                   │
-  │    ssh -T git@gitlab.itp.ac.cn                                      │
+  │    ssh -T git@gitlab.itp.ac.cn                               │
   │    ssh -T git@github.com                                     │
   │                                                              │
   │  常用 git alias (由 env.sh 提供):                            │
