@@ -91,6 +91,24 @@ cp lib/<name>-vYYYYMMDD/env.sh ~/env.sh
 ln -s "$PWD/lib/<name>-vYYYYMMDD/env.sh" ~/env.sh
 ```
 
+## 版本化快照索引
+
+稳定入口吸收跨机器可复用的模式；机器专属路径、版本号和一次性命令保留在快照中。
+
+| 快照家族 | 稳定入口 | 说明 |
+|---|---|---|
+| `wsl-v*` | [`../_wsl/setup.md`](../_wsl/setup.md) | WSL 2 宿主生命周期与发行版内开发环境 |
+| `docker-v*`、`computer-v*` | [`../_docker/setup.md`](../_docker/setup.md) | 容器环境变量、镜像构建与推送记录 |
+| `snsc-v*` | [`../_snsc/setup.md`](../_snsc/setup.md) | SNSC module、conda 激活与 VS Code Server 兼容 |
+| `mac-v*` | [`../_mac/setup.md`](../_mac/setup.md) | macOS arm64 开发环境模式 |
+| `claude-code-v*` | [`../_claude-code/setup.md`](../_claude-code/setup.md) | Claude Code 离线安装与卸载 |
+| `zerotier-v*` | [`../_zerotier/setup.md`](../_zerotier/setup.md) | ZeroTier 安装、授权与组网 |
+| `dcu-v*`、`bscc-v*`、`lingsheng-v*` | [`../_slurm/setup.md`](../_slurm/setup.md) | 集群作业模板、DCU/GPU 资源与 DSUB |
+| `x99-v*` | [`../_ssh/setup.md`](../_ssh/setup.md)、[`../_docker/setup.md`](../_docker/setup.md) | Windows 工作站 SSH 入口与容器镜像构建记录 |
+| `aistudio-v*`、`laptop-v*`、`npu-v*`、`phone-v*`、`usb-v*` | 无独立稳定入口 | 机器/平台专属快照，按目录内 `AGENTS.md` 使用 |
+
+版本化目录是历史快照，不是跨机器模板；需要在新机器复用时，先复制为新的 `{name}-vYYYYMMDD`，再逐项替换路径、账号、module 和分区。
+
 ## 新增或更新机器配置
 
 按照仓库约定，更新时新建当天日期目录：

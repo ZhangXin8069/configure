@@ -85,6 +85,11 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--state-db", default="")
     parser.add_argument("--scan-bytes", type=int, default=DEFAULT_SCAN_BYTES)
+    parser.add_argument(
+        "--last-user-input",
+        action="store_true",
+        help="只输出 last_user_input=<epoch seconds>，用于空闲检测",
+    )
     return parser.parse_args(argv)
 
 
@@ -338,6 +343,122 @@ def event_timestamp(value: Any) -> datetime | None:
         return datetime.fromisoformat(value.replace("Z", "+00:00"))
     except ValueError:
         return None
+
+
+def epoch_of(value: Any) -> float | None:
+    """Normalize a timestamp (ISO string or epoch sec/ms) to epoch seconds."""
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        number = float(value)
+        if number <= 0:
+            return None
+        return number / 1000.0 if number > 1e11 else number
+    if not isinstance(value, str) or not value:
+        return None
+    try:
+        number = float(value)
+    except ValueError:
+        number = 0.0
+    if number > 0:
+        return number / 1000.0 if number > 1e11 else number
+    parsed = event_timestamp(value)
+    return parsed.timestamp() if parsed is not None else None
+
+
+def jsonl_last_user_input(path: Path, max_bytes: int, agent: str) -> float | None:
+    """Scan a JSONL transcript backwards for the newest genuine user message."""
+    newest: float | None = None
+    for line in iter_reverse_lines(path, max_bytes):
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, UnicodeError):
+            continue
+        if not isinstance(event, dict):
+            continue
+        if agent == "claude":
+            if event.get("type") != "user" or event.get("isMeta"):
+                continue
+            message = event.get("message")
+            if not isinstance(message, dict):
+                continue
+            if not content_text(message.get("content")).strip():
+                continue
+            candidate = epoch_of(event.get("timestamp"))
+        else:
+            if event.get("type") != "message":
+                continue
+            message = event.get("message")
+            if not isinstance(message, dict) or message.get("role") != "user":
+                continue
+            meta = message.get("meta") if isinstance(message.get("meta"), dict) else {}
+            if meta.get("injected") or meta.get("source") == "injected":
+                continue
+            if not content_text(message.get("content")).strip():
+                continue
+            candidate = epoch_of(event.get("timestamp"))
+            if candidate is None:
+                candidate = epoch_of(meta.get("createdAt"))
+        if candidate is not None and (newest is None or candidate > newest):
+            newest = candidate
+    return newest
+
+
+def codex_last_user_input(rollout: Path, max_bytes: int) -> float | None:
+    newest: float | None = None
+    for line in iter_reverse_lines(rollout, max_bytes):
+        try:
+            event = json.loads(line)
+        except (json.JSONDecodeError, UnicodeError):
+            continue
+        if not isinstance(event, dict):
+            continue
+        payload = event.get("payload")
+        if isinstance(payload, dict):
+            payload_type = payload.get("type")
+            if payload_type in ("user_message", "task_started"):
+                candidate = epoch_of(event.get("timestamp") or payload.get("timestamp"))
+                if candidate is not None and (newest is None or candidate > newest):
+                    newest = candidate
+                continue
+        if event.get("type") == "response_item" and isinstance(payload, dict):
+            if payload.get("type") == "message" and payload.get("role") == "user":
+                candidate = epoch_of(event.get("timestamp"))
+                if candidate is not None and (newest is None or candidate > newest):
+                    newest = candidate
+    return newest
+
+
+def opencode_last_user_input(
+    connection: sqlite3.Connection,
+    session_id: str,
+    version: int,
+) -> float | None:
+    tables = table_names(connection)
+    if version == 2 and "session_message" in tables:
+        columns = {str(row[1]) for row in connection.execute("PRAGMA table_info(session_message)")}
+        stamp = "time_created" if "time_created" in columns else "NULL"
+        rows = connection.execute(
+            f"SELECT type, {stamp} FROM session_message WHERE session_id=? AND type='user' "
+            "ORDER BY seq DESC, id DESC LIMIT 1",
+            (session_id,),
+        ).fetchall()
+        for _kind, created in rows:
+            return epoch_of(created)
+        return None
+    if "message" not in tables:
+        return None
+    rows = connection.execute(
+        "SELECT data, time_created FROM message WHERE session_id=? "
+        "ORDER BY time_created DESC, id DESC LIMIT 20",
+        (session_id,),
+    ).fetchall()
+    for data, created in rows:
+        value = json_value(data)
+        if value.get("role") != "user":
+            continue
+        return epoch_of(created)
+    return None
 
 
 def claude_session_match(
@@ -828,6 +949,35 @@ def lookup_commandcode(args: argparse.Namespace, created_at: datetime | None) ->
     return 0, candidates[0], "found"
 
 
+def last_user_input_for(
+    args: argparse.Namespace,
+    report: dict[str, Any],
+) -> float | None:
+    agent = args.agent
+    if agent == "opencode":
+        state_db = Path(str(report.get("state_path") or ""))
+        if not state_db.is_file():
+            return None
+        try:
+            connection = sqlite3.connect(f"{state_db.as_uri()}?mode=ro", uri=True, timeout=2)
+            connection.execute("PRAGMA query_only = ON")
+            version = 2 if str(report.get("source", "")).startswith("opencode-v2") else 1
+            return opencode_last_user_input(connection, str(report.get("session_id") or ""), version)
+        except sqlite3.Error:
+            return None
+        finally:
+            try:
+                connection.close()
+            except (UnboundLocalError, sqlite3.Error):
+                pass
+    state_path = Path(str(report.get("state_path") or ""))
+    if not state_path.is_file():
+        return None
+    if agent == "codex":
+        return codex_last_user_input(state_path, args.scan_bytes)
+    return jsonl_last_user_input(state_path, args.scan_bytes, agent)
+
+
 def clean_output_value(value: Any) -> str:
     if value is None:
         return ""
@@ -876,6 +1026,10 @@ def main(argv: list[str] | None = None) -> int:
     if report is None:
         print(f"status=unavailable reason={reason}", file=sys.stderr)
         return code
+    if args.last_user_input:
+        value = last_user_input_for(args, report)
+        print(f"last_user_input={value:.3f}" if value is not None else "last_user_input=0")
+        return 0
     emit(report)
     return 0
 

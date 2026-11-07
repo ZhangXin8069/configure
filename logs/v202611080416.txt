@@ -1,0 +1,63 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-08 04:16:12 +0800
+批次: lib-wsl-20261107-sync
+主任务: 同步 env.sh 更新到 wsl-v20261107 与 _wsl 文档
+触发原因: 阶段成果
+摘要: env.sh 引号规范化同步到 WSL 文档
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 定位更新
+- 目标: 将 `wsl-v20261107/env.sh` 的最新改动同步到版本快照文档与 `_wsl` 稳定入口。
+- 命令/操作: `git status --short`、`git diff -- wsl-v20261107/env.sh`、文件时间戳检查。
+- 关键输出: `env.sh` 的 `iftop` 改用 `${HOME}`，导出变量统一加双引号；更新已进入提交 `5d3e4cb`。
+- 退出码: 0
+- 证据与判断: 其他 WSL 文档无独立内容更新，本次只需同步 `env.sh` 的写法。
+
+### S2 — 同步文档
+- 命令/操作: 修改 `wsl-v20261107/setup.md`、`wsl-v20261107/AGENTS.md`、`_wsl/setup.md`。
+- 关键输出: alias、环境变量表、export 代码块与说明文字全部改为当前 `env.sh` 的双引号写法。
+- 退出码: 0
+- 证据与判断: 全库检索旧写法（`iftop='sudo`、`CUDA_PATH=$CONDA_PREFIX`、`HDF5_DIR=$CONDA_PREFIX`、`sudo ~/miniforge3/bin/netwatch`）零命中。
+
+## 验证与证据
+- 测试/检查: `bash -n wsl-v20261107/env.sh`；在子 shell 中设置 `CONDA_PREFIX=/opt/conda` 后 source，检查变量展开与 alias；文档相对链接遍历；`git diff --check` / `git diff --cached --check`。
+- 结果: 语法退出码 0；展开为 `/opt/conda/targets/x86_64-linux`、`.../include:/old/include`、`/opt/conda/nvvm/bin:/usr/bin:/bin`、`/opt/conda`；alias 指向 `${HOME}`；无缺失链接；diff check 退出码 0。
+- 未验证项: 未在真实 Windows/WSL 主机重新加载环境。
+
+## 变更与产物
+- 文件: `lib/wsl-v20261107/setup.md`、`lib/wsl-v20261107/AGENTS.md`、`lib/_wsl/setup.md`。
+- 产物: 与 `env.sh` 当前内容一致的文档。
+- 未改动范围: `wsl-v20261107/env.sh`（用户已更新并提交）、其他 bin/tools 改动。
+
+## 风险、限制与下一步
+- 风险: 仅文档同步，无运行时影响。
+- 阻塞: 无。
+- 下一步: 由用户决定是否提交本次文档同步。
+
+## 用户输入指令
+内容有更新,保持同步改动
+
+## Agent 全文报告
+--- report begin ---
+✓ finished — 已将 `wsl-v20261107/env.sh` 的最新改动同步到相关文档
+
+**改动内容**
+- `wsl-v20261107/setup.md`：`iftop` 命令与 `env.sh` 变量表的引号写法同步为当前版本，并补充“导出值统一双引号、既有 PATH/CPLUS_INCLUDE_PATH 原样追加”的说明。
+- `wsl-v20261107/AGENTS.md`：目录契约注明变量以双引号包裹、`iftop` 使用 `${HOME}`。
+- `_wsl/setup.md`：netwatch 说明与 export 代码块同步为当前 `env.sh` 的写法。
+
+**推理依据**
+`env.sh` 的更新是引号规范化，语义不变；文档此前展示的是旧写法，会让复制命令与仓库实际内容不一致，因此只同步表示形式，不改行为描述。
+
+**验证结果**
+- `bash -n wsl-v20261107/env.sh` 退出码 0。
+- 子 shell source 后变量展开正确：`/opt/conda/targets/x86_64-linux`、`.../include:/old/include`、`/opt/conda/nvvm/bin:/usr/bin:/bin`、`/opt/conda`；`alias iftop` 指向 `${HOME}`。
+- 全库旧写法检索零命中；文档相对链接无缺失；`git diff --check` 与 `--cached --check` 退出码 0。
+- 未在真实 WSL 主机重新加载环境。
+
+**后续步骤**
+文档同步改动尚未提交；`env.sh` 已包含在提交 `5d3e4cb` 中。需要时可一并提交这三份文档。
+--- report end ---

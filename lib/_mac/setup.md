@@ -75,6 +75,28 @@ uname -m
 
 版本化 `lib/mac-v*/env.sh` 包含某台机器当时使用的 Homebrew、conda 和本地工具路径，不应直接假定所有 macOS 都相同。
 
+## 环境快照参考
+
+`mac-v*` 快照的共同模式（arm64）：
+
+| 项 | 典型值 |
+|---|---|
+| Conda | `Miniconda3-py311_25.9.1-3-MacOSX-arm64.sh`，环境 `qcu`（Python 3.11 + cmake/autoconf/automake/libtool/wget） |
+| 本地工具 | `watch`、`tree`、`htop`、`btop` 编译到 `~/lib/<tool>` 后加入 `PATH` |
+| TeX | `/Library/TeX/texbin` 加入 `PATH` |
+| Homebrew | `HOMEBREW_NO_AUTO_UPDATE=1` |
+| Python | `KMP_DUPLICATE_LIB_OK=TRUE`，`PYTHONPATH=~/PyQCU` |
+| 覆盖 | `@ENV@` 按存在性加载 `~/env-key.sh`；`v20260814` 另加 `~/.opencode/bin` |
+
+复用边界：
+
+- 快照中的 `/Users/zhangxin` 是示例用户路径，其他用户必须替换为 `$HOME`。
+- `KMP_DUPLICATE_LIB_OK=TRUE` 只是绕过 OpenMP 运行库重复加载的报错，不是修复；出现崩溃时应定位重复的 `libomp`/`libiomp`。
+- 本机编译的 `watch`/`tree`/`htop`/`btop` 没有包管理器升级路径，升级时重新编译并保留旧二进制。
+- Apple Silicon 与 Intel 的 Homebrew 前缀不同（`/opt/homebrew` vs `/usr/local`），不要把 Intel 路径带过去。
+- `mac-v20260908` 把 `env-key.sh` 加载改为 `[ -r ... ]` 判断，避免文件缺失时中断；新快照沿用该写法。
+- 新增快照按 `mac-vYYYYMMDD` 新建；稳定入口只保留跨机器可复用的路径和变量模式。
+
 ## 验证
 
 ```bash

@@ -13,6 +13,8 @@
   session/thread 可恢复，就脱离当前 agent 调度 `tools/agent-resume.sh`。并发上限、429、连接中断、
   `upstream_error` / `reasoning_content ... passed back` 等只用于分类，不再作为恢复门槛。
   hook 只启动一个后台监督进程，由其默认每 10 秒无限重试，直到成功、停止或 run 正常结束。
+- `agent-nudge`：委托 `tools/agent-idle-nudge.sh` 启用、停用或完成 auto 技能的空闲自续跑标记；
+  只读写运行目录标记，不启动 agent，也不修改 agent 配置。成功返回 0，参数或上下文错误返回 2。
 - `plugin-audit`：委托 `tools/plugin-audit.py` 静态审计 plugin/hook/MCP manifest，不执行插件代码。
 - 每次 hook 都有覆盖目标执行与 JSON 事件写入的默认总硬超时，可由 `AGENT_HOOK_TIMEOUT` 或 `--timeout`
   覆盖；超时终止整个受控进程组并返回 124。普通事件成功返回时会清理遗留后台子进程，`agent-resume`

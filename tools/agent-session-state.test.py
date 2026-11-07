@@ -512,6 +512,91 @@ class SessionStateTests(unittest.TestCase):
             self.assertIn("failure_found=1", result.stdout)
             self.assertIn("turn_state=completed", result.stdout)
 
+    def test_commandcode_last_user_input_skips_injected_messages(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data_dir = root / "commandcode"
+            cwd = root / "workspace"
+            project = data_dir / "projects" / "root-workspace"
+            project.mkdir(parents=True)
+            cwd.mkdir()
+            session_id = "11111111-2222-4333-8444-555555555555"
+            events = [
+                {
+                    "type": "session",
+                    "id": session_id,
+                    "cwd": str(cwd),
+                    "timestamp": "2026-10-21T03:10:23Z",
+                },
+                {
+                    "type": "message",
+                    "timestamp": "2026-10-21T03:10:24Z",
+                    "message": {
+                        "role": "user",
+                        "content": [{"type": "text", "text": f"run_id={RUN_ID}"}],
+                        "meta": {"source": "user"},
+                    },
+                },
+                {
+                    "type": "message",
+                    "timestamp": "2026-10-21T03:10:30Z",
+                    "message": {
+                        "role": "user",
+                        "content": [{"type": "text", "text": "injected"}],
+                        "meta": {"source": "system", "injected": True},
+                    },
+                },
+            ]
+            (project / f"{session_id}.jsonl").write_text(
+                "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+            )
+            command = [
+                sys.executable, str(SCRIPT), "--agent", "commandcode",
+                "--run-id", RUN_ID, "--cwd", str(cwd), "--created-at", CREATED_AT,
+                "--data-dir", str(data_dir), "--last-user-input",
+            ]
+            result = subprocess.run(command, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            value = float(result.stdout.strip().split("=", 1)[1])
+            expected = datetime.fromisoformat("2026-10-21T03:10:24+00:00").timestamp()
+            self.assertAlmostEqual(value, expected, delta=1)
+
+    def test_claude_last_user_input_ignores_meta_user_events(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            config = root / "claude"
+            cwd = root / "workspace"
+            project = config / "projects" / "-root-workspace"
+            project.mkdir(parents=True)
+            cwd.mkdir()
+            session_id = "11111111-2222-4333-8444-555555555555"
+            events = [
+                {
+                    "type": "user", "sessionId": session_id, "cwd": str(cwd),
+                    "timestamp": "2026-10-21T03:10:24.000Z",
+                    "message": {"role": "user", "content": [{"type": "text", "text": f"run_id={RUN_ID}"}]},
+                },
+                {
+                    "type": "user", "isMeta": True, "sessionId": session_id, "cwd": str(cwd),
+                    "timestamp": "2026-10-21T03:10:30.000Z",
+                    "message": {"role": "user", "content": [{"type": "text", "text": "meta"}]},
+                },
+                {"type": "system", "subtype": "turn_duration", "sessionId": session_id},
+            ]
+            (project / f"{session_id}.jsonl").write_text(
+                "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+            )
+            command = [
+                sys.executable, str(SCRIPT), "--agent", "claude",
+                "--run-id", RUN_ID, "--cwd", str(cwd), "--created-at", CREATED_AT,
+                "--data-dir", str(config), "--last-user-input",
+            ]
+            result = subprocess.run(command, text=True, capture_output=True, check=False)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            value = float(result.stdout.strip().split("=", 1)[1])
+            expected = datetime.fromisoformat("2026-10-21T03:10:24+00:00").timestamp()
+            self.assertAlmostEqual(value, expected, delta=1)
+
 
 if __name__ == "__main__":
     unittest.main()

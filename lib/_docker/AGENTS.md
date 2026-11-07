@@ -2,7 +2,7 @@
 
 Docker Desktop 与容器开发环境参考文档目录，无脚本，不部署到 `$HOME`：
 
-- `setup.md`：Docker Desktop、镜像、容器、Compose、GPU、存储与排障。
+- `setup.md`：Docker Desktop、镜像、容器、Compose、GPU、存储、排障，以及 `docker-v*`/`computer-v*` 容器环境与镜像快照参考。
 
 WSL 2 的安装、发行版导入/迁移、磁盘维护和发行版内开发环境见 [`../_wsl/setup.md`](../_wsl/setup.md)；Docker Desktop 自建的 `docker-desktop` 发行版和 VHDX 仍由 Docker Desktop 管理，不套用 WSL 发行版迁移步骤。
 

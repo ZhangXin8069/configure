@@ -1,0 +1,45 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-08 04:55:05 +0800
+批次: auto-idle-nudge-20261108
+主任务: auto 技能空闲自续跑注入
+触发原因: 任务完成
+摘要: 新增 hooks/tools 空闲注入链，auto 在目标未达成且 5 分钟无输入时自动注入续跑指令
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 机制定位
+- 目标: 为 auto 技能增加“agent 停止工作 5 分钟且未达成目标时，以用户身份注入续跑指令”。
+- 命令/操作: 读取 hooks/agent-hook.sh、hooks/agent-resume.sh、tools/agent-tui-watch.py、tools/agent-session-state.py、bin/agent-runtime.sh、bin/agent.sh、skills/auto/SKILL.md。
+- 关键输出: TUI watcher 已具备同生命周期监控与失败恢复；四类 agent 均有原生 resume/queue 注入通道；会话解析器可读最新 turn 状态。
+- 退出码: 0。
+- 证据与判断: 缺少“空闲判定 + 用户身份注入 + auto 启停”三要素，可在 watcher 内扩展而不新增守护进程。
+
+### S2 — 实现
+- 操作: 新增 tools/agent-idle-nudge.sh（enable/disable/complete/status 标记）、hooks/agent-nudge.sh（hook 入口）；agent-tui-watch.py 增加空闲注入（活动基准=最新真实用户输入或上次注入，阈值 300s，最小回合 30s，可设上限）；agent-session-state.py 增加 --last-user-input（Codex/Claude/OpenCode/CommandCode，跳过 injected 消息）；agent-runtime.sh 转发参数并写 .tui-watch.pid、导出运行上下文；agent.sh 为四类 TUI 构造带 {message} 的注入命令；agent-hook.sh 注册 agent-nudge 事件。
+- 结果: 注入只在回合完成、目标未完成、已武装且无用户活动时发生；失败恢复优先；complete/disable/stop 文件立即终止。
+
+### S3 — auto 技能
+- 操作: 核心原则新增空闲自续跑；预授权清单新增开关；Step 1 确认后武装标记；Step 4 目标达成先 complete；Step 5 中断先 disable；汇总模板与错误表同步。
+
+## 验证与证据
+- 测试/检查: python3 tools/agent-tui-watch-idle.test.py（7 项）、python3 tools/agent-tui-watch.test.py（9 项）、bash tools/agent-tui-watch-idle-runtime.test.sh、python3 tools/agent-session-state.test.py（15 项）、bash hooks/hooks.test.sh、bash tools/agent-resume.test.sh、bash bin/agent-dispatch.test.sh、bash tools/configure-check.sh、bash -n 与 py_compile、git diff --check。
+- 结果: 全部通过；真实运行 20261108T044254.N2qMUN 的 watcher 日志出现 idle_nudge=1 idle_seconds=300.0，未武装时报 nudge_disabled，武装后因该 run 仍 in_progress 正确不注入（符合“停止工作才注入”）。
+- 未验证项: 真实 agent 在空闲注入后完成续跑回合的端到端行为（需要真实长时间 TUI 会话；单元/夹具层已覆盖命令渲染与执行）。
+
+## 变更与产物
+- 文件: tools/agent-idle-nudge.sh、tools/agent-tui-watch.py、tools/agent-session-state.py、tools/agent-tui-watch-idle.test.py、tools/agent-tui-watch-idle-runtime.test.sh、hooks/agent-nudge.sh、hooks/agent-hook.sh、hooks/hooks.test.sh、bin/agent-runtime.sh、bin/agent.sh、skills/auto/SKILL.md、skills/AGENTS.md、tools/{AGENTS.md,README.md}、hooks/AGENTS.md、bin/AGENTS.md。
+- 未改动: co/cl/op 的平台级能力与第三方二进制。
+
+## 风险、限制与下一步
+- 风险: cm/op 的注入是独立 `-p`/`run -s` 进程操作存活 TUI 会话，依赖其会话并发语义；co 走 app-server 队列更稳。
+- 限制: 无法探测用户输入时（会话不可读）fail-closed 不注入；TUI 内手工改 /goal 不更新完成标记，需要 auto 显式 complete。
+- 下一步: 用真实长任务观察首次注入时序与 inject 后的 turn 归属，必要时按 agent 分别调 MIN_TURN/POLL。
+
+## 用户输入指令
+升级本库auto skill:添加{若agent停止工作[此时仍未达成最终目标]且五分钟内无用户输入,则通过脚本自动给此agent注入[简要汇报当前阶段性工作进度到日志目录,并继续下一轮工作或进一步拓展本轮工作]的指令[视同于用户]},注意此次功能的实现需要调用本库的hooks和tools[脚本归属地],这些脚本内容通过参考本库所有相关内容自行构建与优化并调试
+
+## Agent 全文报告
+--- report begin ---
+已为 auto 技能加入空闲自续跑：hooks/agent-nudge.sh + tools/agent-idle-nudge.sh 控制标记，tools/agent-tui-watch.py 在回合完成且 5 分钟无真实用户输入时，经各 agent 原生 resume/queue 通道以用户身份注入续跑指令；tools/agent-session-state.py 新增 --last-user-input 提供活动时间。定向测试与 hook/恢复/派发回归全部通过。
+--- report end ---

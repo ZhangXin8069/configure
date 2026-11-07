@@ -153,8 +153,10 @@ bash tools/agent-resume.test.sh
   `OPENCODE_DATA_HOME` / XDG 数据目录下的 `opencode.db`，同时支持 V1 `message/part` 与 V2
   `session_message`。
 
-三系都限制 cwd 与创建时间窗口，且只以最新完整 turn 输出 `failure_found`、`context_overflow` 和瞬时性
-分类；较早失败不会覆盖后续成功。恢复调用默认受 5 秒硬超时约束，可用 `AGENT_STATE_TIMEOUT` 调整；超时、数据库
+四系都限制 cwd 与创建时间窗口，且只以最新完整 turn 输出 `failure_found`、`context_overflow` 和瞬时性
+分类；较早失败不会覆盖后续成功。`--last-user-input` 只输出最新真实用户输入的 epoch 秒
+（供空闲自续跑判定；Command Code 会话跳过 `meta.injected` 的注入消息），会话不可用时以非零退出
+fail-closed。恢复调用默认受 5 秒硬超时约束，可用 `AGENT_STATE_TIMEOUT` 调整；超时、数据库
 不可读或会话不唯一时 fail-closed。`agent-codex-state.py` 是兼容旧路径的 Codex 入口。
 
 ### `agent-tui-watch.py`
@@ -177,12 +179,40 @@ headless/派发子 agent 仍由进程退出后的 `agent-resume.sh` 兜底。
 `AGENT_TUI_WATCH_RECOVER_TIMEOUT`、`AGENT_TUI_WATCH_SCAN_BYTES` 调整。事件写入 run 目录的
 `tui-watch.log` 和 `events.jsonl`，不记录消息正文或凭据。
 
+**空闲自续跑**：auto 技能通过 `hooks/agent-hook.sh agent-nudge enable --goal TEXT` 写入
+`.idle-nudge-enabled` 后，watcher 在回合完成、目标未完成、且“最新真实用户输入或上次注入”已超过
+5 分钟时，用 agent 原生 resume/queue 命令以用户身份注入“汇报阶段进度到日志目录并继续下一轮”。
+`.goal-complete`（目标达成）、`disable`、stop 文件与 `AGENT_AUTO_RESUME=0` 都会立即停止注入；
+`.idle-nudge-attempted` 记录次数与时间，注入命令经 `AGENT_TUI_IDLE_COMMAND_JSON` 传入，
+阈值用 `AGENT_IDLE_NUDGE_SECONDS`/`AGENT_IDLE_NUDGE_MIN_TURN_SECONDS`/`AGENT_IDLE_NUDGE_POLL`/
+`AGENT_IDLE_NUDGE_TIMEOUT`/`AGENT_IDLE_NUDGE_MAX` 调整。失败恢复优先于空闲注入。
+
 回归测试：
 
 ```bash
 python3 tools/agent-tui-watch.test.py
+python3 tools/agent-tui-watch-idle.test.py
+bash tools/agent-tui-watch-idle-runtime.test.sh
 python3 tools/agent-codex-resume.test.py
 ```
+
+### `agent-idle-nudge.sh`
+
+auto 技能的空闲自续跑标记入口：
+
+```bash
+tools/agent-idle-nudge.sh enable --goal "任务定义"   # 武装看门狗
+tools/agent-idle-nudge.sh status                     # enabled/complete/goal
+tools/agent-idle-nudge.sh complete                   # 目标达成，停止注入
+tools/agent-idle-nudge.sh disable                    # 中断或取消
+```
+
+运行上下文取 `--manifest`、`--run-dir`、`--run-id` 或
+`AGENT_MANIFEST_FILE`/`AGENT_RUN_DIR`/`AGENT_RUN_ID`；只写运行目录的
+`.idle-nudge-enabled`、`.goal-complete` 与 `.idle-nudge-attempted`，不启动 agent、不修改配置。
+`enable` 会检查 `.tui-watch.pid`：无存活 TUI watcher 时输出 `watch=inactive`，调用方应如实报告
+`idle_nudge=unavailable`，不得伪称已启用。hook 入口为
+`hooks/agent-hook.sh agent-nudge ...`。
 
 ### `agent-codex-resume.py`
 

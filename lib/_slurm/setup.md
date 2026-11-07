@@ -134,6 +134,24 @@ grep -nE 'partition|time|gres|ntasks|user|account|source' lib/dcu-v20260227/*.sh
 
 `openmpi_bind_mlnx.sh` 根据 `OMPI_COMM_WORLD_LOCAL_RANK` 绑定 NUMA 节点和 `UCX_NET_DEVICES`。它依赖该机器的 8 卡拓扑和 Mellanox 设备命名，不能假定适用于其他节点。
 
+## 集群快照参考
+
+| 目录 | 调度器/资源 | 可复用要点 |
+|---|---|---|
+| `dcu-v20231220` | DCU DTK 23.04 | module + HIP/ROCm + `HCC_AMDGPU_TARGET=gfx906` |
+| `dcu-v20250825`、`v20260205` | Slurm `newlarge`/`onesitelarge` | `salloc -N 1 -n 128 --gres=dcu:8 --exclusive`；`--ntasks-per-node=8`、`--cpus-per-task=16` |
+| `dcu-v20260227` | Slurm `hpctest` | 1 节点 128 核 8 DCU；`salloc.sh`/`stop.sh` 固定用户 |
+| `dcu-v20261020`、`v20261027` | Slurm `kshdnormal` | `v20261020` 为四卡休眠探针；`v20261027` 增加单卡模板；`sleep.sh` 缺 `--time`，`1dcu_sleep.sh` 已补 10 分钟 |
+| [`../bscc-v20261015/sleep.sh`](../bscc-v20261015/sleep.sh) | Slurm GPU | `--gpus=1`、`--time=5`，正文 `sleep 600s`；时限与正文不一致，提交前必须改 |
+| [`../lingsheng-v20261030/env.sh`](../lingsheng-v20261030/env.sh) | DSUB | 把 `sinfo/squeue/sbatch/scancel` 映射为 `dinfo/djob/dsub/dkill`；队列 `q_hpcapp` |
+
+可复用模式：
+
+- `openmpi_bind_mlnx.sh` 用 `OMPI_COMM_WORLD_LOCAL_RANK % 8` 选择 NUMA 节点和 `UCX_NET_DEVICES`；它绑定该机器的 8 卡拓扑和 Mellanox 设备名，其他节点必须重新核对。
+- `salloc`/`sbatch` 模板中的分区、账号、用户、`--gres` 语法和 `source` 路径都是集群专属；复制后先用 `grep -nE 'partition|time|gres|user|account|source'` 检查。
+- `dcu-v20261027/1dcu_sleep.sh` 使用 `--gres dcu:1`（空格），与其他模板的 `--gres=dcu:8` 不同；不同 Slurm 版本的解析行为不一致，提交前用小作业或 `sbatch --test-only` 验证。
+- `sleep.sh` 一类探针必须声明 `--time`；`--time=5` 与 `sleep 600s` 同时出现时，作业会被时限杀死，不能用来测 10 分钟稳定性。
+
 ## 安全使用流程
 
 ```bash

@@ -1,0 +1,55 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-08 04:18:06 +0800
+批次: cm-longtask-20261108
+主任务: cm 长任务持续性与子代理优化
+触发原因: 任务完成
+摘要: 修复 cm print 续跑工具/回合/goal 丢失，并优化子代理跨 agent 继承、权限、超时与恢复边界
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 差异定位
+- 目标: 分析 cm 长任务持续性与稳定性落后于 co 的原因并优化。
+- 命令/操作: 读取 bin/agent.sh、bin/agent-runtime.sh、bin/agent-dispatch.sh、tools/agent-tui-watch.py、tools/agent-resume.sh、tools/agent-session-state.py、bin/agent-config.json。
+- 关键输出: print 模式帮助确认 --max-turns 默认 100 且 cap-hit 退出 8；--tools-all/--tools-enable 用于恢复 headless 扣留工具；Command Code 会话解析器可实时找到 session；现有 run 记录均为短会话。
+- 退出码: 0。
+- 证据与判断: cm 的续跑/恢复均走 -p，但续跑参数缺少 --add-dir/--skill/--trust，未放宽回合上限，也未恢复 todo_write；goal 只存在于进程内，未写入 manifest。
+
+### S2 — cm 长任务优化
+- 目标: 让 TUI、headless 驱动、TUI 恢复、--resume 自动恢复共享同一上下文/工具/goal 语义。
+- 命令/操作: 修改 bin/agent.sh、bin/agent-runtime.sh、bin/agent-config.json、bin/agent-custom.json.refer、bin/AGENTS.md。
+- 关键输出: 新增 headless_max_turns=1000、headless_tools=todo_write、headless_tools_all=false；goal_turn_budget=1000；goal_objective 写入 manifest 并在 resume 时重发 /goal；续跑继承 add-dir/skill/trust；去重重复 skills 路径。
+- 退出码: 0。
+- 证据与判断: 续跑不再退回 100 回合默认上限，也不丢失 global skills 与待办跟踪。
+
+### S3 — 子代理优化
+- 目标: 修正跨 agent 继承、权限、超时与恢复边界。
+- 命令/操作: 修改 bin/agent-dispatch.sh、tools/agent-resume.sh、测试与文档。
+- 关键输出: 跨 agent 未显式指定模型/强度时回落目标默认；cm 继承 AGENT_PARENT_PERMISSION_MODE；修正 commandcode secure 同 agent 判断；默认 AGENT_DISPATCH_TIMEOUT=30m；超时/中断不再拉起恢复链；恢复默认最多 1 次。
+- 退出码: 0。
+- 证据与判断: 避免把 cm 的 deepseek/... 模型直接传给 co/cl，也避免超时后无限恢复。
+
+## 验证与证据
+- 测试/检查: bash -n 全部修改脚本；python3 -m json.tool 两份配置；bash bin/agent-dispatch.test.sh；bash tools/agent-resume.test.sh；python3 tools/agent-tui-watch.test.py；python3 tools/agent-session-state.test.py；cm 定向夹具（once/goal/resume/drive）；git show --check HEAD -- bin tools；form-data-tracking-check。
+- 结果: 上述定向检查全部通过；cm 夹具验证 --tools-enable todo_write、--max-turns 1000、--add-dir/--skill/--trust 继承、goal_objective 持久化、重复 skill 去重。
+- 未验证项: bash bin/agent.test.sh 全量套件在既有 co --once bridge 用例处挂起（thread.started 后无退出），已终止；该挂起与本次 cm 改动无关，cm 断言由定向夹具覆盖。
+
+## 变更与产物
+- 文件: bin/agent.sh、bin/agent-runtime.sh、bin/agent-config.json、bin/agent-custom.json.refer、bin/agent-dispatch.sh、bin/agent-dispatch.test.sh、bin/agent.test.sh、bin/AGENTS.md、tools/agent-resume.sh。
+- 产物: cm 长任务续跑/恢复参数链与子代理派发参数链。
+- 未改动范围: co/cl/op 的主执行链与第三方 agent 二进制。
+
+## 风险、限制与下一步
+- 风险: cm TUI 恢复仍是存活 TUI 旁路的独立 -p 进程，未使用 co 的 app-server 队列；Command Code 未提供等价的运行中 thread 队列接口。
+- 限制: 交互式在 TUI 内修改 /goal 不会更新 manifest；失败识别仍依赖 message.meta.error/瞬时错误文本。
+- 下一步: 若全量测试的 co bridge 挂起可复现，单独修复该测试/桥退出路径；如需 cm TUI 原地恢复完全对齐 co，需要 Command Code 暴露会话队列 API。
+
+## 用户输入指令
+本库的cm长任务的持续性与稳定性远不如co,进行分析并给出优化
+注意相关参数与选项配置,以求最优最佳
+注意同时优化子代理配置
+
+## Agent 全文报告
+--- report begin ---
+结论：cm 的长任务落差主要来自启动/恢复链的参数缺失，而不是模型能力。已修复四类主因：print 模式丢工具、-p 默认 100 回合上限、续跑丢 add-dir/skill/trust、goal 不持久；并同步优化子代理的跨 agent 继承、权限、超时与恢复边界。定向测试通过；全量 agent.test.sh 在既有 co bridge 用例处挂起，未能完成，已如实记录。
+--- report end ---

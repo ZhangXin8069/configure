@@ -40,7 +40,30 @@ fi
 list_output=$("$hook_script" --list)
 assert_contains "$list_output" 'plugin-audit'
 assert_contains "$list_output" 'agent-resume'
+assert_contains "$list_output" 'agent-nudge'
 printf 'PASS: agent-hook 事件目录列出超时与审计入口\n'
+
+nudge_run=$test_root/nudge-run
+mkdir -p "$nudge_run"
+printf 'run_id=20260101T000000.nudge\n' >"$nudge_run/manifest.env"
+printf '{"count":2,"nudged_at":1}\n' >"$nudge_run/.idle-nudge-attempted"
+nudge_output=$(AGENT_CONFIGURE_ROOT="$script_dir/.." \
+    "$hook_script" agent-nudge enable --run-dir "$nudge_run" --goal 'finish idle test' 2>&1)
+assert_contains "$nudge_output" 'status=enabled'
+[[ -f "$nudge_run/.idle-nudge-enabled" ]] || fail 'agent-nudge enable 未写入启用标记'
+[[ ! -f "$nudge_run/.idle-nudge-attempted" ]] || fail 'agent-nudge enable 应重置旧注入计数'
+nudge_status=$(AGENT_CONFIGURE_ROOT="$script_dir/.." \
+    "$hook_script" agent-nudge status --run-dir "$nudge_run" 2>&1)
+assert_contains "$nudge_status" 'enabled=1'
+assert_contains "$nudge_status" 'goal=finish idle test'
+AGENT_CONFIGURE_ROOT="$script_dir/.." \
+    "$hook_script" agent-nudge complete --run-dir "$nudge_run" >/dev/null 2>&1
+[[ -f "$nudge_run/.goal-complete" ]] || fail 'agent-nudge complete 未写入完成标记'
+[[ ! -f "$nudge_run/.idle-nudge-enabled" ]] || fail 'agent-nudge complete 应清除启用标记'
+nudge_complete=$(AGENT_CONFIGURE_ROOT="$script_dir/.." \
+    "$hook_script" agent-nudge status --run-dir "$nudge_run" 2>&1)
+assert_contains "$nudge_complete" 'complete=1'
+printf 'PASS: agent-nudge 启停与完成标记闭环\n'
 
 json_envelope_valid() {
     local json=$1

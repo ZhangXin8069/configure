@@ -398,3 +398,52 @@ docker run --rm --entrypoint sh zhangxin8069/computer-v20260708:<标签> -c 'env
 | CUDA | 12.4.0 |
 | QUDA | develop, SM80 |
 | PyQCD | stab17 或 stab22，取决于镜像 |
+
+## 版本快照参考
+
+### 容器环境配置
+
+`docker-v*` 目录是容器内 shell 环境快照。各版本反复使用的公共模式如下，路径示例来自快照，跨镜像使用时应替换：
+
+```bash
+export LD_LIBRARY_PATH=/root/PyQCU/cpp/cuda/qcu:$LD_LIBRARY_PATH
+export PYTHONPATH=/root/PyQCU:${PYTHONPATH}
+export MPI_ALLOW_RUN_AS_ROOT=1
+export OMPI_ALLOW_RUN_AS_ROOT=1
+export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+alias mpirun='mpirun --allow-run-as-root'
+alias python='python3 -u'
+```
+
+- 容器内以 root 运行时，OpenMPI 需要三个 root 变量；缺少时 `mpirun` 会直接拒绝启动。
+- `python -u` 让日志在容器 stdout/管道中及时刷新；交互式调试可临时取消。
+- `@ENV@` 块按存在性加载本机覆盖文件，缺失时不应报错：
+
+```bash
+[ -r "${HOME}/env-key.sh" ] && source "${HOME}/env-key.sh"
+[ -r "${HOME}/PyQCU/env.sh" ] && source "${HOME}/PyQCU/env.sh"
+```
+
+| 版本目录 | 可复用要点 |
+|---|---|
+| `docker-v20231220` | 早期 PyQCU/QUDA 双 `LD_LIBRARY_PATH`、MPI root 变量与别名 |
+| `docker-v20241023`、`docker-v20241106` | `setup.sh` 记录基础镜像、APT 依赖、CUDA keyring/NCCL、QUDA 构建 |
+| `docker-v20260408` | 精简为 PyQCU/QUDA 路径与 MPI 变量 |
+| `docker-v20260724` | 增加 `source ~/env-key.sh` |
+| `docker-v20260823` | 增加可选 clash 环境加载 |
+| `docker-v20260825` | 仅保留 env-key |
+| `docker-v20260908` | env-key + `PyQCU/env.sh` |
+| `docker-v20261015` | 回到最小导出集 |
+| `docker-v20261103` | 增加 `no_proxy`/`NO_PROXY`，保留 env-key 与 PyQCU |
+
+新容器快照按 `docker-vYYYYMMDD` 新建；稳定入口只吸收跨镜像可复用的变量、别名和加载顺序。
+
+### 镜像构建记录
+
+| 镜像/记录 | 基础镜像 | 关键内容 |
+|---|---|---|
+| `docker-v20241023/setup.sh`、`docker-v20241106/setup.sh` | `nvidia/cuda:12.4.0-devel-ubuntu22.04` | APT 工具链、oh-my-zsh、CUDA keyring、NCCL、nsight、QUDA 构建 |
+| [`../computer-v20250708/setup.md`](../computer-v20250708/setup.md) | 由运行中容器提交 | `docker commit`/`push` 与 `docker export` 两条迁移路径 |
+| [`../x99-v20241023/setup.sh`](../x99-v20241023/setup.sh) | `nvidia/cuda:11.8.0-devel-ubuntu20.04` | x99 工作站容器、`sm_60` QUDA 与 CMake/nvtop/btop 本地安装 |
+
+镜像标签应保留 OS、GCC、Python、CUDA、QUDA、PyQUDA 和 GPU 架构信息，便于回退；不要把 `latest` 作为唯一标签。`docker commit` 只保存容器层修改，源码与数据集仍应通过挂载或镜像构建流程管理。

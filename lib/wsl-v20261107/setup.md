@@ -161,7 +161,7 @@ b=$(readlink -f "$(which netwatch)") && \
 
 - 组权限只在重新登录后生效；未重新登录前 `netwatch` 无法启动。
 - `env.sh` 中保留同一命令的注释块，便于换机器时复用。
-- 同文件定义的 `alias iftop='sudo ~/miniforge3/bin/netwatch'` 依赖该路径；Miniforge 安装到其他
+- 同文件定义的 `alias iftop="sudo ${HOME}/miniforge3/bin/netwatch"` 依赖该路径；Miniforge 安装到其他
   前缀时需要同步修改。
 
 ## 5. Shell 初始化
@@ -326,15 +326,16 @@ git -C ~/configure status --short
 
 | 变量/别名 | 值 | 说明 |
 |---|---|---|
-| `CUDA_PATH` | `$CONDA_PREFIX/targets/x86_64-linux` | 依赖 conda 已激活；未激活时展开为 `/targets/...` |
-| `CPLUS_INCLUDE_PATH` | `$CUDA_PATH/include:$CPLUS_INCLUDE_PATH` | 供 C++ 扩展编译 |
-| `PATH` | `$CONDA_PREFIX/nvvm/bin:$PATH` | NVVM 工具 |
+| `CUDA_PATH` | `"${CONDA_PREFIX}/targets/x86_64-linux"` | 依赖 conda 已激活；未激活时展开为 `/targets/...` |
+| `CPLUS_INCLUDE_PATH` | `"${CUDA_PATH}/include":${CPLUS_INCLUDE_PATH}` | 供 C++ 扩展编译 |
+| `PATH` | `"${CONDA_PREFIX}/nvvm/bin":${PATH}` | NVVM 工具 |
 | `HDF5_MPI` | `ON` | 让 h5py 构建启用 MPI |
-| `HDF5_DIR` | `$CONDA_PREFIX` | HDF5 安装前缀 |
-| `iftop` | `sudo ~/miniforge3/bin/netwatch` | 依赖 netwatch 的 setcap 权限 |
+| `HDF5_DIR` | `"${CONDA_PREFIX}"` | HDF5 安装前缀 |
+| `iftop` | `sudo ${HOME}/miniforge3/bin/netwatch` | 依赖 netwatch 的 setcap 权限 |
 
 文件开头的 `cd ${HOME}` 会在每次 source 时切换当前目录；交互式使用时注意它会覆盖调用者的工作目录。
-`@NETWATCH@` 块是注释掉的权限配置，`@EXPORT@` 块是实际生效的环境变量。
+`@NETWATCH@` 块是注释掉的权限配置，`@EXPORT@` 块是实际生效的环境变量。导出值统一用双引号包裹；
+`CPLUS_INCLUDE_PATH` 与 `PATH` 的既有部分按原样追加，语义与未加引号的旧写法一致。
 
 ## 风险与回滚
 

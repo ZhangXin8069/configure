@@ -2,7 +2,7 @@
 
 Windows Subsystem for Linux（WSL 2）稳定操作入口，无脚本，不部署到 `$HOME`：
 
-- `setup.md`：WSL 2 安装升级、`.wslconfig`、`/etc/wsl.conf`、发行版导入/克隆/迁移、VHDX 备份与压缩、文件系统/网络/GPU、发行版内开发环境、故障表与检查清单。
+- `setup.md`：WSL 2 安装升级、`.wslconfig`、`/etc/wsl.conf`、发行版导入/克隆/迁移、VHDX 备份与压缩、文件系统/网络/GPU、发行版内开发环境、版本快照参考、故障表与检查清单。
 - `AGENTS.md`：本目录契约、边界与破坏性操作确认清单。
 
 ## 边界

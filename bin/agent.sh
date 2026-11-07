@@ -1459,9 +1459,19 @@ run_commandcode() {
             _cc_recovery_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
                 "$_COMMAND_CODE_BIN" -p "$_cc_recovery_prompt" "${_CC_RECOVERY_ARGS[@]}")"
         fi
+        local _cc_idle_json='[]'
+        if command -v python3 >/dev/null 2>&1; then
+            local -a _CC_IDLE_ARGS=(--session "{session_id}" --output-format json "${_CC_SKIP_ARGS[@]}" \
+                "${_CC_TRUST_ARGS[@]}" --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" \
+                "${_CC_PERMISSION_ARGS[@]}" "${_CC_PRINT_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}")
+            _cc_idle_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
+                "$_COMMAND_CODE_BIN" -p "{message}" "${_CC_IDLE_ARGS[@]}")"
+        fi
         _agent_runtime_turn_begin
         local _cc_tui_started=$SECONDS
-        _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
+        AGENT_TUI_IDLE_COMMAND_JSON="$_cc_idle_json" \
+            _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" \
+            "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
         local _run_rc=$?
         local _cc_tui_elapsed=$(( SECONDS - _cc_tui_started ))
         if (( _run_rc == 0 )); then _agent_runtime_turn_success; else _agent_runtime_turn_failure; fi
@@ -1967,8 +1977,22 @@ run_claude() {
         command -v python3 >/dev/null 2>&1 &&
             _CLAUDE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CLAUDE_TUI_RECOVERY[@]}")"
         unset _CLAUDE_TUI_RECOVERY
+        local -a _CLAUDE_TUI_IDLE=(
+            "${_CLAUDE_BIN}"
+            --bg
+            --resume "{session_id}"
+            --settings "${_CLAUDE_SETTINGS_TMP}"
+            --permission-mode "${_CL_PERMISSION_MODE}"
+            --model "${MODEL_ID}"
+            "{message}"
+        )
+        local _CLAUDE_IDLE_JSON='[]'
+        command -v python3 >/dev/null 2>&1 &&
+            _CLAUDE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CLAUDE_TUI_IDLE[@]}")"
+        unset _CLAUDE_TUI_IDLE
         _agent_runtime_turn_begin
-        _agent_runtime_run_tui_watched claude "$_CLAUDE_RECOVERY_JSON" \
+        AGENT_TUI_IDLE_COMMAND_JSON="$_CLAUDE_IDLE_JSON" \
+            _agent_runtime_run_tui_watched claude "$_CLAUDE_RECOVERY_JSON" \
             "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" \
             --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}" \
             2> "${LOG_FILE}"
@@ -2564,12 +2588,34 @@ PYEOF
         _OPENCODE_TUI_RECOVERY+=(
             "继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
         )
+        # 空闲注入沿用恢复 argv（同一私有 server / 会话），只替换消息占位。
+        local -a _OPENCODE_TUI_IDLE
+        if (( _op_v2 )); then
+            _OPENCODE_TUI_IDLE=(
+                "${_OPENCODE_BIN}" run --standalone -s "{session_id}"
+                --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}"
+                --format json --auto --print-logs --log-level debug
+            )
+        else
+            _OPENCODE_TUI_IDLE=(
+                "${_OPENCODE_BIN}" run -s "{session_id}" --agent "${_OP_AGENT}"
+                --auto --print-logs --log-level DEBUG
+            )
+        fi
+        if [[ -n "$_op_tui_port" ]]; then
+            _OPENCODE_TUI_IDLE+=(--attach "http://127.0.0.1:${_op_tui_port}")
+        fi
+        _OPENCODE_TUI_IDLE+=("{message}")
         local _OPENCODE_RECOVERY_JSON='[]'
         command -v python3 >/dev/null 2>&1 &&
             _OPENCODE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_OPENCODE_TUI_RECOVERY[@]}")"
-        unset _OPENCODE_TUI_RECOVERY
+        local _OPENCODE_IDLE_JSON='[]'
+        command -v python3 >/dev/null 2>&1 &&
+            _OPENCODE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_OPENCODE_TUI_IDLE[@]}")"
+        unset _OPENCODE_TUI_RECOVERY _OPENCODE_TUI_IDLE
         _agent_runtime_turn_begin
-        _agent_runtime_run_tui_watched opencode "$_OPENCODE_RECOVERY_JSON" \
+        AGENT_TUI_IDLE_COMMAND_JSON="$_OPENCODE_IDLE_JSON" \
+            _agent_runtime_run_tui_watched opencode "$_OPENCODE_RECOVERY_JSON" \
             "${_OPENCODE_TUI_ARGS[@]}" 2> "${LOG_FILE}"
         _run_rc=$?
         if (( _run_rc == 0 )); then
@@ -3406,9 +3452,24 @@ PY
         if (( ${#_CODEX_TUI_RECOVERY[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then
             _CODEX_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CODEX_TUI_RECOVERY[@]}")"
         fi
-        unset _CODEX_TUI_RECOVERY
+        # 空闲注入复用同一 app-server 队列；无 app-server 时不注入（无法排队）。
+        local -a _CODEX_TUI_IDLE=()
+        if (( ${#_CODEX_TUI_RECOVERY[@]} > 0 )); then
+            _CODEX_TUI_IDLE=(
+                "$_codex_resume_python" "$_codex_resume_tool"
+                --remote "unix://${_TUI_APP_SERVER_SOCKET}"
+                --thread "{thread_id}"
+                --message "{message}"
+            )
+        fi
+        local _CODEX_IDLE_JSON='[]'
+        if (( ${#_CODEX_TUI_IDLE[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then
+            _CODEX_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CODEX_TUI_IDLE[@]}")"
+        fi
+        unset _CODEX_TUI_RECOVERY _CODEX_TUI_IDLE
         _agent_runtime_turn_begin
-        _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
+        AGENT_TUI_IDLE_COMMAND_JSON="$_CODEX_IDLE_JSON" \
+            _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
             "${_CODEX_BIN}" "${_CODEX_TUI_ARGS[@]}" -- "${PROMPT}" \
             2>"${LOG_FILE}"
         _run_rc=$?

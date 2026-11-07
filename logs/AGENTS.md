@@ -1357,3 +1357,39 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## lib-wsl-20261107-sync - stage - 2026-11-08 04:16:12 +0800
+- 主任务: 同步 env.sh 更新到 wsl-v20261107 与 _wsl 文档
+- 日志文件: logs/v202611080416.txt
+- 文件大小: 3573 bytes
+- 触发原因: 阶段成果
+- 关键内容: env.sh 引号规范化同步到 WSL 文档
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## cm-longtask-20261108 - final - 2026-11-08 04:18:06 +0800
+- 主任务: cm 长任务持续性与子代理优化
+- 日志文件: logs/v2026110804-2.txt
+- 文件大小: 4725 bytes
+- 触发原因: 任务完成
+- 关键内容: 修复 cm print 续跑工具/回合/goal 丢失，并优化子代理跨 agent 继承、权限、超时与恢复边界
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## lib-versioned-sync-20261108 - stage - 2026-11-08 04:25:44 +0800
+- 主任务: 将版本化快照的可复用内容同步到稳定入口
+- 日志文件: logs/v202611080425.txt
+- 文件大小: 5137 bytes
+- 触发原因: 阶段成果
+- 关键内容: 版本化快照参考同步到稳定入口
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## auto-idle-nudge-20261108 - final - 2026-11-08 04:55:05 +0800
+- 主任务: auto 技能空闲自续跑注入
+- 日志文件: logs/v2026110804-3.txt
+- 文件大小: 4720 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 hooks/tools 空闲注入链，auto 在目标未达成且 5 分钟无输入时自动注入续跑指令
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

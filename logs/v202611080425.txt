@@ -1,0 +1,71 @@
+[日志元数据]
+日志类型: stage
+生成时间: 2026-11-08 04:25:44 +0800
+批次: lib-versioned-sync-20261108
+主任务: 将版本化快照的可复用内容同步到稳定入口
+触发原因: 阶段成果
+摘要: 版本化快照参考同步到稳定入口
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 盘点与分类
+- 目标: 将 `*-v*` 版本化快照中可跨机器复用的内容同步到对应稳定入口；无稳定入口的家族建立索引。
+- 命令/操作: 列出 50 个版本化目录与 27 个稳定入口；读取 docker/computer、snsc、mac、claude-code、zerotier、dcu/bscc/lingsheng、x99、aistudio/laptop/npu/phone/usb 的 `AGENTS.md`、`env.sh`、`setup.md`、作业脚本。
+- 关键输出: 有稳定对照的 8 组主题；5 个机器/平台专属家族无独立稳定入口。
+- 退出码: 0
+- 证据与判断: 只迁移通用模式、版本演进和风险边界，机器路径与一次性命令保留在快照。
+
+### S2 — 同步稳定文档
+- `_wsl/setup.md`：新增“版本快照参考”，列出 `wsl-v20261107` 已提炼内容与新增机器规则。
+- `_docker/setup.md`：新增容器环境公共变量、MPI root 变量、`@ENV@` 加载顺序、`docker-v*` 演进表、`computer-v20250708`/`x99-v20241023` 镜像构建记录。
+- `_snsc/setup.md`：扩展为“集群环境与 VS Code Server 兼容配置”，加入 module 组合、conda 激活替代 alias、工具链单一来源、幂等 PATH、交互摘要与版本演进。
+- `_mac/setup.md`：加入 arm64 conda/本地工具/TeX/Homebrew/env-key 快照模式与复用边界。
+- `_claude-code/setup.md`：加入维护源关系、GCS TLS 问题与 HTTP+SHA-256 校验、cc-switch 资产格式、默认固定版本与卸载边界。
+- `_zerotier/setup.md`：加入完整教程与稳定入口的分工。
+- `_slurm/setup.md`：加入 DCU/BSCC/灵晟调度模板、NUMA/网卡绑定、硬编码用户、缺失 `--time` 与 `--gres` 格式风险。
+- `_env/setup.md`：新增版本化快照索引，把无稳定入口的家族指向目录内 `AGENTS.md`。
+- 退出码: 0
+- 证据与判断: 新增内容均来自已读取的版本化文件，未引入未验证的命令。
+
+### S3 — 目录契约同步
+- 更新 `_wsl`、`_docker`、`_snsc`、`_mac`、`_claude-code`、`_zerotier`、`_slurm`、`_env` 的 `AGENTS.md` 描述，以及根 `AGENTS.md` 对应目录行。
+
+## 验证与证据
+- 测试/检查: 17 份文档相对链接逐项 `test -e`；重复二级标题检查；代码围栏奇偶检查；`git diff --check`。
+- 结果: 无缺失链接、无重复标题、围栏全部成对、diff check 退出码 0；本次 17 个文件 +197/-19。
+- 未验证项: 未在真实 SNSC/DCU/BSCC/灵晟/macOS/Windows 主机执行文档命令。
+
+## 变更与产物
+- 文件: `AGENTS.md`、`_wsl/{setup,AGENTS}.md`、`_docker/{setup,AGENTS}.md`、`_snsc/{setup,AGENTS}.md`、`_mac/{setup,AGENTS}.md`、`_claude-code/{setup,AGENTS}.md`、`_zerotier/{setup,AGENTS}.md`、`_slurm/{setup,AGENTS}.md`、`_env/{setup,AGENTS}.md`。
+- 未改动范围: 所有 `*-v*` 快照内容、bin/tools 既有修改；未提交、未推送。
+
+## 风险、限制与下一步
+- 风险: `aistudio-v*`、`laptop-v*`、`npu-v*`、`phone-v*`、`usb-v*` 未新建稳定目录，只在 `_env` 建索引；如需独立入口可另开任务。
+- 阻塞: 无。
+- 下一步: 审阅后提交；真实主机验证需在对应环境完成。
+
+## 用户输入指令
+同步wsl-v**的有参考意义的内容到_wsl,其他部分也以此类推,比如docker
+
+## Agent 全文报告
+--- report begin ---
+✓ finished — 已将版本化快照的可复用内容同步到稳定入口
+
+**改动内容**
+- WSL：`_wsl/setup.md` 增加版本快照参考，明确快照与稳定入口的分工。
+- Docker：`_docker/setup.md` 增加容器环境公共变量、`@ENV@` 加载顺序、`docker-v*` 演进表，以及 computer/x99 镜像构建记录。
+- SNSC：`_snsc/setup.md` 扩展为集群环境 + VS Code Server 文档，吸收 v20260817 的 conda 激活、工具链单一来源、幂等 PATH 与交互摘要经验。
+- macOS、Claude Code、ZeroTier：分别补充 arm64 开发环境模式、离线下载/校验与卸载边界、完整教程分工。
+- Slurm：`_slurm/setup.md` 增加 DCU/BSCC/灵晟快照表与 NUMA 绑定、硬编码用户、缺失时限、`--gres` 格式等风险。
+- 索引：`_env/setup.md` 新增版本化快照索引；8 个稳定目录的 `AGENTS.md` 与根 `AGENTS.md` 描述同步更新。
+
+**推理依据**
+稳定入口应只保留跨机器可复用的模式；版本快照保留机器路径、账号、module 和一次性命令。无稳定对照的 `aistudio/laptop/npu/phone/usb` 先建立索引，避免为每个平台新建空壳目录。
+
+**验证结果**
+17 份文档相对链接全部存在；无重复二级标题；代码围栏全部成对；`git diff --check` 退出码 0。未在真实 SNSC/DCU/BSCC/灵晟/macOS/Windows 主机执行命令。
+
+**后续步骤**
+本次 17 个文件改动未提交；`wsl-v20261107` 的上一轮同步也仍未提交。需要时一并提交，并在目标主机验证。
+--- report end ---

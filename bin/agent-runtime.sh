@@ -103,6 +103,9 @@ _agent_runtime_stop_codex_app_server() {
 _agent_runtime_run_tui_watched() {
     local agent="${1:-}"
     local recover_command_json="${2:-}"
+    # 空闲注入命令经环境变量传入，保持本函数签名与既有调用/测试兼容。
+    local idle_command_json="${AGENT_TUI_IDLE_COMMAND_JSON:-}"
+    unset AGENT_TUI_IDLE_COMMAND_JSON
     [[ $# -gt 1 ]] && shift 2
     case "$agent" in
         codex|claude|opencode|commandcode) ;;
@@ -117,7 +120,8 @@ _agent_runtime_run_tui_watched() {
     python_bin="$(command -v "$python_name" 2>/dev/null || true)"
     local run_id="${AGENT_RUN_ID:-}" cwd="${AGENT_WORKDIR:-$PWD}"
     if [[ "${AGENT_AUTO_RESUME:-1}" == 0 || "${AGENT_RESUME_ACTIVE:-0}" == 1 ||
-          -z "$recover_command_json" || ! -r "$watcher" || -z "$python_bin" ]]; then
+          ( -z "$recover_command_json" && -z "$idle_command_json" ) ||
+          ! -r "$watcher" || -z "$python_bin" ]]; then
         "$@"
         return $?
     fi
@@ -144,6 +148,7 @@ _agent_runtime_run_tui_watched() {
     esac
     local watch_log=""
     [[ -n "${AGENT_RUN_DIR:-}" ]] && watch_log="${AGENT_RUN_DIR}/tui-watch.log"
+    local watch_pid_file="${AGENT_RUN_DIR:+${AGENT_RUN_DIR}/.tui-watch.pid}"
     local bash_bin=""
     bash_bin="$(command -v bash 2>/dev/null || true)"
     [[ -n "$bash_bin" ]] || { "$@"; return $?; }
@@ -169,7 +174,15 @@ _agent_runtime_run_tui_watched() {
         recover_command_json=${18}
         attempt_marker=${19}
         event_file=${20}
-        shift 20
+        idle_command_json=${21}
+        idle_markers=${22}
+        idle_seconds=${23}
+        idle_min_turn=${24}
+        idle_timeout=${25}
+        idle_poll=${26}
+        idle_max=${27}
+        watch_pid_file=${28}
+        shift 28
         watch_args=(
             --agent "$agent"
             --run-id "$run_id"
@@ -186,12 +199,22 @@ _agent_runtime_run_tui_watched() {
             --recover-command-json "$recover_command_json"
             --attempt-marker "$attempt_marker"
             --event-file "$event_file"
+            --idle-nudge-command-json "$idle_command_json"
+            --idle-seconds "$idle_seconds"
+            --idle-min-turn-seconds "$idle_min_turn"
+            --idle-nudge-timeout "$idle_timeout"
+            --idle-poll "$idle_poll"
+            --idle-max-nudges "$idle_max"
         )
         [[ -z "$created_at" ]] || watch_args+=(--created-at "$created_at")
         [[ -z "$state_db" ]] || watch_args+=(--state-db "$state_db")
         [[ -z "$data_dir" ]] || watch_args+=(--data-dir "$data_dir")
         [[ -z "$stop_file" ]] || watch_args+=(--stop-file "$stop_file")
+        [[ -z "$idle_markers" ]] || watch_args+=(--idle-nudge-markers "$idle_markers")
         "$python_bin" "$watcher" "${watch_args[@]}" </dev/null >>"${watch_log:-/dev/null}" 2>&1 &
+        if [[ -n "$watch_pid_file" ]]; then
+            printf "%s\n" "$!" > "$watch_pid_file"
+        fi
         exec "$@"
     ' _ \
         "$python_bin" "$watcher" "$agent" "$run_id" "$cwd" "${AGENT_CREATED_AT:-}" \
@@ -200,7 +223,11 @@ _agent_runtime_run_tui_watched() {
         "${AGENT_TUI_WATCH_MAX_RUNTIME:-0}" "${AGENT_TUI_WATCH_HEARTBEAT:-60}" \
         "${AGENT_TUI_WATCH_STATE_TIMEOUT:-5}" "${AGENT_TUI_WATCH_RECOVER_TIMEOUT:-1800}" \
         "${AGENT_TUI_WATCH_SCAN_BYTES:-2097152}" "$watch_log" "$recover_command_json" \
-        "${AGENT_RUN_DIR:+${AGENT_RUN_DIR}/.auto-resume-attempted}" "${AGENT_EVENT_FILE:-}" "$@"
+        "${AGENT_RUN_DIR:+${AGENT_RUN_DIR}/.auto-resume-attempted}" "${AGENT_EVENT_FILE:-}" \
+        "$idle_command_json" "${AGENT_RUN_DIR:-}" \
+        "${AGENT_IDLE_NUDGE_SECONDS:-300}" "${AGENT_IDLE_NUDGE_MIN_TURN_SECONDS:-30}" \
+        "${AGENT_IDLE_NUDGE_TIMEOUT:-1800}" "${AGENT_IDLE_NUDGE_POLL:-15}" \
+        "${AGENT_IDLE_NUDGE_MAX:-0}" "$watch_pid_file" "$@"
 }
 
 _agent_runtime_abs_path() {
@@ -835,6 +862,7 @@ _agent_runtime_start_or_resume() {
             AGENT_STOP_FILE="$(_agent_runtime_abs_path "$stop_file")"
         fi
         AGENT_UPDATED_AT=$(_agent_runtime_now)
+        _agent_runtime_export_context
         _agent_runtime_emit_event session-resume ok "恢复第 ${AGENT_RESUME_COUNT} 次"
         _agent_runtime_mark running "resume"
         return 0
@@ -876,8 +904,21 @@ _agent_runtime_start_or_resume() {
     _agent_runtime_acquire_lock || return $?
     _agent_runtime_write_manifest || return 73
     _agent_runtime_write_state || return 73
+    _agent_runtime_export_context
     _agent_runtime_emit_event session-created ok "run 已创建"
     _agent_runtime_mark running "start"
+}
+
+# Export run identity for child tools (auto skill nudge hook, hooks, dispatch).
+_agent_runtime_export_context() {
+    export AGENT_RUN_ID AGENT_RUN_DIR AGENT_MANIFEST_FILE AGENT_DATA_ROOT
+    export AGENT_STATE_FILE AGENT_EVENT_FILE AGENT_CONTEXT_FILE AGENT_STOP_FILE
+    if [[ -z "${AGENT_CONFIGURE_ROOT:-}" ]]; then
+        AGENT_CONFIGURE_ROOT="$(_agent_runtime_configure_root)"
+        export AGENT_CONFIGURE_ROOT
+    fi
+    [[ -n "${AGENT_WORKDIR:-}" ]] && export AGENT_WORKDIR
+    return 0
 }
 
 _agent_runtime_append_prompt_contract() {

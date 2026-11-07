@@ -105,6 +105,19 @@ shasum -a 256 lib/_claude-code/claude-code/<version>/claude
 
 不要只根据文件大小判断完整性。`download_all.sh` 会把零字节或失败下载删除，但仍应使用上游 manifest 中的 SHA-256 校验。
 
+## 版本快照参考
+
+`lib/claude-code-v20260706/` 是脚本维护源，`lib/_claude-code/` 是稳定副本；修改脚本时两处同步并各自做 `bash -n`。
+
+离线下载的两个可复用结论：
+
+1. Claude Code 官方二进制从 GCS 下载时，当前环境可能遇到 TLS 握手失败（`unexpected eof while reading`）；历史脚本使用 HTTP 源并在安装前用 `manifest.json` 的 SHA-256 校验。不要把“下载成功”当作“文件完整”。
+2. cc-switch CLI/GUI 来自 GitHub Releases，资产格式随平台变化；下载后先 `find` 确认文件，再按 AppImage/deb/rpm 分别安装，不要跨发行版强行套用。
+
+安装器默认安装固定版本 `2.1.210`，`--new` 才取官方最新版；离线包缺失时才联网。卸载脚本默认保留 `~/.claude.json` 与 `~/.claude/`（含登录凭据和会话），`--purge` 才会删除，执行前必须单独确认。
+
+版本化目录中的 [`setup.md`](../claude-code-v20260706/setup.md) 保留当时的包清单、下载源和版本覆盖；稳定入口只维护当前脚本行为和通用安装/卸载边界。
+
 ## cc-switch
 
 `download_all.sh --cc-switch-cli` 下载 CLI tar 包和上游 `install.sh`。按对应版本目录中的上游说明安装：

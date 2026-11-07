@@ -35,18 +35,18 @@
 | `_command-code/` | Command Code 安装、用户级配置、Provider API 与原生 statusline（Node.js 见 `_node-js/`） |
 | `_commands/` | `bin/` 用户命令总索引及跨主题风险说明 |
 | `_deepseek/` | DeepSeek 的 Claude Code、Codex 与桌面端配置 |
-| `_docker/` | Docker Desktop、镜像、容器、Compose、GPU 和容器数据生命周期 |
-| `_env/` | 环境入口、机器版本快照、本机覆盖和自动恢复边界 |
+| `_docker/` | Docker Desktop、镜像、容器、Compose、GPU、容器数据生命周期与镜像快照参考 |
+| `_env/` | 环境入口、机器版本快照索引、本机覆盖和自动恢复边界 |
 | `_font/` | Linux/Windows 字体安装、授权和刷新 |
 | `_git/` | Git 身份、别名、忽略模板和辅助命令风险 |
 | `_linux/` | Linux 包、Swap、调频、电源和系统入口 |
-| `_mac/` | macOS 更新、Gatekeeper、Keychain 与维护脚本 |
+| `_mac/` | macOS 更新、Gatekeeper、Keychain、环境快照与维护脚本 |
 | `_node-js/` | Node.js 22+ 安装、版本检查与 Windows 用户级安装 |
 | `_open-code/` | OpenCode 安装、V1/V2 配置分流与插件 |
 | `_package/` | APT/Python 清单和随库可执行资源 |
 | `_shell/` | Bash/Zsh/oh-my-zsh 部署、启动链和本机覆盖 |
-| `_slurm/` | Slurm 用户命令与 DCU 作业模板 |
-| `_snsc/` | SNSC 集群 VS Code Server sysroot 兼容 |
+| `_slurm/` | Slurm 用户命令、集群快照与 DCU/GPU/DSUB 作业模板 |
+| `_snsc/` | SNSC 集群环境快照与 VS Code Server sysroot 兼容 |
 | `_ssh/` | SSH 密钥、agent、主机别名与快捷入口 |
 | `_vim/` | Vim 部署、gitlink 插件状态、验证和回滚 |
 | `_vscode/` | VS Code Remote Server 清理与兼容入口 |

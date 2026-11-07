@@ -30,6 +30,21 @@
   固定端口的 `run -s --attach`。恢复成功后继续监控，新失败按状态指纹再次恢复；默认宽限 10 秒，
   `AGENT_TUI_WATCH_MAX_RUNTIME=0` 表示跟随 TUI 生命周期而非固定小时数。恢复中的 run 与
   `AGENT_AUTO_RESUME=0` 自动停用；配套 `agent-tui-watch.test.py`。
+- `agent-tui-watch.py` 的空闲自续跑：当 `--idle-nudge-command-json` 与 `--idle-nudge-markers`
+  同时给出、回合已完成且 `.idle-nudge-enabled` 存在时，以“最新真实用户输入或上次注入时间”
+  为活动基准；超过 `--idle-seconds`（默认 300）无活动就以用户身份执行注入命令
+  （`{message}` 替换为汇报阶段进度并继续下一轮的指令）。`--idle-min-turn-seconds`
+  （默认 30）避免回合刚结束即注入，`--idle-max-nudges` 可设注入上限（0 不限），
+  `.goal-complete` 与停止文件立即终止注入；失败恢复优先于注入，二者互斥。
+  注入次数与最后触发时间记录在 `.idle-nudge-attempted`，动作写入 tui-watch.log 与 events.jsonl。
+  配套 `agent-tui-watch-idle.test.py`。
+- `agent-idle-nudge.sh` 是 auto 技能的空闲注入标记入口：`enable --goal TEXT` 写入
+  `.idle-nudge-enabled` 并清除旧完成标记，`complete` 写入 `.goal-complete` 并撤销启用，
+  `disable` 撤销启用，`status` 只读报告；运行上下文取 `--manifest/--run-dir/--run-id`
+  或 `AGENT_MANIFEST_FILE/AGENT_RUN_DIR/AGENT_RUN_ID`，只写运行目录、不启动 agent。
+  `enable` 会检查 `.tui-watch.pid`，无存活看门狗时输出 `watch=inactive` 供调用方如实报告。
+- `agent-tui-watch-idle-runtime.test.sh` 校验 `bin/agent-runtime.sh` 把空闲注入命令、
+  阈值与轮询参数转发给 watcher，并写入 `.tui-watch.pid`。
 - `agent-codex-resume.py` 是 Codex 运行中 thread 的原生恢复客户端：只用 Python 标准库完成 Unix
   WebSocket 握手与 JSON-RPC，显式执行 thread resume、队列追加和队列启动，并校验返回的 turn id；
   不读取消息正文之外的会话内容，不修改 Codex 配置。配套 `agent-codex-resume.test.py`。

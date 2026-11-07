@@ -21,6 +21,7 @@ usage() {
   after-edit          校验当前工作树改动
   stop                停止前执行当前工作树验证
   agent-resume        检测意外中断并在 10 秒后调度原任务持续恢复
+  agent-nudge         启用/停用空闲 5 分钟后的自动续跑注入（auto 技能）
   plugin-audit        静态审计 Codex plugin/hook/MCP manifest，不执行插件代码
   notify              发送非阻塞完成通知
 
@@ -31,7 +32,7 @@ usage() {
   --list              列出规范事件、默认超时和阻塞语义
 
 事件别名：start、preflight、pre-edit、before-tool、post-edit、after-tool、
-turn-end、post-turn、notification、resume。
+turn-end、post-turn、notification、resume、nudge。
 也可通过 AGENT_HOOK_EVENT 环境变量提供事件名。
 USAGE
 }
@@ -43,6 +44,7 @@ event_timeout() {
         before-edit) printf '10\n' ;;
         after-edit|post-edit|after-tool|turn-end|post-turn|turn-complete|stop) printf '120\n' ;;
         agent-resume) printf '15\n' ;;
+        agent-nudge) printf '15\n' ;;
         plugin-audit) printf '90\n' ;;
         notify) printf '10\n' ;;
         *) printf '30\n' ;;
@@ -57,6 +59,7 @@ before-edit     10s   blocking    路径边界保护
 after-edit      120s  blocking    工作树、Shell 与日志验证
 stop            120s  blocking    停止前验证
 agent-resume    15s   detached    预检后异步调度恢复
+agent-nudge     15s   blocking    启停空闲注入标记（不启动 agent）
 plugin-audit    90s   blocking    plugin/hook/MCP manifest 静态审计
 notify          10s   best-effort 本地通知
 LIST
@@ -117,6 +120,10 @@ case "$event" in
     agent-resume|resume-agent|resume)
         target="$hook_dir/agent-resume.sh"
         canonical_event=agent-resume
+        ;;
+    agent-nudge|nudge|idle-nudge)
+        target="$hook_dir/agent-nudge.sh"
+        canonical_event=agent-nudge
         ;;
     plugin-audit|audit-plugin|audit-plugins)
         target="$hook_dir/../tools/plugin-audit.py"

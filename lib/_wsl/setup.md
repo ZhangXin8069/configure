@@ -420,7 +420,7 @@ sudo setcap 'cap_net_raw,cap_bpf,cap_perfmon+eip' "$b" &&
 echo '重新登录后 netwatch 才能启动'
 ```
 
-  组变更只对新登录会话生效；完成上述命令后退出并重新进入 WSL。`../wsl-v20261107/env.sh` 保留 `@NETWATCH@` 权限命令的注释块，并定义了 `alias iftop='sudo ~/miniforge3/bin/netwatch'`；别名在文件加载后即生效，但 `netwatch` 仍需 setcap 权限和重新登录才能运行。
+  组变更只对新登录会话生效；完成上述命令后退出并重新进入 WSL。`../wsl-v20261107/env.sh` 保留 `@NETWATCH@` 权限命令的注释块，并定义了 `alias iftop="sudo ${HOME}/miniforge3/bin/netwatch"`；别名在文件加载后即生效，但 `netwatch` 仍需 setcap 权限和重新登录才能运行。
 - 让 zsh 自动加载 conda：
 
 ```bash
@@ -431,11 +431,11 @@ exec zsh -l
 - 版本快照在 conda base 激活后导出以下变量；`CONDA_PREFIX` 为空时这些路径会退化为 `/targets/...`，执行前先确认已激活 base：
 
 ```bash
-export CUDA_PATH=$CONDA_PREFIX/targets/x86_64-linux
-export CPLUS_INCLUDE_PATH=$CUDA_PATH/include:$CPLUS_INCLUDE_PATH
-export PATH=$CONDA_PREFIX/nvvm/bin:$PATH
+export CUDA_PATH="${CONDA_PREFIX}/targets/x86_64-linux"
+export CPLUS_INCLUDE_PATH="${CUDA_PATH}/include":${CPLUS_INCLUDE_PATH}
+export PATH="${CONDA_PREFIX}/nvvm/bin":${PATH}
 export HDF5_MPI="ON"
-export HDF5_DIR=$CONDA_PREFIX
+export HDF5_DIR="${CONDA_PREFIX}"
 ```
 
 验证：
@@ -618,6 +618,16 @@ ss -tlnp | grep ':22'
 | Docker Desktop 与容器 | [`../_docker/setup.md`](../_docker/setup.md) |
 | ZeroTier 虚拟网络 | [`../_zerotier/setup.md`](../_zerotier/setup.md) |
 | Windows 批处理与 PowerShell | [`../_windows/setup.md`](../_windows/setup.md) |
+
+## 版本快照参考
+
+| 目录 | 时间 | 关键内容 |
+|---|---|---|
+| [`../wsl-v20261107/`](../wsl-v20261107/) | 2026-11-07 | Ubuntu 26.04、发行版 `env_zhangxin`、`F:\WSL`、Miniforge/conda CUDA 12.4、QUDA `sm_80`、StarVPN 与 OpenSSH |
+
+已从该快照提炼到本文的通用部分：发行版安装/迁移命令、三层环境加载与 `~/env.sh` 符号链接、netwatch setcap、conda 镜像与工具链、源码编译依赖、QUDA/PyQUDA 构建参数、`/mnt/f` 数据盘入口、StarVPN 与 sshd 的 systemd 前提。机器专属路径、版本号和一次性命令保留在快照的 [`setup.md`](../wsl-v20261107/setup.md) 与 [`env.sh`](../wsl-v20261107/env.sh) 中。
+
+新增 WSL 机器时按 `wsl-vYYYYMMDD` 新建目录，不直接修改旧快照；本文只接收可跨机器复用的模式和边界。
 
 ## 常见故障
 
