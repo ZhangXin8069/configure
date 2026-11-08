@@ -401,13 +401,22 @@ conda clean -i
 
 ```bash
 mamba update -n base -c conda-forge conda
-mamba install conda-self zsh gfortran gxx make cmake htop btop nvtop netwatch tree nodejs texlive-core \
+mamba install conda-self zsh gfortran gxx make cmake htop btop nvtop netwatch tree nodejs \
   "cuda-version=12.4.0" "cuda-nvcc" "cuda-libraries-dev" "cuda-nvml-dev" \
   "cuda-nvvp" "cuda-gdb" "python=3.12.4" "hdf5=2.2.0=mpi_openmpi*" cupy
 ```
 
+TeX 不通过 conda 安装，改用系统包：
+
+```bash
+sudo apt install texlive-xetex
+```
+
 - `cuda-version=12.4.0` 约束 CUDA 运行时与编译器版本；`cuda-nvcc` 提供 `nvcc`，CUDA 头文件位于 `$CONDA_PREFIX/targets/x86_64-linux/include`。
 - `hdf5=2.2.0=mpi_openmpi*` 固定 MPI 变体；mpi4py、h5py、QUDA 必须使用同一 MPI，不能混用系统 OpenMPI 与 conda OpenMPI。
+- conda-forge 的 `texlive-core` 非常鸡肋：只提供极简 TeX 二进制和少量宏包，缺 XeLaTeX 常用组件，
+  还容易与系统 TeX Live 混用产生 `PATH` 与版本冲突，因此不放入 mamba 列表；XeLaTeX 统一用
+  `sudo apt install texlive-xetex`。
 - `netwatch` 需要抓包权限。安装后执行：
 
 ```bash

@@ -1393,3 +1393,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## docs - final - 2026-11-08 08:42:56 +0800
+- 主任务: 将文档中 conda 安装 texlive-core 的表述替换为 sudo apt install texlive-xetex 并注明其鸡肋
+- 日志文件: logs/v2026110808.txt
+- 文件大小: 3335 bytes
+- 触发原因: 任务完成
+- 关键内容: WSL 稳定入口与版本快照：移除 texlive-core，改用 apt 安装 texlive-xetex
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

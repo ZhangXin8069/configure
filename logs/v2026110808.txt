@@ -1,0 +1,62 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-08 08:42:56 +0800
+批次: docs
+主任务: 将文档中 conda 安装 texlive-core 的表述替换为 sudo apt install texlive-xetex 并注明其鸡肋
+触发原因: 任务完成
+摘要: WSL 稳定入口与版本快照：移除 texlive-core，改用 apt 安装 texlive-xetex
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 定位 texlive-core 安装表述
+- 目标: 将“使用 mamba/conda 安装 texlive-core”的表述替换为“sudo apt install texlive-xetex”，并注明 texlive-core 非常鸡肋
+- 命令/操作: `grep -rn 'texlive-core' .`
+- 关键输出: 命中 2 处——`_wsl/setup.md:404`、`wsl-v20261107/setup.md:128`，均为 `mamba install` 包列表中的一项
+- 退出码: 0
+- 证据与判断: 仅这两份 WSL 文档包含该安装语句，稳定入口与版本快照需要同步修改
+
+### S2 — 修改文档
+- 目标: 从 conda 工具链列表移除 `texlive-core`，改为系统包安装
+- 命令/操作: 编辑 `_wsl/setup.md`、`wsl-v20261107/setup.md`：删除列表中的 `texlive-core`，新增 `sudo apt install texlive-xetex` 代码块，并在说明列表补充“鸡肋”理由
+- 关键输出: 2 个文件各 +10/-1
+- 退出码: 0
+- 证据与判断: mamba 列表不再包含 texlive-core，XeLaTeX 改由 apt 提供
+
+## 验证与证据
+
+- 测试/检查: `grep -n 'texlive-core|texlive-xetex'`；`git diff --check`；`git diff --stat`；代码围栏计数
+- 结果: 无残留的 conda 安装表述；4 处 `texlive-xetex` 引用均为 apt 安装或说明；`git diff --check` 无输出（通过）；改动仅 2 个文件（20 insertions, 2 deletions）；两份文档围栏数分别为 88/36，均为偶数
+- 未验证项: 未在目标机器实际执行 `sudo apt install texlive-xetex`（本次为文档修改，不含系统变更）
+
+## 变更与产物
+
+- 文件: `lib/_wsl/setup.md`、`lib/wsl-v20261107/setup.md`
+- 产物: 文档更新（稳定入口与版本快照同步）
+- 未改动范围: 其他 `env.sh`、日志文件与无关文档
+
+## 风险、限制与下一步
+
+- 风险: 目标机器需可用的 apt 源；若已装系统 TeX Live，重复安装 `texlive-xetex` 无副作用
+- 阻塞: 无
+- 下一步: 无，等待用户决定是否提交
+
+## 用户输入指令
+
+将使用mamba或conda安装"texlive-core"的表述替换为"sudo apt install texlive-xetex",并注明前者("texlive-core")非常鸡肋
+
+## Agent 全文报告
+
+--- report begin ---
+已完成替换，改动在 `_wsl/setup.md` 与 `wsl-v20261107/setup.md` 两份文档：
+
+- 从 `mamba install` 包列表移除 `texlive-core`。
+- 新增独立代码块 `sudo apt install texlive-xetex`，作为 XeLaTeX 的系统级安装方式。
+- 说明列表补充：conda-forge 的 `texlive-core` 非常鸡肋，只提供极简 TeX 二进制和少量宏包，缺 XeLaTeX 常用组件，且与系统 TeX Live 混用易产生 `PATH` 与版本冲突。
+
+推理依据：两份文档分别是 WSL 的稳定入口与 `wsl-v20261107` 版本快照，内容需保持一致；原有安装语句仅出现在这两处 mamba 列表中。
+
+验证结果：`grep` 确认无残留的 conda 安装表述，`git diff --check` 通过，改动仅涉及 2 个文件（+20/-2），代码围栏配对正常。未提交、未推送。
+
+后续步骤：无。
+--- report end ---
