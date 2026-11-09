@@ -238,6 +238,10 @@ def render_recovery_command(
         return None
     if not isinstance(command, list) or not command or not all(isinstance(item, str) for item in command):
         return None
+    if command[0] == "--":
+        command = command[1:]
+    if not command:
+        return None
     values = {
         "{run_id}": run_id,
         "{session_id}": state.get("session_id", ""),
@@ -727,6 +731,28 @@ def main(argv: list[str] | None = None) -> int:
                                         status="ok",
                                         nudges=nudge_count,
                                     )
+                                    try:
+                                        record_dir = Path(args.idle_nudge_markers or ".")
+                                        (record_dir / "idle-nudge-last.txt").write_text(
+                                            "time=" + time.strftime("%Y-%m-%dT%H:%M:%S%z") + "\n"
+                                            "command=" + json.dumps(command, ensure_ascii=False) + "\n"
+                                            "returncode=" + str(result.returncode) + "\n"
+                                            "stdout:\n" + (result.stdout or "")[-4000:] + "\n"
+                                            "stderr:\n" + (result.stderr or "")[-4000:] + "\n",
+                                            encoding="utf-8",
+                                        )
+                                    except OSError:
+                                        pass
+                            # A nudge command can run for minutes. Restart the
+                            # idle clock at completion so it cannot immediately
+                            # trigger another nudge based on its own start time.
+                            last_nudge_at = time.time()
+                            write_attempt_state(
+                                idle_attempt_file,
+                                last_user,
+                                last_nudge_at,
+                                nudge_count,
+                            )
 
         if deadline is None:
             time.sleep(args.interval)

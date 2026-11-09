@@ -394,7 +394,10 @@ def jsonl_last_user_input(path: Path, max_bytes: int, agent: str) -> float | Non
             meta = message.get("meta") if isinstance(message.get("meta"), dict) else {}
             if meta.get("injected") or meta.get("source") == "injected":
                 continue
-            if not content_text(message.get("content")).strip():
+            text = content_text(message.get("content")).strip()
+            if not text:
+                continue
+            if text.startswith("【自动续跑】"):
                 continue
             candidate = epoch_of(event.get("timestamp"))
             if candidate is None:
@@ -900,8 +903,18 @@ def commandcode_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool
         if role != "assistant":
             return False, False, False, False, "unknown"
         meta = message.get("meta") if isinstance(message.get("meta"), dict) else {}
-        text = content_text(message.get("content"))
+        content = message.get("content")
+        blocks = content if isinstance(content, list) else []
+        has_tool_use = any(
+            isinstance(item, dict) and item.get("type") == "tool_use"
+            for item in blocks
+        )
+        text = content_text(content)
         error = meta.get("error") if meta else None
+        if has_tool_use and not error:
+            return False, False, False, False, "in_progress"
+        if not error and not text.strip():
+            return False, False, False, False, "in_progress"
         failure_text = error if error else text
         transient = error_is_transient(failure_text)
         overflow = error_is_context_overflow(failure_text)

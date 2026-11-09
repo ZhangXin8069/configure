@@ -105,6 +105,7 @@ class IdleNudgeTests(unittest.TestCase):
         idle_seconds: float,
         max_runtime: float = 2.0,
         stop_file: Path | None = None,
+        prefix: list[str] | None = None,
     ):
         command = [
             sys.executable,
@@ -129,7 +130,7 @@ class IdleNudgeTests(unittest.TestCase):
             str(run_dir / "tui-watch.log"),
             "--idle-nudge-command-json",
             json.dumps(
-                [sys.executable, str(nudge), str(record), "{message}"],
+                (prefix or []) + [sys.executable, str(nudge), str(record), "{message}"],
                 separators=(",", ":"),
             ),
             "--idle-nudge-markers",
@@ -180,6 +181,36 @@ class IdleNudgeTests(unittest.TestCase):
                 events = (run_dir / "events.jsonl").read_text(encoding="utf-8")
                 self.assertIn("tui-idle-nudge-start", events)
                 self.assertIn("tui-idle-nudge-end", events)
+                last = (run_dir / "idle-nudge-last.txt").read_text(encoding="utf-8")
+                self.assertIn("returncode=0", last)
+                self.assertIn("自动续跑", last)
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_leading_separator_is_stripped(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, run_dir = self._fixture(root, user_age_seconds=600)
+            self._enable(run_dir)
+            nudge, record = self._nudge_script(root)
+            child = self._child()
+            try:
+                result = self._run(
+                    codex_home,
+                    cwd,
+                    run_dir,
+                    child,
+                    nudge=nudge,
+                    record=record,
+                    idle_seconds=60,
+                    prefix=["--"],
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                self.assertIsNone(child.poll())
+                self.assertTrue(record.exists())
+                log_text = (run_dir / "tui-watch.log").read_text(encoding="utf-8")
+                self.assertIn("action=idle-nudge-ok", log_text)
             finally:
                 child.terminate()
                 child.wait(timeout=2)

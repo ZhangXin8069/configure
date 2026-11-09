@@ -1456,7 +1456,7 @@ run_commandcode() {
                 "${_CC_TRUST_ARGS[@]}" --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" \
                 "${_CC_PERMISSION_ARGS[@]}" "${_CC_PRINT_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}")
             [[ -n "${GOAL_OBJECTIVE}" ]] && _CC_RECOVERY_ARGS+=(--max-turns "$MAX_TURNS_RAW")
-            _cc_recovery_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
+            _cc_recovery_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' \
                 "$_COMMAND_CODE_BIN" -p "$_cc_recovery_prompt" "${_CC_RECOVERY_ARGS[@]}")"
         fi
         local _cc_idle_json='[]'
@@ -1464,7 +1464,7 @@ run_commandcode() {
             local -a _CC_IDLE_ARGS=(--session "{session_id}" --output-format json "${_CC_SKIP_ARGS[@]}" \
                 "${_CC_TRUST_ARGS[@]}" --no-auto-update --model "$MODEL_ID" --effort "$EFFORT" \
                 "${_CC_PERMISSION_ARGS[@]}" "${_CC_PRINT_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}")
-            _cc_idle_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- \
+            _cc_idle_json="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' \
                 "$_COMMAND_CODE_BIN" -p "{message}" "${_CC_IDLE_ARGS[@]}")"
         fi
         _agent_runtime_turn_begin
@@ -1975,7 +1975,7 @@ run_claude() {
         )
         local _CLAUDE_RECOVERY_JSON='[]'
         command -v python3 >/dev/null 2>&1 &&
-            _CLAUDE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CLAUDE_TUI_RECOVERY[@]}")"
+            _CLAUDE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_CLAUDE_TUI_RECOVERY[@]}")"
         unset _CLAUDE_TUI_RECOVERY
         local -a _CLAUDE_TUI_IDLE=(
             "${_CLAUDE_BIN}"
@@ -1988,7 +1988,7 @@ run_claude() {
         )
         local _CLAUDE_IDLE_JSON='[]'
         command -v python3 >/dev/null 2>&1 &&
-            _CLAUDE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CLAUDE_TUI_IDLE[@]}")"
+            _CLAUDE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_CLAUDE_TUI_IDLE[@]}")"
         unset _CLAUDE_TUI_IDLE
         _agent_runtime_turn_begin
         AGENT_TUI_IDLE_COMMAND_JSON="$_CLAUDE_IDLE_JSON" \
@@ -2608,10 +2608,10 @@ PYEOF
         _OPENCODE_TUI_IDLE+=("{message}")
         local _OPENCODE_RECOVERY_JSON='[]'
         command -v python3 >/dev/null 2>&1 &&
-            _OPENCODE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_OPENCODE_TUI_RECOVERY[@]}")"
+            _OPENCODE_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_OPENCODE_TUI_RECOVERY[@]}")"
         local _OPENCODE_IDLE_JSON='[]'
         command -v python3 >/dev/null 2>&1 &&
-            _OPENCODE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_OPENCODE_TUI_IDLE[@]}")"
+            _OPENCODE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_OPENCODE_TUI_IDLE[@]}")"
         unset _OPENCODE_TUI_RECOVERY _OPENCODE_TUI_IDLE
         _agent_runtime_turn_begin
         AGENT_TUI_IDLE_COMMAND_JSON="$_OPENCODE_IDLE_JSON" \
@@ -3450,7 +3450,7 @@ PY
         fi
         local _CODEX_RECOVERY_JSON='[]'
         if (( ${#_CODEX_TUI_RECOVERY[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then
-            _CODEX_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CODEX_TUI_RECOVERY[@]}")"
+            _CODEX_RECOVERY_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_CODEX_TUI_RECOVERY[@]}")"
         fi
         # 空闲注入复用同一 app-server 队列；无 app-server 时不注入（无法排队）。
         local -a _CODEX_TUI_IDLE=()
@@ -3464,7 +3464,7 @@ PY
         fi
         local _CODEX_IDLE_JSON='[]'
         if (( ${#_CODEX_TUI_IDLE[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then
-            _CODEX_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' -- "${_CODEX_TUI_IDLE[@]}")"
+            _CODEX_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_CODEX_TUI_IDLE[@]}")"
         fi
         unset _CODEX_TUI_RECOVERY _CODEX_TUI_IDLE
         _agent_runtime_turn_begin
