@@ -1402,3 +1402,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## tag-dev59 - final - 2026-11-09 14:31:17 +0800
+- 主任务: ~tag 打标签（dev59）
+- 日志文件: logs/v2026110914.txt
+- 文件大小: 5420 bytes
+- 触发原因: 任务完成
+- 关键内容: dev59: 修复前导 --、Command Code 完成判定与空闲注入计时，回归测试通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

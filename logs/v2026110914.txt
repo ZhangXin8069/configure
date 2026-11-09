@@ -1,0 +1,74 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-09 14:31:17 +0800
+批次: tag-dev59
+主任务: ~tag 打标签（dev59）
+触发原因: 任务完成
+摘要: dev59: 修复前导 --、Command Code 完成判定与空闲注入计时，回归测试通过
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 技能与仓库状态调查
+- 目标: 按 tag 技能默认流程执行 ~diff → 历史自检 → ~init → 原版打标。
+- 命令/操作: 读取 skills/{tag,log,diff,init}/SKILL.md；git status --short --branch；git tag -l --sort=-creatordate；git remote -v。
+- 关键输出: 分支 main 与 origin/main 同步；工作区干净；最新标签 dev58（2026-11-08T08:46:58+08:00）；远程 origin 为 gitlab.itp.ac.cn。
+- 退出码: 0
+- 证据与判断: 基线应为 dev58，类型无明确信号按技能默认推断为 dev。
+
+### S2 — ~diff 与历史链自检
+- 目标: 构建 dev58..HEAD 的诚实变更清单，并核对全部历史标签链。
+- 命令/操作: bash skills/tag/tag-baseline.sh --latest；git log dev58..HEAD --oneline --no-merges；git diff dev58..HEAD --stat/--numstat/--check；git diff dev58..HEAD；bash skills/tag/tag-chain.sh --check。
+- 关键输出: BASELINE=dev58；1 个提交 a984ad3；5 个文件 +139/-11；diff --check 无输出；tag-chain PASS，受管标签 158 个。
+- 退出码: 0
+- 证据与判断: 改动集中在 bin/agent.sh（移除 python3 JSON 生成的多余 --）、tools/agent-session-state.py（tool_use/空文本判为 in_progress，跳过【自动续跑】注入消息）、tools/agent-tui-watch.py（剥离前导 --、写 idle-nudge-last.txt、注入完成后重置计时）及两组测试。
+
+### S3 — ~init 只读调查
+- 目标: 同步 AGENTS.md 并归档散落 agent 初始化文件。
+- 命令/操作: find 扫描 CLAUDE.md/CODEX.md/GEMINI.md/.cursorrules/.claude/.codex 等；扫描 skills/ 之外的 SKILL.md；核对 tools/AGENTS.md 与 bin/AGENTS.md 的空闲注入描述。
+- 关键输出: 仅 lib/_deepseek/.codex（安装模板，按仓库本地例外不归档）；无散落 SKILL.md；无 .opencode 镜像；AGENTS.md 描述与实现一致。
+- 退出码: 0
+- 证据与判断: init 无变更，不产生文档改写。
+
+### S4 — 打标前验证
+- 目标: 对本次改动执行语法与回归检查。
+- 命令/操作: bash -n bin/agent.sh；python3 tools/agent-session-state.test.py；python3 tools/agent-tui-watch-idle.test.py。
+- 关键输出: bash -n OK；会话状态 16 项测试 OK；空闲注入 8 项测试 OK（dash 不支持 PIPESTATUS 的报错仅来自统计行）。
+- 退出码: 测试本体 0
+- 证据与判断: 改动相关验证全部通过，可打标。
+
+### S5 — 创建 dev59
+- 目标: 创建注释标签并验证对象与目标提交。
+- 命令/操作: git tag -a dev59 -m '<follow dev58 消息>'；git tag -l dev59；git cat-file -t dev59；git tag -l --format；git rev-parse dev59^{} HEAD。
+- 关键输出: dev59 存在；对象类型 tag；peeled commit a984ad3e3012106deda580a904f7cf2f39238474 与 HEAD 一致。
+- 退出码: 0
+- 证据与判断: 注释标签创建成功，指向 HEAD，且未与已有标签冲突。
+
+## 验证与证据
+- 测试/检查: tag-chain.sh --check、bash -n、agent-session-state.test.py、agent-tui-watch-idle.test.py、git diff --check。
+- 结果: 全部通过；历史链 PASS（158 个受管标签）；16+8 项测试 OK；dev59 cat-file 类型为 tag 且 peeled=HEAD。
+- 未验证项: 远程标签同步与远端对象核验未执行（用户未明确要求同步远程）。
+
+## 变更与产物
+- 文件: logs/ 新增 final 日志；logs/AGENTS.md 追加批次索引（由 write-log.sh 完成）。
+- 产物: 本地注释标签 dev59。
+- 未改动范围: 源码、配置与既有标签均未修改；未暂存、未提交、未推送。
+
+## 风险、限制与下一步
+- 风险: 无已知风险；标签仅存在本地。
+- 阻塞: 无。
+- 下一步: 如需远程可见，明确要求同步后执行 git push origin dev59，并推送当前分支（分支已与远程同步）。
+
+## 用户输入指令
+~tag
+
+## Agent 全文报告
+--- report begin ---
+✓ tag dev59 已创建（本地）
+- 类型/编号: dev（无明确类型信号，按技能默认推断），dev58 → dev59
+- 基线: dev58；基线到 HEAD 共 1 个提交、5 个文件、+139/-11
+- 标签消息: follow dev58, 1. 修复 agent 启动器生成恢复/空闲注入命令时多传前导 --，并在 TUI watcher 侧兼容剥离; 2. 修复 Command Code 会话把工具调用中或空文本 assistant 消息误判为完成，自动续跑注入消息不再计为真实用户输入; 3. 空闲注入完成后写入 idle-nudge-last.txt 并重置计时，避免连续注入; 4. 补充会话状态与空闲注入回归测试; [commandcode].
+- 验证: tag-chain 本地自检 PASS（158 个受管标签）；bash -n bin/agent.sh OK；agent-session-state.test.py 16 项 OK；agent-tui-watch-idle.test.py 8 项 OK；dev59 为注释标签且 peeled commit=a984ad3(HEAD)
+- ~diff: 基线以来改动集中在 bin/agent.sh、tools/agent-session-state.py、tools/agent-tui-watch.py 及两组测试
+- ~init: 无变更（无散落 CLAUDE.md/CODEX.md/.claude 等；lib/_deepseek/.codex 为安装模板不归档；无散落 SKILL.md；AGENTS.md 描述仍与实现一致）
+- Git: 仅创建本地标签，未推送（远程同步需明确授权）；打标前工作区干净
+--- report end ---
