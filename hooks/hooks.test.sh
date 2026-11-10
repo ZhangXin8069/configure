@@ -33,6 +33,16 @@ assert_not_contains() {
     esac
 }
 
+wait_process_gone() {
+    local pid=$1
+    local attempt
+    for attempt in $(seq 1 40); do
+        kill -0 "$pid" 2>/dev/null || return 0
+        sleep 0.05
+    done
+    return 1
+}
+
 if ! command -v jq >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
     fail 'JSON hook 测试需要 jq 或 python3 解析 JSON'
 fi
@@ -291,7 +301,7 @@ background_status=$?
 set -e
 (( background_status == 0 )) || fail "后台清理测试的 hook 应成功，实际 $background_status\n$background_output"
 background_pid=$(cat "$background_pid_file")
-if kill -0 "$background_pid" 2>/dev/null; then
+if ! wait_process_gone "$background_pid"; then
     kill -KILL -- "-$background_pid" 2>/dev/null || kill -KILL "$background_pid" 2>/dev/null || true
     fail "成功 hook 返回后后台子进程仍存活：$background_pid"
 fi
@@ -329,7 +339,7 @@ wait "$stubborn_wrapper_pid"
 stubborn_wrapper_status=$?
 set -e
 (( stubborn_wrapper_status == 143 )) || fail "连续 TERM 包装器应返回 143，实际 $stubborn_wrapper_status"
-if kill -0 "$stubborn_notify_pid" 2>/dev/null; then
+if ! wait_process_gone "$stubborn_notify_pid"; then
     kill -KILL -- "-$stubborn_notify_pid" 2>/dev/null || kill -KILL "$stubborn_notify_pid" 2>/dev/null || true
     fail "连续 TERM 中断清理后 notify-send 子进程仍存活：$stubborn_notify_pid"
 fi

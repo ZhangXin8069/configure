@@ -444,6 +444,145 @@ get_git_large_files() (
     fi
 )
 
+# ===== git_diff_tree: 树形查看最近四层 diff（每层配色 + 行数）=====
+# 用法: gdtree                 四层 = HEAD~3..HEAD~2 / HEAD~2..HEAD~1 / HEAD~1..HEAD / 本地..HEAD
+#       gdtree <git diff 参数>  带参数时退化为单层，参数原样传给 git diff（如 --cached、HEAD~5 HEAD）
+# 配色: 层1 青 / 层2 天蓝 / 层3 深蓝 / 层4 红；GIT_DIFF_TREE_COLOR=auto|always|never
+git_diff_tree() {
+    if ! git rev-parse --git-dir >/dev/null 2>&1; then
+        printf 'git_diff_tree: 当前目录不在 Git 仓库中\n' >&2
+        return 1
+    fi
+
+    local color_mode=${GIT_DIFF_TREE_COLOR:-auto}
+    local use_color=0
+    case "$color_mode" in
+        always) use_color=1 ;;
+        never)  use_color=0 ;;
+        auto)   [[ -t 1 ]] && use_color=1 ;;
+        *)
+            printf 'git_diff_tree: 未知颜色模式 %s（应为 auto/always/never）\n' "$color_mode" >&2
+            return 1
+            ;;
+    esac
+    [[ -z "${NO_COLOR:-}" || "$color_mode" == always ]] || use_color=0
+
+    local c1='' c2='' c3='' c4='' c_dim='' c_rst=''
+    if (( use_color )); then
+        local color_count=8
+        color_count=$(tput colors 2>/dev/null) || color_count=8
+        c1=$'\033[36m'
+        c3=$'\033[34m'
+        c4=$'\033[31m'
+        c_rst=$'\033[0m'
+        if [[ "$color_count" =~ ^[0-9]+$ ]] && (( color_count >= 256 )); then
+            c2=$'\033[38;5;117m'
+            c_dim=$'\033[38;5;240m'
+        else
+            c2=$'\033[96m'
+            c_dim=$'\033[90m'
+        fi
+    fi
+
+    local layer_count labels
+    if (( $# == 0 )); then
+        layer_count=4
+        labels='HEAD~3→HEAD~2|HEAD~2→HEAD~1|HEAD~1→HEAD|本地→HEAD'
+    else
+        layer_count=1
+        labels="diff $*"
+    fi
+
+    local awk_bin=awk
+    if command -v gawk >/dev/null 2>&1; then
+        awk_bin=gawk
+    fi
+
+    {
+        if (( layer_count == 4 )); then
+            if git rev-parse -q --verify 'HEAD~3^{commit}' >/dev/null 2>&1; then
+                git diff --numstat HEAD~3 HEAD~2 | awk -F'\t' -v layer=1 'BEGIN{OFS="\t"}{print layer,$1,$2,$3}'
+            else
+                printf 'git_diff_tree: 历史不足 4 个提交，较早层置空\n' >&2
+            fi
+            if git rev-parse -q --verify 'HEAD~2^{commit}' >/dev/null 2>&1; then
+                git diff --numstat HEAD~2 HEAD~1 | awk -F'\t' -v layer=2 'BEGIN{OFS="\t"}{print layer,$1,$2,$3}'
+            fi
+            if git rev-parse -q --verify 'HEAD~1^{commit}' >/dev/null 2>&1; then
+                git diff --numstat HEAD~1 HEAD | awk -F'\t' -v layer=3 'BEGIN{OFS="\t"}{print layer,$1,$2,$3}'
+            fi
+            if git rev-parse -q --verify 'HEAD^{commit}' >/dev/null 2>&1; then
+                git diff --numstat HEAD | awk -F'\t' -v layer=4 'BEGIN{OFS="\t"}{print layer,$1,$2,$3}'
+            fi
+        else
+            git diff --numstat "$@" | awk -F'\t' -v layer=1 'BEGIN{OFS="\t"}{print layer,$1,$2,$3}'
+        fi
+    } | "$awk_bin" -F'\t' -v NL="$layer_count" -v LBLS="$labels" \
+        -v C1="$c1" -v C2="$c2" -v C3="$c3" -v C4="$c4" -v DIM="$c_dim" -v RST="$c_rst" '
+    BEGIN{
+        split(LBLS,labs,"|"); split("青色|天蓝|深蓝|红色",cnm,"|")
+        col[1]=C1; col[2]=C2; col[3]=C3; col[4]=C4
+    }
+    {
+        L=$1+0; a=$2; d=$3; p=$4
+        if (a=="-") { a=0; d=0; bin[p]=1 }
+        if (p ~ /=>/) {
+            if (match(p,/\{[^}]*=>[^}]*\}/)) {
+                t=substr(p,RSTART+1,RLENGTH-2); n=split(t,kv,"=>")
+                gsub(/^ +| +$/,"",kv[1]); gsub(/^ +| +$/,"",kv[2])
+                p=substr(p,1,RSTART-1) kv[2]
+            } else { n=split(p,kv," => "); p=kv[n] }
+        }
+        a+=0; d+=0
+        k=p SUBSEP L; add[k]+=a; del[k]+=d; has[k]=1
+        n=split(p,pt,"/"); pref=""
+        for (i=1;i<n;i++) {
+            pref=(i==1)?pt[1]:pref "/" pt[i]
+            dk=pref SUBSEP L; dadd[dk]+=a; ddel[dk]+=d
+            node[pref]=1; isdir[pref]=1
+        }
+        node[p]=1; isf[p]=1
+    }
+    END{
+        m=0; for (k in node) ord[++m]=k
+        if (m==0) { printf "（最近 %d 层均无改动）\n", NL; exit }
+        for (i=2;i<=m;i++){ v=ord[i]; j=i-1; while (j>=1 && ord[j]>v){ ord[j+1]=ord[j]; j-- } ord[j+1]=v }
+        for (i=1;i<=m;i++){ p=ord[i]; n=split(p,pt,"/"); par=(n==1)?"":substr(p,1,length(p)-length(pt[n])-1); last[par]=p }
+        maxw=0
+        for (i=1;i<=m;i++){
+            p=ord[i]; n=split(p,pt,"/"); ind=""; anc=""
+            for (l=1;l<n;l++){ pa=anc; anc=(l==1)?pt[1]:anc "/" pt[l]; ind = ind ((last[pa]==anc)?"    ":"│   ") }
+            par=(n==1)?"":substr(p,1,length(p)-length(pt[n])-1)
+            lab[i]=ind ((last[par]==p)?"└── ":"├── ") pt[n]
+            if (length(lab[i])>maxw) maxw=length(lab[i])
+            for (L=1;L<=NL;L++){
+                k=p SUBSEP L; s=""
+                if (isf[p]) { if (k in has) s=(bin[p]?"bin":sprintf("+%d -%d",add[k],del[k])) }
+                else { dk=p SUBSEP L; if (dk in dadd) s=sprintf("+%d -%d",dadd[dk],ddel[dk]) }
+                if (s=="") s="·"
+                seg[i,L]=s
+                if (length(s)>cw[L]) cw[L]=length(s)
+            }
+        }
+        if (NL==1) { print "色标: " col[1] labs[1] RST }
+        else {
+            leg="色标:"
+            for (L=1;L<=NL;L++){ if (L>1) leg = leg " " DIM "|" RST; leg = leg " " col[L] cnm[L] " " labs[L] RST }
+            print leg
+        }
+        print ""
+        for (i=1;i<=m;i++){
+            line=sprintf("%-*s",maxw+2,lab[i])
+            for (L=1;L<=NL;L++){
+                s=seg[i,L]; cc=(s=="·")?DIM:col[L]
+                line = line cc s sprintf("%*s",cw[L]-length(s)+1,"") RST
+            }
+            print line
+        }
+    }'
+}
+alias gdtree='git_diff_tree'
+
 if [ "${_CONFIGURE_ENV_PROBE:-}" = "${_configure_env_self}" ]; then
     printf '%s\n' '@@CONFIGURE_ENV_ALIASES@@'
     if [ -n "${ZSH_VERSION:-}" ]; then

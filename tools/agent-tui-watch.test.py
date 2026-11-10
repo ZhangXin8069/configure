@@ -349,6 +349,9 @@ class TuiWatchTests(unittest.TestCase):
                 self.assertGreaterEqual(
                     len(recovered.read_text(encoding="utf-8").splitlines()), 2
                 )
+                self.assertLessEqual(
+                    len(recovered.read_text(encoding="utf-8").splitlines()), 6
+                )
             finally:
                 child.terminate()
                 child.wait(timeout=2)
@@ -387,6 +390,9 @@ class TuiWatchTests(unittest.TestCase):
                 self.assertIsNone(child.poll())
                 self.assertGreaterEqual(
                     len(recovered.read_text(encoding="utf-8").splitlines()), 2
+                )
+                self.assertLessEqual(
+                    len(recovered.read_text(encoding="utf-8").splitlines()), 6
                 )
             finally:
                 child.terminate()
@@ -441,13 +447,20 @@ class TuiWatchTests(unittest.TestCase):
                 separators=(",", ":"),
             )
             env = dict(os.environ)
-            env.pop("AGENT_AUTO_RESUME", None)
-            env.pop("AGENT_RESUME_ACTIVE", None)
+            for name in (
+                "AGENT_AUTO_RESUME",
+                "AGENT_RESUME_ACTIVE",
+                "AGENT_EVENT_FILE",
+                "AGENT_STOP_FILE",
+                "AGENT_MANIFEST_FILE",
+            ):
+                env.pop(name, None)
             env.update(
                 {
                     "AGENT_CONFIGURE_ROOT": str(Path(__file__).resolve().parents[1]),
                     "AGENT_RUN_ID": RUN_ID,
                     "AGENT_RUN_DIR": str(run_dir),
+                    "AGENT_EVENT_FILE": str(run_dir / "events.jsonl"),
                     "AGENT_WORKDIR": str(cwd),
                     "AGENT_CREATED_AT": CREATED_AT,
                     "AGENT_CODEX_STATE_DB": str(codex_home / "state_5.sqlite"),
@@ -485,6 +498,10 @@ class TuiWatchTests(unittest.TestCase):
                 "01a15df3-e05e-7e23-aae4-b7fefee75e45\n",
             )
             self.assertIn("action=resume-ok", log.read_text(encoding="utf-8"))
+            self.assertIn(
+                "tui-resume-start",
+                (run_dir / "events.jsonl").read_text(encoding="utf-8"),
+            )
 
     def test_runtime_helper_passes_stop_file_to_watcher(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -514,13 +531,20 @@ class TuiWatchTests(unittest.TestCase):
                 separators=(",", ":"),
             )
             env = dict(os.environ)
-            env.pop("AGENT_AUTO_RESUME", None)
-            env.pop("AGENT_RESUME_ACTIVE", None)
+            for name in (
+                "AGENT_AUTO_RESUME",
+                "AGENT_RESUME_ACTIVE",
+                "AGENT_EVENT_FILE",
+                "AGENT_STOP_FILE",
+                "AGENT_MANIFEST_FILE",
+            ):
+                env.pop(name, None)
             env.update(
                 {
                     "AGENT_CONFIGURE_ROOT": str(Path(__file__).resolve().parents[1]),
                     "AGENT_RUN_ID": RUN_ID,
                     "AGENT_RUN_DIR": str(run_dir),
+                    "AGENT_EVENT_FILE": str(run_dir / "events.jsonl"),
                     "AGENT_WORKDIR": str(cwd),
                     "AGENT_CREATED_AT": CREATED_AT,
                     "AGENT_CODEX_STATE_DB": str(codex_home / "state_5.sqlite"),

@@ -512,6 +512,61 @@ class SessionStateTests(unittest.TestCase):
             self.assertIn("failure_found=1", result.stdout)
             self.assertIn("turn_state=completed", result.stdout)
 
+    def test_commandcode_long_answer_with_error_words_is_not_failure(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            data_dir = root / "commandcode"
+            cwd = root / "workspace"
+            project = data_dir / "projects" / "root-workspace"
+            project.mkdir(parents=True)
+            cwd.mkdir()
+            session_id = "11111111-2222-4333-8444-555555555555"
+            long_text = (
+                "排查记录：上一轮因为 timed out 与 rate limit 相关提示被跳过；"
+                "本次已确认该判定路径需要更严格的证据。"
+            ) * 12
+            events = [
+                {
+                    "type": "session",
+                    "id": session_id,
+                    "cwd": str(cwd),
+                    "timestamp": "2026-10-21T03:10:23Z",
+                    "version": "1.88.2",
+                },
+                {
+                    "type": "message",
+                    "id": "user-1",
+                    "parentId": None,
+                    "timestamp": "2026-10-21T03:10:24Z",
+                    "message": {
+                        "role": "user",
+                        "content": [{"type": "text", "text": f"run_id={RUN_ID}"}],
+                        "meta": {"source": "user"},
+                    },
+                },
+                {
+                    "type": "message",
+                    "id": "assistant-1",
+                    "parentId": "user-1",
+                    "timestamp": "2026-10-21T03:10:25Z",
+                    "message": {
+                        "role": "assistant",
+                        "content": [{"type": "text", "text": long_text}],
+                        "meta": {"source": "model"},
+                    },
+                },
+            ]
+            (project / f"{session_id}.jsonl").write_text(
+                "".join(json.dumps(event) + "\n" for event in events), encoding="utf-8"
+            )
+
+            result = self._run_lookup("commandcode", cwd, data_dir=data_dir)
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("transient_failure=0", result.stdout)
+            self.assertIn("failure_found=0", result.stdout)
+            self.assertIn("turn_state=completed", result.stdout)
+
     def test_commandcode_tool_use_message_is_in_progress(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

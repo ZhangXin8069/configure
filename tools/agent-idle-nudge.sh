@@ -35,6 +35,7 @@ fi
 manifest=${AGENT_MANIFEST_FILE:-}
 run_dir=${AGENT_RUN_DIR:-}
 run_id=${AGENT_RUN_ID:-}
+run_id_explicit=0
 goal=""
 
 while (( $# > 0 )); do
@@ -47,7 +48,7 @@ while (( $# > 0 )); do
             run_dir=$2; shift 2;;
         --run-id)
             (( $# >= 2 )) || { usage >&2; exit 2; }
-            run_id=$2; shift 2;;
+            run_id=$2; run_id_explicit=1; shift 2;;
         --data-root)
             (( $# >= 2 )) || { usage >&2; exit 2; }
             data_root=$2; shift 2;;
@@ -91,7 +92,7 @@ fi
 }
 run_dir=$(CDPATH= cd -- "${run_dir}" && pwd)
 
-if [[ -z "${run_id}" ]]; then
+if (( ! run_id_explicit )) && [[ -r "${run_dir}/manifest.env" ]]; then
     run_id=$(awk -F= '$1 == "run_id" { sub(/^[^=]*=/, "", $0); print; exit }' "${run_dir}/manifest.env" 2>/dev/null || true)
 fi
 [[ -n "${run_id}" ]] || run_id=$(basename -- "${run_dir}")

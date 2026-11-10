@@ -72,6 +72,7 @@ CONTEXT_OVERFLOW_ERROR_KEYS = {
 }
 DEFAULT_SCAN_BYTES = 32 * 1024 * 1024
 CREATED_AT_WINDOW = timedelta(minutes=10)
+MAX_TEXT_FAILURE_CHARS = 300
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
@@ -913,13 +914,21 @@ def commandcode_completion_error(path: Path, max_bytes: int) -> tuple[bool, bool
         error = meta.get("error") if meta else None
         if has_tool_use and not error:
             return False, False, False, False, "in_progress"
-        if not error and not text.strip():
+        stripped = text.strip()
+        if not error and not stripped:
             return False, False, False, False, "in_progress"
-        failure_text = error if error else text
-        transient = error_is_transient(failure_text)
-        overflow = error_is_context_overflow(failure_text)
-        failure = bool(error) or transient or overflow
-        return True, transient, overflow, failure, "completed"
+        if error:
+            transient = error_is_transient(error)
+            overflow = error_is_context_overflow(error)
+            return True, transient, overflow, True, "completed"
+        # A normal final answer can mention transient-error wording while
+        # explaining something else.  Without meta.error, only short
+        # error-shaped text is trusted as a failure signal.
+        if len(stripped) > MAX_TEXT_FAILURE_CHARS:
+            return True, False, False, False, "completed"
+        transient = error_is_transient(stripped)
+        overflow = error_is_context_overflow(stripped)
+        return True, transient, overflow, transient or overflow, "completed"
     return False, False, False, False, "unknown"
 
 

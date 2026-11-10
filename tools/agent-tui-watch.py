@@ -89,6 +89,7 @@ def process_identity(pid: int) -> tuple[bool, str]:
         result = subprocess.run(
             ["ps", "-o", "lstart=", "-p", str(pid)],
             text=True,
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=1,
@@ -132,6 +133,7 @@ def read_session_state(args: argparse.Namespace) -> dict[str, str] | None:
         result = subprocess.run(
             command,
             text=True,
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=args.state_timeout,
@@ -226,6 +228,18 @@ def claim_recovery(marker: str, fingerprint: str, retry_after: float) -> bool:
             pass
 
 
+def has_runnable_command(raw: str) -> bool:
+    try:
+        command = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return False
+    if not isinstance(command, list) or not command or not all(isinstance(item, str) for item in command):
+        return False
+    if command[0] == "--":
+        command = command[1:]
+    return bool(command)
+
+
 def render_recovery_command(
     raw: str,
     state: dict[str, str],
@@ -286,6 +300,7 @@ def read_last_user_input(
         result = subprocess.run(
             command,
             text=True,
+            errors="replace",
             capture_output=True,
             check=False,
             timeout=args.state_timeout,
@@ -425,15 +440,35 @@ def main(argv: list[str] | None = None) -> int:
     deadline = started + args.max_runtime if args.max_runtime > 0 else None
     next_heartbeat = started + args.heartbeat
     pending_since: float | None = None
+    resume_attempts = 0
     idle_attempt_file = (
         os.path.join(args.idle_nudge_markers, ".idle-nudge-attempted")
         if args.idle_nudge_markers
         else ""
     )
     next_idle_poll = started + args.idle_poll
-    idle_nudge_enabled = bool(args.idle_nudge_command_json and args.idle_nudge_markers)
+    idle_nudge_enabled = bool(
+        args.idle_nudge_command_json
+        and args.idle_nudge_markers
+        and has_runnable_command(args.idle_nudge_command_json)
+    )
     completed_since: float | None = None
     last_nudge_at, nudge_count = read_attempt_state(idle_attempt_file)
+    last_idle_log: tuple[str, str | None] | None = None
+    nudge_failures = 0
+    nudge_backoff_until = 0.0
+
+    def log_idle_once(action: str, reason: str | None, **fields) -> None:
+        nonlocal last_idle_log
+        key = (action, reason)
+        if key == last_idle_log:
+            return
+        last_idle_log = key
+        if reason is None:
+            write_log(args.log, action, pid=args.pid, **fields)
+        else:
+            write_log(args.log, action, reason=reason, pid=args.pid, **fields)
+
     write_log(
         args.log,
         "start",
@@ -483,8 +518,15 @@ def main(argv: list[str] | None = None) -> int:
         if failure_complete:
             if pending_since is None:
                 pending_since = now
-                write_log(args.log, "detected", reason="completed_failed_turn", pid=args.pid)
-            if now - pending_since >= args.grace:
+                write_log(
+                    args.log,
+                    "detected",
+                    reason="completed_failed_turn",
+                    pid=args.pid,
+                    transient=state.get("transient_failure", ""),
+                    overflow=state.get("context_overflow", ""),
+                )
+            if now - pending_since >= min(args.grace * (2 ** min(resume_attempts, 6)), 3600.0):
                 alive, current_identity = process_identity(args.pid)
                 if not alive or (identity and current_identity and current_identity != identity):
                     write_log(args.log, "stop", reason="process_exited", pid=args.pid)
@@ -515,7 +557,9 @@ def main(argv: list[str] | None = None) -> int:
                         reason="completed_failed_turn",
                         pid=args.pid,
                         command=Path(command[0]).name,
+                        attempt=resume_attempts + 1,
                     )
+                    resume_attempts += 1
                     append_event(
                         args.event_file,
                         "tui-resume-start",
@@ -527,6 +571,7 @@ def main(argv: list[str] | None = None) -> int:
                         result = subprocess.run(
                             command,
                             text=True,
+                            errors="replace",
                             capture_output=True,
                             check=False,
                             timeout=args.recover_timeout,
@@ -590,6 +635,7 @@ def main(argv: list[str] | None = None) -> int:
                     pending_since = None
         else:
             pending_since = None
+            resume_attempts = 0
 
         # Idle nudge: only while a completed turn is waiting and the auto skill
         # has armed the run.  Never inject during failure recovery.
@@ -604,30 +650,32 @@ def main(argv: list[str] | None = None) -> int:
                 completed_since = None
 
             if failure_complete:
-                write_log(args.log, "idle-skip", reason="failure_recovery", pid=args.pid)
-            elif markers.get("enabled") != "1":
-                write_log(args.log, "idle-skip", reason="nudge_disabled", pid=args.pid)
+                log_idle_once("idle-skip", "failure_recovery")
             elif markers.get("complete") == "1":
-                write_log(args.log, "idle-skip", reason="goal_complete", pid=args.pid)
+                log_idle_once("idle-skip", "goal_complete")
+            elif markers.get("enabled") != "1":
+                log_idle_once("idle-skip", "nudge_disabled")
             elif not turn_completed:
-                write_log(args.log, "idle-skip", reason="turn_running", pid=args.pid)
+                log_idle_once("idle-skip", "turn_running")
             elif completed_since is not None and now - completed_since < args.idle_min_turn_seconds:
                 pass
             elif args.idle_max_nudges > 0 and nudge_count >= args.idle_max_nudges:
                 if nudge_count == args.idle_max_nudges:
                     write_log(args.log, "idle-skip", reason="max_nudges", pid=args.pid, nudges=nudge_count)
                     nudge_count += 1
+            elif now < nudge_backoff_until:
+                pass
             else:
                 last_user, user_reason = read_last_user_input(args)
                 if last_user is None:
-                    write_log(args.log, "idle-skip", reason=user_reason, pid=args.pid)
+                    log_idle_once("idle-skip", user_reason)
                 else:
                     # Activity = newest real user input or our own last nudge, so a
                     # finished nudge turn cannot immediately trigger another one.
                     activity = max(last_user, last_nudge_at or 0.0)
                     idle_for = time.time() - activity
                     if idle_for < args.idle_seconds:
-                        write_log(args.log, "idle-wait", pid=args.pid, idle_seconds=round(idle_for, 1))
+                        log_idle_once("idle-wait", None, idle_seconds=round(idle_for, 1))
                     else:
                         command = render_recovery_command(
                             args.idle_nudge_command_json,
@@ -670,15 +718,18 @@ def main(argv: list[str] | None = None) -> int:
                                 idle_seconds=round(idle_for, 1),
                                 nudges=nudge_count,
                             )
+                            nudge_failed = False
                             try:
                                 result = subprocess.run(
                                     command,
                                     text=True,
+                                    errors="replace",
                                     capture_output=True,
                                     check=False,
                                     timeout=args.idle_nudge_timeout,
                                 )
                             except subprocess.TimeoutExpired:
+                                nudge_failed = True
                                 write_log(args.log, "idle-nudge-failed", reason="idle_timeout", pid=args.pid)
                                 append_event(
                                     args.event_file,
@@ -689,6 +740,7 @@ def main(argv: list[str] | None = None) -> int:
                                     reason="idle_timeout",
                                 )
                             except OSError as error:
+                                nudge_failed = True
                                 write_log(
                                     args.log,
                                     "idle-nudge-failed",
@@ -706,6 +758,7 @@ def main(argv: list[str] | None = None) -> int:
                                 )
                             else:
                                 if result.returncode != 0:
+                                    nudge_failed = True
                                     write_log(
                                         args.log,
                                         "idle-nudge-failed",
@@ -743,6 +796,15 @@ def main(argv: list[str] | None = None) -> int:
                                         )
                                     except OSError:
                                         pass
+                            if nudge_failed:
+                                nudge_failures += 1
+                                nudge_backoff_until = time.monotonic() + min(
+                                    max(args.idle_seconds, 10.0) * (2 ** min(nudge_failures - 1, 6)),
+                                    3600.0,
+                                )
+                            else:
+                                nudge_failures = 0
+                                nudge_backoff_until = 0.0
                             # A nudge command can run for minutes. Restart the
                             # idle clock at completion so it cannot immediately
                             # trigger another nudge based on its own start time.

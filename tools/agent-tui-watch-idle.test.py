@@ -93,6 +93,32 @@ class IdleNudgeTests(unittest.TestCase):
         )
         return path, record
 
+    @staticmethod
+    def _failing_nudge_script(root: Path) -> tuple[Path, Path]:
+        record = root / "failed-nudges.txt"
+        path = root / "nudge-fail.py"
+        path.write_text(
+            "import pathlib, sys\n"
+            "with pathlib.Path(sys.argv[1]).open('a', encoding='utf-8') as stream:\n"
+            "    stream.write(sys.argv[2] + '\\n')\n"
+            "raise SystemExit(1)\n",
+            encoding="utf-8",
+        )
+        return path, record
+
+    @staticmethod
+    def _bad_bytes_nudge_script(root: Path) -> tuple[Path, Path]:
+        record = root / "bad-bytes-nudges.txt"
+        path = root / "nudge-bad-bytes.py"
+        path.write_text(
+            "import pathlib, sys\n"
+            "pathlib.Path(sys.argv[1]).write_text('ran\\n', encoding='utf-8')\n"
+            "sys.stdout.buffer.write(b'\\xff\\xfe\\x00')\n"
+            "sys.stdout.buffer.flush()\n",
+            encoding="utf-8",
+        )
+        return path, record
+
     def _run(
         self,
         codex_home: Path,
@@ -318,6 +344,108 @@ class IdleNudgeTests(unittest.TestCase):
                 self.assertGreaterEqual(len(record.read_text(encoding="utf-8").splitlines()), 2)
                 state = json.loads((run_dir / ".idle-nudge-attempted").read_text(encoding="utf-8"))
                 self.assertGreaterEqual(state["count"], 2)
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_disabled_nudge_logs_reason_once(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, run_dir = self._fixture(root, user_age_seconds=600)
+            nudge, record = self._nudge_script(root)
+            child = self._child()
+            try:
+                result = self._run(
+                    codex_home,
+                    cwd,
+                    run_dir,
+                    child,
+                    nudge=nudge,
+                    record=record,
+                    idle_seconds=0.2,
+                    max_runtime=1.2,
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                log_text = (run_dir / "tui-watch.log").read_text(encoding="utf-8")
+                self.assertEqual(log_text.count("reason=nudge_disabled"), 1)
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_failed_nudge_backs_off_instead_of_retrying_every_poll(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, run_dir = self._fixture(root, user_age_seconds=600)
+            self._enable(run_dir)
+            nudge, record = self._failing_nudge_script(root)
+            child = self._child()
+            try:
+                result = self._run(
+                    codex_home,
+                    cwd,
+                    run_dir,
+                    child,
+                    nudge=nudge,
+                    record=record,
+                    idle_seconds=0.1,
+                    max_runtime=2.0,
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                self.assertEqual(len(record.read_text(encoding="utf-8").splitlines()), 1)
+                log_text = (run_dir / "tui-watch.log").read_text(encoding="utf-8")
+                self.assertIn("reason=idle_exit", log_text)
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_invalid_utf8_nudge_output_does_not_crash_watcher(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, run_dir = self._fixture(root, user_age_seconds=600)
+            self._enable(run_dir)
+            nudge, record = self._bad_bytes_nudge_script(root)
+            child = self._child()
+            try:
+                result = self._run(
+                    codex_home,
+                    cwd,
+                    run_dir,
+                    child,
+                    nudge=nudge,
+                    record=record,
+                    idle_seconds=0.1,
+                    max_runtime=1.2,
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                self.assertNotIn("Traceback", result.stderr)
+                self.assertTrue(record.exists())
+            finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_completed_goal_without_enable_logs_goal_complete(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, run_dir = self._fixture(root, user_age_seconds=600)
+            (run_dir / ".goal-complete").write_text("{}\n", encoding="utf-8")
+            nudge, record = self._nudge_script(root)
+            child = self._child()
+            try:
+                result = self._run(
+                    codex_home,
+                    cwd,
+                    run_dir,
+                    child,
+                    nudge=nudge,
+                    record=record,
+                    idle_seconds=0.2,
+                    max_runtime=0.8,
+                )
+                self.assertEqual(result.returncode, 3, result.stderr)
+                self.assertFalse(record.exists())
+                log_text = (run_dir / "tui-watch.log").read_text(encoding="utf-8")
+                self.assertIn("reason=goal_complete", log_text)
+                self.assertNotIn("reason=nudge_disabled", log_text)
             finally:
                 child.terminate()
                 child.wait(timeout=2)

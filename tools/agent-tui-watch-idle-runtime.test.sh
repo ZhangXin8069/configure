@@ -15,7 +15,8 @@ fail() {
     exit 1
 }
 
-unset AGENT_AUTO_RESUME AGENT_RESUME_ACTIVE AGENT_TUI_IDLE_COMMAND_JSON 2>/dev/null || true
+unset AGENT_AUTO_RESUME AGENT_RESUME_ACTIVE AGENT_TUI_IDLE_COMMAND_JSON \
+    AGENT_EVENT_FILE AGENT_STOP_FILE AGENT_MANIFEST_FILE AGENT_STATE_FILE 2>/dev/null || true
 
 run_dir=$test_root/run
 mkdir -p "$run_dir"
