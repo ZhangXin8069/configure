@@ -1009,6 +1009,7 @@ for provider_name, provider in providers.items():
     if not base_url or not env_key:
         continue
     cached = cache_models(provider_name)
+    provider_context_window = positive_int(byok.get("context_window"))
     model_ids = list(static_models)
     if not model_ids and byok.get("models_from_cache"):
         model_ids = list(cached)
@@ -1037,6 +1038,7 @@ for provider_name, provider in providers.items():
             metadata.get("context_window")
             or cached_model.get("context_window")
             or (cached_model.get("limit") or {}).get("context")
+            or provider_context_window
         )
         if context_window:
             model["contextWindow"] = context_window

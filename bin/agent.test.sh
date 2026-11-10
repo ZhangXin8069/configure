@@ -234,12 +234,12 @@ with open(sys.argv[2], encoding='utf-8') as handle:
     custom = json.load(handle)
 dgo_defaults = custom['providers']['opendesign-go']
 assert dgo_defaults['default_models'] == {
-    'claude': 'deepseek-v4.1-flash',
+    'claude': 'deepseek-v4.1-flash[1m]',
     'opencode': 'opendesign-go/deepseek-v4.1-flash',
     'codex': 'deepseek-v4.1-flash',
     'commandcode': 'deepseek-v4.1-flash',
 }, dgo_defaults
-assert set(dgo_defaults['default_strengths'].values()) == {'high'}, dgo_defaults
+assert set(dgo_defaults['default_strengths'].values()) == {'max'}, dgo_defaults
 PY
 printf 'PASS: agent 供应商集合包含 deepseek-pay/opencode-go/commandcode-goat/opendesign-go\n'
 
@@ -623,7 +623,7 @@ assert_file_contains "$cl_run/events.jsonl" '"event":"session-bound"'
 assert_contains "$cl_output" 'FAKE_CLAUDE_OK'
 assert_file_contains "$call_log" '--output-format json'
 assert_file_contains "$call_log" '--model deepseek-v4.1-flash'
-assert_file_contains "$call_log" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go ANTHROPIC_MODEL=deepseek-v4.1-flash ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4.1-flash ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4.1-flash ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash ANTHROPIC_AUTH_TOKEN= ANTHROPIC_API_KEY=test-go-key CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash CLAUDE_CODE_EFFORT_LEVEL=max CLAUDE_CODE_AUTO_COMPACT_WINDOW=786432'
+assert_file_contains "$call_log" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go ANTHROPIC_MODEL=deepseek-v4.1-flash[1m] ANTHROPIC_DEFAULT_OPUS_MODEL=deepseek-v4.1-flash[1m] ANTHROPIC_DEFAULT_SONNET_MODEL=deepseek-v4.1-flash[1m] ANTHROPIC_DEFAULT_HAIKU_MODEL=deepseek-flash ANTHROPIC_AUTH_TOKEN= ANTHROPIC_API_KEY=test-go-key CLAUDE_CODE_SUBAGENT_MODEL=deepseek-flash CLAUDE_CODE_EFFORT_LEVEL=max CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000'
 assert_file_not_contains "$call_log" 'ANTHROPIC_MODEL=external-model'
 assert_file_not_contains "$call_log" 'ANTHROPIC_BASE_URL=https://external.invalid/anthropic'
 assert_file_not_contains "$call_log" 'ANTHROPIC_AUTH_TOKEN=external-token'
@@ -633,8 +633,8 @@ assert_file_contains "$call_log" '--settings'
 settings_line=$(sed -n 's/^claude-settings: //p' "$call_log" | head -1)
 assert_contains "$settings_line" '"ANTHROPIC_BASE_URL":"https://opencode.ai/zen/go"'
 assert_contains "$settings_line" '"ANTHROPIC_API_KEY":"test-go-key","ANTHROPIC_AUTH_TOKEN":""'
-assert_contains "$settings_line" '"ANTHROPIC_MODEL":"deepseek-v4.1-flash"'
-assert_contains "$settings_line" '"CLAUDE_CODE_AUTO_COMPACT_WINDOW":"786432"'
+assert_contains "$settings_line" '"ANTHROPIC_MODEL":"deepseek-v4.1-flash[1m]"'
+assert_contains "$settings_line" '"CLAUDE_CODE_AUTO_COMPACT_WINDOW":"1000000"'
 assert_contains "$settings_line" '"DISABLE_AUTOUPDATER":"1"'
 assert_contains "$settings_line" '"statusLine":{"type":"command","command":'
 sl_cmd=$(printf '%s' "$settings_line" | python3 -c 'import json,sys; print(json.load(sys.stdin)["statusLine"]["command"])')
@@ -1137,10 +1137,10 @@ case "$switch_cl_output" in
 esac
 switch_cl_new=$(tail -n +$((switch_cl_before + 1)) "$call_log")
 assert_contains "$switch_cl_new" 'claude-env ANTHROPIC_BASE_URL=https://opencode.ai/zen/go'
-assert_contains "$switch_cl_new" 'ANTHROPIC_MODEL=deepseek-v4.1-flash'
+assert_contains "$switch_cl_new" 'ANTHROPIC_MODEL=deepseek-v4.1-flash[1m]'
 assert_contains "$switch_cl_new" 'ANTHROPIC_API_KEY=test-go-key'
-assert_contains "$switch_cl_new" '--model deepseek-v4.1-flash'
-printf 'PASS: 快捷词 cl go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash，x-api-key 认证）\n'
+assert_contains "$switch_cl_new" '--model deepseek-v4.1-flash[1m]'
+printf 'PASS: 快捷词 cl go 切换 opencode-go 途径（默认模型 deepseek-v4.1-flash[1m]，x-api-key 认证）\n'
 
 switch_op_pay_before=$(wc -l < "$call_log")
 set +e
@@ -1326,6 +1326,7 @@ go = providers['opencode-go']
 assert go['baseURL'] == 'https://opencode.ai/zen/go/v1'
 assert go['apiKey'] == '$OPENCODE_GO_API_KEY'
 assert 'deepseek-v4.1-flash' in go['models']
+assert go['models']['deepseek-v4.1-flash']['contextWindow'] == 1000000
 assert go['models']['deepseek-v4.1-flash']['reasoningEfforts']
 assert go['models']['minimax-m3']['api'] == 'anthropic-messages'
 assert go['models']['minimax-m3']['baseURL'] == 'https://opencode.ai/zen/go'
@@ -1333,6 +1334,7 @@ pay = providers['deepseek-pay']
 assert pay['baseURL'] == 'https://api.deepseek.com'
 assert pay['apiKey'] == '$DEEPSEEK_PAY_API_KEY'
 assert 'deepseek-v4.1-flash' in pay['models']
+assert pay['models']['deepseek-v4.1-flash']['contextWindow'] == 1000000
 assert 'commandcode-goat' not in providers
 PY
 printf 'PASS: cm go 使用 BYOK providers.json 与 opencode-go/ 模型前缀\n'
@@ -1464,7 +1466,7 @@ dgo_op_status=$?
 set -e
 (( dgo_op_status == 0 )) || fail "op dgo 失败：$dgo_op_output"
 dgo_op_new=$(tail -n +$((dgo_op_before + 1)) "$call_log")
-assert_contains "$dgo_op_new" '"model":"opendesign-go/dgo-test-model","variant":"high"'
+assert_contains "$dgo_op_new" '"model":"opendesign-go/dgo-test-model","variant":"max"'
 dgo_op_config=$(printf '%s\n' "$dgo_op_new" | sed -n 's/^opencode-config: //p' | tail -1)
 printf '%s' "$dgo_op_config" | python3 -c '
 import json,sys
@@ -1491,11 +1493,11 @@ esac
 assert_contains "$dgo_cl_new" 'ANTHROPIC_BASE_URL=https://amr-link.open-design.ai'
 assert_contains "$dgo_cl_new" 'ANTHROPIC_MODEL=dgo-test-model'
 assert_contains "$dgo_cl_new" 'ANTHROPIC_API_KEY=test-dgo-key'
-assert_contains "$dgo_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=high'
+assert_contains "$dgo_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=max'
 assert_contains "$dgo_cl_new" 'printenv OPENDESIGN_GO_API_KEY'
 dgo_cl_settings=$(printf '%s\n' "$dgo_cl_new" | sed -n 's/^claude-settings: //p' | tail -1)
 assert_contains "$dgo_cl_settings" '"ANTHROPIC_BASE_URL":"https://amr-link.open-design.ai"'
-assert_contains "$dgo_cl_settings" '"CLAUDE_CODE_EFFORT_LEVEL":"high"'
+assert_contains "$dgo_cl_settings" '"CLAUDE_CODE_EFFORT_LEVEL":"max"'
 printf 'PASS: cl dgo 直连 Anthropic 兼容根端点（无 /v1）与 OPENDESIGN_GO_API_KEY\n'
 
 dgo_co_before=$(wc -l < "$call_log")
@@ -1513,7 +1515,7 @@ assert_contains "$dgo_co_new" 'model_provider="opendesign-go"'
 assert_contains "$dgo_co_new" 'model_providers.opendesign-go.base_url="http://127.0.0.1:'
 assert_contains "$dgo_co_new" 'model_providers.opendesign-go.env_key="OPENDESIGN_GO_API_KEY"'
 assert_contains "$dgo_co_new" 'model_providers.opendesign-go.wire_api="responses"'
-assert_contains "$dgo_co_new" 'model_reasoning_effort="high"'
+assert_contains "$dgo_co_new" 'model_reasoning_effort="max"'
 printf 'PASS: co dgo 通过本地 Responses -> chat_completions 协议桥\n'
 
 dgo_cache="$data/cache/provider-models/opendesign-go.json"
@@ -1542,7 +1544,7 @@ set -e
 dgo_cm_new=$(tail -n +$((dgo_cm_before + 1)) "$call_log")
 assert_contains "$dgo_cm_output" 'Command Code: opendesign-go/dgo-test-model'
 assert_contains "$dgo_cm_output" 'provider: opendesign-go (BYOK)'
-assert_contains "$dgo_cm_new" '--model opendesign-go/dgo-test-model --effort high'
+assert_contains "$dgo_cm_new" '--model opendesign-go/dgo-test-model --effort max'
 python3 - "$commandcode_home/.commandcode/providers.json" <<'PY' || fail 'cm dgo 未写入正确的 BYOK provider'
 import json
 import sys
@@ -1553,6 +1555,7 @@ dgo = providers['opendesign-go']
 assert dgo['baseURL'] == 'https://amr-link.open-design.ai/v1', dgo
 assert dgo['apiKey'] == '$OPENDESIGN_GO_API_KEY', dgo
 assert 'dgo-test-model' in dgo['models'], dgo
+assert dgo['models']['dgo-test-model']['contextWindow'] == 1000000, dgo
 assert dgo['models']['dgo-test-model']['reasoningEfforts'] == ['high', 'max'], dgo
 PY
 rm -f -- "$dgo_cache"

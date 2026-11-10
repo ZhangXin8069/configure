@@ -136,7 +136,7 @@ cm goal status
 `~/.commandcode/providers.json`，模型以 `opencode-go/<model>`、`deepseek-pay/<model>`、
 `opendesign-go/<model>` 传给 `--model`。`opencode-go` 的 Anthropic-wire 模型（minimax/qwen 等）
 按模型写入 `api: anthropic-messages` 与对应 `baseURL`；`opendesign-go` 为 OpenAI 兼容途径，
-模型清单来自 `/v1/models` 缓存，模板默认 `deepseek-v4.1-flash`/`high`。密钥只保留环境变量引用
+模型清单来自 `/v1/models` 缓存，缓存缺少上下文元数据时回退 `commandcode.context_window`（模板为 1000000），模板默认模型 `deepseek-v4.1-flash[1m]`、默认强度 `max`。密钥只保留环境变量引用
 （`$OPENCODE_GO_API_KEY` / `$DEEPSEEK_PAY_API_KEY` / `$OPENDESIGN_GO_API_KEY`），不落盘、不打印。
 
 ## 快速开始

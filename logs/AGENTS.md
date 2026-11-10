@@ -1447,3 +1447,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent flash defaults max/1m - final - 2026-11-10 12:04:12 +0800
+- 主任务: 统一各供应商 flash 默认强度与上下文预算
+- 日志文件: logs/v2026111012.txt
+- 文件大小: 5955 bytes
+- 触发原因: 任务完成
+- 关键内容: 各供应商 flash 默认统一 max 强度与 1M 上下文；claude [1m]+压缩边界、co/cm BYOK 上下文补齐；Unix 99 项回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

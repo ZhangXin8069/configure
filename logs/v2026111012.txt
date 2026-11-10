@@ -1,0 +1,70 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-10 12:04:12 +0800
+批次: agent flash defaults max/1m
+主任务: 统一各供应商 flash 默认强度与上下文预算
+触发原因: 任务完成
+摘要: 各供应商 flash 默认统一 max 强度与 1M 上下文；claude [1m]+压缩边界、co/cm BYOK 上下文补齐；Unix 99 项回归通过
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 定位各 agent 上下文与强度生效路径
+- 目标: 确认 cl/op/co/cm 的强度与上下文预算分别由哪个配置键落地。
+- 命令/操作: 读取 agent-config.json、agent-custom.json.refer、agent.sh、agent-runtime.ps1、agent-model-catalog.py 与回归断言；核对 data/cache/provider-models 中 flash 模型元数据。
+- 关键输出: opencode-go/commandcode-goat 的 deepseek flash 缓存均为 ctx=1000000、strengths 含 max；opendesign-go 缓存无上下文元数据；claude 压缩窗口为 786432；dgo 默认强度为 high。
+- 退出码: 0
+- 证据与判断: cl 由 `[1m]` 模型后缀与 CLAUDE_CODE_AUTO_COMPACT_WINDOW 共同决定；co 的 model_context_window 已是 1000000；cm BYOK 由 providers.json 的 contextWindow 决定；op 使用 OpenCode 模型元数据。
+
+### S2 — 修改默认配置与运行时
+- 目标: flash 默认模型统一最大强度与 1M 上下文预算。
+- 命令/操作: 修改 bin/agent-config.json、bin/agent-custom.json.refer、bin/agent.sh、bin/agent-runtime.ps1、lib/_deepseek/*；同步测试与文档。
+- 关键输出: dgo 四系默认强度 high→max；claude 默认模型补 `[1m]`；CLAUDE_CODE_AUTO_COMPACT_WINDOW 786432→1000000；DeepSeek/GLM/Qwen flash 模型补 context_window=1000000；BYOK 增加 commandcode.context_window 兜底。
+- 退出码: 0
+- 证据与判断: 两层默认择序要求 claude 的 provider 层与 agent 层同时补 `[1m]`；BYOK 兜底保证 opendesign-go 缓存缺上下文时 cm 仍得到 1M。
+
+## 验证与证据
+- 测试/检查: python3 -m json.tool 两份配置；bash -n 相关 shell；TMPDIR 归一化后 bash bin/agent.test.sh；bash bin/agent-windows.test.sh；form-audit --strict --quiet；form-data-tracking-check；form-large-files-check；git diff --check。
+- 结果: JSON 与 shell 语法通过；Unix 回归 99 项 PASS、exit 0；Windows 静态契约 PASS（本机无 pwsh，解析器检查跳过）；form 审计 exit 0；data 边界与大文件闸门通过；diff check 通过。
+- 未验证项: 未使用真实上游凭据发起新的 API 调用；op（OpenCode）实际窗口仍取决其模型元数据，本库不下发 limit。
+
+## 变更与产物
+- 文件: bin/agent-config.json、bin/agent-custom.json.refer、bin/agent.sh、bin/agent-runtime.ps1、bin/agent.test.sh、bin/AGENTS.md、lib/_deepseek/claude-code-deepseek-env.sh、lib/_deepseek/claude-code-deepseek-env.ps1、lib/_command-code/setup.md。
+- 产物: 统一的 flash 默认策略与回归断言。
+- 未改动范围: 历史日志、form 快照、docs 历史报告、data 运行时数据。
+
+## 风险、限制与下一步
+- 风险: 全局压缩边界改为 1M 后，非 1M 模型由 Claude Code 按模型窗口上限截断；BYOK 兜底只在静态表与缓存均缺上下文时生效。
+- 阻塞: 无。
+- 下一步: 若要求 op 也强制 1M，需要新增 OpenCode provider `limit.context` 注入并同步 Unix/Windows。
+
+## 用户输入指令
+修改本库各个代理商的默认配置:实用flash模型时[比如 deepseek-v4.1-flash],应使用最大的effort,且上下文预算为1M
+
+## Agent 全文报告
+--- report begin ---
+已完成各供应商默认配置的统一：flash 默认模型使用最大 effort 与 1M 上下文预算。
+
+改动内容
+- bin/agent-custom.json.refer：opendesign-go 四系默认强度 high→max；opencode-go/opendesign-go 的 claude 默认模型与 agents.claude.model 补 [1m]；新增 flash 默认策略说明。
+- bin/agent-config.json：CLAUDE_CODE_AUTO_COMPACT_WINDOW 786432→1000000；deepseek-pay/opencode-go 的 DeepSeek/GLM/Qwen flash 模型补 context_window=1000000；opendesign-go BYOK 增加 commandcode.context_window=1000000。
+- bin/agent.sh / bin/agent-runtime.ps1：cm BYOK 在静态表与缓存均缺上下文时回退 commandcode.context_window。
+- lib/_deepseek/*：CLAUDE_CODE_AUTO_COMPACT_WINDOW 同步 1000000。
+- bin/agent.test.sh、bin/AGENTS.md、lib/_command-code/setup.md：同步断言与文档。
+
+推理依据
+- 两层默认：未显式选途径走 agents.<agent>.model，显式快捷词走 providers.<p>.default_models，故 claude 两处都补 [1m]。
+- cl 的 1M 由 [1m] 窗口声明 + CLAUDE_CODE_AUTO_COMPACT_WINDOW 边界共同落地；co 的 model_context_window 已是 1000000，保留 900000 压缩阈值作为安全余量；cm gt 由 Provider 侧 1M，BYOK 由 contextWindow 落地；op 的窗口由 OpenCode 模型元数据决定。
+- 强度默认层全部 max；显式 --effort/--strength 仍最高，不覆盖用户显式选择。
+
+验证结果
+- JSON 解析、shell 语法、git diff --check：通过。
+- TMPDIR 归一化后 bash bin/agent.test.sh：99 项 PASS，exit 0。
+- bash bin/agent-windows.test.sh：PASS（本机无 pwsh，解析器检查跳过）。
+- form-audit --strict --quiet：exit 0；form-data-tracking-check：通过；form-large-files-check：通过（0 个 >10MB）。
+- 已知环境问题：默认 macOS TMPDIR 末尾带 / 且 /tmp 是符号链接，agent-dispatch 测试的 cwd 断言会失败；干净 HEAD 副本用归一化 TMPDIR 通过，确认与本次改动无关。
+
+风险、限制与下一步
+- op（OpenCode）的实际上下文窗口取决于其模型元数据；本库没有给 op 下发 limit 的配置通道，dgo+op 的 1M 需 OpenCode/上游元数据支持。
+- co 的 model_auto_compact_token_limit 仍是 900000（窗口已是 1M），保留压缩安全余量。
+- 若要求 op 也强制 1M，需要新增 OpenCode provider limit 注入（Unix/Windows 双端）并补回归。
+--- report end ---

@@ -2608,6 +2608,7 @@ function Set-CommandCodeProviders {
             } catch {}
         }
         $staticModels = $provider.models
+        $providerContextWindow = ConvertTo-PositiveIntValue $provider.commandcode.context_window
         $modelIds = New-Object System.Collections.Generic.List[string]
         if ($null -ne $staticModels) {
             foreach ($modelProperty in $staticModels.PSObject.Properties) { [void]$modelIds.Add($modelProperty.Name) }
@@ -2637,6 +2638,7 @@ function Set-CommandCodeProviders {
             if ($contextWindow -le 0 -and $null -ne $cacheModel -and $null -ne $cacheModel.limit) {
                 $contextWindow = ConvertTo-PositiveIntValue $cacheModel.limit.context
             }
+            if ($contextWindow -le 0) { $contextWindow = $providerContextWindow }
             if ($contextWindow -gt 0) { $model['contextWindow'] = $contextWindow }
             $maxOutput = ConvertTo-PositiveIntValue $(if ($null -ne $metadata) { $metadata.max_output } else { $null })
             if ($maxOutput -le 0 -and $null -ne $cacheModel -and $null -ne $cacheModel.limit) {
