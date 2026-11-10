@@ -99,6 +99,40 @@ assert x["model"]=="deepseek/deepseek-v4.1-flash" and x["strength"]=="max"
 ' || { printf 'FAIL: cm 派发 JSON 不正确：%s\n' "$output" >&2; exit 1; }
 grep -Fq -- '--once gt --model deepseek/deepseek-v4.1-flash --effort max' "$FAKE_ARGS"
 
+# 新别名 cgo/tgo/dgo 由启动器统一解析，派发接口应原样透传
+output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent op --provider cgo \
+    --model glm-5.3-flash --strength high --no-secure --task 'cgo alias' --json)
+printf '%s' "$output" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["provider"]=="cgo" and x["agent"]=="op"
+' || { printf 'FAIL: cgo 派发 JSON 不正确：%s\n' "$output" >&2; exit 1; }
+grep -Fq -- '--once cgo --model glm-5.3-flash --variant high' "$FAKE_ARGS"
+
+output=$(AGENT_PARENT_AGENT=codex AGENT_PARENT_PROVIDER=go \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent co --provider tgo \
+    --model deepseek/deepseek-v4.1-flash --strength max --no-secure --task 'tgo alias' --json)
+printf '%s' "$output" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["provider"]=="tgo" and x["agent"]=="co"
+' || { printf 'FAIL: tgo 派发 JSON 不正确：%s\n' "$output" >&2; exit 1; }
+grep -Fq -- '--once tgo --model deepseek/deepseek-v4.1-flash --reasoning-effort max' "$FAKE_ARGS"
+
+output=$(AGENT_PARENT_AGENT=opencode AGENT_PARENT_PROVIDER=go \
+    AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \
+    "$test_root/agent-dispatch.sh" --agent cm --provider dgo \
+    --model dgo-test-model --strength max --no-secure --task 'dgo alias' --json)
+printf '%s' "$output" | python3 -c '
+import json,sys
+x=json.load(sys.stdin)
+assert x["provider"]=="dgo" and x["agent"]=="cm"
+' || { printf 'FAIL: dgo 派发 JSON 不正确：%s\n' "$output" >&2; exit 1; }
+grep -Fq -- '--once dgo --model dgo-test-model --effort max' "$FAKE_ARGS"
+
 output=$(AGENT_PARENT_AGENT=commandcode AGENT_PARENT_PROVIDER=gt \
     AGENT_PARENT_PERMISSION_MODE=accept-edits \
     AGENT_PARENT_CWD="$test_root/work" AGENT_PARENT_DATA_ROOT="$test_root/data" \

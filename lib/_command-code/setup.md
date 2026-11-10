@@ -105,7 +105,7 @@ command-code -p "explain this repository"
 
 | 项 | 值 |
 |---|---|
-| 供应商快捷词 | `gt`（默认）；`go`/`pay` 走 BYOK |
+| 供应商快捷词 | `gt|tgo`（默认）；`go|cgo`/`pay`/`dgo` 走 BYOK |
 | 供应商 | `commandcode-goat` |
 | Provider API | `https://api.commandcode.ai/provider/v1` |
 | 默认模型 | `deepseek/deepseek-v4.1-flash` |
@@ -125,18 +125,19 @@ cm goal status
 ```
 
 `cm` 会把 `COMMANDCODE_GOAT_API_KEY` 仅在本进程映射为 Command Code CLI 使用的
-`COMMAND_CODE_API_KEY`。`cl gt`、`op gt`、`co gt` 复用同一 Provider API；其中
-`cl gt` 默认 Claude Sonnet 4.6，`op/co gt` 默认 DeepSeek V4.1 Flash。Command Code
+`COMMAND_CODE_API_KEY`。`cl gt|tgo`、`op gt|tgo`、`co gt|tgo` 复用同一 Provider API；其中
+`cl gt|tgo` 默认 Claude Sonnet 4.6，`op/co gt|tgo` 默认 DeepSeek V4.1 Flash。Command Code
 的原生 statusline 由 `bin/agent-config.json` 的 `agents.commandcode.statusline` 幂等合并到
 `~/.commandcode/config.json`。`cm` 默认 `yolo`，headless 同时显式传 `--yolo`；原生 goal
 恢复后默认是 idle，`cm --resume RUN_ID --goal <objective> --once` 会重新启动目标。
 
-`cm go` / `cm pay` 走 Command Code BYOK：启动器把 `agent-config.json` 中
-`commandcode.byok=true` 的途径（`opencode-go`、`deepseek-pay`）幂等合并进
-`~/.commandcode/providers.json`，模型以 `opencode-go/<model>`、`deepseek-pay/<model>`
-传给 `--model`。`go` 的 Anthropic-wire 模型（minimax/qwen 等）按模型写入
-`api: anthropic-messages` 与对应 `baseURL`；密钥只保留环境变量引用
-（`$OPENCODE_GO_API_KEY` / `$DEEPSEEK_PAY_API_KEY`），不落盘、不打印。
+`cm go|cgo` / `cm pay` / `cm dgo` 走 Command Code BYOK：启动器把 `agent-config.json` 中
+`commandcode.byok=true` 的途径（`opencode-go`、`deepseek-pay`、`opendesign-go`）幂等合并进
+`~/.commandcode/providers.json`，模型以 `opencode-go/<model>`、`deepseek-pay/<model>`、
+`opendesign-go/<model>` 传给 `--model`。`opencode-go` 的 Anthropic-wire 模型（minimax/qwen 等）
+按模型写入 `api: anthropic-messages` 与对应 `baseURL`；`opendesign-go` 为 OpenAI 兼容途径，
+模型清单来自 `/v1/models` 缓存，模板默认 `deepseek-v4.1-flash`/`high`。密钥只保留环境变量引用
+（`$OPENCODE_GO_API_KEY` / `$DEEPSEEK_PAY_API_KEY` / `$OPENDESIGN_GO_API_KEY`），不落盘、不打印。
 
 ## 快速开始
 

@@ -325,14 +325,17 @@ function Get-ConfigEnvironmentValue {
     return $value
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go、gt→commandcode-goat
+# 供应商快捷词：pay→deepseek-pay、go|cgo→opencode-go、gt|tgo→commandcode-goat、dgo→opendesign-go
 function Resolve-ProviderAlias {
     param([string]$Value)
 
     switch ($Value) {
         'pay' { return 'deepseek-pay' }
         'go' { return 'opencode-go' }
+        'cgo' { return 'opencode-go' }
         'gt' { return 'commandcode-goat' }
+        'tgo' { return 'commandcode-goat' }
+        'dgo' { return 'opendesign-go' }
         default { return $Value }
     }
 }
@@ -1045,7 +1048,21 @@ function Get-OpenCodeProviderConfig {
         if ([string]::IsNullOrWhiteSpace((Get-ConfigEnvironmentValue $envKey))) { continue }
         $providerId = [string]$provider.opencode_provider_id
         if ([string]::IsNullOrWhiteSpace($providerId)) { $providerId = [string]$name }
-        $result[$providerId] = [ordered]@{ options = [ordered]@{ apiKey = "{env:$envKey}" } }
+        $block = [ordered]@{ options = [ordered]@{ apiKey = "{env:$envKey}" } }
+        if ($null -ne $provider.opencode) {
+            $opencodeConfig = $provider.opencode
+            $npm = [string]$opencodeConfig.npm
+            if (-not [string]::IsNullOrWhiteSpace($npm)) { $block.npm = $npm }
+            $displayName = [string]$opencodeConfig.name
+            if ([string]::IsNullOrWhiteSpace($displayName)) { $displayName = [string]$provider.label }
+            if (-not [string]::IsNullOrWhiteSpace($displayName)) { $block.name = $displayName }
+            $baseUrl = [string]$opencodeConfig.base_url
+            if ([string]::IsNullOrWhiteSpace($baseUrl)) { $baseUrl = [string]$provider.base_url }
+            if (-not [string]::IsNullOrWhiteSpace($baseUrl)) {
+                $block.options.baseURL = $baseUrl.TrimEnd('/')
+            }
+        }
+        $result[$providerId] = $block
     }
     return $result
 }
@@ -1751,13 +1768,13 @@ function Parse-Interval {
 }
 
 function Show-Usage {
-    Write-Host "用法：$($script:LauncherName) [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL] [--goal OBJECTIVE]"
-    Write-Host '供应商快捷词：pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 cl.bat gt）。'
+    Write-Host "用法：$($script:LauncherName) [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [--reasoning-effort LEVEL] [--goal OBJECTIVE]"
+    Write-Host '供应商快捷词：pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 cl.bat tgo）。'
     Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
-    Write-Host '模型：显式指定途径时（快捷词 pay|go|gt 或各 agent 的 *_PROVIDER 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX,COMMANDCODE}_MODEL 恒为最高。'
+    Write-Host '模型：显式指定途径时（快捷词 pay|go|cgo|gt|tgo|dgo 或各 agent 的 *_PROVIDER 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX,COMMANDCODE}_MODEL 恒为最高。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cm Goal：cm --goal <objective> 或 cm goal <objective|status|clear>；--max-turns 同时作为原生 /goal 预算。'
-    Write-Host 'cm BYOK：pay/go 自动合并 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入；默认仍为 gt。'
+    Write-Host 'cm BYOK：pay/go|cgo/dgo 自动合并 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入；默认仍为 gt|tgo。'
     Write-Host 'cl/op/cm 支持 [-file PATH]；co 不支持 --file。无驱动选项时保持原生 TUI。'
 }
 
@@ -2579,8 +2596,7 @@ function Set-CommandCodeProviders {
             -not [bool]$provider.commandcode.byok) { continue }
         $baseUrl = [string]$provider.base_url
         $envKey = [string]$provider.env_key
-        if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($envKey) -or
-            $null -eq $provider.models) { continue }
+        if ([string]::IsNullOrWhiteSpace($baseUrl) -or [string]::IsNullOrWhiteSpace($envKey)) { continue }
         $baseUrl = $baseUrl.TrimEnd('/')
         $modelsNode = [ordered]@{}
         $cacheModels = $null
@@ -2591,9 +2607,17 @@ function Set-CommandCodeProviders {
                 if ($null -ne $cache) { $cacheModels = $cache.models }
             } catch {}
         }
-        foreach ($modelProperty in $provider.models.PSObject.Properties) {
-            $modelId = $modelProperty.Name
-            $metadata = $modelProperty.Value
+        $staticModels = $provider.models
+        $modelIds = New-Object System.Collections.Generic.List[string]
+        if ($null -ne $staticModels) {
+            foreach ($modelProperty in $staticModels.PSObject.Properties) { [void]$modelIds.Add($modelProperty.Name) }
+        }
+        if ($modelIds.Count -eq 0 -and [bool]$provider.commandcode.models_from_cache -and $null -ne $cacheModels) {
+            foreach ($modelProperty in $cacheModels.PSObject.Properties) { [void]$modelIds.Add($modelProperty.Name) }
+        }
+        if ($modelIds.Count -eq 0) { continue }
+        foreach ($modelId in $modelIds) {
+            $metadata = if ($null -ne $staticModels) { $staticModels.$modelId } else { $null }
             $cacheModel = if ($null -ne $cacheModels) { $cacheModels.$modelId } else { $null }
             $model = [ordered]@{}
             $endpoint = if ($null -ne $metadata) { [string]$metadata.endpoint } else { '' }
@@ -3303,7 +3327,7 @@ function Parse-Arguments {
     $errorMessage = ''
     for ($i = 0; $i -lt $cliArgs.Count; $i++) {
         $option = [string]$cliArgs[$i]
-        if ($option -in @('pay', 'go', 'gt', 'deepseek-pay', 'opencode-go', 'commandcode-goat')) {
+        if ($option -in @('pay', 'go', 'cgo', 'gt', 'tgo', 'dgo', 'deepseek-pay', 'opencode-go', 'commandcode-goat', 'opendesign-go')) {
             $providerOverride = Resolve-ProviderAlias $option
             continue
         }
@@ -3511,7 +3535,7 @@ function Parse-Arguments {
         $script:Posture = if ($script:Agent -eq 'codex') { 'frontier-orchestrator' } else { 'deep-worker' }
     }
 
-    # 途径来自命令行快捷词（pay/go/gt）、各 agent 的 *_PROVIDER 环境变量
+    # 途径来自命令行快捷词（pay/go/cgo/gt/tgo/dgo）、各 agent 的 *_PROVIDER 环境变量
     #（env 值已在 2109-2115 过别名规整），或个性化配置 agents.<agent>.provider。
     # 三者中前两者属「显式选途径」，决定两层默认谁优先。
     $providerForModel = if (-not [string]::IsNullOrWhiteSpace($providerOverride)) {
@@ -3520,12 +3544,12 @@ function Parse-Arguments {
         [string]$agentConfig.provider
     }
     if ([string]::IsNullOrWhiteSpace($providerForModel)) {
-        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|gt 或 agent-custom.json agents.$agentKey.provider）###"
+        Fail-Parse "###$($script:LauncherName): ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo 或 agent-custom.json agents.$agentKey.provider）###"
         return $false
     }
     if ($script:Agent -eq 'commandcode' -and
-        $providerForModel -notin @('commandcode-goat', 'deepseek-pay', 'opencode-go')) {
-        Fail-Parse "###$($script:LauncherName): ERROR: cm 仅支持途径 commandcode-goat（gt）/ deepseek-pay（pay）/ opencode-go（go），当前为 '$providerForModel'###"
+        $providerForModel -notin @('commandcode-goat', 'deepseek-pay', 'opencode-go', 'opendesign-go')) {
+        Fail-Parse "###$($script:LauncherName): ERROR: cm 仅支持途径 commandcode-goat（gt|tgo）/ deepseek-pay（pay）/ opencode-go（go|cgo）/ opendesign-go（dgo），当前为 '$providerForModel'###"
         return $false
     }
     if ($script:Agent -eq 'claude') {
@@ -3621,8 +3645,9 @@ function Parse-Arguments {
     if ($script:Agent -eq 'codex' -and [string]$selection.CodexWireApi -ne 'responses') {
         $providerHint = switch ($providerForModel) {
             'deepseek-pay' { 'pay' }
-            'opencode-go' { 'go' }
-            'commandcode-goat' { 'gt' }
+            'opencode-go' { 'cgo' }
+            'commandcode-goat' { 'tgo' }
+            'opendesign-go' { 'dgo' }
             default { $providerForModel }
         }
         Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Codex Responses 协议：$($selection.CodexUnsupportedReason)###"
@@ -3633,8 +3658,9 @@ function Parse-Arguments {
     if ($script:Agent -eq 'claude' -and [string]$selection.ClaudeWireApi -ne 'messages') {
         $providerHint = switch ($providerForModel) {
             'deepseek-pay' { 'pay' }
-            'opencode-go' { 'go' }
-            'commandcode-goat' { 'gt' }
+            'opencode-go' { 'cgo' }
+            'commandcode-goat' { 'tgo' }
+            'opendesign-go' { 'dgo' }
             default { $providerForModel }
         }
         Write-ErrorLine "###$($script:LauncherName): ERROR: 模型 '$($selection.Model)' 不支持 Claude 的 Anthropic Messages 协议：$($selection.ClaudeUnsupportedReason)###"

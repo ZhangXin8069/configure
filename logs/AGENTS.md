@@ -1411,3 +1411,39 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-opendesign-go - final - 2026-11-10 09:59:58 +0800
+- 主任务: 为 agent 启动器新增 dgo=opendesign-go 供应商与 cgo/tgo 别名
+- 日志文件: logs/v2026111009.txt
+- 文件大小: 6369 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 dgo(opendesign-go) 与 cgo/tgo 别名，Unix/Windows 启动器、BYOK、协议桥与回归同步
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-opendesign-go - final - 2026-11-10 10:09:40 +0800
+- 主任务: 修正 dgo 的 Anthropic 根端点并让 cl 直连
+- 日志文件: logs/v2026111010.txt
+- 文件大小: 5519 bytes
+- 触发原因: 任务完成
+- 关键内容: dgo 的 Anthropic 基址改为去 /v1 根地址，cl 直连；三供应商派生规则与四系回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## agent-opendesign-go - general - 2026-11-10 10:14:58 +0800
+- 主任务: 继续后续：新别名派发与 Windows 静态回归
+- 日志文件: logs/v20261110101458.txt
+- 文件大小: 2637 bytes
+- 触发原因: 一般记录
+- 关键内容: 新增 cgo/tgo/dgo 派发接口与 Windows 静态别名断言，全量回归通过
+- 验证: path, size, required sections, conflict markers
+- 批次状态: in-progress
+
+## agent-opendesign-go - final - 2026-11-10 10:24:49 +0800
+- 主任务: 真实验证 dgo 端点并补齐默认模型/强度
+- 日志文件: logs/v2026111010-2.txt
+- 文件大小: 5228 bytes
+- 触发原因: 任务完成
+- 关键内容: 真实端点认证与四系 dgo 调用通过；修复 cm reasoningEfforts；模板默认 deepseek-v4.1-flash/high
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

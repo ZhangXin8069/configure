@@ -1,0 +1,66 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-10 10:09:40 +0800
+批次: agent-opendesign-go
+主任务: 修正 dgo 的 Anthropic 根端点并让 cl 直连
+触发原因: 任务完成
+摘要: dgo 的 Anthropic 基址改为去 /v1 根地址，cl 直连；三供应商派生规则与四系回归通过
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 修正 Anthropic 根端点
+- 目标: 将 opendesign-go 的 Anthropic 兼容基址改为去掉 /v1 的 https://amr-link.open-design.ai，并让 cl 直连 /v1/messages，不再走本地 chat_completions 桥。
+- 命令/操作: 修改 bin/agent-config.json：anthropic_base_url 改为根地址，移除 providers.opendesign-go.claude 桥块，保留 codex 桥；同步 bin/AGENTS.md、bin/agent-custom.json.refer、lib/_agent/setup.md。
+- 关键输出: python3 -m json.tool 通过；配置规则断言 CONFIG_RULE_OK。
+- 退出码: 0
+- 证据与判断: opencode-go、commandcode-goat、opendesign-go 三者的 anthropic_base_url 均满足 base_url 去掉末尾 /v1；deepseek-pay 保持 /anthropic 特例。
+
+### S2 — 回归修正
+- 目标: 验证 cl dgo 使用根端点且不启动协议桥，其他 launcher 仍使用 /v1。
+- 命令/操作: 更新 bin/agent.test.sh：新增三供应商 Anthropic 根派生断言；cl dgo 断言 ANTHROPIC_BASE_URL=https://amr-link.open-design.ai、无 bridge 输出、settings 同步；op dgo 仍断言 options.baseURL=.../v1；co dgo 仍断言本地桥；cm dgo 仍断言 BYOK baseURL=.../v1。
+- 关键输出: agent.test.sh 全量 PASS，含 “cl dgo 直连 Anthropic 兼容根端点（无 /v1）”。
+- 退出码: 0
+- 证据与判断: TMPDIR=<真实路径> 下全量 PASS；Windows 静态契约 PASS；form 审计、data 边界与 git diff --check 通过。
+
+## 验证与证据
+- 测试/检查: TMPDIR=<真实路径> bash bin/agent.test.sh；bash bin/agent-windows.test.sh；form-audit --strict --quiet；form-data-tracking-check --quiet；git diff --check；配置派生规则 Python 断言。
+- 结果: 全部通过。
+- 未验证项: 未对真实 OpenDesign 端点发起请求（无 OPENDESIGN_GO_API_KEY）；未在原生 Windows PowerShell 中执行。
+
+## 变更与产物
+- 文件: bin/agent-config.json、bin/agent.test.sh、bin/AGENTS.md、bin/agent-custom.json.refer、lib/_agent/setup.md。
+- 产物: dgo 的 OpenAI 兼容基址 .../v1；Anthropic 兼容根 https://amr-link.open-design.ai；cl 直连，co 走桥，op/cm 使用 /v1。
+- 未改动范围: 其余供应商端点、历史 docs 报告、form 快照未改动。
+
+## 风险、限制与下一步
+- 风险: 若该 Anthropic 网关只接受 Authorization: Bearer，需把 providers.opendesign-go.anthropic_auth 从 api_key 改为 auth_token。
+- 阻塞: 无。
+- 下一步: 用真实 key 验证 /v1/messages 的认证头与模型名；补充默认模型配置。
+
+## 用户输入指令
+注意cl的base-url为「https://amr-link.open-design.ai」(没有‘/v1’,为Anthropic 兼容接口),本库的其他供应商也可能以此类推[原openai兼容接口去‘/v1’],进行相关测试与修正
+注意cl的dgo的base-url为「https://amr-link.open-design.ai」(没有‘/v1’,为Anthropic 兼容接口),本库的其他供应商也可能以此类推[原openai兼容接口去‘/v1’],进行相关测试与修正
+
+## Agent 全文报告
+--- report begin ---
+改动内容：
+- bin/agent-config.json 中 providers.opendesign-go 的 anthropic_base_url 由 https://amr-link.open-design.ai/v1 改为 https://amr-link.open-design.ai；删除 claude.bridge_models，使 cl 直连原生 Anthropic /v1/messages；codex 桥保持不变（co 仍用 OpenAI /v1/chat/completions）；op/cm 仍使用 base_url=https://amr-link.open-design.ai/v1。
+- bin/agent.test.sh 新增三供应商 Anthropic 根派生断言，并修正 cl dgo 用例：断言 ANTHROPIC_BASE_URL 为根地址、无 bridge 输出、settings 中同步根地址；op/co/cm 用例继续断言各自 /v1 或桥接路径。
+- 同步 bin/AGENTS.md、bin/agent-custom.json.refer、lib/_agent/setup.md 的端点与桥接说明，并记录 deepseek-pay 的 /anthropic 特例。
+
+推理依据：
+- Claude Code 的 ANTHROPIC_BASE_URL 期望根地址并自行追加 /v1/messages；opencode-go 与 commandcode-goat 的现有配置正是“OpenAI base_url 去掉末尾 /v1”。因此 opendesign-go 按同一规则派生。
+- 既有原生 Anthropic 兼容接口时不应再走 chat_completions 桥，否则会绕开原生协议；co 仍受 Codex Responses 限制，保留桥。
+- deepseek-pay 使用 /anthropic 子路径，不能套用简单去 /v1 规则，保持原样。
+
+验证结果：
+- 配置规则断言通过：opencode-go、commandcode-goat、opendesign-go 的 anthropic_base_url == base_url 去掉末尾 /v1；opendesign-go 无 claude bridge，codex bridge 仍为 ["*"]。
+- TMPDIR=<真实路径> `bash bin/agent.test.sh` 全量 PASS，含 “cl dgo 直连 Anthropic 兼容根端点（无 /v1）”。
+- `bash bin/agent-windows.test.sh` PASS（当前无 pwsh，仅静态契约）。
+- `form-audit --strict --quiet`、`form-data-tracking-check --quiet`、`git diff --check` 均通过。
+- 未验证：真实 OpenDesign /v1/messages 请求（无凭据）；原生 Windows PowerShell 执行。
+
+后续步骤：
+- 用真实 OPENDESIGN_GO_API_KEY 验证认证头；若网关只认 Bearer，把 providers.opendesign-go.anthropic_auth 改为 auth_token。
+- 补充实际模型名到 providers.opendesign-go.default_models.<agent>，或继续使用 `--model`。
+--- report end ---

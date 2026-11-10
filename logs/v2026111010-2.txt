@@ -1,0 +1,67 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-10 10:24:49 +0800
+批次: agent-opendesign-go
+主任务: 真实验证 dgo 端点并补齐默认模型/强度
+触发原因: 任务完成
+摘要: 真实端点认证与四系 dgo 调用通过；修复 cm reasoningEfforts；模板默认 deepseek-v4.1-flash/high
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 真实端点探测
+- 目标: 使用 ~/env-key.sh 中的 OPENDESIGN_GO_API_KEY 验证 dgo 的 OpenAI/Anthropic 端点、认证头与默认模型。
+- 命令/操作: source ~/env-key.sh；curl /v1/models、/v1/messages、/v1/chat/completions；不打印密钥。
+- 关键输出: /v1/models Bearer 200，14 个模型，default=true 为 deepseek-v4.1-flash；/v1/messages 的 x-api-key 与 Bearer 均 200；/v1/chat/completions Bearer 200、x-api-key 401；reasoning_effort low/medium/high/xhigh/max 均 200。
+- 退出码: 0
+- 证据与判断: cl 可继续用 anthropic_auth=api_key；op/co/cm 的 OpenAI 通路必须使用 Bearer，与现有配置一致。
+
+### S2 — cm 失败与修正
+- 目标: 验证 cm dgo BYOK 真实调用。
+- 命令/操作: 首次 cm dgo 失败，日志为 “opendesign-go/deepseek-v4.1-flash has no adjustable reasoning effort.”；在 providers.opendesign-go 增加 supported_strengths low..max 后重试。
+- 关键输出: 重试返回 result=OK；日志显示 “Reasoning effort set to high” 与 model_request_end effort=high。
+- 退出码: 0
+- 证据与判断: /v1/models 不返回 reasoning 元数据，必须在共享配置中声明支持的强度，cm 才会写入 reasoningEfforts。
+
+### S3 — 四系真实调用
+- 命令/操作: agent-dispatch.sh --agent {cl,op,co,cm} --provider dgo，分别用显式 deepseek-v4.1-flash/high 与裸 dgo（不传 model/strength）调用最小任务。
+- 关键输出: 四系显式调用均 ok=True/result=OK；四系裸 dgo 默认调用也均 ok=True/result=OK；cl 解析 deepseek-v4.1-flash，op 解析 opendesign-go/deepseek-v4.1-flash，co 解析 deepseek-v4.1-flash，cm 解析 opendesign-go/deepseek-v4.1-flash。
+- 退出码: 0
+- 证据与判断: 模板默认模型 deepseek-v4.1-flash、默认强度 high 在四系均可用。
+
+### S4 — 回归与审计
+- 命令/操作: TMPDIR=<真实路径> bash bin/agent.test.sh；bash bin/agent-dispatch.test.sh；bash bin/agent-windows.test.sh；form-audit；form-snapshot-verify；form-data-tracking-check；git diff --check；tools/configure-check.sh。
+- 关键输出: agent.test.sh 全量 PASS；派发与 Windows 静态契约 PASS；form/data/diff 通过；configure-check 0 errors、1 条无关 plugins 警告。
+- 退出码: 0
+- 证据与判断: 无回归。
+
+## 验证与证据
+- 测试/检查: 真实 curl 端点探测、四系显式与默认真实调用、agent.test.sh、agent-dispatch.test.sh、agent-windows.test.sh、form 全套、git diff --check、configure-check。
+- 结果: 全部通过；cm 的 reasoningEfforts 缺陷已修复。
+- 未验证项: 原生 Windows PowerShell 执行（当前无 pwsh）；其余模型未逐一调用。
+
+## 变更与产物
+- 文件: bin/agent-config.json（supported_strengths）、bin/agent-custom.json.refer（dgo 默认模型/强度）、bin/agent.test.sh（默认值与强度断言）、bin/AGENTS.md、lib/_agent/setup.md、lib/_command-code/setup.md。
+- 产物: 四系 dgo 可用；cl 直连 Anthropic 根端点；op/co/cm 使用 Bearer OpenAI 通路；模板默认 deepseek-v4.1-flash/high。
+- 未改动范围: 其他供应商端点与历史日志未改动。
+
+## 风险、限制与下一步
+- 风险: 端点未返回逐模型 reasoning 元数据，当前统一声明 low..max；若某模型实际不支持某等级，需按模型覆盖。
+- 阻塞: 无。
+- 下一步: 需要时把默认强度改为 max；为特定模型补充 per-model supported_strengths。
+
+## 用户输入指令
+继续后续
+「当前 OPENDESIGN_GO_API_KEY 未设置」,已设置,需要source ~/env-key.sh
+
+## Agent 全文报告
+--- report begin ---
+真实端点验证与修正已完成：
+- `source ~/env-key.sh` 后确认 OPENDESIGN_GO_API_KEY 已设置（未输出密钥）。
+- `/v1/models` Bearer 200，共 14 个模型，`default=true` 为 `deepseek-v4.1-flash`。
+- `/v1/messages` 同时接受 `x-api-key` 与 Bearer；`/v1/chat/completions` 只接受 Bearer（x-api-key 401）；`reasoning_effort` 的 low/medium/high/xhigh/max 均为 200。
+- `cm dgo` 首次真实调用失败：模型无 adjustable reasoning effort；在 `providers.opendesign-go` 增加 `supported_strengths=[low,medium,high,xhigh,max]` 后重试成功（result=OK）。
+- 四系 `agent-dispatch.sh --agent {cl,op,co,cm} --provider dgo` 显式模型/强度与裸 `dgo` 默认值均返回 OK；默认解析为 `deepseek-v4.1-flash` + `high`（op/cm 自动加 `opendesign-go/` 前缀）。
+- 模板已写入 dgo 默认模型 `deepseek-v4.1-flash` 与默认强度 `high`；`cl` 保持 Anthropic 根端点直连，op/co/cm 使用 Bearer OpenAI 通路。
+- 回归：agent.test.sh 全量 PASS，派发/Windows 静态契约 PASS，form/data/diff 通过，configure-check 0 errors（1 条无关 plugins 警告）。
+- 未验证：原生 Windows PowerShell；其余 13 个模型未逐一调用。
+--- report end ---

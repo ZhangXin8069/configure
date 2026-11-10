@@ -114,15 +114,19 @@ command-code --version 2>/dev/null || true
 显式选择供应商、模型和强度：
 
 ```bash
-co go deepseek-v4.1-flash max
+co cgo deepseek-v4.1-flash max
 cl pay 'deepseek-pro[1m]'
 op pay
-op go
-cl gt
-co gt
-cm gt
+op cgo
+op dgo --model <opendesign-model>
+cl dgo --model <opendesign-model>
+cl tgo
+co tgo
+cm tgo
 cm --once --max-turns 1
 ```
+
+`dgo` 的 OpenAI 兼容基址为 `https://amr-link.open-design.ai/v1`；`cl dgo` 使用去掉 `/v1` 的 Anthropic 兼容根 `https://amr-link.open-design.ai` 直连 `/v1/messages`。模板默认模型 `deepseek-v4.1-flash`、默认强度 `high`（2026-11-10 实测 `/v1/models` 的 `default=true` 模型）。实测 `/v1/messages` 同时接受 `x-api-key` 与 `Authorization: Bearer`，`/v1/chat/completions` 只接受 Bearer；默认按 Anthropic 的 `x-api-key` 认证（`anthropic_auth=api_key`），若该网关只接受 Bearer，把 `providers.opendesign-go.anthropic_auth` 改为 `auth_token`。
 
 传统参数仍具有最高优先级：
 
@@ -135,9 +139,10 @@ cm --model <模型> --effort max
 
 包含 `[1m]` 的模型名必须加引号，避免被 Zsh 当作通配符。
 
-`cm`/`cms` 默认使用 `gt=commandcode-goat`、`deepseek/deepseek-v4.1-flash`、`max`、
+`cm`/`cms` 默认使用 `gt|tgo=commandcode-goat`、`deepseek/deepseek-v4.1-flash`、`max`、
 1M 上下文和 `yolo`。原生 goal 使用 `cm --goal <objective>` 或
-`cm goal <objective|status|clear>`，`--max-turns` 控制 goal 预算。使用前先激活 key：
+`cm goal <objective|status|clear>`，`--max-turns` 控制 goal 预算。使用前先激活 key
+（含 `OPENDESIGN_GO_API_KEY`，供 `dgo=opendesign-go` 使用）：
 
 ```bash
 source ~/env-key.sh

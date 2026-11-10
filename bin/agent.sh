@@ -5,7 +5,7 @@
 #   op  → OpenCode（默认 build agent：TUI；驱动：run -s 链）
 #   co  → Codex（TUI；驱动：exec → exec resume 链）
 #   cm  → Command Code（TUI；驱动：--print NDJSON → --session 续链）
-#         途径 gt=commandcode-goat（原生 Provider API）；pay/go 走 BYOK：
+#         途径 gt|tgo=commandcode-goat（原生 Provider API）；pay/go|cgo/dgo 走 BYOK：
 #         自动合并 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传给 --model
 #   cms → Command Code HPC/secure 入口（agents.commandcode.secure_binary）
 #   ops → OpenCode HPC/secure 入口（agents.opencode.secure_binary 部署路径，缺失时自动完整复制）
@@ -499,12 +499,14 @@ _cfg_provider_key() {
     printf '%s' "$1" | tr '[:lower:]-' '[:upper:]_'
 }
 
-# 供应商快捷词：pay→deepseek-pay、go→opencode-go；完整途径名原样返回
+# 供应商快捷词：pay→deepseek-pay、go|cgo→opencode-go、gt|tgo→commandcode-goat、
+# dgo→opendesign-go；完整途径名原样返回
 _provider_alias() {
     case "$1" in
         pay) printf 'deepseek-pay\n';;
-        go)  printf 'opencode-go\n';;
-        gt)  printf 'commandcode-goat\n';;
+        go|cgo)  printf 'opencode-go\n';;
+        gt|tgo)  printf 'commandcode-goat\n';;
+        dgo) printf 'opendesign-go\n';;
         *)   printf '%s\n' "$1";;
     esac
 }
@@ -620,7 +622,19 @@ def opencode_providers(cfg):
         if not env_key or not os.environ.get(env_key):
             continue
         provider_id = str(provider.get("opencode_provider_id") or name)
-        blocks[provider_id] = {"options": {"apiKey": "{env:%s}" % env_key}}
+        block = {"options": {"apiKey": "{env:%s}" % env_key}}
+        opencode_cfg = provider.get("opencode")
+        if isinstance(opencode_cfg, dict):
+            npm = str(opencode_cfg.get("npm") or "").strip()
+            if npm:
+                block["npm"] = npm
+            display = str(opencode_cfg.get("name") or provider.get("label") or "").strip()
+            if display:
+                block["name"] = display
+            base_url = str(opencode_cfg.get("base_url") or provider.get("base_url") or "").strip().rstrip("/")
+            if base_url:
+                block["options"]["baseURL"] = base_url
+        blocks[provider_id] = block
     return blocks
 
 
@@ -989,17 +1003,25 @@ for provider_name, provider in providers.items():
         continue
     base_url = str(provider.get("base_url") or "").strip().rstrip("/")
     env_key = str(provider.get("env_key") or "").strip()
-    models = provider.get("models")
-    if not base_url or not env_key or not isinstance(models, dict):
+    static_models = provider.get("models")
+    if not isinstance(static_models, dict):
+        static_models = {}
+    if not base_url or not env_key:
         continue
     cached = cache_models(provider_name)
+    model_ids = list(static_models)
+    if not model_ids and byok.get("models_from_cache"):
+        model_ids = list(cached)
+    if not model_ids:
+        continue
     entry = {
         "name": str(provider.get("label") or provider_name),
         "baseURL": base_url,
         "apiKey": "$" + env_key,
         "models": {},
     }
-    for model_id, metadata in models.items():
+    for model_id in model_ids:
+        metadata = static_models.get(model_id)
         metadata = metadata if isinstance(metadata, dict) else {}
         cached_model = cached.get(model_id) if isinstance(cached.get(model_id), dict) else {}
         model = {}
@@ -1212,7 +1234,7 @@ run_commandcode() {
 
     while (( $# )); do
         case "$1" in
-            gt|commandcode-goat|pay|go|deepseek-pay|opencode-go)
+            gt|tgo|commandcode-goat|pay|go|cgo|deepseek-pay|opencode-go|dgo|opendesign-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -1233,11 +1255,11 @@ run_commandcode() {
             --accept-edits) PERMISSION_MODE=accept-edits; shift;;
             --yolo) PERMISSION_MODE=yolo; shift;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--effort LEVEL] [-file PATH] [-time DUR]"
-                echo "默认: gt=commandcode-goat，模型=DeepSeek V4.1 Flash，强度=max，上下文=1M，权限=yolo。"
-                echo "BYOK: pay=deepseek-pay / go=opencode-go，自动合并进 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入。"
+                echo "用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--effort LEVEL] [-file PATH] [-time DUR]"
+                echo "默认: gt|tgo=commandcode-goat，模型=DeepSeek V4.1 Flash，强度=max，上下文=1M，权限=yolo。"
+                echo "BYOK: pay=deepseek-pay / go|cgo=opencode-go / dgo=opendesign-go，自动合并进 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入。"
                 echo "Goal: ${_NAME} --goal <objective> 或 ${_NAME} goal <objective|status|clear>（预算由 --max-turns 控制）。"
-                echo "认证: 先 source ~/env-key.sh；gt 使用 COMMANDCODE_GOAT_API_KEY（映射为 COMMAND_CODE_API_KEY），pay/go 分别使用 DEEPSEEK_PAY_API_KEY/OPENCODE_GO_API_KEY。"
+                echo "认证: 先 source ~/env-key.sh；gt|tgo 使用 COMMANDCODE_GOAT_API_KEY（映射为 COMMAND_CODE_API_KEY），pay/go|cgo/dgo 分别使用 DEEPSEEK_PAY_API_KEY/OPENCODE_GO_API_KEY/OPENDESIGN_GO_API_KEY。"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]。"
                 echo "权限: [--permission-mode default|plan|accept-edits|yolo|dont-ask] [--plan] [--accept-edits] [--yolo]。"
                 echo "不给驱动选项时进入 Command Code TUI；给出 -file/-time/--once 时进入驱动模式。"
@@ -1283,9 +1305,9 @@ run_commandcode() {
 
     local _cc_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_COMMANDCODE_PROVIDER:-commandcode-goat}}")"
     case "${_cc_provider}" in
-        commandcode-goat|deepseek-pay|opencode-go) ;;
+        commandcode-goat|deepseek-pay|opencode-go|opendesign-go) ;;
         *)
-            echo "###${_NAME}: ERROR: cm 仅支持途径 commandcode-goat（gt）/ deepseek-pay（pay）/ opencode-go（go），当前为 '${_cc_provider}'###" >&2
+            echo "###${_NAME}: ERROR: cm 仅支持途径 commandcode-goat（gt|tgo）/ deepseek-pay（pay）/ opencode-go（go|cgo）/ opendesign-go（dgo），当前为 '${_cc_provider}'###" >&2
             exit 64;;
     esac
     local PROVIDER_EXPLICIT=0
@@ -1607,7 +1629,7 @@ run_claude() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 CLAUDE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.claude 与 agents.claude.model 互为一层，高优先层缺值回退另一层。
@@ -1632,14 +1654,14 @@ run_claude() {
     [[ -n "${MODEL_OVERRIDE}" ]] && MODEL_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|gt|deepseek-pay|opencode-go|commandcode-goat)
+            pay|go|cgo|gt|tgo|dgo|deepseek-pay|opencode-go|commandcode-goat|opendesign-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
                 MODEL_OVERRIDE="$2"; MODEL_EXPLICIT=1; MODEL_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 ${_NAME} gt）。"
+                echo "用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 ${_NAME} tgo）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
@@ -1665,7 +1687,7 @@ run_claude() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -1705,11 +1727,11 @@ run_claude() {
 
     # ---- 途径设置：Anthropic 兼容端点与 key 均取自 agent-config.json/agent-custom.json ----
     # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
-    # 途径来自命令行快捷词（pay/go）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
+    # 途径来自命令行快捷词（pay/go/cgo/gt/tgo/dgo）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
     # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go。
     local _cl_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}")"
     if [[ -z "${_cl_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gt、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CLAUDE_PROVIDER 环境变量，两者一视同仁）：
@@ -1796,8 +1818,9 @@ run_claude() {
         local _cl_provider_hint="${_cl_provider}"
         case "${_cl_provider}" in
             deepseek-pay) _cl_provider_hint=pay;;
-            opencode-go) _cl_provider_hint=go;;
-            commandcode-goat) _cl_provider_hint=gt;;
+            opencode-go) _cl_provider_hint=cgo;;
+            commandcode-goat) _cl_provider_hint=tgo;;
+            opendesign-go) _cl_provider_hint=dgo;;
         esac
         echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Claude 的 Anthropic Messages 协议：${AGENT_MODEL_RESOLVED_CLAUDE_UNSUPPORTED_REASON:-该模型不支持 /v1/messages}###" >&2
         echo "###${_NAME}: hint: 请改用 'op ${_cl_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2
@@ -2176,7 +2199,7 @@ run_opencode() {
     fi
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
+    # 用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]
     #   --model MODEL     : 直接指定模型 ID；也可用 OPENCODE_MODEL 环境变量覆盖。
     #                       未指定时按两层默认取（显式选途径时途径默认优先，否则 agent 自身默认优先）：
     #                       providers.<途径>.default_models.opencode 与 agents.opencode.model 互为一层，高优先层缺值回退另一层。
@@ -2203,7 +2226,7 @@ run_opencode() {
     [[ -n "${VARIANT_OVERRIDE}" ]] && VARIANT_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|gt|deepseek-pay|opencode-go|commandcode-goat)
+            pay|go|cgo|gt|tgo|dgo|deepseek-pay|opencode-go|commandcode-goat|opendesign-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -2212,8 +2235,8 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少等级参数###" >&2; exit 64; fi
                 VARIANT_OVERRIDE="$2"; VARIANT_EXPLICIT=1; STRENGTH_FLAG_EXPLICIT=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 ${_NAME} gt）。"
+                echo "用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time DUR]"
+                echo "供应商快捷词: pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 ${_NAME} tgo）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
@@ -2239,7 +2262,7 @@ run_opencode() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -2288,7 +2311,7 @@ run_opencode() {
     # 两层皆空时启动报错。
     local _op_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}")"
     if [[ -z "${_op_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gt、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 OPENCODE_PROVIDER 环境变量，两者一视同仁）
@@ -3015,7 +3038,7 @@ run_codex() {
     # dirs/skills 注入在 _load_prompt 之后执行（_load_prompt 会重置 PROMPT）
 
     # ---- 参数解析：模型/途径覆盖 + 无人值守驱动选项 ----
-    # 用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL]
+    # 用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL]
     #                       [-time DUR]
     #   -time/--time DUR  : 驱动模式中「继续」发送间隔，纯数字=秒；支持 s/m/h 后缀（默认 30s）。
     #   --model MODEL     : 直接指定 Codex 模型；也可用 CODEX_MODEL 环境变量覆盖。
@@ -3043,7 +3066,7 @@ run_codex() {
     [[ -n "${REASONING_OVERRIDE}" ]] && REASONING_EXPLICIT=1
     while (( $# )); do
         case "$1" in
-            pay|go|gt|deepseek-pay|opencode-go|commandcode-goat)
+            pay|go|cgo|gt|tgo|dgo|deepseek-pay|opencode-go|commandcode-goat|opendesign-go)
                 PROVIDER_OVERRIDE="$(_provider_alias "$1")"; shift;;
             --model|-model)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少模型参数###" >&2; exit 64; fi
@@ -3075,15 +3098,15 @@ run_codex() {
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
                 RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
             --help)
-                echo "用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
+                echo "用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
-                echo "供应商快捷词: pay=deepseek-pay / go=opencode-go / gt=commandcode-goat（如 ${_NAME} gt）。"
+                echo "供应商快捷词: pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 ${_NAME} tgo）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             -*)
-                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|gt] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
+                echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time 30s]）###" >&2
                 exit 64;;
             *)
                 if (( ${#POSITIONAL[@]} >= 2 )); then
@@ -3132,7 +3155,7 @@ run_codex() {
     # 两层皆空时启动报错。
     local _cx_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}")"
     if [[ -z "${_cx_provider}" ]]; then
-        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|gt、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
+        echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
     # 是否由用户显式指定途径（命令行快捷词或 CODEX_PROVIDER_ID 环境变量，两者一视同仁）
@@ -3193,8 +3216,9 @@ run_codex() {
         local _cx_provider_hint="${_cx_provider}"
         case "${_cx_provider}" in
             deepseek-pay) _cx_provider_hint=pay;;
-            opencode-go) _cx_provider_hint=go;;
-            commandcode-goat) _cx_provider_hint=gt;;
+            opencode-go) _cx_provider_hint=cgo;;
+            commandcode-goat) _cx_provider_hint=tgo;;
+            opendesign-go) _cx_provider_hint=dgo;;
         esac
         echo "###${_NAME}: ERROR: 模型 '${MODEL_ID}' 不支持 Codex Responses 协议：${AGENT_MODEL_RESOLVED_CODEX_UNSUPPORTED_REASON:-该模型不支持 /responses}###" >&2
         echo "###${_NAME}: hint: 请改用 'op ${_cx_provider_hint} ${MODEL_ID}'，OpenCode 会按模型能力选择 /chat/completions 或 /messages###" >&2

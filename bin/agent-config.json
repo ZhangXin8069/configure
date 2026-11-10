@@ -1,6 +1,6 @@
 {
   "schema": "agent-config/v1",
-  "description": "agent 系列（cl/op/co/cm）通用配置：模型提供途径目录、模型发现/缓存、状态栏与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
+  "description": "agent 系列（cl/op/co/cm）通用配置：模型提供途径目录（deepseek-pay/opencode-go/commandcode-goat/opendesign-go）、模型发现/缓存、状态栏与各 agent 的机制参数。个性化选择（供应商/模型/强度）见 agent-custom.json，缺失时回退 agent-custom.json.refer；两文件深度合并后生效。",
   "model_discovery": {
     "enabled": true,
     "cache_ttl_seconds": 21600,
@@ -138,6 +138,33 @@
           "supported_strengths": [ "low", "medium", "high", "max" ]
         }
       }
+    },
+    "opendesign-go": {
+      "label": "OpenDesign Go（OpenAI 兼容 + Anthropic 兼容根）",
+      "env_key": "OPENDESIGN_GO_API_KEY",
+      "base_url": "https://amr-link.open-design.ai/v1",
+      "anthropic_base_url": "https://amr-link.open-design.ai",
+      "anthropic_auth": "api_key",
+      "wire_api": "responses",
+      "supports_websockets": false,
+      "opencode_provider_id": "opendesign-go",
+      "models_url": "https://amr-link.open-design.ai/v1/models",
+      "models_auth": "bearer",
+      "supported_strengths": [ "low", "medium", "high", "xhigh", "max" ],
+      "opencode": {
+        "npm": "@ai-sdk/openai-compatible",
+        "name": "OpenDesign Go"
+      },
+      "codex": {
+        "bridge_models": [ "*" ],
+        "bridge_protocol": "chat_completions",
+        "bridge_auth": "bearer"
+      },
+      "commandcode": {
+        "byok": true,
+        "models_from_cache": true
+      },
+      "models": {}
     }
   },
   "agents": {
@@ -155,7 +182,8 @@
       "key_providers": [
         "deepseek-pay",
         "opencode-go",
-        "commandcode-goat"
+        "commandcode-goat",
+        "opendesign-go"
       ]
     },
     "codex": {

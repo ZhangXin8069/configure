@@ -1,0 +1,44 @@
+[日志元数据]
+日志类型: general
+生成时间: 2026-11-10 10:14:58 +0800
+批次: agent-opendesign-go
+主任务: 继续后续：新别名派发与 Windows 静态回归
+触发原因: 一般记录
+摘要: 新增 cgo/tgo/dgo 派发接口与 Windows 静态别名断言，全量回归通过
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 派发接口新别名回归
+- 目标: 验证 agent-dispatch.sh 对 cgo/tgo/dgo 原样透传给目标 launcher，不丢失别名。
+- 命令/操作: 在 bin/agent-dispatch.test.sh 新增 op/cgo、co/tgo、cm/dgo 三个派发用例，断言 argv 与 JSON provider 字段。
+- 关键输出: PASS: agent-dispatch.sh 默认继承、显式覆盖、task-file、JSON 结果与子 agent 自动恢复。
+- 退出码: 0
+- 证据与判断: TMPDIR 使用真实路径后派发测试全量通过，cgo/tgo/dgo 均按 `--once <alias> --model ... <strength flag>` 传递。
+
+### S2 — Windows 静态别名断言
+- 目标: 防止 PowerShell runtime 的别名表回退。
+- 命令/操作: 在 bin/agent-windows.test.sh 增加 cgo→opencode-go、tgo→commandcode-goat、dgo→opendesign-go 的静态断言。
+- 关键输出: PASS: Windows launcher 静态契约。
+- 退出码: 0
+- 证据与判断: 当前环境无 pwsh，仅静态检查；断言覆盖 Resolve-ProviderAlias 与参数别名列表。
+
+### S3 — 全量与仓库检查
+- 命令/操作: TMPDIR=<真实路径> bash bin/agent.test.sh；bash tools/configure-check.sh；form-snapshot-verify；form-data-tracking-check；git diff --check。
+- 关键输出: agent.test.sh 全量 PASS；configure-check 0 errors、1 warning（plugins 无 .codex-plugin/plugin.json，与本任务无关）；其余检查通过。
+- 退出码: 0
+- 证据与判断: 无回归。
+
+## 验证与证据
+- 测试/检查: bin/agent.test.sh、bin/agent-dispatch.test.sh、bin/agent-windows.test.sh、tools/configure-check.sh、form 快照/结构/data 边界检查、git diff --check。
+- 结果: 全部通过。
+- 未验证项: 真实 OpenDesign /v1/models 与 /v1/messages 调用（当前 OPENDESIGN_GO_API_KEY 未设置，data/cache 无该供应商缓存）。
+
+## 变更与产物
+- 文件: bin/agent-dispatch.test.sh、bin/agent-windows.test.sh。
+- 产物: 派发接口与 Windows runtime 的新别名回归覆盖。
+- 未改动范围: 业务实现与端点配置本轮未再改动。
+
+## 风险、限制与下一步
+- 风险: 无新增实现风险。
+- 阻塞: 真实端点验证因缺 OPENDESIGN_GO_API_KEY 阻塞。
+- 下一步: 注入 key 后运行 `op dgo --model <model>` 触发 /v1/models 刷新，并用该模型验证 cl 的 /v1/messages 认证头。

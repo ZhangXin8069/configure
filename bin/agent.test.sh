@@ -17,7 +17,7 @@ trap cleanup EXIT HUP INT TERM
 # 屏蔽宿主环境导出的真实 key/模型变量，保证断言确定性（测试内显式前缀赋值仍可覆盖）
 unset DEEPSEEK_PAY_API_KEY OPENCODE_GO_API_KEY OPENCODE_API_KEY DEEPSEEK_API_KEY \
       COMMANDCODE_GOAT_API_KEY COMMAND_CODE_API_KEY COMMANDCODE_MODEL COMMANDCODE_EFFORT \
-      COMMANDCODE_REASONING_EFFORT COMMANDCODE_PROVIDER COMMAND_CODE_BIN \
+      COMMANDCODE_REASONING_EFFORT COMMANDCODE_PROVIDER COMMAND_CODE_BIN OPENDESIGN_GO_API_KEY \
       ANTHROPIC_API_KEY ANTHROPIC_AUTH_TOKEN ANTHROPIC_BASE_URL ANTHROPIC_MODEL \
       ANTHROPIC_DEFAULT_OPUS_MODEL ANTHROPIC_DEFAULT_SONNET_MODEL ANTHROPIC_DEFAULT_HAIKU_MODEL \
       CLAUDE_CODE_SUBAGENT_MODEL CLAUDE_CODE_EFFORT_LEVEL CLAUDE_MODEL OPENCODE_MODEL OPENCODE_VARIANT \
@@ -212,7 +212,7 @@ python3 - "$script_dir/agent-config.json" "$script_dir/agent-custom.json.refer" 
 import json
 import sys
 
-expected = {'deepseek-pay', 'opencode-go', 'commandcode-goat'}
+expected = {'deepseek-pay', 'opencode-go', 'commandcode-goat', 'opendesign-go'}
 for path in sys.argv[1:]:
     with open(path, encoding='utf-8') as handle:
         config = json.load(handle)
@@ -220,8 +220,28 @@ for path in sys.argv[1:]:
 with open(sys.argv[1], encoding='utf-8') as handle:
     base = json.load(handle)
 assert set(base['agents']['opencode']['key_providers']) == expected
+for name in ('opencode-go', 'commandcode-goat', 'opendesign-go'):
+    provider = base['providers'][name]
+    openai_base = provider['base_url'].rstrip('/')
+    assert openai_base.endswith('/v1'), (name, openai_base)
+    assert provider['anthropic_base_url'].rstrip('/') == openai_base[:-3], (
+        name, provider['anthropic_base_url'], openai_base)
+dgo = base['providers']['opendesign-go']
+assert (dgo.get('claude') or {}).get('bridge_models') in (None, []), dgo.get('claude')
+assert dgo['codex']['bridge_models'] == ['*'], dgo['codex']
+assert set(dgo['supported_strengths']) >= {'low', 'medium', 'high', 'xhigh', 'max'}, dgo
+with open(sys.argv[2], encoding='utf-8') as handle:
+    custom = json.load(handle)
+dgo_defaults = custom['providers']['opendesign-go']
+assert dgo_defaults['default_models'] == {
+    'claude': 'deepseek-v4.1-flash',
+    'opencode': 'opendesign-go/deepseek-v4.1-flash',
+    'codex': 'deepseek-v4.1-flash',
+    'commandcode': 'deepseek-v4.1-flash',
+}, dgo_defaults
+assert set(dgo_defaults['default_strengths'].values()) == {'high'}, dgo_defaults
 PY
-printf 'PASS: agent 供应商集合包含 deepseek-pay/opencode-go/commandcode-goat\n'
+printf 'PASS: agent 供应商集合包含 deepseek-pay/opencode-go/commandcode-goat/opendesign-go\n'
 
 if ! python3 "$script_dir/agent-protocol-bridge.test.py" >/dev/null 2>&1; then
     fail 'agent-protocol-bridge.py 协议测试失败（单独运行该测试查看详情）'
@@ -281,6 +301,7 @@ run_launcher() {
             CODEX_PROVIDER_ENV_KEY="${CODEX_PROVIDER_ENV_KEY:-}" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
+            OPENDESIGN_GO_API_KEY="${OPENDESIGN_GO_API_KEY:-}" \
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
             DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
@@ -295,6 +316,7 @@ run_launcher() {
             OPENCODE_BIN="$binary" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
+            OPENDESIGN_GO_API_KEY="${OPENDESIGN_GO_API_KEY:-}" \
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
             DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
@@ -315,6 +337,7 @@ run_launcher() {
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-test-deepseek-key}" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
+            OPENDESIGN_GO_API_KEY="${OPENDESIGN_GO_API_KEY:-}" \
             DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
         cm) (cd "$repo/nested" && \
@@ -332,6 +355,7 @@ run_launcher() {
             COMMAND_CODE_API_KEY="${COMMAND_CODE_API_KEY:-}" \
             OPENCODE_GO_API_KEY="${OPENCODE_GO_API_KEY:-}" \
             OPENCODE_API_KEY="${OPENCODE_API_KEY:-}" \
+            OPENDESIGN_GO_API_KEY="${OPENDESIGN_GO_API_KEY:-}" \
             DEEPSEEK_PAY_API_KEY="${DEEPSEEK_PAY_API_KEY:-}" \
             DEEPSEEK_API_KEY= \
             "$test_root/$name" "$@") ;;
@@ -1408,6 +1432,131 @@ set -e
 switch_op_go_glm_new=$(tail -n +$((switch_op_go_glm_before + 1)) "$call_log")
 assert_contains "$switch_op_go_glm_new" '"model":"opencode-go/glm-5.3-flash"'
 printf 'PASS: op go 模型 ID 使用 opencode-go/ 前缀\n'
+
+# ---- 新快捷词别名 cgo/tgo 与 dgo(opendesign-go) 自定义 provider ----
+cgo_before=$(wc -l < "$call_log")
+set +e
+cgo_output=$(OPENCODE_GO_API_KEY=test-go-key run_launcher op "$fake_opencode" cgo --once 2>&1)
+cgo_status=$?
+set -e
+(( cgo_status == 0 )) || fail "op cgo 失败：$cgo_output"
+cgo_new=$(tail -n +$((cgo_before + 1)) "$call_log")
+assert_contains "$cgo_output" 'opencode-go/deepseek-v4.1-flash（途径默认）'
+assert_contains "$cgo_new" '"model":"opencode-go/deepseek-v4.1-flash","variant":"max"'
+printf 'PASS: 快捷词 cgo 等价于 go（opencode-go）\n'
+
+tgo_before=$(wc -l < "$call_log")
+set +e
+tgo_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key run_launcher op "$fake_opencode" tgo --once 2>&1)
+tgo_status=$?
+set -e
+(( tgo_status == 0 )) || fail "op tgo 失败：$tgo_output"
+tgo_new=$(tail -n +$((tgo_before + 1)) "$call_log")
+assert_contains "$tgo_new" '"apiKey":"{env:COMMANDCODE_GOAT_API_KEY}"'
+assert_contains "$tgo_new" '"model":"commandcode/deepseek/deepseek-v4.1-flash","variant":"max"'
+printf 'PASS: 快捷词 tgo 等价于 gt（commandcode-goat）\n'
+
+dgo_op_before=$(wc -l < "$call_log")
+set +e
+dgo_op_output=$(OPENDESIGN_GO_API_KEY=test-dgo-key \
+    run_launcher op "$fake_opencode" dgo --model dgo-test-model --once 2>&1)
+dgo_op_status=$?
+set -e
+(( dgo_op_status == 0 )) || fail "op dgo 失败：$dgo_op_output"
+dgo_op_new=$(tail -n +$((dgo_op_before + 1)) "$call_log")
+assert_contains "$dgo_op_new" '"model":"opendesign-go/dgo-test-model","variant":"high"'
+dgo_op_config=$(printf '%s\n' "$dgo_op_new" | sed -n 's/^opencode-config: //p' | tail -1)
+printf '%s' "$dgo_op_config" | python3 -c '
+import json,sys
+c=json.load(sys.stdin)
+p=c["provider"]["opendesign-go"]
+assert p["npm"]=="@ai-sdk/openai-compatible"
+assert p["name"]=="OpenDesign Go"
+assert p["options"]["baseURL"]=="https://amr-link.open-design.ai/v1"
+assert p["options"]["apiKey"]=="{env:OPENDESIGN_GO_API_KEY}"
+' || fail "op dgo 自定义 provider 配置不正确：$dgo_op_config"
+printf 'PASS: op dgo 注入 OpenAI 兼容 npm/baseURL 与 OPENDESIGN_GO_API_KEY\n'
+
+dgo_cl_before=$(wc -l < "$call_log")
+set +e
+dgo_cl_output=$(OPENDESIGN_GO_API_KEY=test-dgo-key \
+    run_launcher cl "$fake_claude" dgo --model dgo-test-model --once 2>&1)
+dgo_cl_status=$?
+set -e
+(( dgo_cl_status == 0 )) || fail "cl dgo 失败：$dgo_cl_output"
+dgo_cl_new=$(tail -n +$((dgo_cl_before + 1)) "$call_log")
+case "$dgo_cl_output" in
+    *'bridge:'*) fail 'cl dgo 应直连 Anthropic 兼容根端点，不应启动协议桥' ;;
+esac
+assert_contains "$dgo_cl_new" 'ANTHROPIC_BASE_URL=https://amr-link.open-design.ai'
+assert_contains "$dgo_cl_new" 'ANTHROPIC_MODEL=dgo-test-model'
+assert_contains "$dgo_cl_new" 'ANTHROPIC_API_KEY=test-dgo-key'
+assert_contains "$dgo_cl_new" 'CLAUDE_CODE_EFFORT_LEVEL=high'
+assert_contains "$dgo_cl_new" 'printenv OPENDESIGN_GO_API_KEY'
+dgo_cl_settings=$(printf '%s\n' "$dgo_cl_new" | sed -n 's/^claude-settings: //p' | tail -1)
+assert_contains "$dgo_cl_settings" '"ANTHROPIC_BASE_URL":"https://amr-link.open-design.ai"'
+assert_contains "$dgo_cl_settings" '"CLAUDE_CODE_EFFORT_LEVEL":"high"'
+printf 'PASS: cl dgo 直连 Anthropic 兼容根端点（无 /v1）与 OPENDESIGN_GO_API_KEY\n'
+
+dgo_co_before=$(wc -l < "$call_log")
+set +e
+dgo_co_output=$(OPENDESIGN_GO_API_KEY=test-dgo-key \
+    run_launcher co "$fake_codex" dgo --model dgo-test-model --once 2>&1)
+dgo_co_status=$?
+set -e
+(( dgo_co_status == 0 )) || fail "co dgo 失败：$dgo_co_output"
+dgo_co_new=$(tail -n +$((dgo_co_before + 1)) "$call_log")
+assert_contains "$dgo_co_output" 'bridge: Responses -> chat_completions'
+assert_contains "$dgo_co_output" 'provider: opendesign-go | tier=standard'
+assert_contains "$dgo_co_new" '--model dgo-test-model'
+assert_contains "$dgo_co_new" 'model_provider="opendesign-go"'
+assert_contains "$dgo_co_new" 'model_providers.opendesign-go.base_url="http://127.0.0.1:'
+assert_contains "$dgo_co_new" 'model_providers.opendesign-go.env_key="OPENDESIGN_GO_API_KEY"'
+assert_contains "$dgo_co_new" 'model_providers.opendesign-go.wire_api="responses"'
+assert_contains "$dgo_co_new" 'model_reasoning_effort="high"'
+printf 'PASS: co dgo 通过本地 Responses -> chat_completions 协议桥\n'
+
+dgo_cache="$data/cache/provider-models/opendesign-go.json"
+mkdir -p "$(dirname -- "$dgo_cache")"
+cat > "$dgo_cache" <<'JSON'
+{
+  "schema": "agent-model-catalog/v1",
+  "provider": "opendesign-go",
+  "updated_at": 0,
+  "sources": ["test"],
+  "models": {
+    "dgo-test-model": {
+      "id": "dgo-test-model",
+      "supported_strengths": ["high", "max"]
+    }
+  }
+}
+JSON
+dgo_cm_before=$(wc -l < "$call_log")
+set +e
+dgo_cm_output=$(OPENDESIGN_GO_API_KEY=test-dgo-key \
+    run_launcher cm "$fake_commandcode" dgo --model dgo-test-model --once 2>&1)
+dgo_cm_status=$?
+set -e
+(( dgo_cm_status == 0 )) || fail "cm dgo 失败：$dgo_cm_output"
+dgo_cm_new=$(tail -n +$((dgo_cm_before + 1)) "$call_log")
+assert_contains "$dgo_cm_output" 'Command Code: opendesign-go/dgo-test-model'
+assert_contains "$dgo_cm_output" 'provider: opendesign-go (BYOK)'
+assert_contains "$dgo_cm_new" '--model opendesign-go/dgo-test-model --effort high'
+python3 - "$commandcode_home/.commandcode/providers.json" <<'PY' || fail 'cm dgo 未写入正确的 BYOK provider'
+import json
+import sys
+
+with open(sys.argv[1], encoding='utf-8') as handle:
+    providers = json.load(handle)['provider']
+dgo = providers['opendesign-go']
+assert dgo['baseURL'] == 'https://amr-link.open-design.ai/v1', dgo
+assert dgo['apiKey'] == '$OPENDESIGN_GO_API_KEY', dgo
+assert 'dgo-test-model' in dgo['models'], dgo
+assert dgo['models']['dgo-test-model']['reasoningEfforts'] == ['high', 'max'], dgo
+PY
+rm -f -- "$dgo_cache"
+printf 'PASS: cm dgo 使用缓存模型写入 BYOK providers.json 与 opendesign-go/ 前缀\n'
 
 go_key_precedence_output=$(OPENCODE_GO_API_KEY=go-first OPENCODE_API_KEY=api-third \
     run_launcher co "$fake_codex" go --once 2>&1)

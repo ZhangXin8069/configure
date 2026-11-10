@@ -1,0 +1,73 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-10 09:59:58 +0800
+批次: agent-opendesign-go
+主任务: 为 agent 启动器新增 dgo=opendesign-go 供应商与 cgo/tgo 别名
+触发原因: 任务完成
+摘要: 新增 dgo(opendesign-go) 与 cgo/tgo 别名，Unix/Windows 启动器、BYOK、协议桥与回归同步
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+### S1 — 供应商与别名配置
+- 目标: 在共享 agent 配置中新增 dgo=opendesign-go，OpenAI 兼容 base_url=https://amr-link.open-design.ai/v1，key 变量 OPENDESIGN_GO_API_KEY；并增加 cgo=opencode-go、tgo=commandcode-goat 别名，go/gt 保持等价。
+- 命令/操作: 修改 bin/agent-config.json、bin/agent-custom.json.refer；在 providers.opendesign-go 中配置 models_url/models_auth、opencode npm/baseURL、claude/codex chat_completions 桥、commandcode BYOK 与 models_from_cache；将 opendesign-go 加入 agents.opencode.key_providers。
+- 关键输出: python3 -m json.tool 两个 JSON 均通过。
+- 退出码: 0
+- 证据与判断: 供应商集合与 key_providers 测试断言已扩展并通过。
+
+### S2 — Unix/Windows 启动器
+- 目标: 四系 launcher 与 Windows runtime 对 dgo/cgo/tgo 一致解析。
+- 命令/操作: 更新 bin/agent.sh 的 _provider_alias、四处参数 case、帮助文本、cm 途径白名单、cl/co 协议提示；扩展 op 自定义 provider 注入（npm/name/options.baseURL）；扩展 cm BYOK 的 models_from_cache；同步 bin/agent-runtime.ps1。
+- 关键输出: bin/{op,cl,co,cm} --help 均显示新别名；bash -n 全部通过。
+- 退出码: 0
+- 证据与判断: op dgo 生成 @ai-sdk/openai-compatible + baseURL；cl/co dgo 启动本地协议桥；cm dgo 写入 providers.json。
+
+### S3 — 回归与审计
+- 目标: 确认新增路径不破坏现有三系行为。
+- 命令/操作: TMPDIR=<真实路径> bash bin/agent.test.sh；bash bin/agent-windows.test.sh；form-audit --strict --quiet；form-data-tracking-check --quiet；git diff --check。
+- 关键输出: agent.test.sh 全量 PASS；Windows 静态契约 PASS（当前无 pwsh，仅静态）；form 审计无输出；data 边界检查通过。
+- 退出码: 0
+- 证据与判断: 新增 cgo/tgo/dgo 用例与既有 deepseek-pay/opencode-go/commandcode-goat 用例同时通过；macOS 下 agent-dispatch.test.sh 的 /var→/private/var 路径问题在 HEAD 基线同样存在，使用真实路径 TMPDIR 后通过。
+
+## 验证与证据
+- 测试/检查: bin/agent.test.sh、bin/agent-windows.test.sh、form-audit、form-data-tracking-check、git diff --check、四个 launcher --help 冒烟。
+- 结果: 全部通过；新增 5 个 dgo 专项断言通过。
+- 未验证项: 未对 https://amr-link.open-design.ai/v1 发起真实模型请求（无 OPENDESIGN_GO_API_KEY，且避免外部调用）；未在原生 Windows PowerShell 中执行 runtime（当前环境无 pwsh）。
+
+## 变更与产物
+- 文件: AGENTS.md、bin/AGENTS.md、bin/agent-config.json、bin/agent-custom.json.refer、bin/agent.sh、bin/agent-runtime.ps1、bin/agent-dispatch.sh、bin/agent.test.sh、bin/agent-windows.test.sh、lib/_agent/setup.md、lib/_command-code/AGENTS.md、lib/_command-code/setup.md。
+- 产物: 共享供应商 opendesign-go、别名 cgo/tgo/dgo、op 自定义 provider 注入、cm 缓存模型 BYOK。
+- 未改动范围: 历史 docs 报告、form 快照、refer 外部项目未改动。
+
+## 风险、限制与下一步
+- 风险: opendesign-go 未内置静态模型，裸 `dgo` 未给 --model 时会回退到 agent 层默认模型，可能与该端点模型不匹配；需显式 --model 或在 providers.opendesign-go.default_models 配置。
+- 阻塞: 无。
+- 下一步: 补充真实端点模型清单/默认模型；如需 Windows 上 cl/co 使用 dgo，需实现 PowerShell 协议桥。
+
+## 用户输入指令
+为本库agent配置添加dgo[opendesign-go]供应商,其openai兼容的base-url为「https://amr-link.open-design.ai/v1」,api-key为环境变量中的「OPENDESIGN_GO_API_KEY」,同时进行如下几个供应商的新别名约定:「dgo为opendesign-go,cgo为opencode-go,tgo为commandcode-goat,同时默认go指向cgo,默认gt指向tgo」
+
+## Agent 全文报告
+--- report begin ---
+改动内容：
+- 在 bin/agent-config.json 新增 providers.opendesign-go：label、env_key=OPENDESIGN_GO_API_KEY、base_url=https://amr-link.open-design.ai/v1、models_url=/v1/models、models_auth=bearer、opencode_provider_id=opendesign-go、opencode.npm=@ai-sdk/openai-compatible；claude/codex 使用 chat_completions 本地协议桥；commandcode.byok=true 且 models_from_cache=true；同时加入 agents.opencode.key_providers。
+- 在 bin/agent.sh 与 bin/agent-runtime.ps1 统一别名：pay→deepseek-pay，go|cgo→opencode-go，gt|tgo→commandcode-goat，dgo→opendesign-go；四处参数解析、帮助文本、cm 途径白名单、cl/co 提示同步。
+- op 自定义 provider 注入补充 npm/name/options.baseURL；cm BYOK 在静态模型表为空时使用模型目录缓存；bin/agent-custom.json.refer 增加 opendesign-go 条目与使用说明。
+- 回归新增 cgo/tgo/dgo 用例，覆盖 op/cl/co/cm 四系。
+
+推理依据：
+- 该端点为 OpenAI Chat Completions 兼容，因此 op 需要 @ai-sdk/openai-compatible 与显式 baseURL；cl/co 只支持 Messages/Responses，只能复用仓库现有本地协议桥。
+- 未提供模型清单与默认模型，故不臆造模型名，依赖 /v1/models 自动发现，并要求显式 --model 或用户配置 default_models。
+- go/gt 保持原有语义，cgo/tgo 作为新的等价别名，避免破坏既有脚本。
+
+验证结果：
+- TMPDIR 使用真实路径后 `bash bin/agent.test.sh` 全量 PASS（含新增 dgo/cgo/tgo 用例）。
+- `bash bin/agent-windows.test.sh` PASS（当前无 pwsh，仅静态契约）。
+- `form-audit.sh --root . --strict --quiet`、`form-data-tracking-check.sh --root . --quiet`、`git diff --check` 均通过。
+- 四个 launcher `--help` 冒烟均显示新别名。
+- 未验证：真实 OpenDesign 端点调用（无凭据，避免外部请求）；原生 Windows PowerShell 执行（环境无 pwsh）。
+
+后续步骤：
+- 在 providers.opendesign-go.default_models.<agent> 填入实际模型，或始终用 `op dgo --model <model>`。
+- 如需 Windows 上 cl/co 使用 dgo，需要补充 PowerShell 协议桥实现。
+--- report end ---

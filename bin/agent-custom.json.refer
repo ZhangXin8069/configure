@@ -9,23 +9,24 @@
   },
   "guidance": [
     "复制本文件为 agent-custom.json 后按需修改；agent-custom.json 已被 .gitignore 忽略，不会入库。",
-    "切换语法统一为 [供应商] [模型] [强度]：co go deepseek-v4.1-flash max、cl pay deepseek-pro[1m]、co gt、直接 co 分别使用显式组合或默认供应商/模型/强度；传统 --model/--variant/--reasoning-effort 仍为最高优先级。",
+    "切换语法统一为 [供应商] [模型] [强度]：co cgo deepseek-v4.1-flash max、cl pay deepseek-pro[1m]、co tgo、直接 co 分别使用显式组合或默认供应商/模型/强度；传统 --model/--variant/--reasoning-effort 仍为最高优先级。",
     "模型目录按 TTL 自动从 providers.<途径>.models_url 更新；也可用 models.dev 元数据补齐推理强度。刷新失败依次回退旧缓存、models.dev、静态 models；全部不可用时仍可启动。",
     "不完整模型名会自动匹配完整 ID（如 deepseek-pro → deepseek-v4-pro），[1m] 等上下文后缀保留；模型不支持的过高强度会顺延到最近支持等级（如 ultra → max）。",
     "zsh 会把未引用的 [1m] 当通配符；命令行使用含方括号的模型名时请写成 'deepseek-pro[1m]'（或双引号）。",
-    "两层默认的择序取决于是否「显式选途径」：命令行快捷词（cl go / co pay / op gt）与 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量一视同仁，均视为显式——此时 providers 层优先；未显式时（途径来自 agents.<agent>.provider）agent 层优先。命令行/环境变量的 --model/--variant/--reasoning-effort 恒为最高。",
-    "显式选途径时取 providers.<途径>.default_models|default_strengths.<agent>，仅当该途径未给此 agent 配置时才回退 agents.<agent>.model/strength；未显式选途径时反之。故填写 agents.<agent>.model 只固定「未指定途径时」的默认，执行 cl go 等仍会切到该途径的默认模型。",
+    "两层默认的择序取决于是否「显式选途径」：命令行快捷词（cl cgo / co pay / op tgo）与 {CLAUDE,OPENCODE}_PROVIDER / CODEX_PROVIDER_ID 环境变量一视同仁，均视为显式——此时 providers 层优先；未显式时（途径来自 agents.<agent>.provider）agent 层优先。命令行/环境变量的 --model/--variant/--reasoning-effort 恒为最高。",
+    "显式选途径时取 providers.<途径>.default_models|default_strengths.<agent>，仅当该途径未给此 agent 配置时才回退 agents.<agent>.model/strength；未显式选途径时反之。故填写 agents.<agent>.model 只固定「未指定途径时」的默认，执行 cl cgo 等仍会切到该途径的默认模型。",
     "模型强度（strength）统一配置：cl 经 CLAUDE_CODE_EFFORT_LEVEL、op 经 variant、co 经 reasoning effort 落地，三条解析链相同；OpenCode V2 启动器把 op 的 variant 合并为 provider/model#variant，V1 仍兼容独立 variant 字段。",
     "agents.<agent>.provider 决定未指定快捷词与环境变量时使用哪个途径（此时 agent 层默认优先）。若想让某途径下也始终用 agents.<agent>.model，把该途径的 providers.<途径>.default_models.<agent> 留空或删除即可（强度同理）。",
     "agents.opencode.provider 仅决定「未指定模型时用哪个途径的默认模型」；opencode 实际注册的途径仍是 agent-config.json agents.opencode.key_providers 中 key 已设置者。",
     "agents.claude.env 只保留 claude 专属附加项（HAIKU/子代理模型/压缩窗口等）；ANTHROPIC_MODEL 与 OPUS/SONNET 别名、CLAUDE_CODE_EFFORT_LEVEL 由上述解析链自动派生。",
-    "注意 cl 的模型须在该途径的 Anthropic 兼容路由（/v1/messages）上可用：opencode-go 只对部分模型开放该路由（deepseek/minimax/qwen/kimi 系），整个 GLM 家族会返回 500（仅在 OpenAI 兼容路由 /v1/chat/completions 上可用）。故 agents.claude.model 若填 glm-5.3-flash，需改用 op 与该模型交互，或用 cl go / cl pay 走该途径的默认模型。",
-    "注意 Codex 0.154 只支持 Responses，Claude Code 只支持 Anthropic Messages；Unix 启动器检测到 Go 的 Chat Completions 模型时会自动启动本地协议桥，将 Responses 或 Messages 转换为 /chat/completions。桥会保留 Codex/Claude 原生会话头，并与上游 /chat/completions 使用裸模型 ID；op 配置则仍使用 opencode-go/<model-id>。",
+    "注意 cl 的模型须在该途径的 Anthropic 兼容路由（/v1/messages）上可用：opencode-go 只对部分模型开放该路由（deepseek/minimax/qwen/kimi 系），整个 GLM 家族会返回 500（仅在 OpenAI 兼容路由 /v1/chat/completions 上可用）。故 agents.claude.model 若填 glm-5.3-flash，需改用 op 与该模型交互，或用 cl cgo / cl pay 走该途径的默认模型；opendesign-go 等纯 Chat Completions 途径由 Unix 启动器自动桥接到本地 /v1/messages。",
+    "注意 Codex 0.154 只支持 Responses，Claude Code 只支持 Anthropic Messages；Unix 启动器检测到 OpenAI 兼容的 Chat Completions 模型时会自动启动本地协议桥，将 Responses 或 Messages 转换为 /chat/completions。桥会保留 Codex/Claude 原生会话头，并与上游 /chat/completions 使用裸模型 ID；op 配置则仍使用 <opencode_provider_id>/<model-id>。",
     "agents.<agent>.secure_binary 为 HPC/secure 变体（cls/ops/cos）下对应 agent（claude/opencode/codex）的部署路径，支持 ${HOME} 占位符（升级 vscode-server 后会变化）；路径缺失时启动器自动从 PATH 中对应可执行文件完整复制（非符号链接）过去。",
     "co 的模型元数据目录（消除三方模型「Model metadata ... not found」告警）默认按通用配置 agents.codex.model_catalog 自动生成并缓存于 data/cache；可在本文件覆盖 enabled/clone_template/display_names，或用 CODEX_MODEL_CATALOG 显式指定目录文件。",
-    "OPENCODE_API_KEY 与 OPENCODE_GO_API_KEY 等价，并按 GO>API 择一后归一化到两者；默认基础设置为 go，多个不同值会告警。",
-    "Command Code GOAT 快捷词为 gt，完整途径名为 commandcode-goat，key 只从 COMMANDCODE_GOAT_API_KEY 读取；base_url 固定为 Provider API https://api.commandcode.ai/provider/v1。CLI 默认使用 Claude Sonnet 4.6 走 /messages，程序化 agent 默认使用 deepseek/deepseek-v4.1-flash 走 /responses；模型目录从 /models 自动刷新。cm 默认 yolo，并支持 cm --goal <objective> / cm goal <objective> 的原生 /goal 模式。",
-    "cm 也可用 pay（deepseek-pay）/ go（opencode-go）接入本库 BYOK 途径：启动器把 providers.<途径> 中 commandcode.byok=true 的条目合并进 ~/.commandcode/providers.json（baseURL 取 base_url，apiKey 写环境变量引用，models 取静态模型表并用本地模型目录缓存补齐 contextWindow/reasoningEfforts），模型以 <途径>/<模型> 传给 --model；默认仍是 gt。",
+    "OPENCODE_API_KEY 与 OPENCODE_GO_API_KEY 等价，并按 GO>API 择一后归一化到两者；默认基础设置为 go|cgo，多个不同值会告警。",
+    "Command Code GOAT 快捷词为 gt|tgo，完整途径名为 commandcode-goat，key 只从 COMMANDCODE_GOAT_API_KEY 读取；base_url 固定为 Provider API https://api.commandcode.ai/provider/v1。CLI 默认使用 Claude Sonnet 4.6 走 /messages，程序化 agent 默认使用 deepseek/deepseek-v4.1-flash 走 /responses；模型目录从 /models 自动刷新。cm 默认 yolo，并支持 cm --goal <objective> / cm goal <objective> 的原生 /goal 模式。",
+    "cm 也可用 pay（deepseek-pay）/ go|cgo（opencode-go）/ dgo（opendesign-go）接入本库 BYOK 途径：启动器把 providers.<途径> 中 commandcode.byok=true 的条目合并进 ~/.commandcode/providers.json（baseURL 取 base_url，apiKey 写环境变量引用，models 取静态模型表；标了 models_from_cache 的途径在静态表为空时改用本地模型目录缓存，并补齐 contextWindow/reasoningEfforts），模型以 <途径>/<模型> 传给 --model；默认仍是 gt|tgo。",
+    "dgo=opendesign-go：OpenAI 兼容端点 https://amr-link.open-design.ai/v1（op 直连、co 协议桥、cm BYOK 使用），Anthropic 兼容根端点为去掉 /v1 的 https://amr-link.open-design.ai（cl 直连 /v1/messages）；key 只从 OPENDESIGN_GO_API_KEY 读取，模型清单从 /v1/models 自动发现。模板默认模型 deepseek-v4.1-flash、默认强度 high（2026-11-10 实测 /v1/models 的 default=true 模型；/v1/messages 同时接受 x-api-key 与 Bearer，/v1/chat/completions 只接受 Bearer）；可用 --model/--strength 覆盖。op 使用 @ai-sdk/openai-compatible 自定义 provider；co 在 Unix 走本地协议桥，cl 直连原生 Anthropic 接口（Windows runtime 暂不支持 co 的该桥）。",
     "cm 长任务与恢复：agents.commandcode.headless_max_turns（默认 1000）放宽 -p 单回合上限；headless_tools 默认只恢复 todo_write，headless_tools_all=true 可完全对齐 TUI 工具集；goal_objective 写入 manifest，--resume/自动恢复会重新发送 /goal，续跑同时保留 --add-dir/--skill。"
   ],
   "providers": {
@@ -69,6 +70,20 @@
         "opencode": "max",
         "codex": "max",
         "commandcode": "max"
+      }
+    },
+    "opendesign-go": {
+      "default_models": {
+        "claude": "deepseek-v4.1-flash",
+        "opencode": "opendesign-go/deepseek-v4.1-flash",
+        "codex": "deepseek-v4.1-flash",
+        "commandcode": "deepseek-v4.1-flash"
+      },
+      "default_strengths": {
+        "claude": "high",
+        "opencode": "high",
+        "codex": "high",
+        "commandcode": "high"
       }
     }
   },

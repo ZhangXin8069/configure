@@ -72,8 +72,10 @@ for contract in \
 done
 assert_contains "$runtime" "'agent-config.json'"
 assert_contains "$runtime" "'agent-custom.json.refer'"
-assert_contains "$runtime" "'commandcode-goat', 'deepseek-pay', 'opencode-go'"
+assert_contains "$runtime" "'commandcode-goat', 'deepseek-pay', 'opencode-go', 'opendesign-go'"
 assert_contains "$runtime" "apiKey = '\$' + \$envKey"
+assert_contains "$runtime" '$block.npm'
+assert_contains "$runtime" '$block.options.baseURL'
 assert_contains "$runtime" 'contextWindow'
 assert_contains "$runtime" 'reasoningEfforts'
 assert_contains "$runtime" '(BYOK)'
@@ -104,7 +106,10 @@ assert_contains "$runtime" 'function New-ClaudeSettingsFile'
 assert_contains "$runtime" "'--settings', \$script:ClaudeSettingsFile"
 assert_contains "$runtime" "'--permission-mode', \$permissionMode, '--model', \$script:Model, \$prompt"
 assert_contains "$runtime" 'Resolve-ProviderAlias'
-assert_contains "$runtime" "'pay', 'go', 'gt', 'deepseek-pay', 'opencode-go', 'commandcode-goat'"
+assert_contains "$runtime" "'cgo' { return 'opencode-go' }"
+assert_contains "$runtime" "'tgo' { return 'commandcode-goat' }"
+assert_contains "$runtime" "'dgo' { return 'opendesign-go' }"
+assert_contains "$runtime" "'pay', 'go', 'cgo', 'gt', 'tgo', 'dgo', 'deepseek-pay', 'opencode-go', 'commandcode-goat', 'opendesign-go'"
 assert_not_contains "$runtime" 'opencode-zen'
 assert_contains "$runtime" 'Get-AgentProtocolCompatibility'
 assert_contains "$runtime" 'CodexWireApi'
