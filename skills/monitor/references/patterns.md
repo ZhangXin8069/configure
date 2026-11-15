@@ -58,7 +58,7 @@ done
 ```text
 只看 state 字段（djob -ll → $1=="state"）
 只在 state 变化时打印一行（带时间戳与 elapsed）
-终止态 SUCCEEDED|FAILED|CANCELLED|KILLED|STOPPED → 退出
+终止态 SUCCEEDED|FAILED|CANCELLED|KILLED → 退出（STOPPED/SSTOPPED 是挂起，继续观察）
 超时 → 退出码 9；连续空输出/通信失败 → 退出码 3
 ```
 
@@ -145,7 +145,8 @@ CSV 行数从 2 → 4 → 5 增长，同时 `rows/` 最新文件每轮都在变�
 
 ```text
 monitor 层：started → running → completed/stopped/failed(exit code 是观测者的)
-目标层    ：PENDING → RUNNING → SUCCEEDED/FAILED/CANCELLED/KILLED/STOPPED（或从列表消失）
+目标层    ：PENDING → RUNNING → SUCCEEDED/FAILED/CANCELLED/KILLED（或从列表消失）
+            STOPPED/SSTOPPED = 挂起，仍属 active
 数据层    ：rows/CSV 行数、完整性、重复、known_skips
 ```
 

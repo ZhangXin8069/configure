@@ -1456,3 +1456,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## monitor-skill - final - 2026-11-15 18:26:46 +0800
+- 主任务: 规范并测试并优化新的 monitor-skill
+- 日志文件: logs/v2026111518.txt
+- 文件大小: 6497 bytes
+- 触发原因: 任务完成
+- 关键内容: 修正终止态与环境变量转发；新增 47 项离线回归；同步 description、索引与文档
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

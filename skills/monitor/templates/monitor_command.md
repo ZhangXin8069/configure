@@ -92,7 +92,7 @@ while :; do
   st=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
        'source /etc/profile >/dev/null 2>&1; export PATH=/opt/batch/cli/bin:$PATH; djob -ll '"$JOB"' 2>/dev/null' \
        | awk '$1=="state" {print $2; exit}')
-  case "$st" in SUCCEEDED|FAILED|CANCELLED|KILLED|STOPPED) echo "WATCH_DONE $JOB $st"; break ;; esac
+  case "$st" in SUCCEEDED|FAILED|CANCELLED|KILLED) echo "WATCH_DONE $JOB $st"; break ;; esac
   sleep 60
 done
 ```

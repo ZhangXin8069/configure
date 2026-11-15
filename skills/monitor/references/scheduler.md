@@ -98,7 +98,8 @@ ID           NAME         STATE      USER         ACCOUNT      QUEUE            
 | `CANCELLED` / `KILLED` | 被取消/被杀 | 否（终止态） |
 
 监控脚本的默认 active set 用前 5 个；终止态集合固定为
-`SUCCEEDED|FAILED|CANCELLED|KILLED|STOPPED`。**不要把 `SUCCEEDED` 当“结果正确”**：本次会话里
+`SUCCEEDED|FAILED|CANCELLED|KILLED`。`STOPPED`/`SSTOPPED` 只是被挂起，仍属 active，
+`watch_job.sh` 不会因为它们退出。**不要把 `SUCCEEDED` 当“结果正确”**：本次会话里
 作业成功退出但 CSV 只有部分行（thread9 的 7 行）的情况真实发生过，行级核对是独立步骤。
 
 ## 5. 排除项：长期 PENDING 的无关作业

@@ -1,0 +1,90 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-15 18:26:46 +0800
+批次: monitor-skill
+主任务: 规范并测试并优化新的 monitor-skill
+触发原因: 任务完成
+摘要: 修正终止态与环境变量转发；新增 47 项离线回归；同步 description、索引与文档
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 规范缺口审查
+- 目标: 对照 skills/AGENTS.md 公共契约、form 审计、configure-check 与 skill-creator 分级披露审查 monitor 技能。
+- 命令/操作: 读取 SKILL.md、monitor/AGENTS.md、4 个 references、3 个脚本与模板；运行 form-audit、data-tracking、configure-check。
+- 关键输出: configure-check FAIL“description 缺少明确触发条件”；scheduler.md 将 STOPPED/SSTOPPED 定义为 active，watch_job.sh 却把 STOPPED 当终止态；wait_all_jobs.sh 头注释支持 HOST/REMOTE_USER 环境变量，但未转发给 poll_jobs.sh。
+- 退出码: form-audit=0；configure-check=1（修复前）。
+- 证据与判断: 缺口集中在 description 触发词、终止态定义不一致、脚本参数边界、超时睡眠不封顶，以及三个脚本缺少离线回归。
+
+### S2 — 脚本修复与优化
+- watcher 语义: watch_job.sh 终止态改为 SUCCEEDED/FAILED/CANCELLED/KILLED；STOPPED/SSTOPPED 保持 active，不再提前退出。
+- 环境变量: wait_all_jobs.sh 将 HOST、REMOTE_USER 显式转发为 --host/--user，用户命令行参数仍最后覆盖。
+- 输入边界: poll_jobs.sh 拒绝以 '-' 开头或含空白的 host、空 sentinel、非法/空白 states、非法 include/exclude ERE；watch_job.sh 同步 host 校验。
+- 预算精度: 两个轮询脚本的末尾 sleep 按 max-duration 剩余预算封顶，避免最多多睡一个 interval。
+- 文档同步: SKILL.md、patterns.md、scheduler.md、monitor_command.md 统一终止态定义；description 改为“当用户的任务…”。
+
+### S3 — 新增离线回归
+- 文件: skills/monitor/scripts/monitor-scripts.test.sh。
+- 机制: 临时目录内放置伪 ssh，按调用序号读取 seq.N/seq.default 输出、stderr 与退出码；不连接真实调度器。
+- 覆盖: 参数校验、活跃集过滤、exclude、终端行忽略、SSH 失败中止、超时、wait_all 环境变量转发、watch 状态转移（含 STOPPED）、auto 模式 ll→table 回退、watch SSH 失败。
+
+### S4 — 验证
+- `bash -n` 四个脚本: PASS。
+- `bash skills/monitor/scripts/monitor-scripts.test.sh`: 47 passed, 0 failed。
+- `bash skills/form/scripts/form-audit.sh --root . --strict --quiet`: rc 0。
+- `bash skills/form/scripts/form-data-tracking-check.sh --root . --quiet`: rc 0。
+- `bash skills/form/scripts/form-large-files-check.sh --root .`: rc 0（暂存前检查）。
+- `bash tools/configure-check.sh`: rc 0，errors=0；仅剩 plugins 无 .codex-plugin/plugin.json 的既有 warning。
+- `git diff --check`: rc 0。
+
+### S5 — 索引与归档
+- 更新 skills/AGENTS.md 参考文件与 monitor 技能表行。
+- 更新 skills/monitor/AGENTS.md 的脚本回归命令。
+- 更新根 AGENTS.md「命令」中的 monitor 测试入口。
+- 本文件由 write-log.sh 确定性写入，并追加 logs/AGENTS.md 索引。
+
+## 验证与证据
+- 测试/检查: 语法检查、47 项离线回归、form 布局审计、data 追踪检查、大文件闸门、configure-check、diff 检查。
+- 结果: 全部通过；configure-check errors 从 1 降为 0。
+- 未验证项: 未在真实 djob 集群上重跑脚本；脚本保持只读模板语义，真实调度器兼容性由原有 references 证据覆盖。
+
+## 变更与产物
+- 文件: skills/monitor/scripts/poll_jobs.sh、wait_all_jobs.sh、watch_job.sh、monitor-scripts.test.sh、SKILL.md、AGENTS.md、references/patterns.md、references/scheduler.md、templates/monitor_command.md、skills/AGENTS.md、根 AGENTS.md、logs/AGENTS.md、本日志。
+- 产物: 可离线复跑的 monitor 脚本回归入口；统一后的终止态与环境变量语义。
+- 未改动范围: 未改真实数据树、未启停任何真实作业、未修改其他技能脚本。
+
+## 风险、限制与下一步
+- 风险: 伪 ssh 测试覆盖脚本逻辑，不等价于真实集群的 SSH/BatchMode/djob 行为。
+- 阻塞: 无。
+- 下一步: 暂存本批文件，复跑大文件与 data 边界闸门后按条件式交付提交；如远程可 fast-forward 则正常推送。
+
+## 用户输入指令
+规范并测试并优化新的monitor-skill
+
+## Agent 全文报告
+--- report begin ---
+已完成 monitor 技能的规范、测试与优化。
+
+改动内容:
+- watch_job.sh 只把 SUCCEEDED/FAILED/CANCELLED/KILLED 视为终止态；STOPPED/SSTOPPED 按 scheduler.md 的“被挂起、仍属 active”处理，不再提前退出。
+- wait_all_jobs.sh 现在把 HOST/REMOTE_USER 环境变量转发为 --host/--user；命令行参数仍可最后覆盖。
+- poll_jobs.sh 增加 host、sentinel、states、include/exclude ERE 校验，并把最终 sleep 封顶到 max-duration 剩余预算；watch_job.sh 同步 host 校验与睡眠封顶。
+- 新增 monitor-scripts.test.sh：用伪 ssh 离线覆盖参数校验、哨兵、排除过滤、SSH 失败、超时、环境变量转发、STOPPED 语义与 auto 回退，共 47 项。
+- 同步 SKILL.md、references、模板、monitor/AGENTS.md、skills/AGENTS.md 与根 AGENTS.md 的测试入口；description 改为“当用户的任务…”，满足 configure-check 的触发条件规则。
+
+推理依据:
+- scheduler.md 明确 STOPPED/SSTOPPED 是挂起状态且属于 active；终止态必须与 active set 自洽。
+- wait_all_jobs.sh 的头注释已承诺 HOST/REMOTE_USER 用法，但 poll_jobs.sh 不读环境变量，属于实现与文档不一致。
+- 监控脚本的预算应精确到剩余时间，否则 300s 间隔会让 4h 上限最多超时 5 分钟。
+- 伪 ssh 能在不接触真实集群的前提下稳定复现哨兵、失败与状态转移路径。
+
+验证结果:
+- bash -n 四个脚本通过。
+- monitor-scripts.test.sh: 47 passed, 0 failed。
+- form-audit --strict: rc 0；form-data-tracking-check: rc 0；form-large-files-check: rc 0（暂存前）。
+- tools/configure-check.sh: rc 0，errors=0；仅剩与本改动无关的 plugins warning。
+- git diff --check: rc 0。
+
+后续步骤:
+- 暂存本批文件，复跑大文件与 data 边界闸门后提交；远程可 fast-forward 时正常推送。未在真实 djob 集群上重跑脚本，真实 SSH/调度器行为仍以现场验证为准。
+--- report end ---

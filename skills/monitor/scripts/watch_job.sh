@@ -2,7 +2,8 @@
 # watch_job.sh — TEMPLATE: follow one scheduler job and exit on a terminal state.
 #
 # Prints a line only when the state changes (timestamp + elapsed seconds), then exits
-# as soon as the job reaches SUCCEEDED|FAILED|CANCELLED|KILLED|STOPPED.
+# as soon as the job reaches SUCCEEDED|FAILED|CANCELLED|KILLED. STOPPED/SSTOPPED mean
+# the job is suspended and do NOT end the watch.
 #
 # This file is a template shipped with the `monitor` skill. It is read-only: it never
 # submits, cancels, or kills anything. Copy it into the task scratchpad and edit the
@@ -37,7 +38,8 @@ Required:
 Options:
   --user USER            Remote scheduler user (default: $USER)
   --interval SEC         Seconds between polls (default: 60)
-  --max-duration SEC     Give up after SEC seconds (default: 3600)
+  --max-duration SEC     Give up after SEC seconds (default: 3600);
+                         the final sleep is capped to the remaining budget
   --mode MODE            auto | ll | table (default: auto)
                          ll    = `djob -ll JOB`, read the `state` field
                          table = `djob JOB`, read column 3 of the matching row
@@ -47,7 +49,8 @@ Options:
   --ssh-option OPT       Extra `ssh -o OPT` (repeatable)
   -h, --help             Show this help
 
-Terminal states: SUCCEEDED FAILED CANCELLED KILLED STOPPED
+Terminal states: SUCCEEDED FAILED CANCELLED KILLED
+(STOPPED/SSTOPPED are suspended states and keep the watch running.)
 EOF
 }
 
@@ -90,6 +93,10 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$HOST" ] || die "--host is required"
+case "$HOST" in
+  -*) die "--host must not start with '-'" ;;
+  *[[:space:]]*) die "--host must not contain whitespace" ;;
+esac
 [ -n "$JOB" ] || die "--job is required"
 case "$JOB" in
   *[!A-Za-z0-9_.-]*) die "--job must look like a job id (letters/digits/._-)" ;;
@@ -140,7 +147,7 @@ unknown=0
 
 printf 'watch_job: host=%s user=%s job=%s interval=%ss max_duration=%ss mode=%s\n' \
   "$HOST" "$REMOTE_USER" "$JOB" "$INTERVAL" "$MAX_DURATION" "$MODE"
-printf 'watch_job: terminal states = SUCCEEDED FAILED CANCELLED KILLED STOPPED\n'
+printf 'watch_job: terminal states = SUCCEEDED FAILED CANCELLED KILLED\n'
 
 while :; do
   st=
@@ -192,7 +199,7 @@ while :; do
       last=$st
     fi
     case "$st" in
-      SUCCEEDED | FAILED | CANCELLED | KILLED | STOPPED)
+      SUCCEEDED | FAILED | CANCELLED | KILLED)
         printf 'WATCH_DONE job=%s state=%s after=%ss\n' "$JOB" "$st" "$elapsed"
         cleanup
         exit 0
@@ -206,5 +213,10 @@ while :; do
     exit 9
   fi
 
-  sleep "$INTERVAL"
+  sleep_for=$INTERVAL
+  if [ "$MAX_DURATION" -gt 0 ]; then
+    remaining=$((MAX_DURATION - elapsed))
+    [ "$remaining" -lt "$sleep_for" ] && sleep_for=$remaining
+  fi
+  sleep "$sleep_for"
 done

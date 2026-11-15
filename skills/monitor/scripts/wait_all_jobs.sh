@@ -33,14 +33,23 @@ SENTINEL=${SENTINEL:-ALL_JOBS_DONE}
 MAX_DURATION=${MAX_DURATION:-14400}
 EXCLUDE=${EXCLUDE:-}
 MAX_CYCLES=${MAX_CYCLES:-0}
+host=${HOST:-}
+remote_user=${REMOTE_USER:-}
 
-printf 'wait_all_jobs: interval=%ss sentinel=%s max_duration=%ss max_cycles=%s exclude=%s\n' \
+printf 'wait_all_jobs: host=%s user=%s interval=%ss sentinel=%s max_duration=%ss max_cycles=%s exclude=%s\n' \
+  "${host:-<from flags>}" "${remote_user:-<from flags>}" \
   "$SCAN_INTERVAL" "$SENTINEL" "$MAX_DURATION" "$MAX_CYCLES" "${EXCLUDE:-<none>}"
 
 args=(--interval "$SCAN_INTERVAL" --sentinel "$SENTINEL" --max-duration "$MAX_DURATION")
 args+=(--max-cycles "$MAX_CYCLES")
 if [ -n "$EXCLUDE" ]; then
   args+=(--exclude "$EXCLUDE")
+fi
+if [ -n "$host" ]; then
+  args+=(--host "$host")
+fi
+if [ -n "$remote_user" ]; then
+  args+=(--user "$remote_user")
 fi
 
 # User flags come last so they override the defaults above.

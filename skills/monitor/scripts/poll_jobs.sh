@@ -42,7 +42,8 @@ Options:
   --exclude REGEX         Drop rows matching this extended regex
                           (use it for long-lived baseline/pending jobs you do not own)
   --max-cycles N          Stop after N polls (0 = unlimited, default 0)
-  --max-duration SEC      Stop after SEC seconds (default: 14400 = 4h)
+  --max-duration SEC      Stop after SEC seconds (default: 14400 = 4h);
+                          the final sleep is capped to the remaining budget
   --max-ssh-failures N    Abort after N consecutive ssh failures (default: 3)
   --djob-extra "ARGS"     Extra djob arguments, e.g. "-w" (default: empty)
   --ssh-option OPT        Extra `ssh -o OPT` (repeatable)
@@ -68,6 +69,10 @@ is_uint() {
     '' | *[!0-9]*) return 1 ;;
     *) return 0 ;;
   esac
+}
+
+valid_ere() {
+  awk -v re="$1" 'BEGIN { if ("" ~ re) print "" }' >/dev/null 2>&1
 }
 
 # --- defaults (edit these for a new job family, or pass flags) -------------
@@ -105,6 +110,19 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$HOST" ] || die "--host is required"
+case "$HOST" in
+  -*) die "--host must not start with '-'" ;;
+  *[[:space:]]*) die "--host must not contain whitespace" ;;
+esac
+[ -n "$SENTINEL" ] || die "--sentinel must not be empty"
+case "$STATES" in
+  '' | *[!A-Za-z_[:space:]]*) die "--states must be space-separated state names" ;;
+esac
+# Normalize repeated whitespace so the regex has no empty alternative.
+# shellcheck disable=SC2086
+set -- $STATES
+[ "$#" -gt 0 ] || die "--states must contain at least one state name"
+STATES_RE=$(IFS='|'; printf '%s' "$*")
 is_uint "$INTERVAL" || die "--interval must be a non-negative integer"
 is_uint "$MAX_CYCLES" || die "--max-cycles must be a non-negative integer"
 is_uint "$MAX_DURATION" || die "--max-duration must be a non-negative integer"
@@ -113,6 +131,8 @@ is_uint "$MAX_SSH_FAIL" || die "--max-ssh-failures must be a non-negative intege
 [ "$MAX_SSH_FAIL" -gt 0 ] || die "--max-ssh-failures must be greater than zero"
 command -v ssh >/dev/null 2>&1 || die "ssh not found"
 command -v awk >/dev/null 2>&1 || die "awk not found"
+[ -z "$INCLUDE" ] || valid_ere "$INCLUDE" || die "--include must be a valid extended regex"
+[ -z "$EXCLUDE" ] || valid_ere "$EXCLUDE" || die "--exclude must be a valid extended regex"
 
 case "$REMOTE_USER" in
   '' | *[!A-Za-z0-9_.-]*) die "--user must be a plain user name" ;;
@@ -131,8 +151,6 @@ esac
 PATH_SETUP='export PATH=/opt/batch/cli/bin:$PATH'
 USER_FLAG="-u '$REMOTE_USER'"
 REMOTE_CMD="source /etc/profile >/dev/null 2>&1 || true; ${PATH_SETUP}; djob ${USER_FLAG} ${DJOB_EXTRA} 2>/dev/null"
-
-STATES_RE=$(printf '%s' "$STATES" | tr ' ' '|')
 
 ERR_FILE=$(mktemp "${TMPDIR:-/tmp}/poll_jobs.err.XXXXXX") || die "cannot create a temp file"
 cleanup() { rm -f "$ERR_FILE"; }
@@ -198,5 +216,10 @@ while :; do
     exit 124
   fi
 
-  sleep "$INTERVAL"
+  sleep_for=$INTERVAL
+  if [ "$MAX_DURATION" -gt 0 ]; then
+    remaining=$((MAX_DURATION - elapsed))
+    [ "$remaining" -lt "$sleep_for" ] && sleep_for=$remaining
+  fi
+  sleep "$sleep_for"
 done

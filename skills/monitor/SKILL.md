@@ -1,7 +1,7 @@
 ---
 name: monitor
 description: |
-  当任务还要等外部进程或作业跑完——盯长任务、后台命令、调度器作业（djob/dsub/qsub/sbatch/squeue）、
+  当用户的任务还要等外部进程或作业跑完——盯长任务、后台命令、调度器作业（djob/dsub/qsub/sbatch/squeue）、
   看 rows/CSV 数据有没有在长、判断“现在跑到哪了”“是不是卡住了”——以及收到 monitor check due 需要
   读输出、怀疑重复监控、担心漏读或读错输出时使用；用户说“盯着”“看着点”“轮询”“等它跑完”
   “跑完告诉我”“watch/poll/wait for the jobs”“看下 active/pending”“还有几个作业在跑”
@@ -193,11 +193,12 @@ WATCH_JOB_STATE=$(ssh -o BatchMode=yes -o ConnectTimeout=10 "$HOST" \
   "source /etc/profile >/dev/null 2>&1 || true; export PATH=/opt/batch/cli/bin:\$PATH; djob -ll $JOB 2>/dev/null" \
   | awk '$1=="state" {print $2; exit}')
 case "$WATCH_JOB_STATE" in
-  SUCCEEDED|FAILED|CANCELLED|KILLED|STOPPED) echo "WATCH_DONE state=$WATCH_JOB_STATE" ;;
+  SUCCEEDED|FAILED|CANCELLED|KILLED) echo "WATCH_DONE state=$WATCH_JOB_STATE" ;;
 esac
 ```
 
-- 终止状态集合固定为 `SUCCEEDED|FAILED|CANCELLED|KILLED|STOPPED`；`SUCCEEDED` 只代表作业成功退出，
+- 终止状态集合固定为 `SUCCEEDED|FAILED|CANCELLED|KILLED`；`STOPPED`/`SSTOPPED` 是被挂起，
+  仍属 active，不能据此退出或判定完成。`SUCCEEDED` 只代表作业成功退出，
   **不代表行级/数值 PASS**（本次 `SUCCEEDED` 与 CSV 行级结果需要分别核对）。
 - `PENDING → RUNNING` 可能延迟很久（本次 2133327 在 PENDING 停留约 27 分钟才 `FAILED`）；
   不要因为“一直 PENDING”就重提作业。
@@ -314,6 +315,8 @@ ssh "$HOST" 'wc -l < <data-dir>/<name>.csv 2>/dev/null'
 - `references/troubleshooting.md` — 空 active、PENDING 卡住、`maxDuration`、stderr 污染、`djob` 空输出。
 - `templates/monitor_command.md` — `monitor_command` 模板与参数说明。
 - `scripts/poll_jobs.sh` / `scripts/wait_all_jobs.sh` / `scripts/watch_job.sh` — 脚本模板（只作为模板，不代为执行）。
+- `scripts/monitor-scripts.test.sh` — 三个脚本的离线回归测试（伪 `ssh`，不依赖真实调度器）；
+  修改脚本后运行 `bash skills/monitor/scripts/monitor-scripts.test.sh`。
 
 ## 注意事项
 
