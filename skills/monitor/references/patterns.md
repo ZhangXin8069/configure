@@ -1,161 +1,209 @@
-# Patterns — 四类监控范式与它们的证据
+# Patterns — 通用监控范式与适配器案例
 
-本文件给可直接复用的监控“形状”。每个形状都标明：适用场景、必须要素、本次会话的实测证据。
-SKILL.md 里是摘要，这里是完整版本。
+本文件给适配器无关的监控“形状”。`djob` 只是最后附录里的一个案例；通用适配器契约见
+`adapters.md`，djob 细节见 `djob.md`。SKILL.md 里是摘要，这里是完整版本。
 
-## 1. All-jobs sentinel（全部作业 → 一次结束）
+## 1. All-targets sentinel（一批目标 → 全部结束）
 
-**适用**：一批作业已提交，要等它们**全部**离开队列才开始下一步（对齐数据、合并 CSV、出报告）。
+**适用**：一批目标已经启动，要等它们**全部**结束才开始下一步（合并数据、出报告、切流量）。
 
 **必须要素**：
 
 ```text
-active_set = RUNNING PENDING WAITING STOPPED SSTOPPED
-exclude    = 无关的长期 PENDING（本次 qcu_opt_base / 2108699）
-sentinel   = 打印一行固定文本后 break（本次 ALL_TEST_JOBS_DONE）
-interval   = 150–300s（作业级，不要 20s）
-budget     = maxDurationMs ≈ 预计总时长 × 1.5（本次 4h）
+target_probe = 一条只读探针，返回当前 active 目标列表（或可直接判空的结构化输出）
+active       = 什么行算“仍在进行”
+exclude      = 明确排除的无关目标（别人的作业、长期挂起项、性能基线）
+sentinel     = 打印一行固定文本后 break（例：ALL_TARGETS_DONE）
+budget       = interval + maxDurationMs，且 interval 不小于目标的最小状态变化粒度
 ```
 
-**形状**（本次 `m21zy0uf7` 的实际形态，参数已参数化）：
+**通用形状**：
 
 ```bash
+target_probe() {
+  # 替换为适配器探针：pgrep、squeue、curl、find、djob ...
+  pgrep -af "$TARGET_PATTERN" || true
+}
+
 while :; do
-  out=$(ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=yes "$HOST" \
-        'source /etc/profile >/dev/null 2>&1; export PATH=/opt/batch/cli/bin:$PATH; djob -u '"$REMOTE_USER"' 2>/dev/null' || true)
-  active=$(printf '%s\n' "$out" \
-    | awk 'NR>1 && ($3=="RUNNING" || $3=="PENDING" || $3=="WAITING" || $3=="STOPPED" || $3=="SSTOPPED") {print $1, $2, $3}' \
-    | grep -v "$EXCLUDE_PATTERN" || true)
-  if [ -z "$active" ]; then echo "ALL_TEST_JOBS_DONE"; break; fi
-  echo "[$(date +%H:%M:%S)] active test jobs:"
+  out=$(target_probe)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "PROBE_ERROR rc=$rc"
+    exit 3
+  fi
+  if [ -n "$EXCLUDE_RE" ]; then
+    active=$(printf '%s\n' "$out" | grep -Ev "$EXCLUDE_RE" || true)
+  else
+    active=$out
+  fi
+  if [ -z "$active" ]; then
+    echo "$SENTINEL"
+    break
+  fi
+  echo "[$(date +%H:%M:%S)] active=$(printf '%s\n' "$active" | wc -l)"
   printf '%s\n' "$active"
-  sleep 300
+  sleep "$INTERVAL"
 done
 ```
 
-**实测时间线**（`m21zy0uf7`，300s 间隔，17:37:43 启动，`maxDurationMs=4h`）：
+**本地进程实例**：
 
-| 时刻 | active | 内容 |
-|---|---|---|
-| 17:37:48 | 3 | `2133325 kall_mgr10_* RUNNING`、`2133322 kall_mgr10_* RUNNING`、`2133326 kall_mg1_r5* PENDING` |
-| 17:42:50 | 2 | `2133326 kall_mg1_r5* RUNNING`、`2133322 kall_mgr10_* RUNNING` |
-| 17:47:51 | 1 | `2133326 kall_mg1_r5* RUNNING` |
-| 17:52:52 / 17:57:54 / 18:02:55 | 1 | 同上（长作业仍在跑） |
+```bash
+while :; do
+  pids=$(pgrep -f "$TARGET_PATTERN" || true)
+  if [ -z "$pids" ]; then echo "ALL_TARGETS_DONE"; break; fi
+  echo "[$(date +%H:%M:%S)] active=$(printf '%s\n' "$pids" | wc -l)"
+  printf '%s\n' "$pids"
+  sleep "$INTERVAL"
+done
+```
+
+调度器/服务/数据适配器的探针写法见 `adapters.md`；djob 的完整循环见 `djob.md` 与
+`../scripts/poll_jobs.sh`。形状相同，只替换 `target_probe` 与 active 判定。
 
 **踩过的坑**：
 
-- `|| true` 包住 ssh 会让“SSH 失败”也变成空 `active` → **假哨兵**。正确做法是把 ssh 的 rc 与
-  “空结果”分开处理（`scripts/poll_jobs.sh` 已实现：连续 N 次 ssh 失败就 abort）。
-- 不排除 `qcu_opt_base` 这类长期 PENDING，哨兵**永不**触发。
-- 用 name 做过滤会被截断名坑（`kall_mgr10_*`）→ 用 ID 白名单或 `-J`。
+- `|| true` 包住整条探针会让“连接失败”也变成空 `active` → **假哨兵**。只把预期的
+  “无匹配/无行”包成 `|| true`，探针 rc 单独判断。
+- 不排除无关的长期挂起项，哨兵可能**永不**触发。
+- 用显示名/截断名做匹配会漏判或误伤；用 ID、PID、URL 或 JSON 字段。
+- 探针返回成功但过滤为空，不等于目标结束；先确认过滤条件在手工命令上能选出预期目标。
 
-## 2. Single-job transition（单作业 → 只在变化时打印）
+## 2. Single-target transition（单目标 → 只在变化时打印）
 
-**适用**：只关心一个作业什么时候进 `RUNNING`、什么时候终止；不想被每轮重复状态刷屏。
+**适用**：只关心一个目标什么时候进入运行、什么时候结束/失败；不想被每轮重复状态刷屏。
 
 **必须要素**：
 
 ```text
-只看 state 字段（djob -ll → $1=="state"）
-只在 state 变化时打印一行（带时间戳与 elapsed）
-终止态 SUCCEEDED|FAILED|CANCELLED|KILLED → 退出（STOPPED/SSTOPPED 是挂起，继续观察）
-超时 → 退出码 9；连续空输出/通信失败 → 退出码 3
+state_probe   = 只返回一个可解析状态字段的探针
+state_changes = 只在状态变化时打印一行（带时间戳与 elapsed）
+terminal      = 适配器定义的终态集合；挂起态保持 active
+budget        = interval + maxDuration；超时退出码要可区分
 ```
 
-**实测证据**：
+**通用形状**：
 
-- `2133396`（`m1xa22tu4`）：`16:41:21 job=2133396 state=PENDING` → `17:01:36 job=2133396 state=FAILED`，
-  两行日志、20 分钟、monitor `completed exit 0`。→ 作业失败但监控正常结束。
-- `2133327`（`s1oldb7up`）：PENDING 连续 53 行（16:35:34 → 17:01:19），`17:02:50 FAILED` 后 `DONE`。
-  → 27 分钟 PENDING 是正常的排队，不要因为“太久没动”就重提。
-- `2133416`（`s20idck26`）：`JOB_DONE after 870s`，最后一行是空的——作业**从列表消失**而没有显式终态。
-  → 监控要能处理“消失”这种完成形态。
+```bash
+last=
+start=$(date +%s)
+while :; do
+  st=$(state_probe)
+  rc=$?
+  if [ "$rc" -ne 0 ]; then
+    echo "PROBE_ERROR rc=$rc"
+    exit 3
+  fi
+  if [ "$st" != "$last" ]; then
+    echo "[$(date +%H:%M:%S) +$(( $(date +%s) - start ))s] state=$st"
+    last=$st
+  fi
+  case "$st" in
+    SUCCEEDED|FAILED|CANCELLED|KILLED) echo "TARGET_DONE state=$st"; break ;;
+  esac
+  sleep "$INTERVAL"
+done
+```
 
-**变体**：需要“先等它开始再等它结束”时，加一个 `SEEN=1` 标记（本次 `s20idck26` 用过）：
-先观察到 `RUNNING`，之后 `! RUNNING|PENDING` 才算完成；否则会把“还没开始”误判成“已结束”。
+把终态集合换成适配器的真实语义；例如 djob 的 `STOPPED/SSTOPPED` 是挂起，仍属 active
+（见 `djob.md`）。调度器的 `squeue`/`sacct`、服务的 health 字段、进程的退出码文件都可以作为
+`state_probe`。
 
-## 3. Data progress（数据侧：rows / CSV / newrows）
+**变体：monitor 先于目标启动（SEEN / WAITING_FOR_TARGET）**：如果需要“先等它开始再等它结束”，
+探针的 `UNKNOWN`/空 PID 表示“尚未开始”，不是终态。加 `SEEN=1` 标记：先观察到 RUNNING
+（或目标出现），之后才接受终止态；否则会把“还没开始”误判成“已结束”。
 
-**适用**：作业在写数据（`rows/*.json`、CSV），要用**数据增长**而不是作业状态判断“真的在进展”。
+```bash
+seen=0
+while :; do
+  st=$(state_probe) || { echo "PROBE_ERROR"; exit 3; }
+  case "$st" in
+    RUNNING) seen=1 ;;
+    UNKNOWN|WAITING_FOR_TARGET)
+      [ "$seen" -eq 1 ] || { echo "WAITING_FOR_TARGET"; sleep "$INTERVAL"; continue; }
+      ;;
+  esac
+  case "$st" in
+    SUCCEEDED|FAILED|CANCELLED|KILLED) echo "TARGET_DONE state=$st"; break ;;
+  esac
+  sleep "$INTERVAL"
+done
+```
+
+## 3. Data progress（数据侧：文件 / 行数 / 增量）
+
+**适用**：目标在写数据（`rows/*.json`、CSV、日志），要用**数据增长**而不是状态词判断
+“真的在进展”。
 
 **必须要素**：
 
 ```text
-rows 计数  = ls rows/*.json | wc -l（或用 find）
-CSV 行数   = wc -l < file（表头占 1 行）
+rows 计数  = find <dir> -type f -name '*.json' | wc -l
+CSV 行数   = wc -l < <file>（表头占 1 行）
 newrows    = 本轮 rows 计数 - 上轮（增量比绝对值有信息量）
-最新文件   = ls -t rows/*.json | head -3（看是不是刚写）
+最新文件   = find/ls -t 看 mtime，确认还在写
 ```
-
-**本次 k9 的形态**（`k9_status.sh`，被 `m1klvg1ys` / `m1ylmbo0y` 每 150/180s 调用）：
-
-```text
-# 每轮打印：newrows=<n> running=[<job names>] pending=<n>
-# 以及 3 个最新 rows/*.json、每个 CSV 的行数
-[16:43:21] k9_16x9_c64 RUNNING 16:44:57 ... 其余 PENDING
---- csv lines:
-  kupl_kunpeng_l24_c64_16x9.csv 2
---- newest row files:
-rows/2f2380f75138b934.json
-```
-
-CSV 行数从 2 → 4 → 5 增长，同时 `rows/` 最新文件每轮都在变——这才是“在进展”的证据；
-只看作业 `RUNNING` 不足以说明它在产出。
 
 **纪律**：
 
-- 监控阶段**只读**：不做 `merge`、不覆盖 CSV、不删中间文件。
-- 作业 `SUCCEEDED` ≠ 行级完整：本次 thread9 只写了 7 行部分数据；必须独立核对行数/列/重复。
-- 全部结束后才做：rsync 摘要 → merge CSV → 核对 → `known_skips`/quarantine → docs/logs/skills → 审计。
+- 监控阶段**只读**：不做 merge、不覆盖 CSV、不删中间文件。
+- 目标 `SUCCEEDED`/`exit 0` ≠ 数据完整；必须独立核对行数、列、重复、`known_skips`。
+- 全部目标结束后才做：摘要 → 合并 → 核对 → 记录跳过/quarantine → docs/logs/skills → 审计。
+- 数据增长可以为空但目标仍在跑（缓冲/批处理）；结合目标状态和 mtime 判断。
 
 ## 4. Replacement / handover（换监控，不留空窗也不重叠）
 
-**适用**：目标变了（从“等 4 个作业”换成“等全部作业”）、旧监控间隔不合适、脚本要换。
+**适用**：目标变了、旧监控间隔不合适、脚本要换、旧 monitor 已到预算。
 
 **正确顺序**：
 
 ```text
-1) 先确认新监控命令可用（手工跑一次，看到正确输出）
-2) 起新 monitor（拿到新 m… id 与 output path）
-3) 立刻停旧 monitor（task_stop / kill_shell({taskId})）
+1) 先手工确认新探针可用，输出能被解析
+2) 起新 monitor（拿到新 m…/s… id 与 output path）
+3) 停旧 monitor（task_stop / kill_shell({taskId})）
 4) shell_tasks 复核：只剩一个权威观察者
 ```
 
-本次实测的换班是**干净**的：`09:37:36Z` 停掉当时仍在跑的两个旧任务（`m1ylmbo0y`、`s1m3twhhb`；
-`m1klvg1ys` 更早在 `08:51:05Z` 已停）→ `09:37:43Z` 起 `m21zy0uf7`，间隔 7 秒，无重叠、无空窗。
-（本地时间 17:37:36 → 17:37:43。）
-
-对照：本次也出现过**重叠**——`s1m3twhhb`（45s，自建 wait_jobs.sh）与 `m1klvg1ys`（150s）
-同时在轮询同一批作业，产生两份不一致的时间线。后者才是要避免的形态。
+先起新的再停旧的，间隔几秒即可；不要长期并存，也不要在目标切换时留下空窗。
+如果旧 monitor 已经自动停止（`maxDurationMs`），按“超时 ≠ 完成”处理，先查目标状态再决定是否重启。
 
 ## 5. Anti-pattern：重复监控
 
 | 症状 | 代价 | 处理 |
 |---|---|---|
-| 同一目标两个 monitor | 双倍 SSH、双份日志、时间线冲突、停机时容易漏停 | 保留一个；另一个立即停 |
-| 旧 monitor 还盯着已结束作业 | 无意义输出、误导“还在跑” | `shell_tasks` 找出 → `task_stop` |
+| 同一目标两个 monitor | 双倍连接、双份日志、时间线冲突 | 保留一个；另一个立即停 |
+| 旧 monitor 还盯着已结束目标 | 无意义输出、误导“还在跑” | `shell_tasks` 找出 → `task_stop` |
 | monitor + 前台 `sleep` 轮询并行 | 主循环被阻塞、token 浪费 | 删掉 sleep，只留 monitor |
 | 每个数据文件一个 monitor | 观察者爆炸、难以收尾 | 一个 monitor 覆盖一个数据目录 |
-
-本次会话的旧任务清理清单（作为“要停哪些”的例子）：`m1klvg1ys`（150s×90）、`m1ylmbo0y`（180s×120）、
-`s1m3twhhb`（45s×240）、`m1vqx5c24`（被 `m1xa22tu4` 替换）、`magwlwwt`、`m4modbn3` 等——
-它们都应该在目标结束或换班时停掉，而不是留在 `shell_tasks` 里。
+| 用 monitor 代替一次性查询 | 多出生命周期和清理成本 | 直接前台跑一次探针 |
 
 ## 6. 监控退出码与目标结果分离
 
 ```text
-monitor 层：started → running → completed/stopped/failed(exit code 是观测者的)
-目标层    ：PENDING → RUNNING → SUCCEEDED/FAILED/CANCELLED/KILLED（或从列表消失）
-            STOPPED/SSTOPPED = 挂起，仍属 active
-数据层    ：rows/CSV 行数、完整性、重复、known_skips
+observer 层：started → running → completed/stopped/failed（exit code 是观察者的）
+target 层  ：active → terminal（成功/失败/取消/消失；挂起仍属 active）
+data 层    ：数量、完整性、重复、known_skips（独立于 target 状态）
 ```
 
-三层结论必须分别写。把 `completed exit 0` 写成“作业成功”是最常见的错误
-（本次 `m1xa22tu4` 就是反例：exit 0，作业 FAILED）。
+三层结论必须分别写。`monitor completed exit 0` 只表示观察者正常结束；目标可能 `FAILED`，
+数据也可能不完整。报告里分别写“monitor 结束方式”“目标最终状态”“数据核对结果”。
 
 ## 7. 什么时候**不要**监控
 
-- 一次 `djob -u` 就能回答的问题（“现在有几个在跑”）——前台跑，别起 monitor。
-- 作业预计 <1 分钟——直接 `shell_output(wait:"exit")` 等结果。
-- 需要人判断的交互式调试——用 `screen` 回读，不要用监控代替观察。
+- 一次探针就能回答的问题（“现在有几个在跑”）——前台跑，别起 monitor。
+- 目标预计 <1 分钟——直接 `shell_output(wait:"exit")` 等结果；确需周期观察时，`interval` 必须
+  小于目标预计寿命，否则首轮就可能已经结束。
+- 需要人判断的交互式调试——用 `screen`/`tmux` 回读，不要用监控代替观察。
 - 目标已经结束——不要为了“再看看”而起监控；直接查最终状态。
+- 只需要“进程是否还活着”——`kill -0`/`pgrep` 一次即可，不需要周期哨兵。
+
+## Appendix — djob 案例（一个适配器的实测证据）
+
+以下只作为“形状如何落地”的案例，不是通用流程的要求；完整命令、状态词与证据见 `djob.md`。
+
+- 一批 djob 作业的 all-jobs 监控使用 300s 间隔、4h 上限、`ALL_TEST_JOBS_DONE` 哨兵；
+  时间线显示 active 从 3 → 2 → 1，最终只剩长作业。
+- 无关的长期 PENDING 作业必须加入 `exclude`，否则哨兵永不触发。
+- `djob` 的 NAME 列会截断（`kall_mgr10_*`），匹配应使用作业 ID 或 `-J` JSON。
+- 监控脚本看到 `FAILED` 后正常退出是 `exit 0`；目标失败必须从状态字段读，不能从观察者退出码读。

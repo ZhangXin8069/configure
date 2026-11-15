@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# poll_jobs.sh — TEMPLATE: poll a batch scheduler queue until the active set is empty.
+# poll_jobs.sh — TEMPLATE (djob adapter): poll a djob queue until the active set is empty.
 #
-# This file is a template shipped with the `monitor` skill. It is not executed by the
-# skill itself: copy it into your task scratchpad, adjust the defaults for the job
+# This file is a djob adapter template shipped with the `monitor` skill; the generic
+# observation model lives in SKILL.md and references/adapters.md. It is not executed by
+# the skill itself: copy it into your task scratchpad, adjust the defaults for the job
 # family you are watching, and run it there. Read-only: it never submits, cancels,
 # kills, or writes into the data tree.
 #

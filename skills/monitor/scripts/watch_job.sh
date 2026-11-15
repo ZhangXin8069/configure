@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
-# watch_job.sh — TEMPLATE: follow one scheduler job and exit on a terminal state.
+# watch_job.sh — TEMPLATE (djob adapter): follow one djob job and exit on a terminal state.
 #
 # Prints a line only when the state changes (timestamp + elapsed seconds), then exits
 # as soon as the job reaches SUCCEEDED|FAILED|CANCELLED|KILLED. STOPPED/SSTOPPED mean
 # the job is suspended and do NOT end the watch.
 #
-# This file is a template shipped with the `monitor` skill. It is read-only: it never
-# submits, cancels, or kills anything. Copy it into the task scratchpad and edit the
-# defaults if the scheduler flags differ on your cluster.
+# This file is a djob adapter template shipped with the `monitor` skill; the generic
+# observation model lives in SKILL.md and references/adapters.md. It is read-only: it
+# never submits, cancels, or kills anything. Copy it into the task scratchpad and edit
+# the defaults if the djob flags differ on your cluster.
 #
 # Example:
 #   ./watch_job.sh --host <login-host> --user <remote-user> --job <job-id>

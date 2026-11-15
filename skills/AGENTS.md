@@ -22,13 +22,14 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - `rule/scripts/run-guarded.test.sh`：进程守卫的自然退出、超时、长任务进度门和停滞判定回归。
 - `tag/references/tag-operations.md`：Git 标签创建、查询、删除、改写与区间操作的详细命令。
 - `up/references/awesome-opencode.md`：opencode 生态精选索引（官方/插件/主题/agent/资源），供 up 差距分析与候选发现使用。
-- `monitor/references/scheduler.md`：`djob`/`dsub`/`dkill`、active/pending、列与截断名、`testusers_rebuild` 资源限制与本次作业证据。
+- `monitor/references/adapters.md`：通用适配器契约，以及本地进程/调度器/服务/数据/CI 探针与状态映射。
+- `monitor/references/djob.md`：djob 调度器适配器示例（`djob`/`dsub`/`dkill`、列与截断名、资源限制与证据）。
 - `monitor/references/reading-output.md`：monitor check due、`shell_output` 的 `wait` 三态、offset 续读与不可信输出。
-- `monitor/references/patterns.md`：all-jobs 哨兵、single-job 状态转移、rows/CSV 进度与重复监控清理。
-- `monitor/references/troubleshooting.md`：空 active、PENDING 卡住、`maxDuration`、stderr 污染、`djob` 空输出。
-- `monitor/templates/monitor_command.md`：`monitor_command` 参数、预算关系、模板与停止方式。
-- `monitor/scripts/poll_jobs.sh`、`monitor/scripts/wait_all_jobs.sh`、`monitor/scripts/watch_job.sh`：只读轮询/全部作业/单作业观察脚本模板（只作模板，不代为执行）。
-- `monitor/scripts/monitor-scripts.test.sh`：上述三个脚本的离线回归入口（伪 `ssh`，覆盖参数校验、哨兵、排除过滤、SSH 失败、超时封顶与 `STOPPED` 挂起语义）。
+- `monitor/references/patterns.md`：all-targets 哨兵、single-target 状态转移、数据进度、换班与重复监控。
+- `monitor/references/troubleshooting.md`：探针空结果、挂起、`maxDuration`、stderr 污染、注入与误读。
+- `monitor/templates/monitor_command.md`：`monitor_command` 参数、预算关系、通用模板与停止方式。
+- `monitor/scripts/poll_jobs.sh`、`monitor/scripts/wait_all_jobs.sh`、`monitor/scripts/watch_job.sh`：djob 适配器只读脚本模板（示例，不代为执行）。
+- `monitor/scripts/monitor-scripts.test.sh`：上述 djob 适配器脚本的离线回归入口（伪 `ssh`，覆盖参数校验、哨兵、排除过滤、SSH 失败、超时封顶与 `STOPPED` 挂起语义）。
 
 ## 技能执行公共契约（低 token 版）
 
@@ -192,5 +193,5 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `fast` | 多快好省修饰技能：`~fast <任务>` 默认补全为 `~fast+auto+all`，显式子技能和后续调用继承 fast；全局默认迭代上限 3（显式例外可覆盖）；auto/all 的收益停止阈值 `<5%→<25%`；analy/pure/report 默认 Markdown；合并重复工作并行独立支线，同时以效率 ≥3x、质量 ≥60% 和硬闸门约束收敛 |
 | `go-on` | 继续上次任务：多源汇聚输入清单、Git 改动、项目约定与原生会话；确认任务后优先原生继续，备选手动重建；孤儿进程分类处置，信息补查最多 3 轮 |
 | `follow-up` | 先压缩再分发，行动项可执行、状态与动作分离、跨会话可续；适用于周报、交接、复盘和行动项清单 |
-| `monitor` | 长任务与作业监控：长任务、后台进程、调度器作业（`djob`/`dsub`/`dkill`）与数据进度（rows/CSV/newrows）的只读观测；先选工具（`monitor_command`/`shell_command` 后台/`cron_create`/`shell_output` wait）再定有界预算（interval、`checkAfterMs`、`maxDurationMs`、哨兵）→ 到期增量读（`wait` 的 `none/output/exit` 三态与 offset 续读）→ 判定（active/终止态/PENDING 原因）→ 停止与交接；给出 all-jobs 哨兵、single-job 状态转移、数据进度三种模板、三个只读脚本模板及离线回归测试；不提交、不取消、不 `dkill`、不写数据树，输出按不可信数据处理 |
+| `monitor` | 通用长任务与外部目标监控：本地进程、后台命令、调度器作业、服务/HTTP、CI、数据产出与远端命令的只读观测；先选工具（`monitor_command`/`shell_command` 后台/`cron_create`/`shell_output` wait）再定有界预算（interval、`checkAfterMs`、`maxDurationMs`、哨兵）→ 到期增量读（`wait` 的 `none/output/exit` 三态与 offset 续读）→ 判定（active/终止态/挂起原因）→ 停止与交接；`adapters.md` 定义通用探针契约，`djob.md` 只是调度器适配器示例，另给出 all-targets/single-target/数据进度模板、djob 只读脚本模板及离线回归；不提交、不取消、不写数据树，输出按不可信数据处理 |
 | `screen` | screen 会话接管：把用户给出的 `<pid>.<名称>`（如 `91111.lingsheng`）登记为默认会话环境；注入前三道闸门（Attached / 画面 ≥2s 静态 / 末行为提示符），静态阻塞默认用 `q`/`Ctrl-C` 清除、编辑器或可能丢数据时先请示，有人在输入则只读；`stuff`+单独回车执行、`hardcopy`/`logfile`+`log on` 回读，Detached 时退化为只读；前台进程决定语义（shell/ssh/vim/top）；远程会话 30s 保活为硬性要求、无必要指令默认 `ls`，本地为建议值；多代理共用同一会话时 `flock` 串行化且闸门在锁内，脚本路径不依赖会话变量；远端与本地仅工作集需一致，偏差先按 sh_init.sh 约定备份远程再以本地为准；本地读、远程跑，结果以远程为准；后台保活脚本 `screen-keepalive.sh` 强制运行；不新建 SSH/SCP/SFTP/nc 通道；`configure` 默认解析为本机配置库、远端同名目录以本地为准；不自动 quit/kill、不代输密码，禁止在用户活跃会话做按键实验 |

@@ -67,6 +67,8 @@ shell_output({ id, wait: "exit", timeout_ms: 600000 })
 | `completed, exit 0` | **观测者**正常结束；目标是否成功要单独看状态字段/数据 |
 | `stopped, signal SIGTERM` | 被 `task_stop` / `kill_shell` / `maxDurationMs` 停掉；不是目标结束 |
 | `failed, exit 255` | 通常是 `ssh` 传输/认证失败（本次 `s1zk5czvi` 就是 exit 255），不是远端作业失败 |
+| 目标退出码文件 `rc!=0` | 目标失败；observer 仍可能正常 `exit 0` |
+| HTTP 非 2xx / 探针非 0 | 探针失败，不等于目标失败或尚未就绪 |
 | `[stderr] …` 行 | stderr 被合并进输出（SSH 警告、远端错误）。按噪音/错误分别处理，不当数据 |
 | 末尾无换行/半行 | 进程还在写；下次增量读会补齐 |
 | 输出里有 `ALL_TEST_JOBS_DONE` 之类哨兵 | 目标结束（哨兵由脚本自己打印，可信度取决于过滤是否正确） |
@@ -103,7 +105,10 @@ shell_output({ id, wait: "exit", timeout_ms: 600000 })
 | 用了不存在的 id | 报错但被忽略 | 报错就是报错；先 `shell_tasks` 确认 id 与状态 |
 | `maxDurationMs` 到点自动停 | 以为任务跑完了 | 是“监控超时”，目标可能还在跑；查状态再决定是否重启监控 |
 
-## 8. 本次会话证据
+## 8. 本次会话证据（djob 适配器案例）
+
+以下只是 djob 适配器的实测案例；进程目标看退出码文件，HTTP 目标看 health/status 字段，
+CI 目标看 `conclusion`，共同规则仍是“observer 退出码 ≠ 目标结果”。
 
 - `m1xa22tu4`（`watch_job.sh 2133396`）：16:41:21 打印 `state=PENDING`，17:01:36 打印
   `state=FAILED` 后退出；任务记录 `completed, exit 0`。→ 退出码与目标状态必须分开报告。

@@ -1,8 +1,9 @@
-# Scheduler specifics — `djob` / `dsub` / `dkill`
+# djob adapter — 调度器示例（`djob` / `dsub` / `dkill`）
 
-本文件是 `monitor` 技能的调度器细节层。SKILL.md 只给“最小必要知识”，这里给可执行命令、
-字段语义、已知坑和本次会话证据。所有示例用占位变量（`$HOST`/`$REMOTE_USER`/`$JOB`），
-不把会话里的具体作业 ID 当成唯一路径。
+本文件是 `monitor` 的 **djob 调度器适配器**，不是通用观测模型。通用模型见 `SKILL.md`，
+适配器契约与其他调度器（Slurm/PBS/LSF）见 `adapters.md`。只有目标确实是 djob 时才读本文件。
+这里给可执行命令、字段语义、已知坑和本次会话证据。所有示例用占位变量
+（`$HOST`/`$REMOTE_USER`/`$JOB`），不把会话里的具体作业 ID 当成唯一路径。
 
 ## 1. 远端环境：PATH 是最常见的“假故障”
 
@@ -99,7 +100,7 @@ ID           NAME         STATE      USER         ACCOUNT      QUEUE            
 
 监控脚本的默认 active set 用前 5 个；终止态集合固定为
 `SUCCEEDED|FAILED|CANCELLED|KILLED`。`STOPPED`/`SSTOPPED` 只是被挂起，仍属 active，
-`watch_job.sh` 不会因为它们退出。**不要把 `SUCCEEDED` 当“结果正确”**：本次会话里
+djob 适配器脚本 `watch_job.sh` 不会因为它们退出。**不要把 `SUCCEEDED` 当“结果正确”**：本次会话里
 作业成功退出但 CSV 只有部分行（thread9 的 7 行）的情况真实发生过，行级核对是独立步骤。
 
 ## 5. 排除项：长期 PENDING 的无关作业

@@ -1465,3 +1465,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## monitor-generic - final - 2026-11-15 18:47:51 +0800
+- 主任务: 通用化 monitor 技能并用新建 cm tgo 实测
+- 日志文件: logs/v2026111518-2.txt
+- 文件大小: 8645 bytes
+- 触发原因: 任务完成
+- 关键内容: monitor 改为通用观测模型 + 适配器；djob 迁为示例；两轮 cm tgo 真实验证并修复 6 项文档缺口
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

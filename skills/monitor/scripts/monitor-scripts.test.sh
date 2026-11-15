@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
-# monitor-scripts.test.sh — offline regression tests for the monitor skill scripts.
+# monitor-scripts.test.sh — offline regression tests for the djob adapter scripts.
 #
-# The tests replace `ssh` with a deterministic fake, so they never touch a real
-# scheduler. Run from anywhere:
+# The generic monitor model is documented in SKILL.md/references; these tests cover the
+# djob adapter templates (poll_jobs.sh, wait_all_jobs.sh, watch_job.sh). The tests
+# replace `ssh` with a deterministic fake, so they never touch a real scheduler.
+# Run from anywhere:
 #   bash skills/monitor/scripts/monitor-scripts.test.sh
 
 set -u

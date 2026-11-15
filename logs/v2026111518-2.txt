@@ -1,0 +1,94 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-15 18:47:51 +0800
+批次: monitor-generic
+主任务: 通用化 monitor 技能并用新建 cm tgo 实测
+触发原因: 任务完成
+摘要: monitor 改为通用观测模型 + 适配器；djob 迁为示例；两轮 cm tgo 真实验证并修复 6 项文档缺口
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 通用化重构
+- 目标: 把 monitor 从 djob 专用流程改为任意外部目标的通用观测模型；djob 只作为调度器适配器示例。
+- 结构: SKILL.md 重写为 target_probe/active/exclude/terminal/sentinel/budget 六项定义、工具选择、通用配方、适配器选择与收尾；新增 references/adapters.md（进程/调度器/服务/数据/CI 契约）；references/scheduler.md 迁移为 references/djob.md 并明确“示例、按需读取”。
+- 文档: patterns.md 改为通用 all-targets/single-target/数据/换班范式，djob 只留案例附录；troubleshooting.md 改为通用故障排查 + djob 附录；templates/monitor_command.md 增加进程/服务/数据/CI 模板，djob 只作示例；reading-output.md 增加进程/HTTP 判读行。
+- 脚本: poll_jobs.sh/wait_all_jobs.sh/watch_job.sh 标注为 djob 适配器模板；monitor-scripts.test.sh 标注只测 djob 适配器；技能索引与 monitor/AGENTS.md 同步。
+
+### S2 — cm tgo 实测 #1（通用性）
+- 派发: `bin/agent-dispatch.sh --agent cm --provider tgo --task-file <scratch>/monitor-cm-tgo-test.task.md --timeout 8m --json`。
+- 结果: ok=true, agent=cm, launcher=cm, provider=tgo, model=deepseek/deepseek-v4.1-flash, strength=max, run_id=20261115T183815.SG7ivx, exit 0, timed_out=false, auto_resume=not_needed。
+- 子 agent: 读取 SKILL.md/adapters.md/reading-output.md/patterns.md/templates 共 5 个文件；未读 djob.md；启动本地非 djob 进程 PID 49688（20 tick），monitor id m1id6xm6，哨兵 TARGET_DONE state=DONE rc=0；目标 exit_code=0、PID GONE、run.log 20 行；monitor completed exit 0。
+- 发现: ① Step 1 写“五项”实际列六项；② 短目标（10–60s）缺预算指引，interval 可能大于目标寿命；③ reading-output 的失败/SSH 案例偏 djob；④ monitor_events 措辞可更明确。子 agent 明确回答“完全不使用 djob 时技能足以指导本次监控”。
+
+### S3 — 按实测修正
+- Step 1 改为“六项”；新增“预算必须匹配目标寿命”：短目标优先 shell_output(wait=exit)，确需周期观察用 interval=2–5s/checkAfterMs=2000–5000。
+- templates 增加短目标预算行与 monitor_command 无独立 interval 的说明；patterns §7 同步。
+- reading-output §5 增加“目标退出码/HTTP 探针”通用判读，§8 标注为 djob 案例；Step 3 与 check due 措辞改为“优先 shell_output，运行器提供 monitor_events 时才用”。
+
+### S4 — cm tgo 实测 #2（修订验证）
+- 派发: 同一 cm/tgo 路由，run_id=20261115T184224.yeQpKX，exit 0，timed_out=false。
+- 子 agent: 15s 本地目标 PID 51909，monitor id m1xam82l，checkAfterMs=3000/maxDuration=60000；第一次读取 RUNNING tick_lines=7（非首轮 DONE），后续 10/13，15 tick 后 DONE rc=0；monitor 自然 exit 0，目标 exit_code=0、PID GONE、run.log 15 行。
+- 结论: 六项修订通过；短目标预算修订通过，首轮 DONE 风险消除。
+- 新发现（低）: monitor 先于目标启动时 UNKNOWN 可能被误判终态；已在 SKILL.md/patterns/templates 补 SEEN/WAITING_FOR_TARGET 指引，并补充 monitor_command 的 interval 约定。该最后补充为文档改动，未再跑第三轮 cm tgo。
+
+### S5 — 最终校验
+- bash -n 四个脚本: PASS。
+- monitor-scripts.test.sh: 47 passed, 0 failed。
+- form-audit --strict: rc 0；data-tracking: rc 0；configure-check: errors=0（仅既有 plugins warning）；git diff --check: rc 0。
+- references 链接检查: 无 scheduler.md 断链，SKILL.md 引用的 adapters/djob/patterns/reading-output/troubleshooting/templates/scripts 均存在。
+
+## 验证与证据
+- 真实派发: 两轮 agent-dispatch/v1 JSON 均 ok=true、exit_code=0、timed_out=false；provider=tgo、model=deepseek/deepseek-v4.1-flash、strength=max。
+- 子 agent 证据: 第一轮 monitor m1id6xm6；第二轮 monitor m1xam82l；均在本机临时目录运行，未使用 djob/SSH/调度器，未修改仓库。
+- 静态证据: 47 项 djob 适配器离线回归、form 审计、data 边界、configure-check、diff 检查全部通过。
+- 未验证项: 未在真实 djob 集群上重跑；最后一处 SEEN/WAITING_FOR_TARGET 文档补充未再派发第三轮 cm tgo。
+
+## 变更与产物
+- 重写: skills/monitor/SKILL.md、references/patterns.md、references/troubleshooting.md、templates/monitor_command.md。
+- 新增: references/adapters.md。
+- 迁移: references/scheduler.md → references/djob.md（djob 适配器示例）。
+- 调整: references/reading-output.md、三个 djob 适配器脚本与测试的标注、skills/AGENTS.md、skills/monitor/AGENTS.md。
+- 未改动: 其他技能、真实数据树、远端作业；未执行 djob/dsub/dkill/squeue/scancel/SSH。
+
+## 风险、限制与下一步
+- 真实测试使用的是本地进程，不是 djob 或其他调度器；djob 适配器只由离线伪 ssh 回归覆盖。
+- 最后补充的 SEEN/WAITING_FOR_TARGET 与 interval 说明是文档级改动，未再跑第三轮 cm tgo。
+- 无阻塞；下一步仅剩暂存、复跑大文件/数据闸门、提交并按条件式交付推送。
+
+## 用户输入指令
+使用新建的cm tgo实测
+
+使用新建的cm tgo实测,djob只是特殊示例,本skill为更通用的skill
+
+## Agent 全文报告
+--- report begin ---
+已完成 monitor 技能的通用化，并用新建的 `cm tgo` 做了两轮真实派发测试。
+
+改动内容:
+- SKILL.md 改为 adapter-neutral 观测模型：target_probe/active/exclude/terminal/sentinel/budget 六项、工具选择、通用配方、适配器选择、停止与交接；djob 只作为示例。
+- 新增 references/adapters.md，覆盖本地进程、Slurm/PBS/LSF/djob、HTTP/服务、数据产出、CI、screen/tmux/SSH 的探针与状态映射。
+- references/scheduler.md 迁移为 references/djob.md，明确“只有目标确实是 djob 时才读”。
+- patterns/troubleshooting/templates/reading-output 改为通用范式优先，djob 案例放附录；djob 脚本标注为适配器模板。
+- 同步 skills/AGENTS.md 与 monitor/AGENTS.md 的索引和测试命令。
+
+推理依据:
+- 用户明确指出 djob 只是特殊示例，核心流程不应绑定 djob；适配器层只负责“怎么问”，观测模型、预算、哨兵和停止规则应保持一致。
+- 通用模型必须能覆盖进程、服务、数据、CI 等不同目标；否则每换一种目标就要重写一套监控逻辑。
+- 实测反馈比静态审阅更能暴露文档歧义和预算边界，因此用 cm tgo 做真实派发验证。
+
+实测结果:
+- 第一轮: agent=cm, provider=tgo, model=deepseek/deepseek-v4.1-flash, strength=max, run_id=20261115T183815.SG7ivx, exit 0；子 agent 在完全不用 djob 的情况下监控本地 20 tick 进程，monitor m1id6xm6，哨兵 TARGET_DONE state=DONE rc=0，目标 exit_code=0、PID GONE、run.log 20 行；明确回答通用技能足够。
+- 第一轮发现 4 个文档缺口：六项/五项不一致、短目标预算缺指引、reading-output 案例偏 djob/SSH、monitor_events 措辞不够明确；已修正。
+- 第二轮: run_id=20261115T184224.yeQpKX, exit 0；15s 短目标，monitor m1xam82l，第一次读取 RUNNING tick_lines=7（不是首轮 DONE），后续 10/13，15 tick 后 DONE rc=0；monitor 自然 exit 0，目标 exit_code=0、PID GONE、run.log 15 行；两处修订均通过。
+- 第二轮发现低严重度缺口：monitor 先于目标启动时 UNKNOWN 可能被误判终态；已补 SEEN/WAITING_FOR_TARGET 指引，并说明 monitor_command 没有独立 interval 参数。该最后补充未再跑第三轮 cm tgo。
+
+验证结果:
+- bash -n 四个脚本通过；monitor-scripts.test.sh 47 passed, 0 failed。
+- form-audit --strict rc 0；data-tracking rc 0；configure-check errors=0（仅既有 plugins warning）；git diff --check rc 0。
+- 两轮 agent-dispatch/v1 JSON 均 ok=true、exit_code=0、timed_out=false、auto_resume=not_needed；未执行 djob/SSH，未修改仓库。
+
+后续步骤:
+- 暂存本批文档/脚本改动，复跑大文件与 data 边界闸门后提交；远程可 fast-forward 时正常推送。
+- 真实集群上的 djob 适配器行为本轮未重跑；最后一处 SEEN/WAITING_FOR_TARGET 文档补充为静态验证。
+--- report end ---

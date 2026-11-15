@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# wait_all_jobs.sh — TEMPLATE wrapper: "wait until every job in the active set is gone".
+# wait_all_jobs.sh — TEMPLATE (djob adapter): "wait until every djob job is gone".
 #
-# Thin wrapper around poll_jobs.sh with all-jobs defaults:
+# Thin djob-adapter wrapper around poll_jobs.sh with all-jobs defaults:
 #   interval 300s, sentinel ALL_JOBS_DONE, max duration 4h, optional exclude.
 # Copy both scripts into the task scratchpad and call this one for the common case.
 #
