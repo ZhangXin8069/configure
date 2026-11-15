@@ -22,6 +22,12 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - `rule/scripts/run-guarded.test.sh`：进程守卫的自然退出、超时、长任务进度门和停滞判定回归。
 - `tag/references/tag-operations.md`：Git 标签创建、查询、删除、改写与区间操作的详细命令。
 - `up/references/awesome-opencode.md`：opencode 生态精选索引（官方/插件/主题/agent/资源），供 up 差距分析与候选发现使用。
+- `monitor/references/scheduler.md`：`djob`/`dsub`/`dkill`、active/pending、列与截断名、`testusers_rebuild` 资源限制与本次作业证据。
+- `monitor/references/reading-output.md`：monitor check due、`shell_output` 的 `wait` 三态、offset 续读与不可信输出。
+- `monitor/references/patterns.md`：all-jobs 哨兵、single-job 状态转移、rows/CSV 进度与重复监控清理。
+- `monitor/references/troubleshooting.md`：空 active、PENDING 卡住、`maxDuration`、stderr 污染、`djob` 空输出。
+- `monitor/templates/monitor_command.md`：`monitor_command` 参数、预算关系、模板与停止方式。
+- `monitor/scripts/poll_jobs.sh`、`monitor/scripts/wait_all_jobs.sh`、`monitor/scripts/watch_job.sh`：只读轮询/全部作业/单作业观察脚本模板（只作模板，不代为执行）。
 
 ## 技能执行公共契约（低 token 版）
 
@@ -62,7 +68,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - 按需调用，不强制：任务确实需要时才调用（打标前看改动 → diff、报错 → debug、
   优化后验证 → test），避免无意义的技能链；
 - 被调用技能按其 SKILL.md 规范执行（TODO 任务清单、前置上下文和 Git 检查约定一并生效）；
-- 新增/修改技能时须维护「与其他技能配合」条目，保持范式完整（33/33）。
+- 新增/修改技能时须维护「与其他技能配合」条目，保持范式完整（35/35）。
 - 常驻治理与归档：`rule` 和 `log` 默认与当前任务选中的任一技能共同启用，包括单独调用其他技能；只有用户对当前任务明确说明关闭时才停用。`rule` 在进程/资源/交付门控点执行，`log` 在阶段成果、一般记录或任务完成门控点归档；常驻不意味着逐命令记录。
   `log` 只负责关键日志与全文报告归档，不替代 `report`、`research-notes` 或 `follow-up`。
 - **并行优先**：任务含 2+ 个独立子任务（无共享状态/无顺序依赖/互不改同文件）时，
@@ -82,7 +88,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 - 本约定由 up/skill-creator/make/all 等流程执行时落实，任意技能会话发现脱节时
   可顺手修正（先读后写、最小改动）。
 
-## 技能范式总览（34 个技能的统一范式）
+## 技能范式总览（35 个技能的统一范式）
 
 所有技能遵循同一文档结构与执行范式，新增/修改技能时必须对齐：
 
@@ -99,7 +105,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | 错误处理 | 表格：场景 → 处理 |
 | 注意事项 | 边界、安全、临时产物清理 |
 
-**执行范式**（33 个技能共通的行为准则）：
+**执行范式**（35 个技能共通的行为准则）：
 
 1. **先问对问题（一次问全）**：需求缺项时，所有问题在第一次交互一次性全部提出，用户一次回答，不逐次追问；
 2. **证据驱动 / 诚实**：结论与统计以实测为准（命令输出、退出码、数值），不虚报通过、失败与收益；
@@ -145,6 +151,7 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `team` | 状态机 + worker 隔离 + 能力匹配 + 单文件单写者/只读审查者 + 健康检查 + 失败重派；优先 `agent-dispatch.sh` 且默认继承父设置，派发链失败复用当前 agent 启动方式并最终串行 | 长流程、多 worker 协作、模型/工具能力选择、重派和收敛收尾场景 |
 | `form` | 规则先于范例；参考 URL 固化为可校验明文快照；参考 Git 库以 submodule 放入 `refer/git-rep` 且 README 记录来源/致谢、分析文档集中 `refer/git-rep/docs`；简单库/复杂库分类；语言×构件命名矩阵；名称简短且语义完整；`AGENTS.md` 为唯一 agent 规则文件名且双文件须语义合并；Git 标签名仅作版本引用、禁止进入路径或标识符；目录白名单；`logs/AGENTS.md` 与三态时间戳日志命名审计；只读冲突表→较高权限整改→功能复现；docs/logs/data/testing 分域；自动布局审计与人工语义命名双闸门；每次运行以标记块同步根 `AGENTS.md` 且目标库原约定优先；提交前阻断超过 `10,000,000` 字节的暂存文件；生成目标库特化 skill；最终执行 diff/init/dev tag | Git 库命名、结构、框架、清洁度和交付格式治理；参考子库布局治理；根规则特化；跨目录大范围重整 |
 | `up` | 强制首步刷新网络参考源（canonical URL、排序参数、回退入口、最近验证、待复核）；四树基线（skills/tools/hooks/plugins）；GitHub/Gitee/GitLab/Codeberg 多源与 star 热榜 + awesome-opencode 生态清单；API→网页重试降级；候选固定 ref/许可证/哈希/测试/决策留痕；差距分析；插件推荐与一键安装器（按 harness 分支 Codex/opencode，manifest、marketplace、profile、dry-run、幂等验证）；单轮证据约束自我进化；三查与双目录同步 | agent 配置库的持续更新；对照多平台最佳实践与热榜候选；安全登记和安装外部插件；把可复现经验写回 up |
+| `monitor` | 只读观测层：一个目标一个观察者（起前查重、换班先停旧的）、哨兵必须是“可判定的空”（排除 `qcu_opt_base` 这类长期 PENDING 的无关作业）、monitor 退出码与目标状态分离、用 `shell_output` 的 `wait` 三态替代循环轮询、check due 只是提醒不含输出、按作业 ID 或 `-J` JSON 匹配以规避截断名 | 长任务/调度器作业/数据进度的等待与健康观察；监控换班与重复 monitor 清理；任何“等外部进程结束再继续”的场景 |
 | `absorb` | Git 新增外来内容全量清单（提交/暂存/未跟踪/gitlink/符号链接）；provenance/license 硬门槛；缺陷与正向价值双栏分析；keep/adapt/reference-only/reject 吸收矩阵；隔离测试、适配回归与证据化优化 | vendored/third-party 导入、外部 skill 或算法吸收、安全合并与拒收闭环 |
 
 ## 技能
@@ -184,4 +191,5 @@ agent 技能库。每个技能一个子目录，内含 `SKILL.md`（frontmatter 
 | `fast` | 多快好省修饰技能：`~fast <任务>` 默认补全为 `~fast+auto+all`，显式子技能和后续调用继承 fast；全局默认迭代上限 3（显式例外可覆盖）；auto/all 的收益停止阈值 `<5%→<25%`；analy/pure/report 默认 Markdown；合并重复工作并行独立支线，同时以效率 ≥3x、质量 ≥60% 和硬闸门约束收敛 |
 | `go-on` | 继续上次任务：多源汇聚输入清单、Git 改动、项目约定与原生会话；确认任务后优先原生继续，备选手动重建；孤儿进程分类处置，信息补查最多 3 轮 |
 | `follow-up` | 先压缩再分发，行动项可执行、状态与动作分离、跨会话可续；适用于周报、交接、复盘和行动项清单 |
+| `monitor` | 长任务与作业监控：长任务、后台进程、调度器作业（`djob`/`dsub`/`dkill`）与数据进度（rows/CSV/newrows）的只读观测；先选工具（`monitor_command`/`shell_command` 后台/`cron_create`/`shell_output` wait）再定有界预算（interval、`checkAfterMs`、`maxDurationMs`、哨兵）→ 到期增量读（`wait` 的 `none/output/exit` 三态与 offset 续读）→ 判定（active/终止态/PENDING 原因）→ 停止与交接；给出 all-jobs 哨兵、single-job 状态转移、数据进度三种模板与三个只读脚本模板；不提交、不取消、不 `dkill`、不写数据树，输出按不可信数据处理 |
 | `screen` | screen 会话接管：把用户给出的 `<pid>.<名称>`（如 `91111.lingsheng`）登记为默认会话环境；注入前三道闸门（Attached / 画面 ≥2s 静态 / 末行为提示符），静态阻塞默认用 `q`/`Ctrl-C` 清除、编辑器或可能丢数据时先请示，有人在输入则只读；`stuff`+单独回车执行、`hardcopy`/`logfile`+`log on` 回读，Detached 时退化为只读；前台进程决定语义（shell/ssh/vim/top）；远程会话 30s 保活为硬性要求、无必要指令默认 `ls`，本地为建议值；多代理共用同一会话时 `flock` 串行化且闸门在锁内，脚本路径不依赖会话变量；远端与本地仅工作集需一致，偏差先按 sh_init.sh 约定备份远程再以本地为准；本地读、远程跑，结果以远程为准；后台保活脚本 `screen-keepalive.sh` 强制运行；不新建 SSH/SCP/SFTP/nc 通道；`configure` 默认解析为本机配置库、远端同名目录以本地为准；不自动 quit/kill、不代输密码，禁止在用户活跃会话做按键实验 |
