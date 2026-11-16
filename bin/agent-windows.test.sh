@@ -18,13 +18,18 @@ assert_file() {
 assert_contains() {
     local file="$1"
     local needle="$2"
-    rg -Fq -- "$needle" "$file" || fail "$file 缺少：$needle"
+    if command -v rg >/dev/null 2>&1; then
+        rg -Fq -- "$needle" "$file" || fail "$file 缺少：$needle"
+    else
+        grep -Fq -- "$needle" "$file" || fail "$file 缺少：$needle"
+    fi
 }
 
 assert_not_contains() {
     local file="$1"
     local needle="$2"
-    if rg -Fq -- "$needle" "$file"; then
+    if { command -v rg >/dev/null 2>&1 && rg -Fq -- "$needle" "$file"; } ||
+       { ! command -v rg >/dev/null 2>&1 && grep -Fq -- "$needle" "$file"; }; then
         fail "$file 不应包含：$needle"
     fi
 }
@@ -49,6 +54,7 @@ assert_not_contains "$bat" 'LOG_FILE=.agent.'
 
 for contract in \
     'function Start-Or-ResumeRun' \
+    'function Resolve-RunSessionIdentity' \
     'function Write-Manifest' \
     'function Write-State' \
     'function Emit-Event' \
@@ -67,6 +73,11 @@ for contract in \
     '--max-runtime' \
     '--stop-file' \
     '--resume' \
+    'mode: TUI resume' \
+    "'--resume', \$script:SessionId" \
+    "'--standalone', '--session', \$script:SessionId" \
+    "@('resume') + \$common" \
+    "@('--resume', \$resumeSession)" \
     'Join-Path $script:DataRoot '\''runs'\'''; do
     assert_contains "$runtime" "$contract"
 done
@@ -212,17 +223,21 @@ else
 fi
 
 parser='
-$target = $env:AGENT_TEST_PARSE_TARGET
+$payload = [Console]::In.ReadToEnd()
+$source = [System.Text.Encoding]::UTF8.GetString(
+    [System.Convert]::FromBase64String($payload)
+)
 $tokens = $null
 $errors = $null
-[System.Management.Automation.Language.Parser]::ParseFile($target, [ref]$tokens, [ref]$errors) | Out-Null
+[System.Management.Automation.Language.Parser]::ParseInput($source, [ref]$tokens, [ref]$errors) | Out-Null
 if ($errors.Count -gt 0) {
     $errors | ForEach-Object { $_.Message } | Write-Error
     exit 1
 }
 '
 set +e
-parser_output=$(AGENT_TEST_PARSE_TARGET="$runtime" "$ps_cmd" -NoLogo -NoProfile -Command "$parser" 2>&1)
+parser_output=$(base64 < "$runtime" | tr -d '\r\n' |
+    "$ps_cmd" -NoLogo -NoProfile -Command "$parser" 2>&1)
 parser_status=$?
 set -e
 (( parser_status == 0 )) || fail "PowerShell Parser 失败：$parser_output"

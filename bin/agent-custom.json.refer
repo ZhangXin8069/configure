@@ -28,7 +28,7 @@
     "cm 也可用 pay（deepseek-pay）/ go|cgo（opencode-go）/ dgo（opendesign-go）接入本库 BYOK 途径：启动器把 providers.<途径> 中 commandcode.byok=true 的条目合并进 ~/.commandcode/providers.json（baseURL 取 base_url，apiKey 写环境变量引用，models 取静态模型表；标了 models_from_cache 的途径在静态表为空时改用本地模型目录缓存，并补齐 contextWindow/reasoningEfforts），模型以 <途径>/<模型> 传给 --model；默认仍是 gt|tgo。",
     "dgo=opendesign-go：OpenAI 兼容端点 https://amr-link.open-design.ai/v1（op 直连、co 协议桥、cm BYOK 使用），Anthropic 兼容根端点为去掉 /v1 的 https://amr-link.open-design.ai（cl 直连 /v1/messages）；key 只从 OPENDESIGN_GO_API_KEY 读取，模型清单从 /v1/models 自动发现。模板默认模型 deepseek-v4.1-flash、默认强度 max（2026-11-10 实测 /v1/models 的 default=true 模型；/v1/messages 同时接受 x-api-key 与 Bearer，/v1/chat/completions 只接受 Bearer）；可用 --model/--strength 覆盖。op 使用 @ai-sdk/openai-compatible 自定义 provider；co 在 Unix 走本地协议桥，cl 直连原生 Anthropic 接口（Windows runtime 暂不支持 co 的该桥）。",
     "各途径默认 flash 模型统一使用最大强度与 1M 上下文预算：claude 通过 [1m] 模型后缀声明 1M 窗口，并由 agents.claude.env.CLAUDE_CODE_AUTO_COMPACT_WINDOW=1000000 对齐压缩边界；codex 由 agents.codex.config.model_context_window=1000000 覆盖；cm 由 providers.json 的 contextWindow 落地（静态表或模型缓存缺失时回退 commandcode.context_window）；op 使用途径模型元数据。显式切换非 flash 模型或显式指定强度时仍以命令行为准。",
-    "cm 长任务与恢复：agents.commandcode.headless_max_turns（默认 1000）放宽 -p 单回合上限；headless_tools 默认只恢复 todo_write，headless_tools_all=true 可完全对齐 TUI 工具集；goal_objective 写入 manifest，--resume/自动恢复会重新发送 /goal，续跑同时保留 --add-dir/--skill。"
+    "cm 长任务与恢复：单独 --resume RUN_ID 使用原生 TUI 恢复；带 --once/驱动参数或自动恢复时走 headless，agents.commandcode.headless_max_turns（默认 1000）放宽 -p 单回合上限；headless_tools 默认只恢复 todo_write，headless_tools_all=true 可完全对齐 TUI 工具集；goal_objective 写入 manifest，headless --resume 会重新发送 /goal，续跑同时保留 --add-dir/--skill。"
   ],
   "providers": {
     "deepseek-pay": {

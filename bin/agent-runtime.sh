@@ -963,6 +963,48 @@ _agent_runtime_set_session() {
     _agent_runtime_emit_event session-bound ok "会话标识已绑定"
 }
 
+# 旧版 TUI run 可能没有把原生 session/thread 写进 manifest。恢复时按 run_id
+# 标记、cwd 与创建时间做只读反查；唯一命中后补写 manifest，歧义或不可用则保持原状。
+_agent_runtime_resolve_session_identity() {
+    local agent="${1:-}" run_id="${2:-}"
+    [[ -n "$agent" && -n "$run_id" ]] || return 0
+    case "$agent" in
+        codex)
+            [[ -z "${AGENT_THREAD_ID:-}" ]] || return 0
+            ;;
+        claude|opencode|commandcode)
+            [[ -z "${AGENT_SESSION_ID:-}" ]] || return 0
+            ;;
+        *)
+            return 0
+            ;;
+    esac
+
+    local python_name="${AGENT_STATE_PYTHON:-python3}"
+    local python_bin tool report session_id thread_id
+    python_bin="$(command -v "$python_name" 2>/dev/null || true)"
+    tool="${AGENT_CONFIGURE_ROOT:-}/tools/agent-session-state.py"
+    [[ -n "$python_bin" && -r "$tool" ]] || return 1
+
+    local -a args=(
+        "$tool"
+        --agent "$agent"
+        --run-id "$run_id"
+        --cwd "${AGENT_WORKDIR:-$PWD}"
+    )
+    [[ -z "${AGENT_CREATED_AT:-}" ]] || args+=(--created-at "$AGENT_CREATED_AT")
+    report="$("$python_bin" "${args[@]}" 2>/dev/null)" || return 1
+    session_id="$(printf '%s\n' "$report" | sed -n 's/^session_id=//p' | head -n 1)"
+    thread_id="$(printf '%s\n' "$report" | sed -n 's/^thread_id=//p' | head -n 1)"
+
+    if [[ "$agent" == "codex" ]]; then
+        [[ -n "$thread_id" ]] || thread_id="$session_id"
+        [[ -n "$session_id" ]] || session_id="$thread_id"
+    fi
+    [[ -n "$session_id$thread_id" ]] || return 1
+    _agent_runtime_set_session "$session_id" "$thread_id"
+}
+
 _agent_runtime_stop_file_requested() {
     if [[ -n "${AGENT_STOP_FILE:-}" && -e "$AGENT_STOP_FILE" ]]; then
         _agent_runtime_mark stopped "检测到 stop 文件"

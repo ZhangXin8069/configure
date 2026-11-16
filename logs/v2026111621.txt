@@ -1,0 +1,78 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-16 21:10:50 +0800
+批次: agent-resume
+主任务: agent 系列 CLI 原生 resume
+触发原因: 任务完成
+摘要: 单独 --resume 进入四系原生 TUI，驱动选项与自动恢复保持 headless；补齐旧 run 反查、Windows 对齐和回归测试。
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 根因与设计
+- 目标: 为 agent 系列增加按 run ID 恢复 CLI 原生会话的能力。
+- 根因: 既有 `--resume RUN_ID` 无条件进入 headless drive，恢复后自动发送“继续”；不符合用户期望的原生 TUI resume。
+- 兼容决策: 单独 `--resume RUN_ID` 进入 TUI；与 `--once`、`-time/--time`、`--max-turns`、`--max-runtime`、`--stop-file` 等驱动选项同用时保持既有 headless 行为，自动恢复链协议不变。
+- 旧 run 处理: manifest 缺少 session/thread 时，通过 `tools/agent-session-state.py` 按 run_id、cwd、created_at 只读反查；唯一命中后补写 manifest。Command Code 旧 TUI run 还可用启动时写入的 run 名兜底。
+
+### S2 — 实现
+- 共享 Unix runtime 增加 session/thread 反查与补写函数。
+- Claude: `claude --resume <session>` 进入原生 TUI。
+- OpenCode: `--session <session>` 进入 V1/V2 原生 TUI。
+- Codex: `codex resume <thread>` 进入原生 TUI；本地 app-server 路径同步支持。
+- Command Code: `command-code --resume <session|run-name>` 进入原生 TUI。
+- Windows runtime 同步解析语义、TUI 参数和 session 反查。
+- 恢复 TUI 时日志改为追加，避免覆盖原 `agent.log`。
+- 非 TTY 输出不再启动后台 `tail -F` 实时监视器，避免 CI/命令替换被后台管道阻塞。
+- 修复 Windows 中三处既有的 `@resumeBase` 数组表达式语法错误。
+
+### S3 — 验证
+- `bash -n agent.sh agent-runtime.sh agent.test.sh agent-windows.test.sh`: 通过。
+- `python3 -m json.tool agent-custom.json.refer`: 通过。
+- `bash agent.test.sh`: 通过，覆盖四系 TUI resume、`co dgo --resume RUN_ID`、旧 cm run 反查、headless 恢复回归、日志追加与原自动恢复链。
+- `bash agent-windows.test.sh`: 通过，包含 PowerShell Parser 和 Windows 静态契约。
+- `form-audit.sh --root . --strict --quiet`: 通过。
+- `form-snapshot-verify.sh --quiet`: 通过。
+- `form-data-tracking-check.sh --root . --quiet`: 通过。
+- `tools/configure-check.sh`: 跳过，因为 `.opencode/skills` 不存在。
+- `git diff --check`: 通过。
+
+## 验证与证据
+- 测试/检查: 上述 shell、PowerShell、JSON、form 与 Git 检查均已实际运行。
+- 结果: 全部适用检查退出码为 0。
+- 未验证项: 未在真实 Windows 主机上执行交互式 TUI；Windows 侧完成 PowerShell 5.1 Parser 与静态契约验证。
+
+## 变更与产物
+- 文件: `bin/agent.sh`
+- 文件: `bin/agent-runtime.sh`
+- 文件: `bin/agent-runtime.ps1`
+- 文件: `bin/agent.test.sh`
+- 文件: `bin/agent-windows.test.sh`
+- 文件: `bin/AGENTS.md`
+- 文件: `bin/agent-custom.json.refer`
+- 未改动范围: 既有自动恢复调用方仍使用 `--resume RUN_ID --once`，无需修改。
+
+## 风险、限制与下一步
+- 风险: 旧 run 若本地会话记录缺失、歧义或无法由原生 CLI 找到，会明确报错而不伪造恢复；cm 仍可按 run 名兜底。
+- 阻塞: 无。
+- 下一步: 可直接在目标 workspace 使用 `co dgo --resume <run-id>` 进入原生 Codex TUI。
+
+## 用户输入指令
+为本库的agent系列添加cli的resume功能,如同{co dgo --resume 20261114T081237.5HpiXG}
+
+## Agent 全文报告
+--- report begin ---
+**状态：finished**
+
+已完成 agent 系列原生 CLI resume：
+
+- `cl --resume RUN_ID` → `claude --resume <session>`
+- `op --resume RUN_ID` → `opencode --session <session>`
+- `co --resume RUN_ID` → `codex resume <thread>`
+- `cm --resume RUN_ID` → `command-code --resume <session|run-name>`
+
+单独 `--resume RUN_ID` 现在进入原生交互 TUI，不再自动发送“继续”。带 `--once` 或其他驱动控制参数时仍使用既有 headless 恢复，因此自动恢复、dispatch 和既有脚本协议不变。
+
+旧版 TUI run 即使 manifest 中没有 session/thread，也会按 run ID、cwd 和创建时间只读反查；Command Code 的旧 run 还可通过 run 名恢复。恢复日志使用追加模式。
+
+验证通过：Unix 完整 `agent.test.sh`、Windows 静态契约与 PowerShell Parser、shell 语法、JSON 校验、form 审计、快照检查、数据边界检查和 `git diff --check`。真实 Windows 交互式 TUI 未在本机执行。
+--- report end ---

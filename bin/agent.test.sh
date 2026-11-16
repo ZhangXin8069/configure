@@ -32,6 +32,10 @@ unset DEEPSEEK_PAY_API_KEY OPENCODE_GO_API_KEY OPENCODE_API_KEY DEEPSEEK_API_KEY
 # 除显式恢复用例外，关闭 TUI watcher 以保证测试进程和共享 call log 按用例确定性收敛。
 AGENT_AUTO_RESUME=0
 export AGENT_AUTO_RESUME
+# 测试用命令替换会等待继承 stdout 的后台进程；关闭仅面向终端的关键活动监视器，
+# 避免 tail -F 持有捕获管道，驱动逻辑本身仍完整执行。
+AGENT_LIVE_LOG=0
+export AGENT_LIVE_LOG
 
 fail() {
     printf 'FAIL: %s\n' "$*" >&2
@@ -497,6 +501,24 @@ assert_contains "$(cat "$codex_run/.lock")" "$$"
 rm -f -- "$codex_run/.lock"
 printf 'PASS: 锁获取失败时不会误删 owner 的锁\n'
 
+co_tui_resume_before=$(wc -l < "$call_log")
+printf 'codex-resume-log-sentinel\n' >> "$codex_run/agent.log"
+set +e
+co_tui_resume_output=$(AGENT_CODEX_APP_SERVER=0 \
+    run_launcher co "$fake_codex" --resume "$codex_run_id" 2>&1)
+co_tui_resume_status=$?
+set -e
+(( co_tui_resume_status == 0 )) || fail "Codex TUI resume fake launcher 失败：$co_tui_resume_output"
+assert_contains "$co_tui_resume_output" "mode: TUI resume | run=$codex_run_id | thread=thread-fake"
+co_tui_resume_new=$(tail -n +$((co_tui_resume_before + 1)) "$call_log")
+assert_contains "$co_tui_resume_new" 'resume --model fake-model'
+assert_contains "$co_tui_resume_new" 'thread-fake'
+case "$co_tui_resume_new" in
+    *' exec resume '*) fail 'Codex TUI resume 不应进入 headless exec resume' ;;
+esac
+assert_file_contains "$codex_run/agent.log" 'codex-resume-log-sentinel'
+printf 'PASS: Codex --resume 单独使用进入原生 TUI，且保留原日志\n'
+
 release_lock_dir="$test_root/release-lock"
 mkdir -p "$release_lock_dir"
 set +e
@@ -607,6 +629,24 @@ case "$v2_tui_new" in
     *' --port '*) fail 'OpenCode V2 顶层 TUI 不应传 --port（2.2.0 起不支持）' ;;
 esac
 printf 'PASS: OpenCode V2 原生配置、standalone、JSON 会话解析与 TUI 参数兼容\n'
+
+v2_resume_before=$(wc -l < "$call_log")
+printf 'opencode-resume-log-sentinel\n' >> "$v2_op_run/agent.log"
+set +e
+v2_resume_output=$(OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher op "$fake_opencode_v2" --resume "$v2_op_run_id" 2>&1)
+v2_resume_status=$?
+set -e
+(( v2_resume_status == 0 )) || fail "OpenCode V2 TUI resume fake launcher 失败：$v2_resume_output"
+assert_contains "$v2_resume_output" "mode: TUI resume | run=$v2_op_run_id | session=session-v2"
+v2_resume_new=$(tail -n +$((v2_resume_before + 1)) "$call_log")
+assert_contains "$v2_resume_new" '--standalone --session session-v2 --auto'
+case "$v2_resume_new" in
+    *' --prompt '*) fail 'OpenCode TUI resume 不应发送新初始 prompt' ;;
+    *' run --standalone -s '*) fail 'OpenCode TUI resume 不应进入 headless run 模式' ;;
+esac
+assert_file_contains "$v2_op_run/agent.log" 'opencode-resume-log-sentinel'
+printf 'PASS: OpenCode --resume 单独使用进入原生 TUI，且保留原日志\n'
 
 set +e
 # 未显式选途径：途径取 agents.claude.provider=opencode-go，模型取 agent 层 agents.claude.model
@@ -756,6 +796,23 @@ assert_contains "$tui_cl_new" '【子 agent 派发与降级】'
 assert_contains "$tui_cl_new" 'agent-dispatch.sh'
 assert_contains "$tui_cl_new" '由本 agent 单独串行完成全部子任务'
 printf 'PASS: Claude TUI 以初始提示词启动（含注入清单）\n'
+
+cl_tui_resume_before=$(wc -l < "$call_log")
+printf 'claude-resume-log-sentinel\n' >> "$cl_run/agent.log"
+set +e
+cl_tui_resume_output=$(OPENCODE_GO_API_KEY=test-go-key \
+    run_launcher cl "$fake_claude" --resume "$cl_run_id" 2>&1)
+cl_tui_resume_status=$?
+set -e
+(( cl_tui_resume_status == 0 )) || fail "Claude TUI resume fake launcher 失败：$cl_tui_resume_output"
+assert_contains "$cl_tui_resume_output" "mode: TUI resume | run=$cl_run_id | session=session-fake"
+cl_tui_resume_new=$(tail -n +$((cl_tui_resume_before + 1)) "$call_log")
+assert_contains "$cl_tui_resume_new" '--resume session-fake --settings'
+case "$cl_tui_resume_new" in
+    *' -p '*) fail 'Claude TUI resume 不应进入 headless -p 模式' ;;
+esac
+assert_file_contains "$cl_run/agent.log" 'claude-resume-log-sentinel'
+printf 'PASS: Claude --resume 单独使用进入原生 TUI，且保留原日志\n'
 
 max_turns_before=$(call_count)
 set +e
@@ -1259,6 +1316,45 @@ assert 'model-reasoning' in ids and 'context-used' in ids and 'git-branch' in id
 PY
 printf 'PASS: cm 默认模型/强度、1M 上下文、key 映射、manifest 与原生 statusline\n'
 
+cm_tui_before=$(wc -l < "$call_log")
+set +e
+cm_tui_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" 2>&1)
+cm_tui_status=$?
+set -e
+(( cm_tui_status == 0 )) || fail "cm TUI fake launcher 失败：$cm_tui_output"
+cm_tui_run_id=$(printf '%s\n' "$cm_tui_output" | sed -n 's/^  run: //p' | head -1)
+cm_tui_run="$data/runs/$cm_tui_run_id"
+assert_file_contains "$cm_tui_run/manifest.env" 'session_id='
+
+cm_recovery_session=session-commandcode-recovered
+cm_recovery_dir="$commandcode_home/.commandcode/projects/recovery"
+mkdir -p "$cm_recovery_dir"
+{
+    printf '{"type":"session","id":"%s","cwd":"%s","timestamp":"%s"}\n' \
+        "$cm_recovery_session" "$repo/nested" "$(date "+%Y-%m-%dT%H:%M:%S%z")"
+    printf '{"type":"message","message":{"role":"user","content":"run_id=%s"}}\n' "$cm_tui_run_id"
+} > "$cm_recovery_dir/$cm_recovery_session.jsonl"
+
+cm_tui_resume_before=$(wc -l < "$call_log")
+printf 'cm-resume-log-sentinel\n' >> "$cm_tui_run/agent.log"
+set +e
+cm_tui_resume_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" --resume "$cm_tui_run_id" 2>&1)
+cm_tui_resume_status=$?
+set -e
+(( cm_tui_resume_status == 0 )) || fail "cm TUI resume fake launcher 失败：$cm_tui_resume_output"
+assert_contains "$cm_tui_resume_output" \
+    "mode: TUI resume | run=$cm_tui_run_id | session=$cm_recovery_session"
+cm_tui_resume_new=$(tail -n +$((cm_tui_resume_before + 1)) "$call_log")
+assert_contains "$cm_tui_resume_new" "--resume $cm_recovery_session"
+case "$cm_tui_resume_new" in
+    *' -p '*) fail 'cm TUI resume 不应进入 headless -p 模式' ;;
+esac
+assert_file_contains "$cm_tui_run/manifest.env" "session_id=$cm_recovery_session"
+assert_file_contains "$cm_tui_run/agent.log" 'cm-resume-log-sentinel'
+printf 'PASS: cm --resume 可从旧 TUI run 反查 session 并进入原生 TUI\n'
+
 cm_goal_before=$(wc -l < "$call_log")
 set +e
 cm_goal_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
@@ -1517,6 +1613,25 @@ assert_contains "$dgo_co_new" 'model_providers.opendesign-go.env_key="OPENDESIGN
 assert_contains "$dgo_co_new" 'model_providers.opendesign-go.wire_api="responses"'
 assert_contains "$dgo_co_new" 'model_reasoning_effort="max"'
 printf 'PASS: co dgo 通过本地 Responses -> chat_completions 协议桥\n'
+
+dgo_co_run_id=$(printf '%s\n' "$dgo_co_output" | sed -n 's/^  run: //p' | head -1)
+dgo_co_resume_before=$(wc -l < "$call_log")
+set +e
+dgo_co_resume_output=$(AGENT_CODEX_APP_SERVER=0 OPENDESIGN_GO_API_KEY=test-dgo-key \
+    run_launcher co "$fake_codex" dgo --resume "$dgo_co_run_id" 2>&1)
+dgo_co_resume_status=$?
+set -e
+(( dgo_co_resume_status == 0 )) ||
+    fail "co dgo --resume TUI 失败：$dgo_co_resume_output"
+assert_contains "$dgo_co_resume_output" \
+    "mode: TUI resume | run=$dgo_co_run_id | thread=thread-fake"
+dgo_co_resume_new=$(tail -n +$((dgo_co_resume_before + 1)) "$call_log")
+assert_contains "$dgo_co_resume_new" 'resume --model dgo-test-model'
+assert_contains "$dgo_co_resume_new" 'model_provider="opendesign-go"'
+case "$dgo_co_resume_new" in
+    *' exec resume '*) fail 'co dgo --resume 不应进入 headless exec resume' ;;
+esac
+printf 'PASS: co dgo --resume RUN_ID 语法进入原生 TUI 恢复\n'
 
 dgo_cache="$data/cache/provider-models/opendesign-go.json"
 mkdir -p "$(dirname -- "$dgo_cache")"
@@ -1966,7 +2081,8 @@ set -e
 (( deploy_rc == 0 )) || fail "部署在 \${HOME}/configure 之外时启动失败（rc=$deploy_rc）：$deploy_out"
 assert_contains "$deploy_out" "agent config: ${deploy_root}/{skills,tools,hooks,plugins}"
 assert_file_contains "$deploy_call_log" "${deploy_root}/skills"
-if rg -Fq '${CONFIGURE_ROOT}' "$deploy_call_log"; then
+if { command -v rg >/dev/null 2>&1 && rg -Fq '${CONFIGURE_ROOT}' "$deploy_call_log"; } ||
+   { ! command -v rg >/dev/null 2>&1 && grep -Fq '${CONFIGURE_ROOT}' "$deploy_call_log"; }; then
     fail 'prompt 中 ${CONFIGURE_ROOT} 占位符未被替换'
 fi
 [[ -n "$(latest_manifest "$deploy_root/data")" ]] \

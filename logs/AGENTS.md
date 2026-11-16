@@ -1474,3 +1474,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-resume - final - 2026-11-16 21:10:50 +0800
+- 主任务: agent 系列 CLI 原生 resume
+- 日志文件: logs/v2026111621.txt
+- 文件大小: 4588 bytes
+- 触发原因: 任务完成
+- 关键内容: 单独 --resume 进入四系原生 TUI，驱动选项与自动恢复保持 headless；补齐旧 run 反查、Windows 对齐和回归测试。
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -1556,6 +1556,73 @@ function Set-Session {
     Emit-Event 'session-bound' 'ok' '会话标识已绑定'
 }
 
+function Resolve-RunSessionIdentity {
+    if ([string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+        return
+    }
+    switch ($script:Agent) {
+        'codex' {
+            if (-not [string]::IsNullOrWhiteSpace($script:ThreadId)) { return }
+        }
+        { $_ -in @('claude', 'opencode', 'commandcode') } {
+            if (-not [string]::IsNullOrWhiteSpace($script:SessionId)) { return }
+        }
+        default { return }
+    }
+
+    $configureRoot = Get-ConfigureRoot
+    if ([string]::IsNullOrWhiteSpace($configureRoot)) { return }
+    $tool = Join-Path (Join-Path $configureRoot 'tools') 'agent-session-state.py'
+    if (-not (Test-Path -LiteralPath $tool -PathType Leaf)) { return }
+
+    $python = $null
+    $pythonPrefix = @()
+    foreach ($candidate in @('python3', 'python', 'py')) {
+        $command = Get-Command $candidate -ErrorAction SilentlyContinue | Select-Object -First 1
+        if ($null -ne $command) {
+            $python = [string]$command.Source
+            if ($candidate -eq 'py') { $pythonPrefix = @('-3') }
+            break
+        }
+    }
+    if ([string]::IsNullOrWhiteSpace($python)) { return }
+
+    $arguments = $pythonPrefix + @(
+        $tool
+        '--agent', $script:Agent
+        '--run-id', $script:ResumeRunId
+        '--cwd', $script:WorkDir
+    )
+    if (-not [string]::IsNullOrWhiteSpace($script:CreatedAt)) {
+        $arguments += @('--created-at', $script:CreatedAt)
+    }
+    try {
+        $output = & $python @arguments 2>$null
+        if ($LASTEXITCODE -ne 0) { return }
+    } catch {
+        return
+    }
+
+    $session = ''
+    $thread = ''
+    foreach ($line in @($output)) {
+        $text = [string]$line
+        if ($text.StartsWith('session_id=')) {
+            $session = $text.Substring('session_id='.Length)
+        } elseif ($text.StartsWith('thread_id=')) {
+            $thread = $text.Substring('thread_id='.Length)
+        }
+    }
+    if ($script:Agent -eq 'codex') {
+        if ([string]::IsNullOrWhiteSpace($thread)) { $thread = $session }
+        if ([string]::IsNullOrWhiteSpace($session)) { $session = $thread }
+    }
+    if ([string]::IsNullOrWhiteSpace($session) -and [string]::IsNullOrWhiteSpace($thread)) {
+        return
+    }
+    Set-Session $session $thread
+}
+
 function Turn-Begin {
     $script:Turn++
     $script:UpdatedAt = (Get-Date).ToString('yyyy-MM-ddTHH:mm:sszzz')
@@ -1772,6 +1839,7 @@ function Show-Usage {
     Write-Host '供应商快捷词：pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 cl.bat tgo）。'
     Write-Host '位置参数：供应商 → 模型 → 强度，均可省略；不完整模型名会按在线模型目录自动匹配，过高强度会顺延到模型支持的最近等级。'
     Write-Host '模型：显式指定途径时（快捷词 pay|go|cgo|gt|tgo|dgo 或各 agent 的 *_PROVIDER 环境变量）优先取 providers.<途径>.default_models.<agent>，否则优先取 agents.<agent>.model；缺省回退另一层。--model/{CLAUDE,OPENCODE,CODEX,COMMANDCODE}_MODEL 恒为最高。'
+    Write-Host '恢复：[--resume RUN_ID] 单独使用进入原生 TUI；与 [--once]/[-time]/[--max-turns] 等驱动选项同用进入 headless。'
     Write-Host '驱动控制：[--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID] [-time DUR]'
     Write-Host 'cm Goal：cm --goal <objective> 或 cm goal <objective|status|clear>；--max-turns 同时作为原生 /goal 预算。'
     Write-Host 'cm BYOK：pay/go|cgo/dgo 自动合并 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入；默认仍为 gt|tgo。'
@@ -2222,9 +2290,24 @@ function Run-Claude {
         Write-Host '  launcher: secure/HPC'
     }
     if (-not $script:Drive) {
-        Write-Host '  mode: TUI interactive'
-        Turn-Begin
-        $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, $prompt)
+        if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+            if ([string]::IsNullOrWhiteSpace($script:SessionId)) {
+                Write-ErrorLine "###$($script:LauncherName): ERROR: 可恢复会话没有 session_id，无法进入 Claude TUI###"
+                return 1
+            }
+            Write-Host "  mode: TUI resume | run=$($script:ResumeRunId) | session=$($script:SessionId)"
+            Turn-Begin
+            $rc = Invoke-Logged $executable @(
+                '--resume', $script:SessionId,
+                '--settings', $script:ClaudeSettingsFile,
+                '--permission-mode', $permissionMode,
+                '--model', $script:Model
+            )
+        } else {
+            Write-Host '  mode: TUI interactive'
+            Turn-Begin
+            $rc = Invoke-Logged $executable @('--settings', $script:ClaudeSettingsFile, '--permission-mode', $permissionMode, '--model', $script:Model, $prompt)
+        }
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -2392,12 +2475,33 @@ function Run-OpenCode {
         Write-Host '  launcher: secure/HPC'
     }
     if (-not $script:Drive) {
-        Write-Host '  mode: TUI interactive'
-        Turn-Begin
-        if ($openCodeV2) {
-            $rc = Invoke-Logged $executable @('--standalone', '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'debug')
+        if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+            if ([string]::IsNullOrWhiteSpace($script:SessionId)) {
+                Write-ErrorLine "###$($script:LauncherName): ERROR: 可恢复会话没有 session_id，无法进入 OpenCode TUI###"
+                return 1
+            }
+            Write-Host "  mode: TUI resume | run=$($script:ResumeRunId) | session=$($script:SessionId)"
+            Turn-Begin
+            if ($openCodeV2) {
+                $rc = Invoke-Logged $executable @(
+                    '--standalone', '--session', $script:SessionId,
+                    '--auto', '--print-logs', '--log-level', 'debug'
+                )
+            } else {
+                $rc = Invoke-Logged $executable @(
+                    '--session', $script:SessionId,
+                    '--agent', $agentName, '--auto',
+                    '--print-logs', '--log-level', 'DEBUG'
+                )
+            }
         } else {
-            $rc = Invoke-Logged $executable @('--agent', $agentName, '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'DEBUG')
+            Write-Host '  mode: TUI interactive'
+            Turn-Begin
+            if ($openCodeV2) {
+                $rc = Invoke-Logged $executable @('--standalone', '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'debug')
+            } else {
+                $rc = Invoke-Logged $executable @('--agent', $agentName, '--auto', '--prompt', $prompt, '--print-logs', '--log-level', 'DEBUG')
+            }
         }
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
@@ -2817,6 +2921,9 @@ function Run-CommandCode {
     if ($script:Secure -eq '1') { Write-Host '  launcher: secure/HPC' }
     if ($script:Drive) {
         Write-Host "  drive mode: ON | interval=$($script:Interval)s | max-turns=$($script:MaxTurns) | max-runtime=$($script:MaxRuntime)s"
+    } elseif (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+        $resumeSessionLabel = if ([string]::IsNullOrWhiteSpace($script:SessionId)) { $script:RunId } else { $script:SessionId }
+        Write-Host "  mode: TUI resume | run=$($script:ResumeRunId) | session=$resumeSessionLabel"
     } else {
         Write-Host '  mode: TUI interactive'
     }
@@ -2826,8 +2933,18 @@ function Run-CommandCode {
     Write-Host '============================================================'
 
     if (-not $script:Drive) {
-        $initialPrompt = if ([string]::IsNullOrWhiteSpace($script:GoalObjective)) { $prompt } else { "/goal $($script:GoalObjective)" }
-        $tuiArgs = @($baseArgs.ToArray()) + @('--name', $script:RunId, $initialPrompt)
+        if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+            # 新 TUI run 以 run_id 作为 session 名称；旧 run 未保存 session_id 时
+            # 仍可按该名称恢复，已反查到原生 id 时优先使用原生 id。
+            $resumeSession = if ([string]::IsNullOrWhiteSpace($script:SessionId)) { $script:RunId } else { $script:SessionId }
+            $tuiArgs = @($baseArgs.ToArray()) + @('--resume', $resumeSession)
+            if (-not [string]::IsNullOrWhiteSpace($script:GoalObjective)) {
+                $tuiArgs += "/goal $($script:GoalObjective)"
+            }
+        } else {
+            $initialPrompt = if ([string]::IsNullOrWhiteSpace($script:GoalObjective)) { $prompt } else { "/goal $($script:GoalObjective)" }
+            $tuiArgs = @($baseArgs.ToArray()) + @('--name', $script:RunId, $initialPrompt)
+        }
         Turn-Begin
         $rc = Invoke-Logged $executable $tuiArgs $true
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
@@ -2866,7 +2983,7 @@ function Run-CommandCode {
 
     if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId) -and
         -not [string]::IsNullOrWhiteSpace($script:GoalObjective)) {
-        $turnArgs = @('-p', "/goal $($script:GoalObjective)", '--session', $sessionId) + @resumeBase
+        $turnArgs = @('-p', "/goal $($script:GoalObjective)", '--session', $sessionId) + $resumeBase
         Turn-Begin
         & $executable @turnArgs *>> $script:LogFile
         $rc = $LASTEXITCODE
@@ -2880,7 +2997,7 @@ function Run-CommandCode {
         }
         $text = (Get-Content -LiteralPath $script:DriveFile -Raw -Encoding UTF8).Replace("`r", '')
         Turn-Begin
-        $turnArgs = @('-p', $text, '--session', $sessionId) + @resumeBase
+        $turnArgs = @('-p', $text, '--session', $sessionId) + $resumeBase
         & $executable @turnArgs *>> $script:LogFile
         $rc = $LASTEXITCODE
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure; return $rc }
@@ -2896,7 +3013,7 @@ function Run-CommandCode {
         Start-Sleep -Seconds $script:Interval
         if (Should-Stop $nudges) { break }
         Turn-Begin
-        $turnArgs = @('-p', '继续', '--session', $sessionId) + @resumeBase
+        $turnArgs = @('-p', '继续', '--session', $sessionId) + $resumeBase
         & $executable @turnArgs *>> $script:LogFile
         $rc = $LASTEXITCODE
         if ($rc -eq 0) {
@@ -3172,9 +3289,19 @@ function Run-Codex {
     }
     Write-Host "  sandbox: $sandbox | approval: $approval"
     if (-not $script:Drive) {
-        Write-Host '  mode: TUI interactive'
-        Turn-Begin
-        $rc = Invoke-Logged $executable ($common + @('--', $prompt))
+        if (-not [string]::IsNullOrWhiteSpace($script:ResumeRunId)) {
+            if ([string]::IsNullOrWhiteSpace($script:ThreadId)) {
+                Write-ErrorLine "###$($script:LauncherName): ERROR: 可恢复会话没有 thread_id，无法进入 Codex TUI###"
+                return 1
+            }
+            Write-Host "  mode: TUI resume | run=$($script:ResumeRunId) | thread=$($script:ThreadId)"
+            Turn-Begin
+            $rc = Invoke-Logged $executable (@('resume') + $common + @($script:ThreadId))
+        } else {
+            Write-Host '  mode: TUI interactive'
+            Turn-Begin
+            $rc = Invoke-Logged $executable ($common + @('--', $prompt))
+        }
         if ($rc -eq 0) { Turn-Success } else { Turn-Failure }
         return $rc
     }
@@ -3441,7 +3568,6 @@ function Parse-Arguments {
             '--resume' {
                 if ($i + 1 -ge $cliArgs.Count) { $errorMessage = "$option 缺少 run id"; break }
                 $resumeRunId = [string]$cliArgs[++$i]
-                $drive = $true
                 continue
             }
             default {
@@ -3729,6 +3855,7 @@ try {
         } elseif (-not (Start-Or-ResumeRun)) {
             $script:ExitCode = if ($script:FailureCode -ne 0) { $script:FailureCode } else { 1 }
         } else {
+            Resolve-RunSessionIdentity
             switch ($script:Agent) {
                 'claude' { $script:ExitCode = Run-Claude }
                 'opencode' { $script:ExitCode = Run-OpenCode }

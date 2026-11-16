@@ -1262,9 +1262,10 @@ run_commandcode() {
                 echo "BYOK: pay=deepseek-pay / go|cgo=opencode-go / dgo=opendesign-go，自动合并进 ~/.commandcode/providers.json，模型以 <途径>/<模型> 传入。"
                 echo "Goal: ${_NAME} --goal <objective> 或 ${_NAME} goal <objective|status|clear>（预算由 --max-turns 控制）。"
                 echo "认证: 先 source ~/env-key.sh；gt|tgo 使用 COMMANDCODE_GOAT_API_KEY（映射为 COMMAND_CODE_API_KEY），pay/go|cgo/dgo 分别使用 DEEPSEEK_PAY_API_KEY/OPENCODE_GO_API_KEY/OPENDESIGN_GO_API_KEY。"
+                echo "恢复: --resume RUN_ID 单独使用时进入原生 TUI 恢复；与 --once/-time/--max-turns 等驱动选项同用时进入 headless 驱动。"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]。"
                 echo "权限: [--permission-mode default|plan|accept-edits|yolo|dont-ask] [--plan] [--accept-edits] [--yolo]。"
-                echo "不给驱动选项时进入 Command Code TUI；给出 -file/-time/--once 时进入驱动模式。"
+                echo "不给驱动选项时进入 Command Code TUI；给出驱动选项时进入驱动模式。"
                 exit 0;;
             -file|--file)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
@@ -1284,7 +1285,7 @@ run_commandcode() {
                 STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
-                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
+                RESUME_RUN_ID="$2"; shift 2;;
             -*) echo "###${_NAME}: ERROR: 未知参数 '$1'（用法见 ${_NAME} --help）###" >&2; exit 64;;
             *) POSITIONAL+=("$1"); shift;;
         esac
@@ -1358,6 +1359,8 @@ run_commandcode() {
         "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 1 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"; EFFORT="${AGENT_RUNTIME_REASONING:-$EFFORT}"
     GOAL_OBJECTIVE="${AGENT_RUNTIME_GOAL_OBJECTIVE:-$GOAL_OBJECTIVE}"
+    [[ -z "${RESUME_RUN_ID}" ]] ||
+        _agent_runtime_resolve_session_identity commandcode "$RESUME_RUN_ID" || true
     _export_parent_context "${_cc_provider}" "${MODEL_ID}" "${EFFORT}"
     export AGENT_PARENT_PERMISSION_MODE="${PERMISSION_MODE}"
     _load_prompt
@@ -1464,14 +1467,28 @@ run_commandcode() {
     echo "  log: ${LOG_FILE}"
     echo "  state: ${AGENT_MANIFEST_FILE}"
     if (( _SECURE )); then echo "  launcher: secure/HPC"; fi
-    if (( DRIVE_MODE )); then echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s"; else echo "  mode: TUI interactive"; fi
+    if (( DRIVE_MODE )); then
+        echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s"
+    elif [[ -n "${RESUME_RUN_ID}" ]]; then
+        echo "  mode: TUI resume | run=${RESUME_RUN_ID} | session=${AGENT_SESSION_ID:-${AGENT_RUN_ID}}"
+    else
+        echo "  mode: TUI interactive"
+    fi
     [[ -n "${GOAL_OBJECTIVE}" ]] && echo "  goal: ${GOAL_OBJECTIVE} | native /goal | budget=${MAX_TURNS_RAW}"
     echo "============================================================"
 
     if (( ! DRIVE_MODE )); then
-        local _cc_initial_prompt="$PROMPT"
-        [[ -n "${GOAL_OBJECTIVE}" ]] && _cc_initial_prompt="/goal ${GOAL_OBJECTIVE}"
-        local -a _CC_TUI_ARGS=("${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}" --name "$AGENT_RUN_ID" "$_cc_initial_prompt")
+        local -a _CC_TUI_ARGS=("${_CC_BASE_ARGS[@]}" "${_CC_ADD_DIR_ARGS[@]}" "${_CC_SKILL_ARGS[@]}")
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            # 新 TUI run 以 run_id 作为 session 名称；旧 run 若未保存 session_id，
+            # 可直接按该名称恢复，已反查到原生 id 时则优先使用原生 id。
+            _CC_TUI_ARGS+=(--resume "${AGENT_SESSION_ID:-${AGENT_RUN_ID}}")
+            [[ -z "${GOAL_OBJECTIVE}" ]] || _CC_TUI_ARGS+=("/goal ${GOAL_OBJECTIVE}")
+        else
+            local _cc_initial_prompt="$PROMPT"
+            [[ -n "${GOAL_OBJECTIVE}" ]] && _cc_initial_prompt="/goal ${GOAL_OBJECTIVE}"
+            _CC_TUI_ARGS+=(--name "$AGENT_RUN_ID" "$_cc_initial_prompt")
+        fi
         local _cc_recovery_json='[]'
         if command -v python3 >/dev/null 2>&1; then
             local _cc_recovery_prompt="继续。上次回合因瞬时服务故障中断，请从原任务断点继续完成；不要重复已完成工作。"
@@ -1493,9 +1510,15 @@ run_commandcode() {
         fi
         _agent_runtime_turn_begin
         local _cc_tui_started=$SECONDS
-        AGENT_TUI_IDLE_COMMAND_JSON="$_cc_idle_json" \
-            _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" \
-            "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            AGENT_TUI_IDLE_COMMAND_JSON="$_cc_idle_json" \
+                _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" \
+                "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>>"${LOG_FILE}"
+        else
+            AGENT_TUI_IDLE_COMMAND_JSON="$_cc_idle_json" \
+                _agent_runtime_run_tui_watched commandcode "$_cc_recovery_json" \
+                "$_COMMAND_CODE_BIN" "${_CC_TUI_ARGS[@]}" 2>"${LOG_FILE}"
+        fi
         local _run_rc=$?
         local _cc_tui_elapsed=$(( SECONDS - _cc_tui_started ))
         if (( _run_rc == 0 )); then _agent_runtime_turn_success; else _agent_runtime_turn_failure; fi
@@ -1666,7 +1689,8 @@ run_claude() {
                 echo "供应商快捷词: pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 ${_NAME} tgo）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CLAUDE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.claude，否则优先取 agents.claude.model，缺值回退另一层；--model/CLAUDE_MODEL 直接覆盖。"
-                echo "不给驱动选项时进入 Claude TUI，给出 -file/-time 时进入驱动模式。"
+                echo "恢复: --resume RUN_ID 单独使用时进入原生 Claude TUI 恢复；与 --once/-time/--max-turns 等驱动选项同用时进入 headless 驱动。"
+                echo "不给驱动选项时进入 Claude TUI，给出驱动选项时进入驱动模式。"
                 exit 0;;
             -file|--file)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
@@ -1687,7 +1711,7 @@ run_claude() {
                 STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
-                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
+                RESUME_RUN_ID="$2"; shift 2;;
             -*)
                 echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
@@ -1955,6 +1979,8 @@ run_claude() {
         "${AGENT_POSTURE:-deep-worker}" "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" \
         "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 0 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
+    [[ -z "${RESUME_RUN_ID}" ]] ||
+        _agent_runtime_resolve_session_identity claude "$RESUME_RUN_ID" || true
     _export_parent_context "${_cl_provider}" "${MODEL_ID}" "${CLAUDE_STRENGTH}"
     _load_prompt
     _append_agent_config_dirs "全局 Agent 配置目录（按需读取）" "${_agent_config_dirs[@]}"
@@ -1982,13 +2008,16 @@ run_claude() {
     fi
     if (( DRIVE_MODE )); then
         echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
+    elif [[ -n "${RESUME_RUN_ID}" ]]; then
+        echo "  mode: TUI resume | run=${RESUME_RUN_ID} | session=${AGENT_SESSION_ID:-<未绑定>}"
     else
         echo "  mode: TUI interactive"
     fi
     echo "============================================================"
 
     if (( ! DRIVE_MODE )); then
-        # TUI 交互模式：与 op/co 一致，把初始提示词作为首条消息传入（--permission-mode 原语义保留）
+        # TUI 交互模式：新建会话传初始 prompt；显式 --resume 时只恢复原生会话，
+        # 不额外发送用户回合。
         local -a _CLAUDE_TUI_RECOVERY=(
             "${_CLAUDE_BIN}"
             --bg
@@ -2015,19 +2044,45 @@ run_claude() {
         command -v python3 >/dev/null 2>&1 &&
             _CLAUDE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_CLAUDE_TUI_IDLE[@]}")"
         unset _CLAUDE_TUI_IDLE
+        local -a _CLAUDE_TUI_ARGS
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            if [[ -z "${AGENT_SESSION_ID:-}" ]]; then
+                echo "###${_NAME}: ERROR: 可恢复会话没有 session_id，无法进入 Claude TUI###" >&2
+                exit 1
+            fi
+            _CLAUDE_TUI_ARGS=(
+                "${_CLAUDE_BIN}"
+                --resume "${AGENT_SESSION_ID}"
+                --settings "${_CLAUDE_SETTINGS_TMP}"
+                --permission-mode "${_CL_PERMISSION_MODE}"
+                --model "${MODEL_ID}"
+            )
+        else
+            _CLAUDE_TUI_ARGS=(
+                "${_CLAUDE_BIN}"
+                --settings "${_CLAUDE_SETTINGS_TMP}"
+                --permission-mode "${_CL_PERMISSION_MODE}"
+                --model "${MODEL_ID}"
+                "${PROMPT}"
+            )
+        fi
         _agent_runtime_turn_begin
-        AGENT_TUI_IDLE_COMMAND_JSON="$_CLAUDE_IDLE_JSON" \
-            _agent_runtime_run_tui_watched claude "$_CLAUDE_RECOVERY_JSON" \
-            "${_CLAUDE_BIN}" --settings "${_CLAUDE_SETTINGS_TMP}" \
-            --permission-mode "${_CL_PERMISSION_MODE}" --model "${MODEL_ID}" "${PROMPT}" \
-            2> "${LOG_FILE}"
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            AGENT_TUI_IDLE_COMMAND_JSON="$_CLAUDE_IDLE_JSON" \
+                _agent_runtime_run_tui_watched claude "$_CLAUDE_RECOVERY_JSON" \
+                "${_CLAUDE_TUI_ARGS[@]}" 2>>"${LOG_FILE}"
+        else
+            AGENT_TUI_IDLE_COMMAND_JSON="$_CLAUDE_IDLE_JSON" \
+                _agent_runtime_run_tui_watched claude "$_CLAUDE_RECOVERY_JSON" \
+                "${_CLAUDE_TUI_ARGS[@]}" 2>"${LOG_FILE}"
+        fi
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
         else
             _agent_runtime_turn_failure
         fi
-        unset _CLAUDE_RECOVERY_JSON
+        unset _CLAUDE_TUI_ARGS _CLAUDE_RECOVERY_JSON
         return "${_run_rc}"
     fi
 
@@ -2037,6 +2092,8 @@ run_claude() {
     _live_log()
     {
         [[ -n "${AGENT_DISPATCH_TASK:-}" ]] && return 0
+        [[ "${AGENT_LIVE_LOG:-1}" != 0 ]] || return 0
+        [[ -t 1 ]] || return 0
         local _iu
         if tail --version 2>/dev/null | head -1 | grep -q GNU; then
             _iu="-s 0.2 --pid=$$"
@@ -2241,7 +2298,8 @@ run_opencode() {
                 echo "供应商快捷词: pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 ${_NAME} tgo）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 OPENCODE_PROVIDER 环境变量）时优先取 providers.<途径>.default_models.opencode，否则优先取 agents.opencode.model，缺值回退另一层；--model/OPENCODE_MODEL 直接覆盖。"
-                echo "不给驱动选项时进入 OpenCode TUI，给出 -file/-time 时进入驱动模式。"
+                echo "恢复: --resume RUN_ID 单独使用时进入原生 OpenCode TUI 恢复；与 --once/-time/--max-turns 等驱动选项同用时进入 headless 驱动。"
+                echo "不给驱动选项时进入 OpenCode TUI，给出驱动选项时进入驱动模式。"
                 exit 0;;
             -file|--file)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少路径参数###" >&2; exit 64; fi
@@ -2262,7 +2320,7 @@ run_opencode() {
                 STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
-                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
+                RESUME_RUN_ID="$2"; shift 2;;
             -*)
                 echo "###${_NAME}: ERROR: 未知参数 '$1'（用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--variant LEVEL] [-file PATH] [-time 30s]）###" >&2
                 exit 64;;
@@ -2394,6 +2452,8 @@ run_opencode() {
         "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 0 "$VARIANT_EXPLICIT" || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
     VARIANT="${AGENT_RUNTIME_VARIANT:-$VARIANT}"
+    [[ -z "${RESUME_RUN_ID}" ]] ||
+        _agent_runtime_resolve_session_identity opencode "$RESUME_RUN_ID" || true
     _export_parent_context "${_op_provider}" "${MODEL_ID}" "${VARIANT}"
     _load_prompt
     local _configure_agent_root="${AGENT_CONFIGURE_ROOT:-$(_agent_runtime_configure_root)}" _git_root _workspace_root
@@ -2495,6 +2555,8 @@ PYEOF
     fi
     if (( DRIVE_MODE )); then
         echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | first-instruction=${DRIVE_FILE:-<无，仅继续循环>}"
+    elif [[ -n "${RESUME_RUN_ID}" ]]; then
+        echo "  mode: TUI resume | run=${RESUME_RUN_ID} | session=${AGENT_SESSION_ID:-<未绑定>}"
     else
         echo "  mode: TUI interactive"
     fi
@@ -2506,6 +2568,8 @@ PYEOF
     _live_log()
     {
         [[ -n "${AGENT_DISPATCH_TASK:-}" ]] && return 0
+        [[ "${AGENT_LIVE_LOG:-1}" != 0 ]] || return 0
+        [[ -t 1 ]] || return 0
         local _iu
         if tail --version 2>/dev/null | head -1 | grep -q GNU; then
             _iu="-s 0.2 --pid=$$"
@@ -2587,25 +2651,44 @@ PYEOF
         (( _op_v2 )) || _op_tui_port="$(_agent_runtime_free_port 2>/dev/null || true)"
         local -a _OPENCODE_TUI_ARGS _OPENCODE_TUI_RECOVERY
         if (( _op_v2 )); then
-            _OPENCODE_TUI_ARGS=(
-                "${_OPENCODE_BIN}" --standalone --auto --prompt "${PROMPT}"
-                --print-logs --log-level debug
-            )
+            if [[ -n "${RESUME_RUN_ID}" ]]; then
+                _OPENCODE_TUI_ARGS=(
+                    "${_OPENCODE_BIN}" --standalone
+                    --session "${AGENT_SESSION_ID:-}"
+                    --auto --print-logs --log-level debug
+                )
+            else
+                _OPENCODE_TUI_ARGS=(
+                    "${_OPENCODE_BIN}" --standalone --auto --prompt "${PROMPT}"
+                    --print-logs --log-level debug
+                )
+            fi
             _OPENCODE_TUI_RECOVERY=(
                 "${_OPENCODE_BIN}" run --standalone -s "{session_id}"
                 --model "${MODEL_ID}#${VARIANT}" --agent "${_OP_AGENT}"
                 --format json --auto --print-logs --log-level debug
             )
         else
-            _OPENCODE_TUI_ARGS=(
-                "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}"
-                --print-logs --log-level DEBUG
-            )
+            if [[ -n "${RESUME_RUN_ID}" ]]; then
+                _OPENCODE_TUI_ARGS=(
+                    "${_OPENCODE_BIN}" --session "${AGENT_SESSION_ID:-}"
+                    --agent "${_OP_AGENT}" --auto --print-logs --log-level DEBUG
+                )
+            else
+                _OPENCODE_TUI_ARGS=(
+                    "${_OPENCODE_BIN}" --agent "${_OP_AGENT}" --auto --prompt "${PROMPT}"
+                    --print-logs --log-level DEBUG
+                )
+            fi
             [[ -z "$_op_tui_port" ]] || _OPENCODE_TUI_ARGS+=(--port "$_op_tui_port")
             _OPENCODE_TUI_RECOVERY=(
                 "${_OPENCODE_BIN}" run -s "{session_id}" --agent "${_OP_AGENT}"
                 --auto --print-logs --log-level DEBUG
             )
+        fi
+        if [[ -n "${RESUME_RUN_ID}" && -z "${AGENT_SESSION_ID:-}" ]]; then
+            echo "###${_NAME}: ERROR: 可恢复会话没有 session_id，无法进入 OpenCode TUI###" >&2
+            exit 1
         fi
         if [[ -n "$_op_tui_port" ]]; then
             _OPENCODE_TUI_RECOVERY+=(--attach "http://127.0.0.1:${_op_tui_port}")
@@ -2639,9 +2722,15 @@ PYEOF
             _OPENCODE_IDLE_JSON="$(python3 -c 'import json,sys; print(json.dumps(sys.argv[1:], ensure_ascii=False, separators=(",", ":")))' "${_OPENCODE_TUI_IDLE[@]}")"
         unset _OPENCODE_TUI_RECOVERY _OPENCODE_TUI_IDLE
         _agent_runtime_turn_begin
-        AGENT_TUI_IDLE_COMMAND_JSON="$_OPENCODE_IDLE_JSON" \
-            _agent_runtime_run_tui_watched opencode "$_OPENCODE_RECOVERY_JSON" \
-            "${_OPENCODE_TUI_ARGS[@]}" 2> "${LOG_FILE}"
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            AGENT_TUI_IDLE_COMMAND_JSON="$_OPENCODE_IDLE_JSON" \
+                _agent_runtime_run_tui_watched opencode "$_OPENCODE_RECOVERY_JSON" \
+                "${_OPENCODE_TUI_ARGS[@]}" 2>>"${LOG_FILE}"
+        else
+            AGENT_TUI_IDLE_COMMAND_JSON="$_OPENCODE_IDLE_JSON" \
+                _agent_runtime_run_tui_watched opencode "$_OPENCODE_RECOVERY_JSON" \
+                "${_OPENCODE_TUI_ARGS[@]}" 2>"${LOG_FILE}"
+        fi
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
@@ -3098,13 +3187,14 @@ run_codex() {
                 STOP_FILE_ARG="$2"; DRIVE_MODE=1; shift 2;;
             --resume)
                 if [[ $# -lt 2 ]]; then echo "###${_NAME}: ERROR: $1 缺少 run id###" >&2; exit 64; fi
-                RESUME_RUN_ID="$2"; DRIVE_MODE=1; shift 2;;
+                RESUME_RUN_ID="$2"; shift 2;;
             --help)
                 echo "用法: ${_NAME} [pay|go|cgo|gt|tgo|dgo] [MODEL] [STRENGTH] [--model MODEL] [--reasoning-effort LEVEL] [-time DUR]"
                 echo "驱动控制: [--once] [--max-turns N] [--max-runtime DUR] [--stop-file PATH] [--resume RUN_ID]"
                 echo "供应商快捷词: pay=deepseek-pay / go|cgo=opencode-go / gt|tgo=commandcode-goat / dgo=opendesign-go（如 ${_NAME} tgo）。"
                 echo "位置参数: [供应商] [模型] [强度] 均可省略；支持不完整模型名匹配与过高强度顺延。"
                 echo "模型: 两层默认——显式选途径（快捷词或 CODEX_PROVIDER_ID 环境变量）时优先取 providers.<途径>.default_models.codex，否则优先取 agents.codex.model，缺值回退另一层；--model/CODEX_MODEL 直接覆盖。"
+                echo "恢复: --resume RUN_ID 单独使用时进入原生 Codex TUI 恢复；与 --once/-time/--max-turns 等驱动选项同用时进入 headless exec resume。"
                 echo "不给驱动选项时进入 Codex TUI，给出驱动选项时进入 exec 模式。"
                 exit 0;;
             -*)
@@ -3240,6 +3330,8 @@ run_codex() {
         "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" "$REASONING_EXPLICIT" 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"
     REASONING_EFFORT="${AGENT_RUNTIME_REASONING:-$REASONING_EFFORT}"
+    [[ -z "${RESUME_RUN_ID}" ]] ||
+        _agent_runtime_resolve_session_identity codex "$RESUME_RUN_ID" || true
     _export_parent_context "${_cx_provider}" "${MODEL_ID}" "${REASONING_EFFORT}" \
         "${CODEX_SANDBOX_MODE}" "${CODEX_APPROVAL_POLICY}"
     _load_prompt
@@ -3375,6 +3467,8 @@ run_codex() {
     fi
     if (( DRIVE_MODE )); then
         echo "  drive mode: ON | interval=${DRIVE_INTERVAL}s | max-turns=${AGENT_MAX_TURNS} | max-runtime=${AGENT_MAX_RUNTIME}s | prompt + 继续"
+    elif [[ -n "${RESUME_RUN_ID}" ]]; then
+        echo "  mode: TUI resume | run=${RESUME_RUN_ID} | thread=${AGENT_THREAD_ID:-<未绑定>}"
     else
         echo "  mode: TUI interactive"
     fi
@@ -3388,6 +3482,8 @@ run_codex() {
     }
     _live_log() {
         [[ -n "${AGENT_DISPATCH_TASK:-}" ]] && return 0
+        [[ "${AGENT_LIVE_LOG:-1}" != 0 ]] || return 0
+        [[ -t 1 ]] || return 0
         local -a _tail_args
         if tail --version 2>/dev/null | head -1 | grep -q GNU; then
             _tail_args=(-s 0.2 "--pid=$$")
@@ -3459,11 +3555,22 @@ PY
         local _codex_resume_python=""
         local _codex_resume_tool="${_configure_agent_root}/tools/agent-codex-resume.py"
         _codex_resume_python="$(command -v "${AGENT_STATE_PYTHON:-python3}" 2>/dev/null || true)"
-        _CODEX_TUI_ARGS=("${CODEX_INITIAL_ARGS[@]}")
+        _CODEX_TUI_ARGS=()
         _CODEX_TUI_RECOVERY=()
         if [[ -n "$_codex_resume_python" && -r "$_codex_resume_tool" ]] &&
            _agent_runtime_start_codex_app_server "$_CODEX_BIN" "$AGENT_RUN_DIR" "${CODEX_COMMON_ARGS[@]}"; then
-            _CODEX_TUI_ARGS+=(--remote "unix://${_TUI_APP_SERVER_SOCKET}")
+            if [[ -n "${RESUME_RUN_ID}" ]]; then
+                _CODEX_TUI_ARGS=(
+                    "${_CODEX_BIN}" resume "${CODEX_INITIAL_ARGS[@]}"
+                    --remote "unix://${_TUI_APP_SERVER_SOCKET}"
+                    "${AGENT_THREAD_ID:-}"
+                )
+            else
+                _CODEX_TUI_ARGS=(
+                    "${_CODEX_BIN}" "${CODEX_INITIAL_ARGS[@]}"
+                    --remote "unix://${_TUI_APP_SERVER_SOCKET}"
+                )
+            fi
             _CODEX_TUI_RECOVERY=(
                 "$_codex_resume_python" "$_codex_resume_tool"
                 --remote "unix://${_TUI_APP_SERVER_SOCKET}"
@@ -3472,7 +3579,22 @@ PY
             )
         else
             # 无 app-server 时回退本地 TUI，此时才支持 --add-dir。
-            _CODEX_TUI_ARGS+=("${CODEX_AGENT_DIR_ARGS[@]}")
+            if [[ -n "${RESUME_RUN_ID}" ]]; then
+                _CODEX_TUI_ARGS=(
+                    "${_CODEX_BIN}" resume "${CODEX_INITIAL_ARGS[@]}"
+                    "${CODEX_AGENT_DIR_ARGS[@]}" "${AGENT_THREAD_ID:-}"
+                )
+            else
+                _CODEX_TUI_ARGS=(
+                    "${_CODEX_BIN}" "${CODEX_INITIAL_ARGS[@]}"
+                    "${CODEX_AGENT_DIR_ARGS[@]}"
+                )
+            fi
+        fi
+        if [[ -n "${RESUME_RUN_ID}" && -z "${AGENT_THREAD_ID:-}" ]]; then
+            echo "###${_NAME}: ERROR: 可恢复会话没有 thread_id，无法进入 Codex TUI###" >&2
+            _agent_runtime_stop_codex_app_server
+            exit 1
         fi
         local _CODEX_RECOVERY_JSON='[]'
         if (( ${#_CODEX_TUI_RECOVERY[@]} > 0 )) && command -v python3 >/dev/null 2>&1; then
@@ -3494,10 +3616,15 @@ PY
         fi
         unset _CODEX_TUI_RECOVERY _CODEX_TUI_IDLE
         _agent_runtime_turn_begin
-        AGENT_TUI_IDLE_COMMAND_JSON="$_CODEX_IDLE_JSON" \
-            _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
-            "${_CODEX_BIN}" "${_CODEX_TUI_ARGS[@]}" -- "${PROMPT}" \
-            2>"${LOG_FILE}"
+        if [[ -n "${RESUME_RUN_ID}" ]]; then
+            AGENT_TUI_IDLE_COMMAND_JSON="$_CODEX_IDLE_JSON" \
+                _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
+                "${_CODEX_TUI_ARGS[@]}" 2>>"${LOG_FILE}"
+        else
+            AGENT_TUI_IDLE_COMMAND_JSON="$_CODEX_IDLE_JSON" \
+                _agent_runtime_run_tui_watched codex "$_CODEX_RECOVERY_JSON" \
+                "${_CODEX_TUI_ARGS[@]}" -- "${PROMPT}" 2>"${LOG_FILE}"
+        fi
         _run_rc=$?
         if (( _run_rc == 0 )); then
             _agent_runtime_turn_success
