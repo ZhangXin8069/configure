@@ -34,6 +34,8 @@ elif [[ -n "${AGENT_DATA_DIR:-}" ]]; then
     data_root="${AGENT_DATA_DIR}/hooks"
 elif [[ -n "${HOME:-}" ]]; then
     data_root="${HOME}/configure/data/hooks"
+elif [[ -n "${AGENT_SCRATCH_ROOT:-}" ]]; then
+    data_root="${AGENT_SCRATCH_ROOT}/hooks"
 else
     data_root="${TMPDIR:-/tmp}/configure-agent-hooks"
 fi

@@ -315,7 +315,7 @@ _CLAUDE_JSON_TMP=""
 _run_claude_json_command() {
     local _json_file _result_file _sid_file _rc=0 _py_rc=0 _parsed=0 _is_error=0 _text=""
     _CLAUDE_JSON_SESSION=""
-    _json_file="$(mktemp "${TMPDIR:-/tmp}/claude-json.XXXXXX")" || return 70
+    _json_file="$(mktemp "${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}}/claude-json.XXXXXX")" || return 70
     _CLAUDE_JSON_TMP="$_json_file"
     _result_file="${_json_file}.result"
     _sid_file="${_json_file}.sid"
@@ -1925,7 +1925,7 @@ run_claude() {
 
     # 用户级 settings.json 的 env 块（如 cc-switch 遗留的 ANTHROPIC_BASE_URL）优先级高于进程环境变量，
     # 因此再生成只读私有临时设置文件并经 CLI --settings 注入（优先级高于用户/项目设置）；退出时清理。
-    _CLAUDE_SETTINGS_TMP="$(mktemp "${TMPDIR:-/tmp}/claude-settings.XXXXXX")" || {
+    _CLAUDE_SETTINGS_TMP="$(mktemp "${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}}/claude-settings.XXXXXX")" || {
         echo "###${_NAME}: ERROR: 无法创建 claude --settings 临时文件###" >&2
         exit 1
     }
@@ -3028,7 +3028,7 @@ _start_protocol_bridge() {
     fi
     local _bridge_dir="${AGENT_RUN_DIR:-}"
     if [[ -z "${_bridge_dir}" ]]; then
-        _bridge_dir="$(mktemp -d "${AGENT_DATA_ROOT:-${TMPDIR:-/tmp}}/bridge.XXXXXX")" || return 70
+        _bridge_dir="$(mktemp -d "${AGENT_SCRATCH_ROOT:-${AGENT_DATA_ROOT:-${TMPDIR:-/tmp}}}/bridge.XXXXXX")" || return 70
         _BRIDGE_TMP_DIR="${_bridge_dir}"
     fi
     local _bridge_log="${_bridge_dir}/bridge.log"

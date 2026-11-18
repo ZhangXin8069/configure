@@ -83,6 +83,10 @@ skills/rule/scripts/run-guarded.sh \
 预计超过 10 分钟时必须提供 `--output-log` 或 `--watch-file`。脚本使用系统 `timeout` 或 `gtimeout`，
 两者都不存在时直接失败，而不是无界运行。
 
+临时文件与中间产物的默认落点是 `AGENT_SCRATCH_ROOT`（工作目录 Git 根 `data/tmp`，等同 `/tmp` 的持久
+替代），`--output-log`/`--event-log` 也应指向该目录；`/tmp` 仅用于进程内一次性文件，避免容量上限或重启
+清空导致进度丢失。`run-guarded.sh` 的 stop marker 同样写在该目录。
+
 ## 4. 共享交互环境
 
 环境不明确时默认是共享环境。基本策略：

@@ -274,7 +274,15 @@ if [[ "$format" != json ]]; then
     exit "$hook_status"
 fi
 
-tmp_output=$(mktemp "${TMPDIR:-/tmp}/agent-hook.XXXXXX")
+# 临时输出落点：AGENT_SCRATCH_ROOT > 工作目录 Git 根 data/tmp > 系统临时目录
+hook_scratch="${AGENT_SCRATCH_ROOT:-}"
+if [[ -z "$hook_scratch" ]]; then
+    hook_git_root="$(git rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -z "$hook_git_root" ]] || hook_scratch="${hook_git_root}/data/tmp"
+fi
+[[ -n "$hook_scratch" ]] || hook_scratch="${TMPDIR:-/tmp}"
+mkdir -p -- "$hook_scratch" 2>/dev/null || hook_scratch="${TMPDIR:-/tmp}"
+tmp_output=$(mktemp "${hook_scratch}/agent-hook.XXXXXX")
 cleanup() {
     rm -f -- "$tmp_output"
 }

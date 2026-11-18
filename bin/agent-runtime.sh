@@ -268,6 +268,7 @@ _agent_runtime_write_manifest() {
         printf 'cwd=%s\n' "${AGENT_WORKDIR:-}"
         printf 'workspace_root=%s\n' "${AGENT_WORKSPACE_ROOT:-}"
         printf 'data_root=%s\n' "${AGENT_DATA_ROOT:-}"
+        printf 'scratch_root=%s\n' "${AGENT_SCRATCH_ROOT:-}"
         printf 'run_dir=%s\n' "${AGENT_RUN_DIR:-}"
         printf 'log_file=%s\n' "${LOG_FILE:-}"
         printf 'list_file=%s\n' "${LIST_FILE:-}"
@@ -637,6 +638,68 @@ _agent_runtime_resolve_data_root() {
     return 1
 }
 
+# 本地忽略：工作区尚未忽略 data/tmp/ 时写入 .git/info/exclude（幂等、失败不阻塞），
+# 使临时产物不出现在 git status，也不会被误提交；已被 .gitignore 覆盖时不做任何写入。
+_agent_runtime_ensure_local_ignore() {
+    local root="${1:-}" pattern="${2:-}" exclude=""
+    [[ -n "$root" && -n "$pattern" ]] || return 0
+    git -C "$root" check-ignore -q -- "${pattern%/}" 2>/dev/null && return 0
+    exclude="$(git -C "$root" rev-parse --git-path info/exclude 2>/dev/null || true)"
+    [[ -n "$exclude" ]] || return 0
+    case "$exclude" in
+        /*) ;;
+        *) exclude="${root}/${exclude}" ;;
+    esac
+    mkdir -p -- "$(dirname -- "$exclude")" 2>/dev/null || return 0
+    if [[ -r "$exclude" ]] && grep -Fqx -- "$pattern" "$exclude" 2>/dev/null; then
+        return 0
+    fi
+    if ! printf '%s\n' "$pattern" >> "$exclude" 2>/dev/null; then
+        printf '###%s: warning: 无法写入 %s，临时产物可能出现在 git status 中###\n' \
+            "${_NAME:-agent}" "$exclude" >&2
+    fi
+    return 0
+}
+
+# 临时产物根解析（/tmp 的可持久替代）：1) AGENT_SCRATCH_DIR（显式）
+# 2) 工作区 Git 根 data/tmp 3) AGENT_DATA_ROOT/tmp 4) ${TMPDIR:-/tmp}/configure-agent-tmp。
+# 逐个候选实测可创建并取第一个可用者；工作区不是 Git 仓库时跳过 2，避免在任意目录造 data/。
+# 调用方可传 workdir 覆盖解析起点（供尚未建立 workspace 状态的工具使用）。
+_agent_runtime_resolve_scratch_root() {
+    local workdir="${1:-}" explicit="${AGENT_SCRATCH_DIR:-}"
+    local root="" candidate
+    local -a candidates=()
+    if [[ -n "$explicit" ]]; then
+        candidates+=("$(_agent_runtime_abs_path "$explicit")")
+    else
+        if [[ -n "$workdir" ]]; then
+            root="$(git -C "$workdir" rev-parse --show-toplevel 2>/dev/null || true)"
+        else
+            root="${AGENT_WORKSPACE_ROOT:-}"
+            if [[ -z "$root" ]]; then
+                root="$(git -C "${AGENT_WORKDIR:-$PWD}" rev-parse --show-toplevel 2>/dev/null || true)"
+            fi
+        fi
+        if [[ -n "$root" ]]; then
+            root="$(cd -- "$root" && pwd -P)"
+            candidates+=("${root}/data/tmp")
+        else
+            root=""
+        fi
+        [[ -n "${AGENT_DATA_ROOT:-}" ]] && candidates+=("${AGENT_DATA_ROOT}/tmp")
+        candidates+=("${TMPDIR:-/tmp}/configure-agent-tmp")
+    fi
+    for candidate in "${candidates[@]}"; do
+        mkdir -p -- "$candidate" 2>/dev/null || continue
+        [[ -w "$candidate" ]] || continue
+        [[ "$candidate" != "${root:+${root}/data/tmp}" ]] ||
+            _agent_runtime_ensure_local_ignore "$root" 'data/tmp/'
+        (CDPATH= cd -- "$candidate" && pwd -P)
+        return 0
+    done
+    return 1
+}
+
 _agent_runtime_init() {
     AGENT_WORKDIR="${1:-${_PWD:-$PWD}}"
     AGENT_SCRIPT_DIR="${2:-${_PATH:-.}}"
@@ -664,6 +727,14 @@ _agent_runtime_init() {
         AGENT_WORKSPACE_ROOT="$(cd -- "$AGENT_WORKSPACE_ROOT" && pwd -P)"
     else
         AGENT_WORKSPACE_ROOT="$AGENT_WORKDIR"
+    fi
+
+    # 临时产物根：默认落在工作区 Git 根的 data/tmp，避免 /tmp 容量上限与重启丢失
+    AGENT_SCRATCH_ROOT="$(_agent_runtime_resolve_scratch_root 2>/dev/null || true)"
+    if [[ -z "${AGENT_SCRATCH_ROOT:-}" ]]; then
+        printf '###%s: warning: 无法创建 agent 临时产物目录，回退 %s###\n' \
+            "${_NAME:-agent}" "${TMPDIR:-/tmp}" >&2
+        AGENT_SCRATCH_ROOT="${TMPDIR:-/tmp}"
     fi
 
     AGENT_CONTEXT_FILE=""
@@ -911,7 +982,7 @@ _agent_runtime_start_or_resume() {
 
 # Export run identity for child tools (auto skill nudge hook, hooks, dispatch).
 _agent_runtime_export_context() {
-    export AGENT_RUN_ID AGENT_RUN_DIR AGENT_MANIFEST_FILE AGENT_DATA_ROOT
+    export AGENT_RUN_ID AGENT_RUN_DIR AGENT_MANIFEST_FILE AGENT_DATA_ROOT AGENT_SCRATCH_ROOT
     export AGENT_STATE_FILE AGENT_EVENT_FILE AGENT_CONTEXT_FILE AGENT_STOP_FILE
     if [[ -z "${AGENT_CONFIGURE_ROOT:-}" ]]; then
         AGENT_CONFIGURE_ROOT="$(_agent_runtime_configure_root)"
@@ -942,6 +1013,7 @@ _agent_runtime_append_prompt_contract() {
     extra+="state_manifest=${AGENT_MANIFEST_FILE:-}"$'\n'
     extra+="event_log=${AGENT_EVENT_FILE:-}"$'\n'
     extra+="stop_file=${AGENT_STOP_FILE:-}"$'\n'
+    extra+="scratch_dir=${AGENT_SCRATCH_ROOT:-}"$'\n'
     extra+=$'\n【结果优先】先确认目标结果、验收标准、约束、可用证据、预期输出和停止条件，再展开过程。\n'
     extra+=$'【执行顺序】理解上下文 → 制定最小方案 → 实施 → 针对变更验证 → 以证据报告结果。\n'
     extra+=$'【协作姿态】按 role/tier/posture 选择自主执行、委派或升级；没有真实专长时不要伪装，不把深度实现交给只适合快速分流的角色。\n'

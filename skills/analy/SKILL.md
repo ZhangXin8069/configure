@@ -458,8 +458,10 @@ cd docs
 # 中文文档：在临时目录 xelatex 编译两遍，避免 aux/log 污染 docs/
 tex_name="analy_<slug>_<YYYYMMDD>.tex"
 pdf_stem="${tex_name%.tex}"
-build_dir=$(mktemp -d)
-render_dir=$(mktemp -d)
+scratch_root=${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}}
+mkdir -p -- "$scratch_root"
+build_dir=$(mktemp -d "$scratch_root/build.XXXXXX")
+render_dir=$(mktemp -d "$scratch_root/render.XXXXXX")
 trap 'rm -rf "$build_dir" "$render_dir"' EXIT
 compile_output="$(xelatex -interaction=nonstopmode -halt-on-error -file-line-error \
   -output-directory "$build_dir" "$tex_name" 2>&1 &&

@@ -153,7 +153,9 @@ PATH_SETUP='export PATH=/opt/batch/cli/bin:$PATH'
 USER_FLAG="-u '$REMOTE_USER'"
 REMOTE_CMD="source /etc/profile >/dev/null 2>&1 || true; ${PATH_SETUP}; djob ${USER_FLAG} ${DJOB_EXTRA} 2>/dev/null"
 
-ERR_FILE=$(mktemp "${TMPDIR:-/tmp}/poll_jobs.err.XXXXXX") || die "cannot create a temp file"
+scratch_root=${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}}
+mkdir -p -- "$scratch_root" 2>/dev/null || scratch_root=${TMPDIR:-/tmp}
+ERR_FILE=$(mktemp "${scratch_root}/poll_jobs.err.XXXXXX") || die "cannot create a temp file"
 cleanup() { rm -f "$ERR_FILE"; }
 trap 'cleanup; exit 130' INT
 trap 'cleanup; exit 143' TERM HUP

@@ -128,7 +128,9 @@ esac
 PATH_SETUP='export PATH=/opt/batch/cli/bin:$PATH'
 REMOTE_PREFIX="source /etc/profile >/dev/null 2>&1 || true; ${PATH_SETUP}; "
 
-ERR_FILE=$(mktemp "${TMPDIR:-/tmp}/watch_job.err.XXXXXX") || die "cannot create a temp file"
+scratch_root=${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}}
+mkdir -p -- "$scratch_root" 2>/dev/null || scratch_root=${TMPDIR:-/tmp}
+ERR_FILE=$(mktemp "${scratch_root}/watch_job.err.XXXXXX") || die "cannot create a temp file"
 cleanup() { rm -f "$ERR_FILE"; }
 trap 'cleanup; exit 130' INT
 trap 'cleanup; exit 143' TERM HUP

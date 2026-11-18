@@ -1483,3 +1483,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-scratch-contract - final - 2026-11-18 14:32:57 +0800
+- 主任务: 明确 AGENT_DATA_DIR 与工作区 Git 根 data/ 两处唯一落点约定
+- 日志文件: logs/v2026111814.txt
+- 文件大小: 9695 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 AGENT_SCRATCH_ROOT（默认工作区 Git 根 data/tmp）并迁移临时产物；同步 prompt/AGENTS 文档与回归断言
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

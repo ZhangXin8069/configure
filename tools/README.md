@@ -115,7 +115,8 @@ turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_i
 `.auto-resume-attempted` 记录尝试次数。`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数，设置正整数可加安全上限。
 恢复链不要求 root 或系统级写权限：配置根来自 `AGENT_CONFIGURE_ROOT` 或脚本真实路径，数据根来自
 `AGENT_DATA_DIR` / `CONFIGURE_AGENT_DATA_DIR`、部署目录或当前用户 `$HOME/configure/data`，临时锁与日志均位于
-该用户可写的数据根内。
+该用户可写的数据根内；agent 临时产物（含本工具的中间文件）默认落在工作目录 Git 根的 `data/tmp`
+（`AGENT_SCRATCH_ROOT`，可用 `AGENT_SCRATCH_DIR` 覆盖），不写 `/tmp`。
 
 ```bash
 tools/agent-resume.sh --check --run-id RUN_ID

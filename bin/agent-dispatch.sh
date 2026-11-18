@@ -139,7 +139,15 @@ esac
 
 [[ -x "${_PATH}/${_launcher}" ]] || _fail "launcher 不存在或不可执行：${_PATH}/${_launcher}"
 
-_tmp="$(mktemp -d "${TMPDIR:-/tmp}/agent-dispatch.XXXXXX")" || exit 70
+# 临时产物落点：AGENT_SCRATCH_ROOT > 工作目录 Git 根 data/tmp > 父数据根 > 系统临时目录
+_scratch_root="${AGENT_SCRATCH_ROOT:-}"
+if [[ -z "${_scratch_root}" ]]; then
+    _git_root="$(git -C "${_cwd}" rev-parse --show-toplevel 2>/dev/null || true)"
+    [[ -z "${_git_root}" ]] || _scratch_root="${_git_root}/data/tmp"
+fi
+[[ -n "${_scratch_root}" ]] || _scratch_root="${AGENT_PARENT_DATA_ROOT:-${AGENT_DATA_DIR:-${TMPDIR:-/tmp}}}"
+mkdir -p -- "${_scratch_root}" 2>/dev/null || _scratch_root="${TMPDIR:-/tmp}"
+_tmp="$(mktemp -d "${_scratch_root}/agent-dispatch.XXXXXX")" || exit 70
 _cleanup() {
     local _rc=$?
     rm -rf -- "${_tmp}" 2>/dev/null || true

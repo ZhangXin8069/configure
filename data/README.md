@@ -1,8 +1,14 @@
 # Agent 数据目录
 
-`bin/agent.sh`/`bin/agent.bat` 的运行时数据默认写入 `${HOME}/configure/data`，Windows
-优先使用 `HOME`，未设置时回退 `USERPROFILE`；也可用
-`AGENT_DATA_DIR` 或 `CONFIGURE_AGENT_DATA_DIR` 覆盖。
+`bin/agent.sh`/`bin/agent.bat` 的运行时数据默认写入 `<configure 部署根>/data`（回退
+`${HOME}/configure/data`，Windows 优先使用 `HOME`，未设置时回退 `USERPROFILE`）；也可用
+`AGENT_DATA_DIR` 或旧名 `CONFIGURE_AGENT_DATA_DIR` 覆盖。该目录是 agent 运行时信息
+（run、manifest、state、事件、会话索引、模型目录缓存）的唯一保存路径。
+
+临时产物不写这里：默认落在当前工作目录 Git 根下的 `data/tmp/`，地位等同 `/tmp`，
+用于避免 `/tmp` 容量上限或系统重启清空 `/tmp` 造成进度丢失。运行时路径见 manifest 的
+`scratch_root=` 与 `AGENT_SCRATCH_ROOT`，可用 `AGENT_SCRATCH_DIR` 覆盖；工作区不是 Git 仓库时
+回退本目录的 `tmp/`，再回退系统临时目录。
 
 ## 运行记录
 

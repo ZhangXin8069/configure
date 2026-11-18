@@ -890,11 +890,21 @@ if find "$repo" -maxdepth 1 -name '.agent.*' -print | grep -q .; then
 fi
 printf 'PASS: 工作目录无运行时垃圾\n'
 
+# ---- 临时产物落点：工作区 Git 根 data/tmp，且默认被忽略 ----
+assert_file_contains "$codex_run/manifest.env" "scratch_root=$repo/data/tmp"
+[[ -d "$repo/data/tmp" ]] || fail "临时产物根未建立：$repo/data/tmp"
+git -C "$repo" check-ignore -q -- data/tmp \
+    || fail '工作区 data/tmp 应被本地忽略'
+[[ -z "$(git -C "$repo" status --porcelain -- data)" ]] \
+    || fail "临时产物不应污染 git status：$(git -C "$repo" status --porcelain -- data)"
+printf 'PASS: 临时产物落在工作区 data/tmp 且不污染 git status\n'
+
 # ---- 提示词硬约束：关键闸门不得在重构中丢失 ----
 prompt_file="$script_dir/agent-prompt.txt"
 [[ -r "$prompt_file" ]] || fail "prompt 单一来源缺失：$prompt_file"
 for anchor in '请求不阻塞任务推进' '五类必须显式确认的操作' '输出前自查清单' '冲突裁决' \
-              '身份体系' '思维方法论' '诚实原则' '访问边界' '通用运行契约'; do
+              '身份体系' '思维方法论' '诚实原则' '访问边界' '通用运行契约' \
+              '运行时数据与临时产物落点' 'AGENT_SCRATCH_ROOT'; do
     assert_file_contains "$prompt_file" "$anchor"
 done
 assert_file_contains "$prompt_file" '一律按【请求不阻塞】直接执行，不得询问'

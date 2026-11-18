@@ -1,0 +1,81 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-18 14:32:57 +0800
+批次: agent-scratch-contract
+主任务: 明确 AGENT_DATA_DIR 与工作区 Git 根 data/ 两处唯一落点约定
+触发原因: 任务完成
+摘要: 新增 AGENT_SCRATCH_ROOT（默认工作区 Git 根 data/tmp）并迁移临时产物；同步 prompt/AGENTS 文档与回归断言
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+
+### S1 — 约定定位与影响面调查
+- 目标: 明确「AGENT_DATA_DIR 为运行时信息唯一落点、工作区 Git 根 data/ 为临时产物唯一落点（等同 /tmp）」的既有实现与文档缺口。
+- 命令/操作: grep `CONFIGURE_AGENT_DATA_DIR`/`AGENT_DATA_DIR`/`TMPDIR`/`mktemp`；读取 `bin/agent-runtime.sh`、`bin/agent-runtime.ps1`、`bin/agent.sh`、`bin/agent-prompt.txt`、`bin/AGENTS.md`、`data/{AGENTS.md,README.md}`、`skills/AGENTS.md`、`skills/{rule,monitor,pure,report,analy}` 相关章节。
+- 关键输出: 运行时信息落点已唯一（`_agent_runtime_resolve_data_root`）；但临时产物散落在 `${TMPDIR:-/tmp}`：`agent.sh` 的 claude-json/claude-settings/协议桥、`agent-dispatch.sh`、`hooks/agent-hook.sh`、`rule/scripts/run-guarded.sh`、`monitor/scripts/{poll_jobs,watch_job}.sh`、pure/report/analy 的 LaTeX 构建目录。
+- 退出码: 0
+- 证据与判断: 缺「工作区 data/ 作为临时产物唯一落点」的运行时实现与文档约定。
+
+### S2 — 实现：scratch 根解析与本地忽略
+- 目标: 新增 `AGENT_SCRATCH_ROOT`（默认工作区 Git 根 `data/tmp`）并让上述临时产物改用该根。
+- 命令/操作: 编辑 `bin/agent-runtime.sh`（新增 `_agent_runtime_resolve_scratch_root`、`_agent_runtime_ensure_local_ignore`，init 时解析并导出，manifest 增 `scratch_root=`，prompt contract 增 `scratch_dir=`）；`bin/agent-runtime.ps1`（等价 `Resolve-AgentScratchRoot`、`Add-WorkspaceLocalIgnore`、`$script:ScratchRoot`）；`bin/agent.sh`、`bin/agent-dispatch.sh`、`hooks/agent-hook.sh`、`skills/rule/scripts/run-guarded.sh`、`skills/monitor/scripts/{poll_jobs,watch_job}.sh`、pure/report/analy LaTeX 模板改用该根；`hooks/agent-event.sh` 增 `AGENT_SCRATCH_ROOT/hooks` 回退。
+- 关键输出: 候选顺序 `AGENT_SCRATCH_DIR` > `<git 根>/data/tmp` > `<数据根>/tmp` > `${TMPDIR}/configure-agent-tmp`；仅实际选用工作区 `data/tmp` 时向 `.git/info/exclude` 追加 `data/tmp/`（`check-ignore` 已覆盖则跳过）。
+- 退出码: 0
+- 证据与判断: 非 Git 工作区不创建 `data/`；本库 `.gitignore` 覆盖 `data/`，故 exclude 写入被跳过（实测 `git check-ignore -v data/tmp` 命中 `data/.gitignore:1`）。
+
+### S3 — 文档同步
+- 目标: 把该约定写进 agent 相关规范与 prompt。
+- 命令/操作: 更新 `AGENTS.md`、`bin/AGENTS.md`、`skills/AGENTS.md`、`data/AGENTS.md`、`data/README.md`、`hooks/AGENTS.md`、`tools/README.md`、`skills/rule/SKILL.md` 与 references、`skills/monitor/SKILL.md`；`bin/agent-prompt.txt` 新增 ⛔【运行时数据与临时产物落点】闸门。
+- 关键输出: 提示词现为五个 ⛔ 闸门；`agent.test.sh` 同步断言 `运行时数据与临时产物落点`/`AGENT_SCRATCH_ROOT`。
+- 退出码: 0
+
+## 验证与证据
+
+- 语法: `bash -n` 覆盖 `agent-runtime.sh`、`agent.sh`、`agent-dispatch.sh`、`agent.test.sh`、`agent-windows.test.sh`、`agent-hook.sh`、`agent-event.sh`、`run-guarded.sh`、`watch_job.sh`、`poll_jobs.sh` → 全部通过。
+- 回归: `bash bin/agent.test.sh`（105 项 PASS，含新增 `PASS: 临时产物落在工作区 data/tmp 且不污染 git status`）；`bash bin/agent-windows.test.sh`（PASS，PowerShell Parser SKIP：本机无 pwsh）；`bash bin/agent-dispatch.test.sh`、`bash hooks/hooks.test.sh`、`bash skills/monitor/scripts/monitor-scripts.test.sh`（47 passed）、`bash bin/agent-runtime-resume.test.sh`、`bash tools/agent-resume.test.sh`、`bash hooks/agent-resume.test.sh`、`bash bin/agent-goal.test.sh` → 全部通过。
+- 结构: `skills/form/scripts/form-audit.sh --strict --quiet`、`form-data-tracking-check.sh --quiet`、`form-snapshot-verify.sh --quiet`、`tools/configure-check.sh`、`git diff --check` → 全部通过（configure-check 仅 1 条既有 plugins 警告）。
+- 未验证项: `tools/agent-tui-watch-idle-runtime.test.sh` 失败（`watcher 未收到空闲注入开关`），已在 HEAD 版本 `bin/agent-runtime.sh` 复现同样的 watcher 日志只有 `action=stop`，判定为基线既存环境问题（本机无 `timeout`/`gtimeout`、watcher 生命周期过短），与本次改动无关；`skills/rule/scripts/run-guarded.test.sh` 需 `timeout`/`gtimeout`，本机缺失，HEAD 同样失败。
+
+## 变更与产物
+
+- 文件: `AGENTS.md`、`bin/AGENTS.md`、`bin/agent-prompt.txt`、`bin/agent-runtime.sh`、`bin/agent-runtime.ps1`、`bin/agent.sh`、`bin/agent-dispatch.sh`、`bin/agent.test.sh`、`bin/agent-windows.test.sh`、`hooks/AGENTS.md`、`hooks/agent-hook.sh`、`hooks/agent-event.sh`、`data/AGENTS.md`、`data/README.md`、`skills/AGENTS.md`、`skills/rule/{SKILL.md,references/process-and-resources.md,scripts/run-guarded.sh}`、`skills/monitor/{SKILL.md,scripts/poll_jobs.sh,scripts/watch_job.sh}`、`skills/{pure,report,analy}/{SKILL.md,references/latex-template.md}`、`tools/README.md`
+- 产物: 约定文本 + 运行时 `AGENT_SCRATCH_ROOT` 与 `scratch_root=`/`scratch_dir=` 字段 + `.git/info/exclude` 本地忽略
+- 未改动范围: 运行时数据根解析逻辑（`AGENT_DATA_DIR` 优先级）保持不变；`data/cache` 等既有边界未动
+
+## 风险、限制与下一步
+
+- 风险: 在已有 `data/` 但被 Git 跟踪的仓库中，若 `data/tmp` 内容被显式 add 仍可入库；依赖 `.git/info/exclude` 属本地生效，不随仓库分发。
+- 阻塞: 本机缺 `timeout`/`gtimeout`，`run-guarded.sh` 及其回归无法执行；`pwsh` 缺失，PowerShell 仅做静态契约检查。
+- 下一步: 如在 Windows 实机使用，需在真实 `powershell.exe` 下跑一次 `agent-runtime.ps1` 的 scratch 解析冒烟。
+
+## 用户输入指令
+
+在库 agent 相关部分明确本约定：1. `AGENT_DATA_DIR`（`<configure 部署根>/data`）为默认的唯一 agent 运行时信息缓存与保存路径；2. 工作目录的 git 根目录下的 data 目录为默认的唯一 agent 的临时文档和日志和代码和数据缓存与保存路径，等同于 `/tmp`，避免 `/tmp` 容量超限或系统重启 `/tmp` 被清除导致 agent 进度丢失的问题；
+补充：临时产物应落在工作区 git 根 data/（继续执行）。
+
+## Agent 全文报告
+
+--- report begin ---
+已把这条约定固化为「两处落点唯一」并落到实现与文档。
+
+改动内容
+- 运行时数据：`AGENT_DATA_DIR`（默认 `<configure 部署根>/data`）保持为 run/manifest/state/事件/会话索引/模型缓存的唯一落点，解析逻辑不变。
+- 临时产物：新增 `AGENT_SCRATCH_ROOT`（默认「工作区 Git 根 `data/tmp`」），并按 `AGENT_SCRATCH_DIR` > 工作区 `data/tmp` > 数据根 `tmp` > `${TMPDIR}/configure-agent-tmp` 实测选择；非 Git 工作区不创建 `data/`。
+- 迁移到该落点的调用点：`bin/agent.sh`（claude-json、claude-settings、协议桥）、`bin/agent-runtime.ps1`（claude-settings）、`bin/agent-dispatch.sh`、`hooks/agent-hook.sh`、`skills/rule/scripts/run-guarded.sh`、`skills/monitor/scripts/{poll_jobs,watch_job}.sh`、pure/report/analy 的 LaTeX 构建与渲染目录。
+- 可观测性：run manifest 增 `scratch_root=`，runtime prompt contract 增 `scratch_dir=`；首次选用工作区 `data/tmp` 时把 `data/tmp/` 幂等追加到 `.git/info/exclude`（已被 `.gitignore` 覆盖则跳过），保证临时产物不污染 `git status`。
+- 文档与 prompt：`AGENTS.md`、`bin/AGENTS.md`、`skills/AGENTS.md`、`data/AGENTS.md`、`data/README.md`、`hooks/AGENTS.md`、`tools/README.md`、`skills/rule/*`、`skills/monitor/SKILL.md` 同步；`bin/agent-prompt.txt` 新增 ⛔【运行时数据与临时产物落点】，提示词从四个 ⛔ 闸门变为五个。
+
+推理依据
+- 原实现只有运行时数据根统一，临时文件仍散落 `/tmp`，正是重启清空与容量上限的风险点；把 `/tmp` 语义搬到工作区 `data/` 才能跨回合、跨进程、跨重启保留进度。
+- 选择子目录 `data/tmp/` 而非直接 `data/`，避免与运行时数据目录同名造成语义混淆，也让忽略规则可以只针对临时层。
+- 仅在实际选用工作区路径时写 `.git/info/exclude`，避免在共享只读部署或用户未预期时改写 Git 元数据。
+
+验证结果
+- `bash bin/agent.test.sh` 105 项 PASS（含新增断言 `scratch_root=<repo>/data/tmp`、目录存在、`check-ignore` 命中、`git status -- data` 为空）。
+- `bash bin/agent-windows.test.sh`、`bin/agent-dispatch.test.sh`、`hooks/hooks.test.sh`、`skills/monitor/scripts/monitor-scripts.test.sh`、`bin/agent-runtime-resume.test.sh`、`tools/agent-resume.test.sh`、`hooks/agent-resume.test.sh`、`bin/agent-goal.test.sh` 全部通过。
+- `form-audit --strict`、`form-data-tracking-check`、`form-snapshot-verify`、`tools/configure-check.sh`、`git diff --check` 全部通过。
+- 未验证：`tools/agent-tui-watch-idle-runtime.test.sh` 与 `skills/rule/scripts/run-guarded.test.sh` 在本机失败/不可执行（缺 `timeout`/`gtimeout`；watcher 用例在 HEAD 版本复现同样现象），已判定为基线环境问题且与本次改动无关；PowerShell 仅有静态契约，未做 Windows 实机运行。
+
+后续步骤
+- 需要时在 Windows 实机对 `agent-runtime.ps1` 的 scratch 解析做一次冒烟；其余无阻塞项。
+--- report end ---

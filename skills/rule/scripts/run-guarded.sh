@@ -200,7 +200,9 @@ START_EPOCH=$(date +%s)
 START_ISO=$(date -u '+%Y-%m-%dT%H:%M:%SZ')
 STOPPED_BY=
 MONITOR_PID=
-STOP_MARKER=$(mktemp "${TMPDIR:-/tmp}/run-guarded-stop.XXXXXX") ||
+SCRATCH_ROOT=${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}}
+mkdir -p -- "$SCRATCH_ROOT" 2>/dev/null || SCRATCH_ROOT=${TMPDIR:-/tmp}
+STOP_MARKER=$(mktemp "${SCRATCH_ROOT}/run-guarded-stop.XXXXXX") ||
   die "cannot create stop marker"
 
 cleanup() {

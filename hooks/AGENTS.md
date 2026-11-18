@@ -36,6 +36,9 @@ bash hooks/hooks.test.sh
 必需依赖为 `bash`、`git`；路径规范化需要 `realpath`，`before-edit` JSON payload 解析和
 `plugin-audit` 需要 `python3`；
 事件 JSONL 编码优先使用 `python3`、缺失时回退 `jq`，通知 JSON 解析也可选用 `python3`。
+事件写入位置优先级为 `AGENT_HOOK_DATA_DIR`、`AGENT_DATA_DIR/hooks`、`${HOME}/configure/data/hooks`、
+`AGENT_SCRATCH_ROOT/hooks`；hook 自身的临时输出与其他 agent 临时产物一样落在
+`AGENT_SCRATCH_ROOT`（默认工作目录 Git 根 `data/tmp`），不用 `/tmp` 保存需跨回合保留的内容。
 测试中的 JSON envelope 断言需要 `jq` 或 `python3` 任一解析器。
 恢复事件复用 `tools/agent-resume.sh` 的检测与 launcher 解析，不直接调用 codex/claude/opencode。
 Git 门禁覆盖 `hooks/`、`skills/`、`tools/`、`plugins/`，并检查暂存 Python AST、plugin/tool JSON

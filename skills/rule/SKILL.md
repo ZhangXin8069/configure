@@ -157,8 +157,10 @@ cleanup=<进程、临时文件和失败产物清理方式>
 
 ```bash
 RULE_SKILL_DIR=${RULE_SKILL_DIR:-$HOME/configure/skills/rule}
-process_log=${process_log:-$PWD/.agent.rule-process.log}
-event_log=${event_log:-$PWD/.agent.rule-events.log}
+scratch_root=${AGENT_SCRATCH_ROOT:-${TMPDIR:-/tmp}/configure-agent-tmp}
+mkdir -p -- "$scratch_root"
+process_log=${process_log:-$scratch_root/rule-process.log}
+event_log=${event_log:-$scratch_root/rule-events.log}
 
 "$RULE_SKILL_DIR/scripts/run-guarded.sh" \
   --label '<task-label>' \

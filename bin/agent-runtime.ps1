@@ -36,6 +36,7 @@ $script:LockStream = $null
 $script:RunId = ''
 $script:RunDir = ''
 $script:DataRoot = ''
+$script:ScratchRoot = ''
 $script:ConfigureRoot = ''
 $script:WorkspaceRoot = ''
 $script:LogFile = ''
@@ -213,6 +214,83 @@ function Resolve-AgentDataRoot {
     }
     if (-not [string]::IsNullOrWhiteSpace($homeData)) { return Resolve-FullPath $homeData }
     if ($candidates.Count -gt 0) { return Resolve-FullPath $candidates[0] }
+    return ''
+}
+
+# 本地忽略：工作区尚未忽略 data/tmp/ 时写入 .git\info\exclude（幂等、失败不阻塞），
+# 使临时产物不出现在 git status，也不会被误提交。
+function Add-WorkspaceLocalIgnore {
+    param(
+        [Parameter(Mandatory = $true)][string]$Root,
+        [Parameter(Mandatory = $true)][string]$Pattern
+    )
+
+    if (-not (Get-Command git -ErrorAction SilentlyContinue)) { return }
+    $ignoreProbe = $Pattern.TrimEnd('/')
+    & git -C $Root check-ignore -q -- $ignoreProbe 2>$null
+    if ($LASTEXITCODE -eq 0) { return }
+    $exclude = (& git -C $Root rev-parse --git-path info/exclude 2>$null | Select-Object -First 1)
+    if ([string]::IsNullOrWhiteSpace($exclude)) { return }
+    $exclude = [string]$exclude
+    if (-not [System.IO.Path]::IsPathRooted($exclude)) {
+        $exclude = Join-Path $Root $exclude
+    }
+    $directory = Split-Path -Parent $exclude
+    try {
+        if (-not [string]::IsNullOrWhiteSpace($directory)) {
+            New-Item -ItemType Directory -Force -Path $directory -ErrorAction Stop | Out-Null
+        }
+        if (Test-Path -LiteralPath $exclude -PathType Leaf) {
+            $lines = [System.IO.File]::ReadAllLines($exclude)
+            if ($lines -contains $Pattern) { return }
+        }
+        [System.IO.File]::AppendAllText(
+            $exclude, $Pattern + [Environment]::NewLine, (New-Object System.Text.UTF8Encoding($false)))
+    } catch {
+        Write-ErrorLine "###$($script:LauncherName): warning: 无法写入 $exclude，临时产物可能出现在 git status 中###"
+    }
+}
+
+# 临时产物根（/tmp 的可持久替代）：1) AGENT_SCRATCH_DIR（显式）
+# 2) 工作区 Git 根 data\tmp 3) <数据根>\tmp 4) 系统临时目录\configure-agent-tmp。
+# 逐个候选实测可创建并取第一个可用者；工作区不是 Git 仓库时跳过 2。
+function Resolve-AgentScratchRoot {
+    $explicit = [Environment]::GetEnvironmentVariable('AGENT_SCRATCH_DIR')
+    $candidates = @()
+    $workspaceTmp = ''
+    if (-not [string]::IsNullOrWhiteSpace($explicit)) {
+        $candidates += (Resolve-FullPath $explicit)
+    } else {
+        $workspaceIsGitRoot = $false
+        if (-not [string]::IsNullOrWhiteSpace($script:WorkspaceRoot) -and
+            (Get-Command git -ErrorAction SilentlyContinue)) {
+            $probe = (& git -C $script:WorkspaceRoot rev-parse --show-toplevel 2>$null | Select-Object -First 1)
+            if ($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace($probe)) {
+                $probe = [System.IO.Path]::GetFullPath(([string]$probe).Trim())
+                $workspaceIsGitRoot = $probe -eq $script:WorkspaceRoot
+            }
+        }
+        if ($workspaceIsGitRoot) {
+            $workspaceTmp = Join-Path (Join-Path $script:WorkspaceRoot 'data') 'tmp'
+            $candidates += $workspaceTmp
+        }
+        if (-not [string]::IsNullOrWhiteSpace($script:DataRoot)) {
+            $candidates += (Join-Path $script:DataRoot 'tmp')
+        }
+        $candidates += (Join-Path ([System.IO.Path]::GetTempPath()) 'configure-agent-tmp')
+    }
+    foreach ($path in $candidates) {
+        try {
+            New-Item -ItemType Directory -Force -Path $path -ErrorAction Stop | Out-Null
+            if (Test-WritableDirectory $path) {
+                if (-not [string]::IsNullOrWhiteSpace($workspaceTmp) -and $path -eq $workspaceTmp) {
+                    Add-WorkspaceLocalIgnore -Root $script:WorkspaceRoot -Pattern 'data/tmp/'
+                }
+                return [System.IO.Path]::GetFullPath($path)
+            }
+        } catch {
+        }
+    }
     return ''
 }
 
@@ -1211,6 +1289,7 @@ function Write-Manifest {
         "cwd=$(Clean-ManifestValue $script:WorkDir)"
         "workspace_root=$(Clean-ManifestValue $script:WorkspaceRoot)"
         "data_root=$(Clean-ManifestValue $script:DataRoot)"
+        "scratch_root=$(Clean-ManifestValue $script:ScratchRoot)"
         "run_dir=$(Clean-ManifestValue $script:RunDir)"
         "log_file=$(Clean-ManifestValue $script:LogFile)"
         "list_file=$(Clean-ManifestValue $script:ListFile)"
@@ -1699,6 +1778,7 @@ function Append-PromptContract {
         "state_manifest=$($script:ManifestFile)"
         "event_log=$($script:EventFile)"
         "stop_file=$($script:StopFile)"
+        "scratch_dir=$($script:ScratchRoot)"
         ''
         '【结果优先】先确认目标结果、验收标准、约束、可用证据、预期输出和停止条件，再展开过程。'
         '【执行顺序】理解上下文 → 制定最小方案 → 实施 → 针对变更验证 → 以证据报告结果。'
@@ -2239,7 +2319,9 @@ function New-ClaudeSettingsFile {
             command = "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$statuslineScript`""
         }
     }
-    $path = Join-Path ([System.IO.Path]::GetTempPath()) ('claude-settings-' + [guid]::NewGuid().ToString('N') + '.json')
+    $scratch = $script:ScratchRoot
+    if ([string]::IsNullOrWhiteSpace($scratch)) { $scratch = [System.IO.Path]::GetTempPath() }
+    $path = Join-Path $scratch ('claude-settings-' + [guid]::NewGuid().ToString('N') + '.json')
     $json = $settingsRoot | ConvertTo-Json -Depth 4 -Compress
     [System.IO.File]::WriteAllText($path, $json, (New-Object System.Text.UTF8Encoding($false)))
     return $path
@@ -3845,6 +3927,12 @@ try {
             $script:WorkspaceRoot = [System.IO.Path]::GetFullPath(([string]$workspaceCandidate).Trim())
         } else {
             $script:WorkspaceRoot = $script:WorkDir
+        }
+        # 临时产物根：默认落在工作区 Git 根的 data\tmp，避免系统临时目录容量上限与重启丢失
+        $script:ScratchRoot = Resolve-AgentScratchRoot
+        if ([string]::IsNullOrWhiteSpace($script:ScratchRoot)) {
+            Write-ErrorLine "###$($script:LauncherName): warning: 无法创建 agent 临时产物目录，回退系统临时目录###"
+            $script:ScratchRoot = [System.IO.Path]::GetTempPath()
         }
         Discover-Context
         Invoke-LegacyKeyMigration
