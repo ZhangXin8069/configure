@@ -1,0 +1,59 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-18 14:33:58 +0800
+批次: agent-scratch-contract
+主任务: 交付 agent 两处落点唯一约定（commit daece79 + dev63）
+触发原因: 任务完成
+摘要: 提交 30 文件、创建并推送 dev63、远端回读一致
+Git 根目录: /Users/zhangxin/configure
+
+## 关键日志
+
+### S4 — 交付
+- 目标: 提交、打标并推送本次约定改动。
+- 命令/操作: `git add --` 明确路径 30 项；`git diff --cached --check`；`git commit`（含 co-author trailer）；`git tag -a dev63`（follow dev62）；`git push origin main`、`git push origin dev63`；`git ls-remote` 回读。
+- 关键输出: `04070aa..daece79 main -> main`；`* [new tag] dev63 -> dev63`；远端 `main=daece797…`、`dev63=6012167…`、`dev63^{}=daece797…`。
+- 退出码: 0
+- 证据与判断: 分支与标签对象均与本地一致；`tag-chain.sh --check` 165 个管理标签 follow 链 PASS；工作树干净。
+
+## 验证与证据
+- 定向回归与结构检查结果见 S1–S3 及上一轮验证（agent 105 PASS、dispatch/hooks/monitor/resume/goal 全通过、form 审计与快照校验通过）。
+- 提交前 `form-data-tracking-check.sh --quiet` 通过，`git ls-files -- data` 仅三份契约文件。
+
+## 变更与产物
+- 提交: `daece79 feat(agent): unify runtime data and scratch output locations`（30 文件，+382/−33）
+- 标签: `dev63`（已推送，follow dev62）
+- 远端: `origin/main`、`origin/dev63` 已同步
+
+## 风险、限制与下一步
+- 风险: `.git/info/exclude` 仅本地生效；Windows 端仅静态契约，未实机验证。
+- 下一步: 需要时在 Windows 实机对 `agent-runtime.ps1` 的 scratch 解析做冒烟。
+
+## 用户输入指令
+在库 agent 相关部分明确本约定（`AGENT_DATA_DIR` 为运行时信息唯一落点；工作区 Git 根 data/ 为临时产物唯一落点，等同 /tmp）；补充「临时产物应落在工作区 git 根 data/」；随后「继续」。
+
+## Agent 全文报告
+--- report begin ---
+已在库的 agent 相关部分明确并实现该约定，提交为 `daece79`，标签 `dev63` 已推送。
+
+改动内容
+- 运行时信息唯一落点：`AGENT_DATA_DIR`（默认 `<configure 部署根>/data`）承载 run、manifest、state、事件、会话索引与模型缓存，解析逻辑未变。
+- 临时产物唯一落点：新增 `AGENT_SCRATCH_ROOT`，默认「工作区 Git 根 `data/tmp`」；解析顺序 `AGENT_SCRATCH_DIR` > 工作区 `data/tmp` > 数据根 `tmp` > `${TMPDIR}/configure-agent-tmp`，非 Git 工作区不创建 `data/`。
+- 迁移调用点：`bin/agent.sh`（claude-json / claude-settings / 协议桥）、`bin/agent-runtime.ps1`（claude-settings）、`bin/agent-dispatch.sh`、`hooks/agent-hook.sh`、`skills/rule/scripts/run-guarded.sh`、`skills/monitor/scripts/{poll_jobs,watch_job}.sh`、pure/report/analy 的 LaTeX 构建与渲染目录。
+- 可观测性与隔离：manifest 增 `scratch_root=`、prompt contract 增 `scratch_dir=`；实际选用工作区 `data/tmp` 时幂等追加 `data/tmp/` 到 `.git/info/exclude`（已被 `.gitignore` 覆盖则跳过）。
+- 文档与闸门：`AGENTS.md`、`bin/AGENTS.md`、`skills/AGENTS.md`、`data/AGENTS.md`、`data/README.md`、`hooks/AGENTS.md`、`tools/README.md`、`skills/rule/*`、`skills/monitor/SKILL.md` 同步；`bin/agent-prompt.txt` 新增 ⛔【运行时数据与临时产物落点】（提示词现为五个 ⛔ 闸门）。
+
+推理依据
+- 原实现只统一运行时数据根，临时文件仍散落 `/tmp`，正是容量上限与重启清空的风险源；把 `/tmp` 语义移到工作区 `data/` 才能跨回合/跨进程/跨重启保留进度。
+- 选择 `data/tmp/` 而非直接 `data/`，避免与运行时数据语义混淆，也让忽略规则只作用于临时层。
+- 仅在实际选用工作区路径时写 `.git/info/exclude`，避免在共享只读部署或用户未预期时改写 Git 元数据。
+
+验证结果
+- `bash bin/agent.test.sh`：105 项 PASS，含新增 `PASS: 临时产物落在工作区 data/tmp 且不污染 git status`。
+- `bin/agent-windows.test.sh`、`bin/agent-dispatch.test.sh`、`hooks/hooks.test.sh`、`skills/monitor/scripts/monitor-scripts.test.sh`（47 passed）、`bin/agent-runtime-resume.test.sh`、`tools/agent-resume.test.sh`、`hooks/agent-resume.test.sh`、`bin/agent-goal.test.sh`：全部通过。
+- `form-audit --strict`、`form-data-tracking-check`、`form-snapshot-verify`、`form-large-files-check`、`tools/configure-check.sh`、`git diff --check`：全部通过。
+- 未验证：`skills/rule/scripts/run-guarded.test.sh` 需 `timeout`/`gtimeout`，本机缺失（HEAD 同样失败）；`tools/agent-tui-watch-idle-runtime.test.sh` 在 HEAD 版本复现同样的 watcher 无 idle 日志现象，判定基线环境问题；PowerShell 未实机运行。
+
+后续步骤
+- 如需 Windows 支持确认，在实机跑一次 `agent-runtime.ps1` scratch 解析冒烟；无其他阻塞项。
+--- report end ---

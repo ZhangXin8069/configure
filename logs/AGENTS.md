@@ -1492,3 +1492,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-scratch-contract - final - 2026-11-18 14:33:58 +0800
+- 主任务: 交付 agent 两处落点唯一约定（commit daece79 + dev63）
+- 日志文件: logs/v2026111814-2.txt
+- 文件大小: 4983 bytes
+- 触发原因: 任务完成
+- 关键内容: 提交 30 文件、创建并推送 dev63、远端回读一致
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
