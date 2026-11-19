@@ -729,7 +729,7 @@ run_launcher() {
             codex) [[ -z "$provider" ]] || export CODEX_PROVIDER_ID="$provider";;
             opencode) [[ -z "$provider" ]] || export OPENCODE_PROVIDER="$provider";;
             claude) [[ -z "$provider" ]] || export CLAUDE_PROVIDER="$provider";;
-            commandcode) ;;
+            commandcode) [[ -z "$provider" ]] || export COMMANDCODE_PROVIDER="$provider";;
         esac
         if (( use_setsid )); then
             exec setsid "$launcher_path" "$@"

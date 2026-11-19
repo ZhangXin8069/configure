@@ -14,9 +14,12 @@
   重试状态，改为生成脱敏、限长的 `resume-handoff.md`，用原 launcher 启动一次新 run/thread，并把
   `handoff_run_id` / `handoff_thread_id` 写回源 manifest。交接尝试由 `.context-overflow-handoff-attempted`
   去重，后续调用返回 `reason=handoff_already_started`，不会重复烧资源。调度锁防止同一 run 出现并行恢复链，
-  每次 launcher 仍受硬超时和心跳约束。检测范围包含上下文窗口/`context_length_exceeded`、429、并发上限
+  每次 launcher 仍受硬超时和心跳约束。恢复时把 provider 交给 launcher 的方式按 agent 分流：codex 走
+  `CODEX_PROVIDER_ID`、opencode 走 `OPENCODE_PROVIDER`、claude 走 `CLAUDE_PROVIDER`、commandcode 走
+  `COMMANDCODE_PROVIDER`；漏传时 launcher 会回落到配置默认途径，与 manifest 里的模型脱钩。
+  检测范围包含上下文窗口/`context_length_exceeded`、429、并发上限
   中英文变体、连接中断和 `upstream_error` / `reasoning_content ... passed back` 等错误。配套
-  `agent-resume.test.sh`，并覆盖派发子 agent 的同构 manifest。
+  `agent-resume.test.sh`，并覆盖派发子 agent 的同构 manifest 与 commandcode 的 provider 传递。
 - `agent-session-state.py` 是 Codex、Claude Code、OpenCode 共用的只读会话解析器：按 manifest 的
   `run_id + cwd + created_at` 分别查询 Codex state DB/rollout、Claude 项目 JSONL、OpenCode V1/V2
   SQLite，并只依据最后一个完整 turn 输出 `failure_found`、`context_overflow` 与瞬时性分类；不修改各 agent

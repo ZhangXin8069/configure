@@ -73,6 +73,7 @@ fi
     printf 'codex_provider=%s\n' "${CODEX_PROVIDER_ID:-}"
     printf 'opencode_provider=%s\n' "${OPENCODE_PROVIDER:-}"
     printf 'claude_provider=%s\n' "${CLAUDE_PROVIDER:-}"
+    printf 'commandcode_provider=%s\n' "${COMMANDCODE_PROVIDER:-}"
     printf 'resume_active=%s\n' "${AGENT_RESUME_ACTIVE:-}"
     printf 'auto_resume=%s\n' "${AGENT_AUTO_RESUME:-}"
     printf 'handoff_task_present=%s\n' "$([[ -n "$dispatch_task" ]] && printf 1 || printf 0)"
@@ -455,6 +456,26 @@ assert_contains "$calls" "cwd=$workspace_root/tasks/subagent"
 assert_contains "$calls" 'opencode_provider=opencode-go'
 grep -Fq 'session_id=ses_dispatch_child' "$manifest" || fail '未恢复派发子 agent 的 session_id'
 printf 'PASS: 派发子 agent 的 manifest/log 使用同一恢复路径\n'
+
+# 恢复 argv 会吸收调用方环境里的权限设置；先清空，避免测试结果随宿主 shell 漂移。
+unset AGENT_PARENT_PERMISSION_MODE AGENT_PARENT_SANDBOX AGENT_PARENT_APPROVAL
+create_run 20261021T040250.commandcode commandcode cm tasks
+printf '%s\n' \
+    '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]},"sessionId":"4e971cd1-commandcode"}' \
+    '{"type":"error","message":"exceeded retry limit, last status: 429 Too Many Requests"}' \
+    >"$log_file"
+set_fake_env
+set +e
+commandcode_output=$(AGENT_RESUME_PROVIDER=opendesign-go "$resume_tool" \
+    --run-id 20261021T040250.commandcode --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+commandcode_status=$?
+set -e
+(( commandcode_status == 0 )) || fail "Command Code 恢复失败：$commandcode_output"
+calls=$(<"$FAKE_CALL_LOG")
+assert_contains "$calls" 'args=--resume 20261021T040250.commandcode --once --model fake-commandcode --effort max'
+assert_contains "$calls" 'commandcode_provider=opendesign-go'
+printf 'PASS: Command Code 恢复会把途径传给 COMMANDCODE_PROVIDER，避免回落默认供应商\n'
 
 create_run 20261021T031022.tui429 codex co tasks
 : >"$log_file"
