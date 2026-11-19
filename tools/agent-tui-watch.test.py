@@ -98,6 +98,19 @@ class TuiWatchTests(unittest.TestCase):
         )
         return path
 
+    @staticmethod
+    def _slow_recovery_script(root: Path) -> tuple[Path, Path]:
+        """Recovery that sleeps well past the stop poll interval."""
+        marker = root / "slow-recovery-ran.txt"
+        path = root / "slow-recover.py"
+        path.write_text(
+            "import pathlib, sys, time\n"
+            "pathlib.Path(sys.argv[1]).write_text('started\\n', encoding='utf-8')\n"
+            "time.sleep(30)\n",
+            encoding="utf-8",
+        )
+        return path, marker
+
     def _run_watch(
         self,
         codex_home: Path,
@@ -271,6 +284,100 @@ class TuiWatchTests(unittest.TestCase):
                 self.assertFalse(recovered.exists())
                 self.assertIn("reason=stop_requested", (root / "watch.log").read_text(encoding="utf-8"))
             finally:
+                child.terminate()
+                child.wait(timeout=2)
+
+    def test_stop_file_interrupts_a_running_recovery(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            codex_home, cwd, rollout = self._fixture(root)
+            self._write_events(
+                rollout,
+                [
+                    {
+                        "type": "event_msg",
+                        "payload": {
+                            "type": "task_complete",
+                            "error": {"message": "429 Too Many Requests"},
+                        },
+                    }
+                ],
+            )
+            child = self._child()
+            marker = root / "slow-recovery-ran.txt"
+            pid_file = root / "slow-recovery.pid"
+            recovery = root / "slow-recover.py"
+            recovery.write_text(
+                "import os, pathlib, sys, time\n"
+                f"pathlib.Path({str(marker)!r}).write_text('started\\n', encoding='utf-8')\n"
+                f"pathlib.Path({str(pid_file)!r}).write_text(str(os.getpid()), encoding='utf-8')\n"
+                "time.sleep(30)\n",
+                encoding="utf-8",
+            )
+            stop_file = root / "stop"
+            command = [
+                sys.executable,
+                str(SCRIPT),
+                "--agent",
+                "codex",
+                "--run-id",
+                RUN_ID,
+                "--cwd",
+                str(cwd),
+                "--created-at",
+                CREATED_AT,
+                "--state-db",
+                str(codex_home / "state_5.sqlite"),
+                "--pid",
+                str(child.pid),
+                "--grace",
+                "0.1",
+                "--interval",
+                "0.05",
+                "--max-runtime",
+                "30",
+                "--log",
+                str(root / "watch.log"),
+                "--stop-file",
+                str(stop_file),
+                "--recover-command-json",
+                json.dumps(
+                    [sys.executable, str(recovery), str(marker)],
+                    separators=(",", ":"),
+                ),
+                "--attempt-marker",
+                str(root / ".auto-resume-attempted"),
+            ]
+            watcher = subprocess.Popen(
+                command,
+                text=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            try:
+                deadline = time.time() + 10
+                while time.time() < deadline and not pid_file.exists():
+                    time.sleep(0.05)
+                self.assertTrue(pid_file.exists(), "恢复子进程未启动")
+                recovery_pid = int(pid_file.read_text(encoding="utf-8").strip())
+                stop_file.touch()
+                watcher.wait(timeout=10)
+                self.assertEqual(watcher.returncode, 0)
+                log_text = (root / "watch.log").read_text(encoding="utf-8")
+                self.assertIn("action=stop reason=stop_requested", log_text)
+                deadline = time.time() + 5
+                while time.time() < deadline:
+                    try:
+                        os.kill(recovery_pid, 0)
+                    except ProcessLookupError:
+                        break
+                    time.sleep(0.05)
+                with self.assertRaises(ProcessLookupError):
+                    os.kill(recovery_pid, 0)
+            finally:
+                if watcher.poll() is None:
+                    watcher.kill()
+                    watcher.wait(timeout=2)
                 child.terminate()
                 child.wait(timeout=2)
 

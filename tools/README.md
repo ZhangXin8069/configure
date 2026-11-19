@@ -214,7 +214,8 @@ tools/agent-idle-nudge.sh disable                    # 中断或取消
 运行上下文取 `--manifest`、`--run-dir`、`--run-id` 或
 `AGENT_MANIFEST_FILE`/`AGENT_RUN_DIR`/`AGENT_RUN_ID`；只写运行目录的
 `.idle-nudge-enabled`、`.goal-complete` 与 `.idle-nudge-attempted`，不启动 agent、不修改配置。
-`enable` 会检查 `.tui-watch.pid`：无存活 TUI watcher 时输出 `watch=inactive`，调用方应如实报告
+`enable` 会检查 `.tui-watch.pid`：该文件记录 `<pid> <启动标识>`，两者同时匹配才算存活；
+PID 被复用时输出 `watch=inactive`，调用方应如实报告
 `idle_nudge=unavailable`，不得伪称已启用。hook 入口为
 `hooks/agent-hook.sh agent-nudge ...`。
 

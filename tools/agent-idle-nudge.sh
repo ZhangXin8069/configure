@@ -132,12 +132,24 @@ finally:
 PY
 }
 
+# watcher 在 .tui-watch.pid 里写 "<pid> <启动标识>"，比对启动标识可防止 PID 复用时误报存活。
+_process_identity() {
+    local pid=$1
+    if [[ -r "/proc/${pid}/stat" ]]; then
+        awk '{ sub(/^.*\) /, ""); print $20 }' "/proc/${pid}/stat" 2>/dev/null && return 0
+    fi
+    ps -o lstart= -p "${pid}" 2>/dev/null | tr -d '\n' | sed 's/  */ /g'
+}
+
 watcher_running() {
     [[ -r "${watch_pid_file}" ]] || return 1
-    local pid
-    pid=$(<"${watch_pid_file}")
+    local pid identity current
+    read -r pid identity <"${watch_pid_file}" || return 1
     [[ "${pid}" =~ ^[1-9][0-9]*$ ]] || return 1
-    kill -0 "${pid}" 2>/dev/null
+    kill -0 "${pid}" 2>/dev/null || return 1
+    [[ -z "${identity}" ]] && return 0
+    current=$(_process_identity "${pid}")
+    [[ -z "${current}" || "${current}" == "${identity}" ]]
 }
 
 case "${command_name}" in
@@ -157,7 +169,8 @@ PY
         write_json "${enabled_file}" "${payload}"
         printf 'status=enabled run_id=%s goal=%s marker=%s\n' "${run_id}" "${goal:-<empty>}" "${enabled_file}"
         if watcher_running; then
-            printf 'watch=active pid=%s\n' "$(<"${watch_pid_file}")"
+            read -r watch_pid _ <"${watch_pid_file}"
+            printf 'watch=active pid=%s\n' "${watch_pid}"
         else
             printf 'watch=inactive warning=no-live-tui-watcher marker=%s\n' "${watch_pid_file}" >&2
         fi

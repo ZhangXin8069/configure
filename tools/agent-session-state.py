@@ -80,8 +80,8 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         description="Read-only local session lookup by the configure run id."
     )
     parser.add_argument("--agent", choices=("codex", "claude", "opencode", "commandcode"), default="codex")
-    parser.add_argument("--run-id", required=True)
-    parser.add_argument("--cwd", required=True)
+    parser.add_argument("--run-id", default="")
+    parser.add_argument("--cwd", default="")
     parser.add_argument("--created-at", default="")
     parser.add_argument("--data-dir", default="")
     parser.add_argument("--state-db", default="")
@@ -91,7 +91,45 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
         action="store_true",
         help="只输出 last_user_input=<epoch seconds>，用于空闲检测",
     )
+    parser.add_argument(
+        "--classify-log",
+        default="",
+        help="只对给定日志做瞬时/上下文超限分类，复用本文件的正则而不做会话查询",
+    )
     return parser.parse_args(argv)
+
+
+def classify_log_text(path: str) -> tuple[bool, bool]:
+    """Classify a log with the same patterns used for session records.
+
+    Recovery needs the shared classifier: keeping a second copy in bash made the
+    two silently diverge (for example on ``reasoning_content ... passed back``).
+    """
+    transient = False
+    overflow = False
+    try:
+        with open(path, "rb") as stream:
+            data = stream.read()
+    except OSError:
+        return False, False
+    text = data.decode("utf-8", errors="replace")
+    for line in text.splitlines():
+        if not line:
+            continue
+        try:
+            event = json.loads(line)
+        except json.JSONDecodeError:
+            if error_is_transient(line):
+                transient = True
+            if error_is_context_overflow(line):
+                overflow = True
+            continue
+        if isinstance(event, dict):
+            if error_is_transient(event):
+                transient = True
+            if error_is_context_overflow(event):
+                overflow = True
+    return transient, overflow
 
 
 def parse_created_at(value: str) -> datetime | None:
@@ -1024,6 +1062,11 @@ def emit(record: dict[str, Any]) -> None:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    if args.classify_log:
+        transient, overflow = classify_log_text(args.classify_log)
+        print(f"transient_failure={1 if transient else 0}")
+        print(f"context_overflow={1 if overflow else 0}")
+        return 0
     if not RUN_ID_RE.fullmatch(args.run_id):
         print("status=invalid reason=invalid_run_id", file=sys.stderr)
         return 2

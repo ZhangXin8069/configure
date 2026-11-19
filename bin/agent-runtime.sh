@@ -206,15 +206,13 @@ _agent_runtime_run_tui_watched() {
             --idle-poll "$idle_poll"
             --idle-max-nudges "$idle_max"
         )
+        [[ -z "$watch_pid_file" ]] || watch_args+=(--pid-file "$watch_pid_file")
         [[ -z "$created_at" ]] || watch_args+=(--created-at "$created_at")
         [[ -z "$state_db" ]] || watch_args+=(--state-db "$state_db")
         [[ -z "$data_dir" ]] || watch_args+=(--data-dir "$data_dir")
         [[ -z "$stop_file" ]] || watch_args+=(--stop-file "$stop_file")
         [[ -z "$idle_markers" ]] || watch_args+=(--idle-nudge-markers "$idle_markers")
         "$python_bin" "$watcher" "${watch_args[@]}" </dev/null >>"${watch_log:-/dev/null}" 2>&1 &
-        if [[ -n "$watch_pid_file" ]]; then
-            printf "%s\n" "$!" > "$watch_pid_file"
-        fi
         exec "$@"
     ' _ \
         "$python_bin" "$watcher" "$agent" "$run_id" "$cwd" "${AGENT_CREATED_AT:-}" \

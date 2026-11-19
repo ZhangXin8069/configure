@@ -7,8 +7,10 @@ import argparse
 import json
 import os
 import re
+import signal
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime
 from pathlib import Path
@@ -49,7 +51,41 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--idle-nudge-timeout", type=float, default=1800.0)
     parser.add_argument("--idle-poll", type=float, default=15.0)
     parser.add_argument("--idle-max-nudges", type=int, default=0)
+    parser.add_argument("--pid-file", default="")
     return parser.parse_args(argv)
+
+
+def write_watch_pid_file(path: str) -> None:
+    """Record watcher pid plus its start identity so PID reuse cannot fool readers."""
+    if not path:
+        return
+    identity = process_identity(os.getpid())[1]
+    payload = f"{os.getpid()} {identity}\n"
+    directory = os.path.dirname(path) or "."
+    try:
+        descriptor, temp = tempfile.mkstemp(prefix=".pid.", dir=directory)
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as stream:
+                stream.write(payload)
+            os.chmod(temp, 0o600)
+            os.replace(temp, path)
+        finally:
+            if os.path.exists(temp):
+                os.unlink(temp)
+    except OSError:
+        pass
+
+
+def remove_watch_pid_file(path: str) -> None:
+    """Drop the pid file only while it still describes this process."""
+    if not path:
+        return
+    try:
+        recorded = Path(path).read_text(encoding="utf-8").split()
+        if recorded and recorded[0] == str(os.getpid()):
+            os.unlink(path)
+    except OSError:
+        pass
 
 
 def write_log(path: str, action: str, **fields: Any) -> None:
@@ -240,6 +276,74 @@ def has_runnable_command(raw: str) -> bool:
     return bool(command)
 
 
+def run_with_stop_watch(
+    command: list[str],
+    *,
+    timeout: float,
+    stop_file: str,
+    poll: float = 0.2,
+) -> tuple[int, str, str]:
+    """Run a child command while honouring timeout and the stop file.
+
+    subprocess.run() cannot react to a stop file, so a long recovery or idle
+    nudge would keep running for up to ``timeout`` seconds after the user asked
+    to stop. A new session is created so the whole child group can be reaped.
+
+    Returns (returncode, stdout, stderr); returncode -2 means stopped by the
+    stop file and -3 means timed out.
+    """
+    stopped = False
+    timed_out = False
+    with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+        process = subprocess.Popen(
+            command,
+            stdout=stdout_file,
+            stderr=stderr_file,
+            text=True,
+            errors="replace",
+            start_new_session=True,
+        )
+        started = time.monotonic()
+        try:
+            while True:
+                try:
+                    process.wait(timeout=poll)
+                    break
+                except subprocess.TimeoutExpired:
+                    pass
+                if stop_file and Path(stop_file).exists():
+                    stopped = True
+                    break
+                if time.monotonic() - started >= timeout:
+                    timed_out = True
+                    break
+        finally:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except (ProcessLookupError, PermissionError):
+                    process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except (ProcessLookupError, PermissionError):
+                        process.kill()
+                    process.wait(timeout=5)
+        stdout_file.seek(0)
+        stderr_file.seek(0)
+        stdout_text = stdout_file.read().decode("utf-8", errors="replace")
+        stderr_text = stderr_file.read().decode("utf-8", errors="replace")
+    if stopped:
+        returncode = -2
+    elif timed_out:
+        returncode = -3
+    else:
+        returncode = process.returncode if process.returncode is not None else -1
+    return returncode, stdout_text, stderr_text
+
+
 def render_recovery_command(
     raw: str,
     state: dict[str, str],
@@ -417,11 +521,20 @@ def validate_args(args: argparse.Namespace) -> str:
         return "invalid_idle_max_nudges"
     if args.idle_nudge_markers and not os.path.isabs(args.idle_nudge_markers):
         return "idle_nudge_markers_not_absolute"
+    if args.pid_file and not os.path.isabs(args.pid_file):
+        return "pid_file_not_absolute"
     return ""
 
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
+    try:
+        return _watch_loop(args)
+    finally:
+        remove_watch_pid_file(args.pid_file)
+
+
+def _watch_loop(args: argparse.Namespace) -> int:
     invalid_reason = validate_args(args)
     if invalid_reason:
         print(f"status=invalid reason={invalid_reason}", file=sys.stderr)
@@ -435,6 +548,8 @@ def main(argv: list[str] | None = None) -> int:
     if not alive:
         write_log(args.log, "stop", reason="process_not_alive", pid=args.pid)
         return 0
+
+    write_watch_pid_file(args.pid_file)
 
     started = time.monotonic()
     deadline = started + args.max_runtime if args.max_runtime > 0 else None
@@ -568,26 +683,11 @@ def main(argv: list[str] | None = None) -> int:
                         command=Path(command[0]).name,
                     )
                     try:
-                        result = subprocess.run(
+                        rc, _, _ = run_with_stop_watch(
                             command,
-                            text=True,
-                            errors="replace",
-                            capture_output=True,
-                            check=False,
                             timeout=args.recover_timeout,
+                            stop_file=args.stop_file,
                         )
-                    except subprocess.TimeoutExpired:
-                        write_log(args.log, "resume-failed", reason="recover_timeout", pid=args.pid)
-                        append_event(
-                            args.event_file,
-                            "tui-resume-end",
-                            run_id=args.run_id,
-                            pid=args.pid,
-                            status="failed",
-                            reason="recover_timeout",
-                        )
-                        pending_since = None
-                        continue
                     except OSError as error:
                         write_log(
                             args.log,
@@ -606,13 +706,23 @@ def main(argv: list[str] | None = None) -> int:
                         )
                         pending_since = None
                         continue
-                    if result.returncode != 0:
+                    if rc == -2:
+                        write_log(args.log, "stop", reason="stop_requested", pid=args.pid)
+                        append_event(
+                            args.event_file,
+                            "tui-resume-end",
+                            run_id=args.run_id,
+                            pid=args.pid,
+                            status="stopped",
+                            reason="stop_requested",
+                        )
+                        return 0
+                    if rc == -3:
                         write_log(
                             args.log,
                             "resume-failed",
-                            reason="recover_exit",
+                            reason="recover_timeout",
                             pid=args.pid,
-                            exit_code=result.returncode,
                         )
                         append_event(
                             args.event_file,
@@ -620,7 +730,25 @@ def main(argv: list[str] | None = None) -> int:
                             run_id=args.run_id,
                             pid=args.pid,
                             status="failed",
-                            exit_code=result.returncode,
+                            reason="recover_timeout",
+                        )
+                        pending_since = None
+                        continue
+                    if rc != 0:
+                        write_log(
+                            args.log,
+                            "resume-failed",
+                            reason="recover_exit",
+                            pid=args.pid,
+                            exit_code=rc,
+                        )
+                        append_event(
+                            args.event_file,
+                            "tui-resume-end",
+                            run_id=args.run_id,
+                            pid=args.pid,
+                            status="failed",
+                            exit_code=rc,
                         )
                         pending_since = None
                         continue
@@ -720,24 +848,10 @@ def main(argv: list[str] | None = None) -> int:
                             )
                             nudge_failed = False
                             try:
-                                result = subprocess.run(
+                                rc, nudge_stdout, nudge_stderr = run_with_stop_watch(
                                     command,
-                                    text=True,
-                                    errors="replace",
-                                    capture_output=True,
-                                    check=False,
                                     timeout=args.idle_nudge_timeout,
-                                )
-                            except subprocess.TimeoutExpired:
-                                nudge_failed = True
-                                write_log(args.log, "idle-nudge-failed", reason="idle_timeout", pid=args.pid)
-                                append_event(
-                                    args.event_file,
-                                    "tui-idle-nudge-end",
-                                    run_id=args.run_id,
-                                    pid=args.pid,
-                                    status="failed",
-                                    reason="idle_timeout",
+                                    stop_file=args.stop_file,
                                 )
                             except OSError as error:
                                 nudge_failed = True
@@ -757,14 +871,36 @@ def main(argv: list[str] | None = None) -> int:
                                     reason="idle_exec_error",
                                 )
                             else:
-                                if result.returncode != 0:
+                                if rc == -2:
+                                    write_log(args.log, "stop", reason="stop_requested", pid=args.pid)
+                                    append_event(
+                                        args.event_file,
+                                        "tui-idle-nudge-end",
+                                        run_id=args.run_id,
+                                        pid=args.pid,
+                                        status="stopped",
+                                        reason="stop_requested",
+                                    )
+                                    return 0
+                                if rc == -3:
+                                    nudge_failed = True
+                                    write_log(args.log, "idle-nudge-failed", reason="idle_timeout", pid=args.pid)
+                                    append_event(
+                                        args.event_file,
+                                        "tui-idle-nudge-end",
+                                        run_id=args.run_id,
+                                        pid=args.pid,
+                                        status="failed",
+                                        reason="idle_timeout",
+                                    )
+                                elif rc != 0:
                                     nudge_failed = True
                                     write_log(
                                         args.log,
                                         "idle-nudge-failed",
                                         reason="idle_exit",
                                         pid=args.pid,
-                                        exit_code=result.returncode,
+                                        exit_code=rc,
                                     )
                                     append_event(
                                         args.event_file,
@@ -772,7 +908,7 @@ def main(argv: list[str] | None = None) -> int:
                                         run_id=args.run_id,
                                         pid=args.pid,
                                         status="failed",
-                                        exit_code=result.returncode,
+                                        exit_code=rc,
                                     )
                                 else:
                                     write_log(args.log, "idle-nudge-ok", pid=args.pid, nudges=nudge_count)
@@ -789,9 +925,9 @@ def main(argv: list[str] | None = None) -> int:
                                         (record_dir / "idle-nudge-last.txt").write_text(
                                             "time=" + time.strftime("%Y-%m-%dT%H:%M:%S%z") + "\n"
                                             "command=" + json.dumps(command, ensure_ascii=False) + "\n"
-                                            "returncode=" + str(result.returncode) + "\n"
-                                            "stdout:\n" + (result.stdout or "")[-4000:] + "\n"
-                                            "stderr:\n" + (result.stderr or "")[-4000:] + "\n",
+                                            "returncode=" + str(rc) + "\n"
+                                            "stdout:\n" + (nudge_stdout or "")[-4000:] + "\n"
+                                            "stderr:\n" + (nudge_stderr or "")[-4000:] + "\n",
                                             encoding="utf-8",
                                         )
                                     except OSError:

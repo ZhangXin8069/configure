@@ -202,6 +202,9 @@ reset_run_state() {
     _agent_state_thread=""
     _agent_state_transient=""
     _agent_state_context_overflow=""
+    _log_classified=0
+    _log_transient=""
+    _log_context_overflow=""
     _turn=0
     _reason=""
 }
@@ -259,6 +262,7 @@ load_agent_state_report() {
     local helper=${config_root}/tools/agent-session-state.py
     local python_bin=${AGENT_STATE_PYTHON:-${AGENT_CODEX_STATE_PYTHON:-python3}}
     [[ -r "$helper" ]] && command -v "$python_bin" >/dev/null 2>&1 || return 1
+    [[ -n "$_run_id" && -n "$_run_cwd" ]] || return 1
 
     local -a state_args=(--agent "$_agent" --run-id "$_run_id" --cwd "$_run_cwd")
     [[ -z "$_created_at" ]] || state_args+=(--created-at "$_created_at")
@@ -290,6 +294,27 @@ agent_state_has_transient_failure() {
 agent_state_has_context_overflow() {
     load_agent_state_report || return 1
     [[ "$_agent_state_context_overflow" == 1 ]]
+}
+
+# 日志分类统一走 agent-session-state.py 的同一套正则，避免 bash 副本与 Python
+# 判定分叉（例如 reasoning_content 传回错误只在一侧命中）。
+classify_log() {
+    local helper=${config_root}/tools/agent-session-state.py
+    local python_bin=${AGENT_STATE_PYTHON:-${AGENT_CODEX_STATE_PYTHON:-python3}}
+    if [[ "$_log_classified" == 1 ]]; then return 0; fi
+    [[ -n "$_log_file" && -r "$_log_file" ]] || return 1
+    [[ -r "$helper" ]] && command -v "$python_bin" >/dev/null 2>&1 || return 1
+    local report=""
+    if command -v timeout >/dev/null 2>&1; then
+        report=$(timeout "${AGENT_STATE_TIMEOUT:-${AGENT_CODEX_STATE_TIMEOUT:-5}}" \
+            "$python_bin" "$helper" --classify-log "$_log_file" 2>/dev/null) || return 1
+    else
+        report=$("$python_bin" "$helper" --classify-log "$_log_file" 2>/dev/null) || return 1
+    fi
+    _log_classified=1
+    _log_transient=$(report_value "$report" transient_failure)
+    _log_context_overflow=$(report_value "$report" context_overflow)
+    return 0
 }
 
 recover_session_ids() {
@@ -372,25 +397,16 @@ classify_context_overflow() {
     if agent_state_has_context_overflow; then
         return 0
     fi
-    local last_failure=""
-    if [[ -r "$_log_file" ]]; then
-        last_failure=$(tail -n 500 -- "$_log_file" 2>/dev/null |
-            grep -Ei 'error|失败|错误|context|token|上下文' | tail -n 1 || true)
-    fi
-    if [[ -n "$last_failure" ]] && grep -Eiq \
-        '(maximum|max)[[:space:]_.-]*context[[:space:]_.-]*(length|window)|context[[:space:]_.-]*(length|window)[^[:cntrl:]]{0,120}(exceed|maximum|max|limit|too[[:space:]]+(long|large))|context_length_exceeded|string_above_max_length|prompt[^[:cntrl:]]{0,100}(too many tokens|tokens[^[:cntrl:]]{0,100}(maximum|max|limit))|(input|request)[^[:cntrl:]]{0,60}too[[:space:]]+(long|large)|too many tokens|token[[:space:]_.-]*(limit|budget)[^[:cntrl:]]{0,40}(exceed|reached)|上下文[^[:cntrl:]]{0,60}(超限|超出|过长|限制)|token[^[:cntrl:]]{0,30}(超限|超出)' \
-        <<<"$last_failure"; then
-        return 0
-    fi
-    return 1
+    classify_log || return 1
+    [[ "$_log_context_overflow" == 1 ]]
 }
 
 classify_transient_failure() {
-    if [[ -r "$_log_file" ]] && tail -n 200 -- "$_log_file" 2>/dev/null | grep -Eiq \
-        'exceeded retry limit|429[[:space:]]+too many requests|too many requests|rate limit|concurr(ency|ent)([[:space:]_\.-]*(request|session|job|task|run|connection)s?)?[[:space:]_\.-]*(limit|cap|quota|exceeded|reached)|too many concurrent([[:space:]_\.-]+(request|session|job|task|run|connection)s?)?|maximum concurrent([[:space:]_\.-]+(request|session|job|task|run|connection)s?)?|parallel(ism)?[[:space:]_\.-]*(request|session|job|task|run|connection)?s?[[:space:]_\.-]*(limit|cap|quota|exceeded|reached)|并发[^[:cntrl:]]{0,20}(上限|限制|超限|已满|过多)|overloaded_error|service unavailable|bad gateway|gateway timeout|connection reset by peer|connection refused|stream disconnected|unexpected eof|timed out|temporarily unavailable|upstream_error|reasoning_content.*passed back|(http|status([[:space:]_\.-]*code)?)[^0-9]*(429|500|502|503|504)'; then
+    if agent_state_has_transient_failure; then
         return 0
     fi
-    agent_state_has_transient_failure
+    classify_log || return 1
+    [[ "$_log_transient" == 1 ]]
 }
 
 inspect_run() {
