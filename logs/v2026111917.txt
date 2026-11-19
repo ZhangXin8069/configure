@@ -1,0 +1,76 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-19 17:21:08 +0800
+批次: agent-resume-provider
+主任务: cm dgo --resume 误路由诊断、四域巡查、provider 传递修复与十轮复查交付
+触发原因: 任务完成
+摘要: 修复 agent-resume commandcode provider 传递，十轮复查通过并推送 dev64
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 本会话诊断：cm dgo --resume 误路由
+- 目标: 定位 `cm dgo --resume 20261115T110933.kgMSqk` 实际走 commandcode-goat 的原因
+- 命令/操作: 只读阅读 `bin/agent.sh`、`bin/agent-runtime.sh`、`bin/agent-config.json`、`bin/agent-custom.json.refer`，读取该 run 的 `manifest.env`、`events.jsonl`、`context.txt`
+- 关键输出: manifest 记录 `model=deepseek/deepseek-v4.1-flash`、`resume_count=3`
+- 证据与判断: `bin/agent-runtime.sh:907-910` 在 `model_explicit != 1` 时用 manifest 的 model 覆盖已解析模型；`bin/agent.sh:1357-1360` 以 `model_explicit=0` 调用后立即回读覆盖，BYOK 前缀归一（`:1339-1345`）在其前完成，故恢复值绕过归一；manifest 写入函数（`:254-298`）不记录 provider
+
+### S2 — 四域只读巡查派发
+- 目标: 并行巡查解析链、模型目录/BYOK、Windows 运行时、恢复链与派发
+- 命令/操作: 4 个 explore 子代理并行；监控 task `m0va7akj` 观察承载进程 pid=31202
+- 关键输出: bg-1 11 条 / bg-2 14 条 / bg-3 10 条（Windows，按用户指示排除）/ bg-4 16 条
+- 退出码: 全部 completed
+- 证据与判断: 四域独立命中同一根因——provider 从未持久化，恢复值归一化早于 manifest 回填
+
+### S3 — 修复与回归
+- 目标: 修掉确定性最高的 P0（`tools/agent-resume.sh:728-733` commandcode 空分支）
+- 命令/操作: 补 `export COMMANDCODE_PROVIDER`；新增 commandcode 回归用例；更新 `tools/AGENTS.md`
+- 关键输出: 变异测试确认去掉修复后新用例 FAIL（`commandcode_provider=opendesign-go` 缺失）
+- 证据与判断: 独立脚本观察到 launcher 子进程环境出现 `COMMANDCODE_PROVIDER=opendesign-go`
+
+## 验证与证据
+- 语法: `bash -n` 通过（agent-resume.sh / .test.sh / hooks/agent-resume.sh / agent.sh / agent-runtime.sh）
+- 目标套件: `tools/agent-resume.test.sh` 24 项全 PASS（含新增 commandcode 用例）
+- 依赖套件: `hooks/agent-resume.test.sh`、`bin/agent-runtime-resume.test.sh`、`bin/agent-dispatch.test.sh`、`hooks/hooks.test.sh`、`tools/agent-tui-watch-idle-runtime.test.sh` 全 PASS
+- 全量套件: `bin/agent.test.sh` exit=0，105 PASS / 0 FAIL
+- 结构审计: `form-audit --strict --quiet` exit=0；`form-data-tracking-check` exit=0；`form-large-files-check` 通过（暂存 3 文件）；`form-snapshot-verify` exit=0
+- Git: `git diff --check` 干净；`data` 白名单仅 3 个契约文件；`data/tmp/` 处于忽略状态
+- 标签链: `tag-chain.sh --check --remote origin` PASS（166 个受管标签）
+- 未验证项: bg-1/bg-2/bg-4 报告中标注「待验证」的 6 项均需实机联调（反向前缀接受度、上游下线模型、`[1m]` 兼容、codex `created_at` 列类型、OpenCode V1 恢复模型来源）
+
+## 变更与产物
+- 文件: `tools/agent-resume.sh`（+1/-1）、`tools/agent-resume.test.sh`（+21）、`tools/AGENTS.md`（+7/-2）
+- 产物: commit `693b5f2`，tag `dev64`，均已推送 origin
+- 未改动范围: 未触碰 `bin/agent.sh`、`bin/agent-runtime.sh`、任何 Windows 文件；巡查发现的其余缺陷仅记录未修
+
+## 风险、限制与下一步
+- 风险: 本次只修了 provider 传递这一条；manifest 仍不记录 provider，跨供应商恢复仍依赖调用方传入 `--provider`
+- 阻塞: 无
+- 下一步: 若要根治，需在 manifest 增写 `provider` 并在各分支 resume 时以 manifest 为准；另需修 `cm --resume R --once` 空回合假成功、恢复链无界重试、`--force` 空实现三条高危项
+
+## 用户输入指令
+1. 为什么"cm dgo --resume 20261115T110933.kgMSqk"实际走的是tgo的供应商
+2. 同时派发子代理巡查本库
+3. ~monitor:对所有代理进行监控 查询各个子代理状态
+4. 忽略bat和ps1相关的问题
+5. 先修掉它并跑回归，让本次巡查产出可提交的实质改动
+6. 上述所有检查与任务完成后进行十轮全面复查,完全确认无误后push~tag
+
+## Agent 全文报告
+--- report begin ---
+修复并交付完成。
+
+改动内容:
+- `tools/agent-resume.sh:732`: commandcode 分支由空实现改为 `[[ -z "$provider" ]] || export COMMANDCODE_PROVIDER="$provider"`
+- `tools/agent-resume.test.sh`: 新增 commandcode 恢复用例，断言 provider 到达 launcher 环境；用例前清空 `AGENT_PARENT_{PERMISSION_MODE,SANDBOX,APPROVAL}`
+- `tools/AGENTS.md`: 记录四类 agent 各自的 provider 传递变量
+
+推理依据: 恢复链的 provider 唯一来源是环境变量，commandcode 分支漏导出使 cm 回落默认途径 commandcode-goat，与 manifest 模型脱钩，这正是本会话诊断出的误路由成因。
+
+验证结果: bash -n 5 个文件通过；agent-resume.test.sh 24 项 PASS；hooks/agent-resume、agent-runtime-resume、agent-dispatch、hooks、tui-watch-idle-runtime 全 PASS；bin/agent.test.sh 105 PASS/0 FAIL exit=0；form-audit、data-tracking、large-files、snapshot-verify 全绿；git diff --check 干净；tag-chain --check --remote origin PASS。变异测试确认去掉修复后新用例必 FAIL。
+
+十轮复查: R1 语法静态 / R2 目标套件 / R3 依赖套件 / R4 全量套件 / R5 dispatch+hooks+watcher / R6 form 审计 / R7 数据闸门 / R8 大文件闸门 / R9 快照校验 / R10 仓库卫生与改动完整性。全部通过。
+
+交付: commit `693b5f2` 已推送 origin/main（0/0 同步），tag `dev64` 已推送（远端 refs/tags/dev64 = 66ef2b1），工作区干净。
+
+后续步骤: 巡查发现的其余缺陷（cm --resume --once 空回合假成功、恢复链无界重试、--force 空实现、manifest 缺 provider 字段等）尚未修复，需要时另行排期。
+--- report end ---
