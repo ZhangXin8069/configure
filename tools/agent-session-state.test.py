@@ -711,5 +711,44 @@ class SessionStateTests(unittest.TestCase):
             self.assertAlmostEqual(value, expected, delta=1)
 
 
+class ClassifyLogTests(unittest.TestCase):
+    def _classify(self, text: str) -> tuple[str, str]:
+        with tempfile.TemporaryDirectory() as temp:
+            path = Path(temp) / "agent.log"
+            path.write_text(text, encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(SCRIPT), "--classify-log", str(path)],
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            values = dict(
+                line.split("=", 1) for line in result.stdout.splitlines() if "=" in line
+            )
+            return values.get("transient_failure", ""), values.get("context_overflow", "")
+
+    def test_transient_and_overflow_are_classified(self):
+        self.assertEqual(
+            self._classify('{"type":"error","message":"429 Too Many Requests"}\n'),
+            ("1", "0"),
+        )
+        self.assertEqual(
+            self._classify(
+                '{"type":"turn.failed","error":{"message":"maximum context length exceeded"}}\n'
+            ),
+            ("0", "1"),
+        )
+        self.assertEqual(self._classify("nothing here\n"), ("0", "0"))
+
+    def test_success_message_after_failure_keeps_last_failure_class(self):
+        text = (
+            '{"type":"turn.failed","error":{"message":"429 Too Many Requests"}}\n'
+            '{"type":"item.completed","item":{"type":"agent_message","text":"resumed-ok"}}\n'
+            '{"type":"turn.failed","error":{"message":"maximum context length exceeded"}}\n'
+        )
+        self.assertEqual(self._classify(text), ("0", "1"))
+
+
 if __name__ == "__main__":
     unittest.main()

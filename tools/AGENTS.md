@@ -26,7 +26,8 @@
 - `agent-session-state.py` 是 Codex、Claude Code、OpenCode 共用的只读会话解析器：按 manifest 的
   `run_id + cwd + created_at` 分别查询 Codex state DB/rollout、Claude 项目 JSONL、OpenCode V1/V2
   SQLite，并只依据最后一个完整 turn 输出 `failure_found`、`context_overflow` 与瞬时性分类；不修改各 agent
-  状态、不输出消息正文或凭据。
+  状态、不输出消息正文或凭据。`--classify-log PATH` 复用同一套正则对任意日志做「最后一条失败行」分类，
+  恢复工具改为调用它而不是维护第二份 bash 正则。
   `agent-codex-state.py` 保留为 Codex 兼容入口。配套 `agent-session-state.test.py` 与
   `agent-codex-state.test.py`。
 - `agent-tui-watch.py` 是 TUI 的同生命周期旁路监控器：复用会话解析器的最新 `turn_state` 与

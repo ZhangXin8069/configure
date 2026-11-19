@@ -99,37 +99,40 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+FAILURE_LINE_RE = re.compile(
+    r"error|失败|错误|context|token|上下文", re.IGNORECASE
+)
+
+
 def classify_log_text(path: str) -> tuple[bool, bool]:
-    """Classify a log with the same patterns used for session records.
+    """Classify the newest failure in a log with the shared patterns.
 
     Recovery needs the shared classifier: keeping a second copy in bash made the
     two silently diverge (for example on ``reasoning_content ... passed back``).
+    Only the last failure-looking line decides the outcome, so an older context
+    overflow cannot mask a later transient failure in the same log.
     """
-    transient = False
-    overflow = False
     try:
         with open(path, "rb") as stream:
-            data = stream.read()
+            text = stream.read().decode("utf-8", errors="replace")
     except OSError:
         return False, False
-    text = data.decode("utf-8", errors="replace")
+    last_failure = ""
     for line in text.splitlines():
-        if not line:
+        stripped = line.strip()
+        if not stripped:
             continue
-        try:
-            event = json.loads(line)
-        except json.JSONDecodeError:
-            if error_is_transient(line):
-                transient = True
-            if error_is_context_overflow(line):
-                overflow = True
+        # 与恢复工具的既有语义一致：只有含失败关键词的行才参与判定，
+        # 正常回合的成功记录（如 agent_message）不得覆盖真正的失败行。
+        if not FAILURE_LINE_RE.search(stripped):
             continue
-        if isinstance(event, dict):
-            if error_is_transient(event):
-                transient = True
-            if error_is_context_overflow(event):
-                overflow = True
-    return transient, overflow
+        last_failure = stripped
+    if not last_failure:
+        return False, False
+    return (
+        bool(TRANSIENT_RE.search(last_failure)),
+        bool(CONTEXT_OVERFLOW_RE.search(last_failure)),
+    )
 
 
 def parse_created_at(value: str) -> datetime | None:
