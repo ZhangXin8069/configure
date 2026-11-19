@@ -1519,3 +1519,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-resume-leftovers - final - 2026-11-19 18:52:13 +0800
+- 主任务: 修复 tui-watch 停止响应、PID 复用误报、错误分类双实现
+- 日志文件: logs/v2026111918-2.txt
+- 文件大小: 2916 bytes
+- 触发原因: 任务完成
+- 关键内容: 三项遗留缺陷修复，全部测试通过并推送 dev66
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

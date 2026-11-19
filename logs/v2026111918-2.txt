@@ -1,0 +1,50 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-19 18:52:13 +0800
+批次: agent-resume-leftovers
+主任务: 修复 tui-watch 停止响应、PID 复用误报、错误分类双实现
+触发原因: 任务完成
+摘要: 三项遗留缺陷修复，全部测试通过并推送 dev66
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 三项遗留缺陷修复
+- 目标: 修掉 tui-watch 忽略 stop、pid 文件 PID 复用误报、错误分类双实现
+- 命令/操作: 修改 tools/agent-tui-watch.py、tools/agent-idle-nudge.sh、bin/agent-runtime.sh、tools/agent-resume.sh、tools/agent-session-state.py 及测试与文档
+- 关键输出: 新增 run_with_stop_watch（0.2s 轮询 stop + start_new_session + killpg）；--pid-file 写 <pid> <启动标识>；--classify-log 统一分类
+- 证据与判断: 变异测试确认禁用 stop 轮询后新用例失败；pidguard 脚本确认复用 PID 输出 inactive、标识匹配输出 active
+
+### S2 — 验证
+- 主套件: agent 107 PASS、resume 26 PASS、session-state 19 PASS、watcher 10 PASS、idle 12 PASS
+- 依赖: hooks、hook-resume、dispatch、runtime-resume、watch-runtime 全部 0
+- 闸门: form-audit、data-tracking、snapshot、large-files、diff --check 全部通过
+
+## 验证与证据
+- 语法: bash -n 与 py_compile 全部通过
+- 变异测试: 禁用 stop 轮询 -> test_stop_file_interrupts_a_running_recovery FAIL；恢复后 PASS
+- 行为: pidguard 脚本三态（无文件/标识不符/标识匹配）输出符合预期
+- 未验证项: 无
+
+## 变更与产物
+- 文件: agent-tui-watch.py、agent-tui-watch.test.py、agent-idle-nudge.sh、agent-runtime.sh、agent-resume.sh、agent-session-state.py、agent-session-state.test.py、tools/AGENTS.md、tools/README.md
+- 产物: commit b3544b7、594bb2b，tag dev66
+- 未改动范围: Windows 侧按此前指示仍未动
+
+## 风险、限制与下一步
+- 风险: stop 轮询间隔 0.2s，极短恢复仍可能先完成再检查
+- 阻塞: 无
+- 下一步: 巡查清单已清空，可按需继续其他项
+
+## 用户输入指令
+继续
+
+## Agent 全文报告
+--- report begin ---
+三项遗留缺陷已修复，commit b3544b7 与 594bb2b 已推送，tag dev66 已创建并推送。
+
+改动内容: 恢复与空闲注入子进程改用独立进程组并每 0.2s 检查停止文件，命中即回收整组；watcher pid 文件改由 watcher 自己写 <pid> <启动标识> 并在退出时清理，agent-idle-nudge 比对标识防止 PID 复用误报；日志分类统一走 agent-session-state.py --classify-log，删除 bash 正则副本。
+
+验证结果: agent 107 PASS、resume 26 PASS、session-state 19 PASS、watcher 10 PASS、idle 12 PASS，五项依赖测试 0，四项审计闸门通过；变异测试确认 stop 用例有效；pidguard 脚本确认三态行为正确。
+
+后续步骤: 巡查清单已清空；如需继续可处理其他仓库项。
+--- report end ---
