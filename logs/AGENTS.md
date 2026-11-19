@@ -1510,3 +1510,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## agent-resume-hardening - final - 2026-11-19 18:18:40 +0800
+- 主任务: 修复 cm once 空回合、恢复链无界重试、--force 空操作、manifest 缺 provider 四项缺陷
+- 日志文件: logs/v2026111918.txt
+- 文件大小: 4479 bytes
+- 触发原因: 任务完成
+- 关键内容: 四项恢复链缺陷修复，十轮复查通过并推送 dev65
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

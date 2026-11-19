@@ -1,0 +1,62 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-19 18:18:40 +0800
+批次: agent-resume-hardening
+主任务: 修复 cm once 空回合、恢复链无界重试、--force 空操作、manifest 缺 provider 四项缺陷
+触发原因: 任务完成
+摘要: 四项恢复链缺陷修复，十轮复查通过并推送 dev65
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 四项缺陷修复
+- 目标: 修掉 cm once 空回合假成功、恢复链无界重试、--force 空操作、manifest 缺 provider
+- 命令/操作: 修改 bin/agent.sh、bin/agent-runtime.sh、tools/agent-resume.sh 及测试与文档
+- 关键输出: manifest 新增 provider=；恢复时按途径决定是否继承旧模型；默认重试上限 30；永久错误码 64/78/126/127 立即终止；--force 清除交接标记；--dry-run 输出计划
+- 退出码: 各测试套件 0
+- 证据与判断: 变异测试确认回退修复后新用例失败；黑盒脚本观察到跨供应商恢复改用 opendesign-go 默认模型
+
+### S2 — 十轮复查
+- 目标: 全量验证改动
+- 命令/操作: 依次执行语法、两套主测试、五套依赖测试、四项 form 闸门、两项行为脚本、仓库卫生
+- 关键输出: agent 107 PASS、resume 26 PASS、其余依赖全部 exit=0、form/data/snapshot/large 均 0、diff --check 干净
+- 证据与判断: 每轮均为本次会话新执行的命令输出
+
+### S3 — 交付
+- 命令/操作: commit de740b6、推送 origin/main、打 dev65 并推送
+- 关键输出: tag-chain --check --remote origin PASS（167 个受管标签）
+- 证据与判断: origin/main 与本地 0/0，远端 refs/tags/dev65 存在
+
+## 验证与证据
+- 语法: bash -n 全部通过
+- 主测试: bin/agent.test.sh 107 PASS/0 FAIL；tools/agent-resume.test.sh 26 PASS
+- 依赖测试: hooks/agent-resume、bin/agent-runtime-resume、bin/agent-dispatch、hooks/hooks、tools/agent-tui-watch-idle-runtime 全部 exit=0
+- 结构审计: form-audit、form-data-tracking-check、form-snapshot-verify、form-large-files-check 全部通过
+- 行为验证: 跨供应商恢复改用当前途径默认模型；同供应商恢复仍沿用 manifest 模型；途径不一致时打印 note
+- 变异测试: 回退四项修复后新用例失败（handoff 去重用例）
+- 未验证项: PowerShell/bat 侧按用户指示排除，未做同类修复
+
+## 变更与产物
+- 文件: bin/agent.sh、bin/agent-runtime.sh、tools/agent-resume.sh、bin/agent.test.sh、tools/agent-resume.test.sh、bin/AGENTS.md、tools/AGENTS.md、tools/README.md、hooks/README.md
+- 产物: commit de740b6，tag dev65
+- 未改动范围: 未触碰 Windows 侧文件
+
+## 风险、限制与下一步
+- 风险: 旧版 manifest 无 provider 时依赖模型前缀启发式，非斜杠模型无法判定归属，仅在不显式选途径时维持原行为
+- 阻塞: 无
+- 下一步: 若要彻底消除跨供应商歧义，让所有新 run 重建后再恢复；其余巡查项（tui-watch 忽略 stop、调度锁 PID 校验、错误分类双实现）待排期
+
+## 用户输入指令
+修补"cm --resume R --once 空回合假成功（bin/agent.sh:1572-1581）、恢复链无界重试（max_attempts=0 + while true）、--force 是空操作、manifest 仍不记录 provider 字段。其中最后一条是本次修复的补位缺口——现在依赖调用方传 --provider，若要根治需在 manifest 增写该字段"
+
+## Agent 全文报告
+--- report begin ---
+四项缺陷已全部修复并通过十轮复查，已推送 commit de740b6 与 tag dev65。
+
+改动内容: manifest 增写 provider 并在 resume 时按途径决定是否继承旧模型；tools/agent-resume.sh 的 provider 优先级改为 --provider > manifest > 环境，默认重试上限 30，永久错误码立即终止，--force 真正清除交接标记，--dry-run 输出计划；cm 的 --resume --once 在无 goal/file 时补发「继续」。
+
+推理依据: 恢复链唯一 provider 来源是环境变量，manifest 不记录途径，导致模型与端点脱钩；cm 的 once 分支只在 _cc_text 非空时发回合，否则空转后仍标记 finished。
+
+验证结果: agent 107 PASS、resume 26 PASS、五套依赖测试 exit=0、四项 form 闸门 0、行为脚本确认跨/同供应商两种场景正确、变异测试证明新用例有效。
+
+后续步骤: 旧版 manifest 无 provider 时的启发式判定存在局限；tui-watch 忽略 stop、调度锁 PID 复用、错误分类双实现三项巡查结论未修。
+--- report end ---
