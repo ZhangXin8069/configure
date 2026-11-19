@@ -44,9 +44,9 @@ hooks/agent-verify.sh --paths hooks/agent-hook.sh skills/all/SKILL.md
 
 `agent-resume` 先调用 `tools/agent-resume.sh --check`，只要 run 未主动停止或正常结束、没有存活
 lock owner，且能从 Codex/Claude/OpenCode 本地状态恢复 session/thread，就进入后台调度。后台工具默认等待
-10 秒，通过原 manifest 的 launcher 执行 `--resume RUN_ID --once`，失败后继续等待并重试，直到成功或
-run 结束。hook 只创建一个后台监督进程，`.auto-resume-schedule` 防止同一 run 出现并行恢复链；
-`AGENT_RESUME_MAX_ATTEMPTS=0` 表示无限重试，设置正整数可加安全上限。
+10 秒，通过原 manifest 的 launcher 执行 `--resume RUN_ID --once`，失败后继续等待并重试，直到成功、
+达到重试上限或 run 结束。hook 只创建一个后台监督进程，`.auto-resume-schedule` 防止同一 run 出现并行恢复链；
+`AGENT_RESUME_MAX_ATTEMPTS` 默认 30，设为 0 表示不限次数。
 
 所有事件默认带总硬超时：session-start 30 秒、summary 20 秒、before-edit 10 秒、after-edit/stop
 120 秒、agent-resume 15 秒、plugin-audit 90 秒、notify 10 秒。该时限同时覆盖目标 hook 与 JSON 事件

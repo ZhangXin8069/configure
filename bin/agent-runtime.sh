@@ -251,6 +251,19 @@ _agent_runtime_read_manifest_value() {
     ' "$manifest"
 }
 
+# 恢复前预读旧 run 的 manifest 字段：启动器需要在解析途径与模型之前就知道
+# 原 run 的 provider，否则恢复出来的模型会与端点分属不同供应商。
+_agent_runtime_resume_manifest_value() {
+    local run_id="${1:-}" key="${2:-}" value
+    [[ -n "$run_id" && -n "$key" ]] || return 1
+    _agent_runtime_safe_run_id "$run_id" || return 1
+    [[ -n "${AGENT_DATA_ROOT:-}" ]] || return 1
+    value=$(_agent_runtime_read_manifest_value "${AGENT_DATA_ROOT}/runs/${run_id}/manifest.env" "$key") || return 1
+    # 只接受受控标识符形状，避免把任意 manifest 文本当途径名注入环境变量。
+    [[ "$value" =~ ^[A-Za-z0-9._-]+$ ]] || return 1
+    printf '%s\n' "$value"
+}
+
 _agent_runtime_write_manifest() {
     [[ -n "${AGENT_MANIFEST_FILE:-}" ]] || return 0
     local temp="${AGENT_MANIFEST_FILE}.tmp.$$"
@@ -276,6 +289,7 @@ _agent_runtime_write_manifest() {
         printf 'context_file=%s\n' "${AGENT_CONTEXT_FILE:-}"
         printf 'stop_file=%s\n' "${AGENT_STOP_FILE:-}"
         printf 'model=%s\n' "${AGENT_RUNTIME_MODEL:-}"
+        printf 'provider=%s\n' "${AGENT_RUNTIME_PROVIDER:-}"
         printf 'reasoning_effort=%s\n' "${AGENT_RUNTIME_REASONING:-}"
         printf 'variant=%s\n' "${AGENT_RUNTIME_VARIANT:-}"
         printf 'goal_objective=%s\n' "${AGENT_RUNTIME_GOAL_OBJECTIVE:-}"
@@ -856,6 +870,7 @@ _agent_runtime_start_or_resume() {
 
     AGENT_RUNTIME_AGENT="$agent"
     AGENT_RUNTIME_MODEL="$model"
+    AGENT_RUNTIME_PROVIDER="${AGENT_RUNTIME_PROVIDER:-}"
     AGENT_RUNTIME_REASONING="${AGENT_RUNTIME_REASONING:-}"
     AGENT_RUNTIME_VARIANT="${AGENT_RUNTIME_VARIANT:-}"
     AGENT_RUNTIME_MODE="$mode"
@@ -906,7 +921,29 @@ _agent_runtime_start_or_resume() {
         [[ -n "$manifest_value" ]] && AGENT_STOP_FILE="$manifest_value"
         if [[ "$model_explicit" != 1 ]]; then
             manifest_value=$(_agent_runtime_read_manifest_value "$AGENT_MANIFEST_FILE" model)
-            [[ -n "$manifest_value" ]] && AGENT_RUNTIME_MODEL="$manifest_value"
+            # 只有 manifest 记录的途径与本次解析途径一致时才继承旧模型；
+            # 跨供应商恢复时沿用旧模型会让模型与端点脱钩。旧版 manifest 没有
+            # provider 字段时按模型前缀保守判断：带 <途径>/ 前缀且不等于当前途径即视为他途径。
+            if [[ -n "$manifest_value" ]]; then
+                local _manifest_provider _current_provider _model_prefix
+                _manifest_provider=$(_agent_runtime_read_manifest_value "$AGENT_MANIFEST_FILE" provider)
+                AGENT_RUNTIME_MANIFEST_PROVIDER="${_manifest_provider:-}"
+                _current_provider="${AGENT_RUNTIME_PROVIDER:-}"
+                if [[ -n "$_manifest_provider" ]]; then
+                    if [[ -z "$_current_provider" || "$_manifest_provider" == "$_current_provider" ]]; then
+                        AGENT_RUNTIME_MODEL="$manifest_value"
+                    else
+                        printf '###%s: note: 原 run 途径为 %s，本次为 %s，已放弃继承旧模型 %s###\n' \
+                            "${_NAME:-agent}" "$_manifest_provider" "$_current_provider" "$manifest_value" >&2
+                    fi
+                else
+                    _model_prefix="${manifest_value%%/*}"
+                    if [[ "$manifest_value" != */* || -z "$_current_provider" ||
+                          "$_model_prefix" == "$_current_provider" ]]; then
+                        AGENT_RUNTIME_MODEL="$manifest_value"
+                    fi
+                fi
+            fi
         fi
         if [[ "$reasoning_explicit" != 1 ]]; then
             manifest_value=$(_agent_runtime_read_manifest_value "$AGENT_MANIFEST_FILE" reasoning_effort)

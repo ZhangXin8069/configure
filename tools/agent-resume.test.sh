@@ -79,6 +79,9 @@ fi
     printf 'handoff_task_present=%s\n' "$([[ -n "$dispatch_task" ]] && printf 1 || printf 0)"
 } >>"${FAKE_CALL_LOG:?}"
 [[ -z "${FAKE_SLEEP:-}" ]] || sleep "$FAKE_SLEEP"
+if [[ "${FAKE_EXIT_CODE:-0}" != 0 ]]; then
+    exit "${FAKE_EXIT_CODE}"
+fi
 printf '%s\n' '{"type":"item.completed","item":{"type":"agent_message","text":"resumed-ok"}}' \
     >>"${FAKE_RUN_LOG:?}"
 success_attempt=${FAKE_SUCCESS_ATTEMPT:-1}
@@ -103,7 +106,7 @@ EOF
 chmod 0755 "$fake_launcher"
 
 create_run() {
-    local run_id=$1 agent=$2 launcher=$3 cwd_rel=$4 role=${5:-solo-agent}
+    local run_id=$1 agent=$2 launcher=$3 cwd_rel=$4 role=${5:-solo-agent} provider=${6:-}
     run_dir=$data_root/runs/$run_id
     mkdir -p "$run_dir" "$workspace_root/$cwd_rel"
     manifest=$run_dir/manifest.env
@@ -132,6 +135,7 @@ event_file=$event_file
 context_file=$run_dir/context.txt
 stop_file=$run_dir/stop
 model=fake-$agent
+provider=$provider
 reasoning_effort=max
 variant=high
 session_id=
@@ -270,6 +274,20 @@ assert_contains "$duplicate_context" 'reason=handoff_already_started'
 [[ "$(cksum "$FAKE_CALL_LOG")" == "$before_context_calls" ]] || fail '重复调用仍启动了新 thread'
 unset FAKE_NEW_RUN_ID FAKE_NEW_THREAD_ID FAKE_DATA_ROOT FAKE_HANDOFF_CAPTURE
 printf 'PASS: 上下文超限停止原 thread 重试并生成受限交接后启动新 run\n'
+
+# --force：清除交接尝试标记后允许对同一源 run 再交接一次。
+export FAKE_NEW_RUN_ID=20261021T031101.handoff2
+export FAKE_NEW_THREAD_ID=01a15ab8-handoff-thread2
+export FAKE_DATA_ROOT=$data_root
+export FAKE_HANDOFF_CAPTURE=$test_root/context-handoff-force-prompt.txt
+forced_output=$("$resume_tool" --run-id 20261021T031100.context --data-root "$data_root" \
+    --force --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+assert_contains "$forced_output" 'status=handoff-finished'
+assert_contains "$forced_output" 'handoff_run_id=20261021T031101.handoff2'
+[[ ! -e "$run_dir/.context-overflow-handoff-attempted" ]] ||
+    printf 'note: 交接标记在完成时会重新写入（预期行为）\n'
+unset FAKE_NEW_RUN_ID FAKE_NEW_THREAD_ID FAKE_DATA_ROOT FAKE_HANDOFF_CAPTURE
+printf 'PASS: --force 清除交接尝试标记并允许重试一次\n'
 
 create_run 20261021T031105.contextlate codex co tasks
 printf '%s\n' \
@@ -459,15 +477,16 @@ printf 'PASS: 派发子 agent 的 manifest/log 使用同一恢复路径\n'
 
 # 恢复 argv 会吸收调用方环境里的权限设置；先清空，避免测试结果随宿主 shell 漂移。
 unset AGENT_PARENT_PERMISSION_MODE AGENT_PARENT_SANDBOX AGENT_PARENT_APPROVAL
-create_run 20261021T040250.commandcode commandcode cm tasks
+create_run 20261021T040250.commandcode commandcode cm tasks worker opendesign-go
 printf '%s\n' \
     '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]},"sessionId":"4e971cd1-commandcode"}' \
     '{"type":"error","message":"exceeded retry limit, last status: 429 Too Many Requests"}' \
     >"$log_file"
 set_fake_env
 set +e
-commandcode_output=$(AGENT_RESUME_PROVIDER=opendesign-go "$resume_tool" \
-    --run-id 20261021T040250.commandcode --data-root "$data_root" \
+# 不给 --provider 也不导出 AGENT_RESUME_PROVIDER：provider 只能来自 manifest。
+commandcode_output=$(env -u COMMANDCODE_PROVIDER -u AGENT_RESUME_PROVIDER -u AGENT_PARENT_PROVIDER \
+    "$resume_tool" --run-id 20261021T040250.commandcode --data-root "$data_root" \
     --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
 commandcode_status=$?
 set -e
@@ -475,7 +494,27 @@ set -e
 calls=$(<"$FAKE_CALL_LOG")
 assert_contains "$calls" 'args=--resume 20261021T040250.commandcode --once --model fake-commandcode --effort max'
 assert_contains "$calls" 'commandcode_provider=opendesign-go'
-printf 'PASS: Command Code 恢复会把途径传给 COMMANDCODE_PROVIDER，避免回落默认供应商\n'
+printf 'PASS: Command Code 恢复从 manifest 读取 provider，避免回落默认供应商\n'
+
+create_run 20261021T040255.permanent commandcode cm tasks worker opendesign-go
+printf '%s\n' \
+    '{"type":"message","message":{"role":"assistant","content":[{"type":"text","text":"ok"}]},"sessionId":"4e971cd1-permanent"}' \
+    '{"type":"error","message":"429 Too Many Requests"}' >"$log_file"
+set_fake_env
+export FAKE_EXIT_CODE=64
+set +e
+permanent_output=$(env -u AGENT_RESUME_PROVIDER -u AGENT_PARENT_PROVIDER \
+    "$resume_tool" --run-id 20261021T040255.permanent --data-root "$data_root" \
+    --delay 0 --timeout 10 --launcher "$fake_launcher" 2>&1)
+permanent_status=$?
+set -e
+unset FAKE_EXIT_CODE
+(( permanent_status == 64 )) || fail "不可重试退出码应原样返回 64：$permanent_output"
+assert_contains "$permanent_output" 'reason=permanent_failure'
+[[ "$(cat "$FAKE_COUNT_FILE")" == 1 ]] || fail '不可重试错误不应重试第二次'
+printf 'PASS: 参数/身份类退出码立即终止，不做无界重试\n'
+
+printf '%s\n' '--- dry-run 只输出计划 ---'
 
 create_run 20261021T031022.tui429 codex co tasks
 : >"$log_file"
@@ -819,6 +858,6 @@ unset FAKE_SUCCESS_ATTEMPT
 assert_contains "$retry_output" 'status=finished'
 [[ "$(cat "$FAKE_COUNT_FILE")" == 3 ]] || fail "恢复应在第 3 次尝试成功，实际次数：$(cat "$FAKE_COUNT_FILE")"
 (( $(grep -c '"event":"resume-start"' "$event_file") == 3 )) || fail '三次恢复尝试未全部写入事件'
-printf 'PASS: 恢复失败后会无限重试直至成功\n'
+printf 'PASS: 瞬时失败会按上限内重试直至成功\n'
 
-printf 'PASS: agent-resume.sh 检测、无限重试、身份恢复与子 agent 覆盖全部通过\n'
+printf 'PASS: agent-resume.sh 检测、有界重试、身份恢复与子 agent 覆盖全部通过\n'

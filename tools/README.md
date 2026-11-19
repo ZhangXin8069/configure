@@ -108,11 +108,13 @@ python3 tools/agent-config-benchmark.test.py
 子 agent 使用同一恢复路径。若 Codex 在首个回合失败前已写入 `thread.started` 但 manifest 尚无
 `thread_id`，工具会从 `agent.log` 回填；TUI 日志为空时，还会用 `agent-session-state.py` 按
 `run_id + cwd + created_at` 查询 Codex/Claude Code/OpenCode 的本地会话存储，并依据最后一个完整
-turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。普通瞬时失败默认无限重试，
-每次尝试之间等待 `AGENT_RESUME_DELAY` 秒；模型上下文超限时不重试原 thread，而是生成不超过
+turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_id。普通瞬时失败默认最多重试
+30 次（`AGENT_RESUME_MAX_ATTEMPTS`），每次尝试之间等待 `AGENT_RESUME_DELAY` 秒；参数、身份或不可执行
+类退出码（64/78/126/127）立即终止而不重试，避免无界刷日志；模型上下文超限时不重试原 thread，而是生成不超过
 `AGENT_RESUME_HANDOFF_MAX_BYTES`（默认 32768 字节）的脱敏 `resume-handoff.md`，再用原 launcher 的
 `--once` 新 run 接管，并把新 run/thread 标识写回源 manifest。`.auto-resume-schedule` 防止同一 run 出现并行恢复链，
-`.auto-resume-attempted` 记录尝试次数。`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数，设置正整数可加安全上限。
+`.auto-resume-attempted` 记录尝试次数。恢复使用的 provider 按「显式 `--provider` > manifest 的 `provider`
+> `AGENT_PARENT_PROVIDER`」取值，manifest 记录的是原 run 实际途径，最可信。
 恢复链不要求 root 或系统级写权限：配置根来自 `AGENT_CONFIGURE_ROOT` 或脚本真实路径，数据根来自
 `AGENT_DATA_DIR` / `CONFIGURE_AGENT_DATA_DIR`、部署目录或当前用户 `$HOME/configure/data`，临时锁与日志均位于
 该用户可写的数据根内；agent 临时产物（含本工具的中间文件）默认落在工作目录 Git 根的 `data/tmp`
@@ -120,9 +122,10 @@ turn 判断是否失败。Codex 恢复 thread，Claude/OpenCode 恢复 session_i
 
 ```bash
 tools/agent-resume.sh --check --run-id RUN_ID
+tools/agent-resume.sh --dry-run --run-id RUN_ID   # 只打印 provider/model/argv 计划，不落任何文件
 tools/agent-resume.sh --run-id RUN_ID
 tools/agent-resume.sh                 # 自动选择最新可恢复 run
-tools/agent-resume.sh --force --run-id RUN_ID
+tools/agent-resume.sh --force --run-id RUN_ID     # 清除上下文交接尝试标记后重试一次
 ```
 
 退出码：`0` 恢复成功，`1` 达到可选重试上限后仍失败，`2` 参数错误，`3` 不可恢复，`4` 正在运行/

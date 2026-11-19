@@ -10,13 +10,16 @@
 - `task-scope.sh` 是只读任务分流入口，把自然语言任务映射到技能组合与拆分建议；保持可执行，并同步 `README.md` 里的用途、参数和测试入口。
 - `agent-resume.sh` 检测 agent run 的意外中断，默认等待 10 秒后通过原统一 launcher 执行
   `--resume`；除用户停止、正常结束或仍有存活锁的 run 外，failed/blocked/stale-running 等状态均会恢复。
-  普通瞬时失败默认无限重试，`AGENT_RESUME_MAX_ATTEMPTS=0` 表示不限次数；模型上下文超限属于不可原 thread
+  普通瞬时失败默认最多 30 次（`AGENT_RESUME_MAX_ATTEMPTS`，0 表示不限），参数/身份/不可执行类退出码
+  （64/78/126/127）立即终止不重试；模型上下文超限属于不可原 thread
   重试状态，改为生成脱敏、限长的 `resume-handoff.md`，用原 launcher 启动一次新 run/thread，并把
   `handoff_run_id` / `handoff_thread_id` 写回源 manifest。交接尝试由 `.context-overflow-handoff-attempted`
-  去重，后续调用返回 `reason=handoff_already_started`，不会重复烧资源。调度锁防止同一 run 出现并行恢复链，
+  去重，后续调用返回 `reason=handoff_already_started`，`--force` 清除该标记后允许重试一次；`--dry-run`
+  只打印 provider/model/argv 计划且不写文件。调度锁防止同一 run 出现并行恢复链，
   每次 launcher 仍受硬超时和心跳约束。恢复时把 provider 交给 launcher 的方式按 agent 分流：codex 走
   `CODEX_PROVIDER_ID`、opencode 走 `OPENCODE_PROVIDER`、claude 走 `CLAUDE_PROVIDER`、commandcode 走
-  `COMMANDCODE_PROVIDER`；漏传时 launcher 会回落到配置默认途径，与 manifest 里的模型脱钩。
+  `COMMANDCODE_PROVIDER`；provider 取值优先级为显式 `--provider` > manifest 的 `provider` > 调用方环境，
+  漏传时 launcher 会回落到配置默认途径，与 manifest 里的模型脱钩。
   检测范围包含上下文窗口/`context_length_exceeded`、429、并发上限
   中英文变体、连接中断和 `upstream_error` / `reasoning_content ... passed back` 等错误。配套
   `agent-resume.test.sh`，并覆盖派发子 agent 的同构 manifest 与 commandcode 的 provider 传递。

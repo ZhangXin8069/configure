@@ -1395,6 +1395,19 @@ assert_contains "$cm_goal_resume_new" '--tools-enable todo_write'
 assert_contains "$cm_goal_resume_new" '--max-turns 1000'
 printf 'PASS: cm goal 写入 manifest 并在 --resume 时重新发送 /goal\n'
 
+# 无 goal、无 -file 的 --resume --once 必须真的发出一个回合，不能空转后标记 finished。
+cm_plain_once_before=$(wc -l < "$call_log")
+set +e
+cm_plain_once_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
+    run_launcher cm "$fake_commandcode" --resume "$cm_tui_run_id" --once 2>&1)
+cm_plain_once_status=$?
+set -e
+(( cm_plain_once_status == 0 )) || fail "cm --resume --once 失败：$cm_plain_once_output"
+cm_plain_once_new=$(tail -n +$((cm_plain_once_before + 1)) "$call_log")
+assert_contains "$cm_plain_once_new" '-p 继续 --session session-commandcode'
+assert_file_contains "$cm_tui_run/manifest.env" 'state=finished'
+printf 'PASS: cm --resume --once 无 goal/file 时补发「继续」而非空转假成功\n'
+
 cm_drive_before=$(wc -l < "$call_log")
 set +e
 cm_drive_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key \
@@ -1685,6 +1698,23 @@ assert dgo['models']['dgo-test-model']['reasoningEfforts'] == ['high', 'max'], d
 PY
 rm -f -- "$dgo_cache"
 printf 'PASS: cm dgo 使用缓存模型写入 BYOK providers.json 与 opendesign-go/ 前缀\n'
+
+# manifest 记录 provider 后，不带快捷词的 --resume 仍应落在同一途径，
+# 且旧 run 的模型（opendesign-go/ 前缀）不会被默认途径误用。
+dgo_cm_run_id=$(printf '%s\n' "$dgo_cm_output" | sed -n 's/^  run: //p' | head -1)
+[[ -n "$dgo_cm_run_id" ]] || fail 'cm dgo 未输出 run id'
+assert_file_contains "$data/runs/$dgo_cm_run_id/manifest.env" 'provider=opendesign-go'
+dgo_cm_resume_before=$(wc -l < "$call_log")
+set +e
+dgo_cm_resume_output=$(COMMANDCODE_GOAT_API_KEY=test-goat-key OPENDESIGN_GO_API_KEY=test-dgo-key \
+    run_launcher cm "$fake_commandcode" --resume "$dgo_cm_run_id" --once 2>&1)
+dgo_cm_resume_status=$?
+set -e
+(( dgo_cm_resume_status == 0 )) || fail "cm dgo --resume 失败：$dgo_cm_resume_output"
+assert_contains "$dgo_cm_resume_output" 'provider: opendesign-go (BYOK)'
+dgo_cm_resume_new=$(tail -n +$((dgo_cm_resume_before + 1)) "$call_log")
+assert_contains "$dgo_cm_resume_new" '--model opendesign-go/dgo-test-model'
+printf 'PASS: cm --resume 从 manifest 继承 provider，不再回落默认途径\n'
 
 go_key_precedence_output=$(OPENCODE_GO_API_KEY=go-first OPENCODE_API_KEY=api-third \
     run_launcher co "$fake_codex" go --once 2>&1)

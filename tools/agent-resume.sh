@@ -13,12 +13,16 @@ data_root_arg=""
 delay=${AGENT_RESUME_DELAY:-10}
 timeout_seconds=${AGENT_RESUME_TIMEOUT:-1800}
 heartbeat_seconds=${AGENT_RESUME_HEARTBEAT:-60}
-max_attempts=${AGENT_RESUME_MAX_ATTEMPTS:-0}
+max_attempts=${AGENT_RESUME_MAX_ATTEMPTS:-30}
 handoff_max_bytes=${AGENT_RESUME_HANDOFF_MAX_BYTES:-32768}
 provider=${AGENT_RESUME_PROVIDER:-${AGENT_PARENT_PROVIDER:-}}
 launcher_override=${AGENT_RESUME_LAUNCHER:-}
+force_retry=0
 active_launcher_pid=""
 active_launcher_group=0
+
+# 这些退出码表示启动器/参数/身份不可能靠重试恢复，继续重试只会刷日志。
+permanent_failure_codes="64 78 126 127"
 
 usage() {
     cat <<'USAGE'
@@ -33,14 +37,14 @@ usage() {
   --data-root DIR       覆盖 AGENT_DATA_DIR / configure 数据根
   --delay SECONDS       恢复前等待秒数，默认 10
   --timeout SECONDS     单次恢复的硬超时，默认 1800
-  --max-attempts N      最多恢复次数；0 表示无限，默认读取 AGENT_RESUME_MAX_ATTEMPTS=0
+  --max-attempts N      最多恢复次数；0 表示无限，默认读取 AGENT_RESUME_MAX_ATTEMPTS=30
   --handoff-max-bytes N 上下文超限交接文件上限，默认 32768
   --heartbeat SECONDS   单次恢复运行期间的心跳间隔，默认 60
-  --provider NAME       恢复时使用的供应商；默认继承 AGENT_PARENT_PROVIDER
+  --provider NAME       恢复时使用的供应商；默认 manifest 的 provider，其次 AGENT_PARENT_PROVIDER
   --launcher PATH       覆盖 manifest 对应的统一 launcher（主要供包装器/测试）
   --check               只检查是否可恢复，不等待、不写文件
   --dry-run             输出将要执行的恢复计划，不等待、不写文件
-  --force               兼容旧参数；当前恢复本身已支持无限重试
+  --force               清除上下文交接尝试标记，允许对同一次交接重试一次
   -h, --help            显示帮助
 
 退出码：0 恢复成功；1 达到可选重试上限后仍失败；2 参数错误；3 不可恢复；
@@ -78,10 +82,12 @@ while (( $# > 0 )); do
         --launcher)
             (( $# >= 2 )) || { usage >&2; exit 2; }
             launcher_override=$2; shift 2;;
-        --check|--dry-run)
+        --check)
             mode=check; shift;;
+        --dry-run)
+            mode=dry_run; shift;;
         --force)
-            shift;;
+            force_retry=1; shift;;
         -h|--help)
             usage; exit 0;;
         *)
@@ -182,6 +188,7 @@ reset_run_state() {
     _model=""
     _reasoning=""
     _variant=""
+    _provider=""
     _resume_class=""
     _handoff_run_id=""
     _handoff_thread_id=""
@@ -435,6 +442,7 @@ inspect_run() {
     _stop_file=$(manifest_value "$manifest" stop_file)
     _created_at=$(manifest_value "$manifest" created_at)
     _model=$(manifest_value "$manifest" model)
+    _provider=$(manifest_value "$manifest" provider)
     _reasoning=$(manifest_value "$manifest" reasoning_effort)
     _variant=$(manifest_value "$manifest" variant)
     _resume_class=$(manifest_value "$manifest" resume_class)
@@ -482,8 +490,16 @@ inspect_run() {
     if [[ -e "${_run_dir}/.context-overflow-handoff-attempted" ||
           "$_resume_class" == context_overflow_handoff* ||
           -n "$_handoff_run_id" ]]; then
-        _reason=handoff_already_started
-        return 1
+        if (( force_retry )) && [[ "$mode" != check && "$mode" != dry_run ]]; then
+            # --force 只解除交接尝试标记，不动 manifest 分类；调用方据此显式重试一次。
+            rm -f -- "${_run_dir}/.context-overflow-handoff-attempted"
+            _resume_class=""
+            _handoff_run_id=""
+            _handoff_thread_id=""
+        else
+            _reason=handoff_already_started
+            return 1
+        fi
     fi
 
     if classify_context_overflow; then
@@ -538,6 +554,66 @@ if [[ "$mode" == check ]]; then
     printf '%s：status=%s run_id=%s agent=%s launcher=%s state=%s delay=%s timeout=%s reason=%s handoff_bytes=%s\n' \
         "$tool_name" "$check_status" "$_run_id" "$_agent" "$_launcher" "$_state" \
         "$delay" "$timeout_seconds" "$_reason" "$handoff_max_bytes"
+    exit 0
+fi
+
+# provider 优先级：显式 --provider > manifest 的 provider > AGENT_PARENT_PROVIDER。
+# manifest 记录的是原 run 实际使用的途径，比恢复进程的环境更可信。
+if [[ -z "$provider" && -n "$_provider" ]]; then
+    provider=$_provider
+fi
+
+build_launcher_args() {
+    local -a args=(--resume "$_run_id" --once)
+    # 旧版 manifest 没有 provider 字段时按模型前缀保守判断：带 <途径>/ 前缀且与本次
+    # 解析到的途径不一致，就说明模型属于别的供应商，交给 launcher 重新解析默认模型。
+    local model="$_model"
+    if [[ -n "$model" && -z "$_provider" && -n "$provider" && "$model" == */* ]]; then
+        [[ "${model%%/*}" == "$provider" ]] || model=""
+    fi
+    RESOLVED_MODEL="$model"
+    case "$_agent" in
+        codex)
+            [[ -z "$model" ]] || args+=(--model "$model")
+            [[ -z "$_reasoning" ]] || args+=(--reasoning-effort "$_reasoning")
+            [[ -z "${AGENT_PARENT_SANDBOX:-}" ]] || args+=(--sandbox "$AGENT_PARENT_SANDBOX")
+            [[ -z "${AGENT_PARENT_APPROVAL:-}" ]] || args+=(--ask-for-approval "$AGENT_PARENT_APPROVAL")
+            ;;
+        opencode)
+            [[ -z "$model" ]] || args+=(--model "$model")
+            [[ -z "$_variant" ]] || args+=(--variant "$_variant")
+            ;;
+        claude)
+            if [[ -n "$model" ]]; then
+                args+=("$model")
+                [[ -z "$_reasoning" ]] || args+=("$_reasoning")
+            fi
+            ;;
+        commandcode)
+            [[ -z "$model" ]] || args+=(--model "$model")
+            [[ -z "$_reasoning" ]] || args+=(--effort "$_reasoning")
+            [[ -z "${AGENT_PARENT_PERMISSION_MODE:-}" ]] || args+=(--permission-mode "$AGENT_PARENT_PERMISSION_MODE")
+            ;;
+    esac
+    printf '%s\n' "${args[@]}"
+}
+
+# bash 3.2（macOS 默认）没有 mapfile，逐行读回数组以保持兼容。
+load_launcher_args() {
+    LAUNCHER_ARGS=()
+    local line
+    while IFS= read -r line; do
+        LAUNCHER_ARGS+=("$line")
+    done < <(build_launcher_args)
+}
+
+if [[ "$mode" == dry_run ]]; then
+    load_launcher_args
+    printf '%s：status=planned run_id=%s agent=%s launcher=%s provider=%s model=%s strength=%s attempts=%s\n' \
+        "$tool_name" "$_run_id" "$_agent" "$_launcher" "${provider:-<inherit>}" \
+        "${RESOLVED_MODEL:-<默认解析>}" "${_reasoning:-}${_variant:-}" "$max_attempts"
+    printf 'plan_argv=%s\n' "${LAUNCHER_ARGS[*]}"
+    printf 'plan_cwd=%s\n' "$_run_cwd"
     exit 0
 fi
 
@@ -1004,30 +1080,9 @@ append_run_event resume-scheduled ok "检测到 agent 意外中断，${delay} �
 printf '%s：status=scheduled run_id=%s delay=%s resume_log=%s\n' \
     "$tool_name" "$_run_id" "$delay" "$resume_log"
 
-launcher_args=(--resume "$_run_id" --once)
-case "$_agent" in
-    codex)
-        [[ -z "$_model" ]] || launcher_args+=(--model "$_model")
-        [[ -z "$_reasoning" ]] || launcher_args+=(--reasoning-effort "$_reasoning")
-        [[ -z "${AGENT_PARENT_SANDBOX:-}" ]] || launcher_args+=(--sandbox "$AGENT_PARENT_SANDBOX")
-        [[ -z "${AGENT_PARENT_APPROVAL:-}" ]] || launcher_args+=(--ask-for-approval "$AGENT_PARENT_APPROVAL")
-        ;;
-    opencode)
-        [[ -z "$_model" ]] || launcher_args+=(--model "$_model")
-        [[ -z "$_variant" ]] || launcher_args+=(--variant "$_variant")
-        ;;
-    claude)
-        if [[ -n "$_model" ]]; then
-            launcher_args+=("$_model")
-            [[ -z "$_reasoning" ]] || launcher_args+=("$_reasoning")
-        fi
-        ;;
-    commandcode)
-        [[ -z "$_model" ]] || launcher_args+=(--model "$_model")
-        [[ -z "$_reasoning" ]] || launcher_args+=(--effort "$_reasoning")
-        [[ -z "${AGENT_PARENT_PERMISSION_MODE:-}" ]] || launcher_args+=(--permission-mode "$AGENT_PARENT_PERMISSION_MODE")
-        ;;
-esac
+load_launcher_args
+launcher_args=("${LAUNCHER_ARGS[@]}")
+unset LAUNCHER_ARGS
 
 attempt=0
 while true; do
@@ -1083,6 +1138,15 @@ while true; do
         perform_context_handoff
         exit $?
     fi
+    # 124=单次超时：先记录再按上限重试；64/78/126/127 等参数/身份/不可执行错误
+    # 重试不会改变结果，直接终止，避免无界刷日志。
+    case " $permanent_failure_codes " in
+        *" $rc "*)
+            append_run_event resume-end failed "退出码 ${rc} 属不可重试类，停止恢复"
+            printf '%s：status=failed run_id=%s attempt=%s exit_code=%s reason=permanent_failure resume_log=%s\n' \
+                "$tool_name" "$_run_id" "$attempt" "$rc" "$resume_log" >&2
+            exit "$rc";;
+    esac
     printf '%s：status=retrying run_id=%s attempt=%s exit_code=%s resume_log=%s\n' \
         "$tool_name" "$_run_id" "$attempt" "$rc" "$resume_log" >&2
     if (( max_attempts > 0 && attempt >= max_attempts )); then

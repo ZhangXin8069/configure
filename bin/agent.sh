@@ -1306,6 +1306,17 @@ run_commandcode() {
     if ! MAX_TURNS_RAW="$(_parse_nonnegative_integer "$MAX_TURNS_RAW")"; then echo "###${_NAME}: ERROR: --max-turns 必须是非负整数###" >&2; exit 64; fi
     if ! MAX_RUNTIME_RAW="$(_parse_runtime_limit "$MAX_RUNTIME_RAW")"; then echo "###${_NAME}: ERROR: --max-runtime 格式无效###" >&2; exit 64; fi
 
+    # 显式标记只反映用户输入；manifest 注入的途径虽然决定路由，但不改变两层默认的择序。
+    local PROVIDER_EXPLICIT=0
+    [[ -n "${PROVIDER_OVERRIDE}" ]] && PROVIDER_EXPLICIT=1
+    # 恢复时沿用原 run 记录的 provider：命令行快捷词/环境变量仍是最高优先级，
+    # 其次 manifest，最后才是配置默认值。否则恢复出来的模型会与端点分属不同供应商。
+    if [[ -z "${PROVIDER_OVERRIDE}" && -n "${RESUME_RUN_ID}" ]]; then
+        local _cc_resume_provider
+        _cc_resume_provider="$(_agent_runtime_resume_manifest_value "${RESUME_RUN_ID}" provider || true)"
+        [[ -z "${_cc_resume_provider}" ]] || PROVIDER_OVERRIDE="$(_provider_alias "${_cc_resume_provider}")"
+    fi
+
     local _cc_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_COMMANDCODE_PROVIDER:-commandcode-goat}}")"
     case "${_cc_provider}" in
         commandcode-goat|deepseek-pay|opencode-go|opendesign-go) ;;
@@ -1313,8 +1324,6 @@ run_commandcode() {
             echo "###${_NAME}: ERROR: cm 仅支持途径 commandcode-goat（gt|tgo）/ deepseek-pay（pay）/ opencode-go（go|cgo）/ opendesign-go（dgo），当前为 '${_cc_provider}'###" >&2
             exit 64;;
     esac
-    local PROVIDER_EXPLICIT=0
-    [[ -n "${PROVIDER_OVERRIDE}" ]] && PROVIDER_EXPLICIT=1
     local _cc_agent_model="${_CFG_AGENTS_COMMANDCODE_MODEL:-}"
     local _cc_provider_model="$(_cfg_provider_default_model "$_cc_provider" commandcode)"
     local _cc_model_label="（途径默认）"
@@ -1351,6 +1360,7 @@ run_commandcode() {
     (( DRIVE_MODE )) && _runtime_mode=drive
     [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
     AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_PROVIDER="${_cc_provider}"
     AGENT_RUNTIME_REASONING="${EFFORT}"
     AGENT_RUNTIME_VARIANT=""
     AGENT_RUNTIME_GOAL_OBJECTIVE="${GOAL_OBJECTIVE}"
@@ -1359,6 +1369,8 @@ run_commandcode() {
         "$MAX_TURNS_RAW" "$MAX_RUNTIME_RAW" "$STOP_FILE_ARG" "$RESUME_RUN_ID" "$MODEL_EXPLICIT" 1 0 || exit $?
     MODEL_ID="${AGENT_RUNTIME_MODEL:-$MODEL_ID}"; EFFORT="${AGENT_RUNTIME_REASONING:-$EFFORT}"
     GOAL_OBJECTIVE="${AGENT_RUNTIME_GOAL_OBJECTIVE:-$GOAL_OBJECTIVE}"
+    # 恢复后模型可能来自旧 manifest，横幅必须反映真正传给 CLI 的值。
+    [[ -z "${RESUME_RUN_ID}" ]] || MODEL_NAME="${MODEL_ID}（恢复）"
     [[ -z "${RESUME_RUN_ID}" ]] ||
         _agent_runtime_resolve_session_identity commandcode "$RESUME_RUN_ID" || true
     _export_parent_context "${_cc_provider}" "${MODEL_ID}" "${EFFORT}"
@@ -1569,6 +1581,12 @@ run_commandcode() {
         if [[ ! -r "${DRIVE_FILE}" ]]; then echo "###${_NAME}: ERROR: --file '${DRIVE_FILE}' 不存在或不可读###" >&2; exit 64; fi
         _cc_text="$(tr -d '\r' < "$DRIVE_FILE")"
     fi
+    # 恢复型 once 必须有实际回合内容：--resume 且既无 /goal 也无 -file 时补发「继续」，
+    # 与 cl/op/co 的 headless 行为一致。否则会静默跳过回合却把 run 标记为 finished，
+    # 让自动恢复链得到假成功且无法重试。新建 run 的首个 prompt 回合已在上面执行，不补发。
+    if (( ONCE_MODE )) && [[ -n "${RESUME_RUN_ID}" && -z "${_cc_text}" ]]; then
+        _cc_text="继续"
+    fi
     if (( ONCE_MODE )); then
         if [[ -n "${_cc_text}" ]]; then
             _agent_runtime_turn_begin
@@ -1755,15 +1773,20 @@ run_claude() {
     # 端点与 baseline 环境变量无条件覆盖外部同名变量；ANTHROPIC_AUTH_TOKEN 取自途径 env_key 环境变量。
     # 途径来自命令行快捷词（pay/go/cgo/gt/tgo/dgo）、CLAUDE_PROVIDER 环境变量或个性化配置 agents.claude.provider。
     # 环境变量值同样过别名规整，使 CLAUDE_PROVIDER=go 等价于命令行快捷词 go。
+    # 显式标记只反映用户输入；manifest 注入的途径决定路由，但不改变两层默认的择序。
+    local PROVIDER_EXPLICIT=0
+    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
+    # 恢复时沿用原 run 记录的 provider（命令行/环境变量优先级最高，其次 manifest）。
+    if [[ -z "${PROVIDER_OVERRIDE}" && -n "${RESUME_RUN_ID}" ]]; then
+        local _cl_resume_provider
+        _cl_resume_provider="$(_agent_runtime_resume_manifest_value "${RESUME_RUN_ID}" provider || true)"
+        [[ -z "${_cl_resume_provider}" ]] || PROVIDER_OVERRIDE="$(_provider_alias "${_cl_resume_provider}")"
+    fi
     local _cl_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CLAUDE_PROVIDER}}")"
     if [[ -z "${_cl_provider}" ]]; then
         echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo、CLAUDE_PROVIDER 环境变量或 agent-custom.json agents.claude.provider）###" >&2
         exit 64
     fi
-    # 是否由用户显式指定途径（命令行快捷词或 CLAUDE_PROVIDER 环境变量，两者一视同仁）：
-    # 决定两层默认谁优先——显式时 providers 层优先，否则 agent 层优先。
-    local PROVIDER_EXPLICIT=0
-    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
     local _CL_PERMISSION_MODE="${_CFG_AGENTS_CLAUDE_PERMISSION_MODE:-auto}"
     local _cl_pkey _cl_var _cl_key_name _cl_key=""
     _cl_pkey="$(_cfg_provider_key "${_cl_provider}")"
@@ -1971,6 +1994,7 @@ run_claude() {
     (( DRIVE_MODE )) && _runtime_mode=drive
     [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
     AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_PROVIDER="${_cl_provider}"
     AGENT_RUNTIME_REASONING=""
     AGENT_RUNTIME_VARIANT=""
     _agent_runtime_start_or_resume \
@@ -2369,14 +2393,20 @@ run_opencode() {
     #   2) 显式途径时取 providers.<途径>.default_models.opencode，缺省回退 agents.opencode.model；
     #   3) 途径来自 agents.opencode.provider 时取 agents.opencode.model，缺省回退途径默认模型。
     # 两层皆空时启动报错。
+    # 显式标记只反映用户输入；manifest 注入的途径决定路由，但不改变两层默认的择序。
+    local PROVIDER_EXPLICIT=0
+    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
+    # 恢复时沿用原 run 记录的 provider（命令行/环境变量优先级最高，其次 manifest）。
+    if [[ -z "${PROVIDER_OVERRIDE}" && -n "${RESUME_RUN_ID}" ]]; then
+        local _op_resume_provider
+        _op_resume_provider="$(_agent_runtime_resume_manifest_value "${RESUME_RUN_ID}" provider || true)"
+        [[ -z "${_op_resume_provider}" ]] || PROVIDER_OVERRIDE="$(_provider_alias "${_op_resume_provider}")"
+    fi
     local _op_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_OPENCODE_PROVIDER}}")"
     if [[ -z "${_op_provider}" ]]; then
         echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo、OPENCODE_PROVIDER 环境变量或 agent-custom.json agents.opencode.provider）###" >&2
         exit 64
     fi
-    # 是否由用户显式指定途径（命令行快捷词或 OPENCODE_PROVIDER 环境变量，两者一视同仁）
-    local PROVIDER_EXPLICIT=0
-    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
     local _op_agent_model="${_CFG_AGENTS_OPENCODE_MODEL:-}"
     local _op_provider_model
     _op_provider_model="$(_cfg_provider_default_model "${_op_provider}" opencode)"
@@ -2443,6 +2473,7 @@ run_opencode() {
     (( DRIVE_MODE )) && _runtime_mode=drive
     [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
     AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_PROVIDER="${_op_provider}"
     AGENT_RUNTIME_REASONING=""
     AGENT_RUNTIME_VARIANT="$VARIANT"
     _agent_runtime_start_or_resume \
@@ -3245,14 +3276,20 @@ run_codex() {
     #   2) 显式途径时取 providers.<途径>.default_models.codex，缺省回退 agents.codex.model；
     #   3) 途径来自 agents.codex.provider 时取 agents.codex.model，缺省回退途径默认模型。
     # 两层皆空时启动报错。
+    # 显式标记只反映用户输入；manifest 注入的途径决定路由，但不改变两层默认的择序。
+    local PROVIDER_EXPLICIT=0
+    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
+    # 恢复时沿用原 run 记录的 provider（命令行/环境变量优先级最高，其次 manifest）。
+    if [[ -z "${PROVIDER_OVERRIDE}" && -n "${RESUME_RUN_ID}" ]]; then
+        local _cx_resume_provider
+        _cx_resume_provider="$(_agent_runtime_resume_manifest_value "${RESUME_RUN_ID}" provider || true)"
+        [[ -z "${_cx_resume_provider}" ]] || PROVIDER_OVERRIDE="$(_provider_alias "${_cx_resume_provider}")"
+    fi
     local _cx_provider="$(_provider_alias "${PROVIDER_OVERRIDE:-${_CFG_AGENTS_CODEX_PROVIDER}}")"
     if [[ -z "${_cx_provider}" ]]; then
         echo "###${_NAME}: ERROR: 未指定途径（命令行快捷词 pay|go|cgo|gt|tgo|dgo、CODEX_PROVIDER_ID 环境变量或 agent-custom.json agents.codex.provider）###" >&2
         exit 64
     fi
-    # 是否由用户显式指定途径（命令行快捷词或 CODEX_PROVIDER_ID 环境变量，两者一视同仁）
-    local PROVIDER_EXPLICIT=0
-    if [[ -n "${PROVIDER_OVERRIDE}" ]]; then PROVIDER_EXPLICIT=1; fi
     local _cx_agent_model="${_CFG_AGENTS_CODEX_MODEL:-}"
     local _cx_provider_model
     _cx_provider_model="$(_cfg_provider_default_model "${_cx_provider}" codex)"
@@ -3321,6 +3358,7 @@ run_codex() {
     (( DRIVE_MODE )) && _runtime_mode=drive
     [[ -n "${RESUME_RUN_ID}" ]] && _runtime_mode=resume
     AGENT_ONCE="${ONCE_MODE}"
+    AGENT_RUNTIME_PROVIDER="${_cx_provider}"
     AGENT_RUNTIME_REASONING="$REASONING_EFFORT"
     AGENT_RUNTIME_VARIANT=""
     _agent_runtime_start_or_resume \
