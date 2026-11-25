@@ -7,8 +7,9 @@ _NAME=${_SRC##*/}
 echo "###${_NAME} in ${_PATH} is running...:$(date "+%Y-%m-%d-%H-%M-%S")###"
 
 _usage() {
-    echo "用法: ss [缩写|数字|缩写数字组合]" >&2
+    echo "用法: ss [--screen] [缩写|数字|缩写数字组合]" >&2
     echo "缩写: k, z, x, zx, y, ht, yht" >&2
+    echo "  --screen  在远端创建或进入同名 screen 会话（默认关闭）" >&2
 }
 
 _finish() {
@@ -18,9 +19,20 @@ _finish() {
 
 main() {
     local short alias ip_text ip user default_ip numeric_fallback_user remote_shell rc
+    local use_screen=0
 
     numeric_fallback_user="zhangxin"
 
+    while (( $# > 0 )); do
+        case "$1" in
+            --screen) use_screen=1; shift;;
+            --no-screen) use_screen=0; shift;;
+            -h|--help) _usage; _finish 0;;
+            --) shift; break;;
+            -*) echo "ss: 未知参数: $1" >&2; _usage; _finish 64;;
+            *) break;;
+        esac
+    done
     if (( $# > 1 )); then
         echo "ss: 只接受一个缩写、数字或组合参数" >&2
         _usage
@@ -86,7 +98,9 @@ main() {
         esac
     fi
 
-    SSH_REMOTE_SHELL="${remote_shell}" _ssh_screen "${_NAME}" \
+    local -a screen_arg=()
+    if (( use_screen )); then screen_arg=(--screen); fi
+    SSH_REMOTE_SHELL="${remote_shell}" _ssh_screen "${_NAME}" "${screen_arg[@]}" \
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -l "${user}" "192.168.188.${ip}"
     rc=$?

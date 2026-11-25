@@ -25,12 +25,25 @@ readonly REMOTE_SHELL="${SSH_REMOTE_SHELL:-powershell}"
 
 # 解析命令行参数
 NO_DDOCKER=false
+USE_SCREEN=false
 while [[ $# -gt 0 ]]; do
     case "$1" in
         -n) NO_DDOCKER=true; shift ;;
+        --screen) USE_SCREEN=true; shift ;;
+        --no-screen) USE_SCREEN=false; shift ;;
+        -h|--help)
+            echo "用法: xx99 [-n] [--screen]" >&2
+            echo "  -n        跳过 ddocker，直接 SSH 到 x99 终端" >&2
+            echo "  --screen  在远端创建或进入同名 screen 会话（默认关闭）" >&2
+            exit 0 ;;
         *)  shift ;;
     esac
 done
+
+screen_args=()
+if [[ "${USE_SCREEN}" == true ]]; then
+    screen_args=(--screen)
+fi
 
 # ──────────────────────────────────────────────
 # 1. 确保 zerotier-cli 可用
@@ -107,7 +120,7 @@ echo ""
 if [[ "${NO_DDOCKER}" == true ]]; then
     echo "[STEP] SSH → ${SSH_USER}@${TARGET_HOST}（跳过 ddocker）"
     echo ""
-    SSH_REMOTE_SHELL="${REMOTE_SHELL}" _ssh_screen "${_NAME}" \
+    SSH_REMOTE_SHELL="${REMOTE_SHELL}" _ssh_screen "${_NAME}" ${screen_args[@]+"${screen_args[@]}"} \
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}"
 else
@@ -115,7 +128,7 @@ else
     echo ""
     # -t 强制分配 TTY（docker exec -it 需要）; 远程执行 ddocker.bat
     # ddocker.bat 退出后（成功退出容器或登入失败），始终退回 x99 SSH 终端，避免直接断开连接
-    SSH_REMOTE_SHELL="${REMOTE_SHELL}" _ssh_screen "${_NAME}" \
+    SSH_REMOTE_SHELL="${REMOTE_SHELL}" _ssh_screen "${_NAME}" ${screen_args[@]+"${screen_args[@]}"} \
         -o ServerAliveInterval=30 -o ServerAliveCountMax=3 \
         -t -p "${SSH_PORT}" "${SSH_USER}@${TARGET_HOST}" -- \
         "ddocker.bat; Write-Host ''; Write-Host '[INFO] 已退出 ddocker，回到 x99 终端'"

@@ -7,9 +7,11 @@ set "_PATH=%~dp0"
 set "_NAME=%~nx0"
 echo ###%_NAME% in %_PATH% is running...:%date% %time%###
 
-if not "%~2"=="" (
-    echo ERROR: ss accepts only one alias, number, or combined argument.
-    endlocal & exit /b 64
+set "_SCREEN_ARG="
+set "_SHORT=%~1"
+if /i "%~1"=="--screen" (
+    set "_SCREEN_ARG=-Screen"
+    set "_SHORT=%~2"
 )
 
 if not exist "%_PATH%ss.ps1" (
@@ -17,12 +19,11 @@ if not exist "%_PATH%ss.ps1" (
     endlocal & exit /b 127
 )
 
-set "_SHORT=%~1"
 if not defined _SHORT set "_SHORT=k"
 set "SS_SHORT=%_SHORT%"
 if not defined SSH_SCREEN_NAME set "SSH_SCREEN_NAME=%~n0"
 
-powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%_PATH%ss.ps1"
+powershell.exe -NoLogo -NoProfile -ExecutionPolicy Bypass -File "%_PATH%ss.ps1" %_SCREEN_ARG%
 set "_RC=%errorlevel%"
 
 echo ###%_NAME% in %_PATH% is done......:%date% %time%###

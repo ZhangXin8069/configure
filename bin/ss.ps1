@@ -1,6 +1,7 @@
 param(
     [Parameter(Position = 0)]
-    [string]$Short
+    [string]$Short,
+    [switch]$Screen
 )
 
 $numericFallbackUser = 'zhangxin'
@@ -99,38 +100,50 @@ if ($remoteShell -notin @('posix', 'powershell')) {
     exit 64
 }
 
-if ($remoteShell -eq 'powershell') {
+if ($Screen) {
+    if ($remoteShell -eq 'powershell') {
+        $remoteScreenScript = @(
+            '$ErrorActionPreference = ''SilentlyContinue'''
+            '$screenCommand = Get-Command screen -ErrorAction SilentlyContinue'
+            '$screenTerm = ''screen'''
+            '$infocmpCommand = Get-Command infocmp -ErrorAction SilentlyContinue'
+            'if ($null -ne $infocmpCommand) {'
+            '    & $infocmpCommand.Path screen-256color *> $null'
+            '    if ($LASTEXITCODE -eq 0) { $screenTerm = ''screen-256color'' }'
+            '}'
+            '$hostShell = (Get-Process -Id $PID).Path'
+            'if ([string]::IsNullOrWhiteSpace($hostShell)) { $hostShell = ''powershell.exe'' }'
+            'if ($null -ne $screenCommand) {'
+            ("    & `$screenCommand.Path -U -T `$screenTerm -S '" + $screenSession + "' -t '" + $screenSession + "'")
+            '} else {'
+            '    Write-Warning ''remote screen is unavailable; continuing without it.'''
+            '    & $hostShell -NoLogo -NoProfile'
+            '}'
+        ) -join "`n"
+    }
+    else {
+        $remoteScreenScript = @(
+            'if command -v screen >/dev/null 2>&1; then'
+            '    screen_term=screen'
+            '    if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then'
+            '        screen_term=screen-256color'
+            '    fi'
+            ("    exec screen -U -T `"`$screen_term`" -S '" + $screenSession + "' -t '" + $screenSession + "'")
+            'fi'
+            "printf '%s\n' '[WARN] remote screen is unavailable; continuing without it.' >&2"
+            'exec "${SHELL:-/bin/sh}" -l'
+        ) -join "`n"
+    }
+}
+elseif ($remoteShell -eq 'powershell') {
     $remoteScreenScript = @(
-        '$ErrorActionPreference = ''SilentlyContinue'''
-        '$screenCommand = Get-Command screen -ErrorAction SilentlyContinue'
-        '$screenTerm = ''screen'''
-        '$infocmpCommand = Get-Command infocmp -ErrorAction SilentlyContinue'
-        'if ($null -ne $infocmpCommand) {'
-        '    & $infocmpCommand.Path screen-256color *> $null'
-        '    if ($LASTEXITCODE -eq 0) { $screenTerm = ''screen-256color'' }'
-        '}'
         '$hostShell = (Get-Process -Id $PID).Path'
         'if ([string]::IsNullOrWhiteSpace($hostShell)) { $hostShell = ''powershell.exe'' }'
-        'if ($null -ne $screenCommand) {'
-        ("    & `$screenCommand.Path -U -T `$screenTerm -S '" + $screenSession + "' -t '" + $screenSession + "'")
-        '} else {'
-        '    Write-Warning ''remote screen is unavailable; continuing without it.'''
-        '    & $hostShell -NoLogo -NoProfile'
-        '}'
+        '& $hostShell -NoLogo -NoProfile'
     ) -join "`n"
 }
 else {
-    $remoteScreenScript = @(
-        'if command -v screen >/dev/null 2>&1; then'
-        '    screen_term=screen'
-        '    if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then'
-        '        screen_term=screen-256color'
-        '    fi'
-        ("    exec screen -U -T `"`$screen_term`" -S '" + $screenSession + "' -t '" + $screenSession + "'")
-        'fi'
-        "printf '%s\n' '[WARN] remote screen is unavailable; continuing without it.' >&2"
-        'exec "${SHELL:-/bin/sh}" -l'
-    ) -join "`n"
+    $remoteScreenScript = 'exec "${SHELL:-/bin/sh}" -l'
 }
 
 $sshArguments = @(

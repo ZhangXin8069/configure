@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# SSH 公共辅助: 先建立 SSH，再在远端创建独立的 UTF-8 screen 会话。
+# SSH 公共辅助: 先建立 SSH，再按需在远端创建独立的 UTF-8 screen 会话。
+# screen 默认关闭，只有显式传入 --screen 时才注入远端 screen 启动脚本。
 
 _ssh_screen_quote() {
     local value=$1 single_quote="'" escaped_quote="'\\''"
@@ -29,25 +30,39 @@ _ssh_screen_client_hostname() {
 }
 
 _ssh_screen_powershell_script() {
-    local session_name=$1 remote_command=${2:-} quoted_session quoted_command screen_path host_shell
+    local session_name=$1 remote_command=${2:-} use_screen=${3:-0}
+    local quoted_session quoted_command screen_path host_shell
     quoted_session=$(_ssh_screen_powershell_quote "${session_name}")
     screen_path='$screenCommand.Path'
     host_shell='$hostShell'
     printf '%s\n' \
         '$ErrorActionPreference = '\''SilentlyContinue'\''' \
+        '$hostShell = (Get-Process -Id $PID).Path' \
+        'if ([string]::IsNullOrWhiteSpace($hostShell)) { $hostShell = '\''powershell.exe'\'' }'
+    if [[ -n "${remote_command}" ]]; then
+        quoted_command=$(_ssh_screen_powershell_quote "${remote_command}")
+        printf '%s\n' "\$remoteCommand = ${quoted_command}"
+    fi
+    if (( use_screen == 0 )); then
+        if [[ -n "${remote_command}" ]]; then
+            printf '%s\n' \
+                'Invoke-Expression $remoteCommand' \
+                "& ${host_shell} -NoLogo -NoProfile"
+            return 0
+        fi
+        printf '%s\n' "& ${host_shell} -NoLogo -NoProfile"
+        return 0
+    fi
+    printf '%s\n' \
         '$screenCommand = Get-Command screen -ErrorAction SilentlyContinue' \
         '$screenTerm = '\''screen'\''' \
         '$infocmpCommand = Get-Command infocmp -ErrorAction SilentlyContinue' \
         'if ($null -ne $infocmpCommand) {' \
         '    & $infocmpCommand.Path screen-256color *> $null' \
         '    if ($LASTEXITCODE -eq 0) { $screenTerm = '\''screen-256color'\'' }' \
-        '}' \
-        '$hostShell = (Get-Process -Id $PID).Path' \
-        'if ([string]::IsNullOrWhiteSpace($hostShell)) { $hostShell = '\''powershell.exe'\'' }'
+        '}'
     if [[ -n "${remote_command}" ]]; then
-        quoted_command=$(_ssh_screen_powershell_quote "${remote_command}")
         printf '%s\n' \
-            "\$remoteCommand = ${quoted_command}" \
             'if ($null -ne $screenCommand) {' \
             "    & ${screen_path} -U -T \$screenTerm -S ${quoted_session} -t ${quoted_session}; & ${host_shell} -NoLogo -NoProfile -Command \$remoteCommand" \
             '} else {' \
@@ -67,7 +82,8 @@ _ssh_screen_powershell_script() {
 }
 
 _ssh_screen_remote_script() {
-    local session_name=$1 remote_command=${2:-} remote_shell=${3:-posix} quoted_session quoted_command
+    local session_name=$1 remote_command=${2:-} remote_shell=${3:-posix} use_screen=${4:-0}
+    local quoted_session quoted_command
     case "${remote_shell}" in
         posix|powershell) ;;
         *)
@@ -76,52 +92,61 @@ _ssh_screen_remote_script() {
             ;;
     esac
     if [[ "${remote_shell}" == powershell ]]; then
-        _ssh_screen_powershell_script "${session_name}" "${remote_command}"
+        _ssh_screen_powershell_script "${session_name}" "${remote_command}" "${use_screen}"
         return
     fi
     quoted_session=$(_ssh_screen_quote "${session_name}")
-    if [[ -n "${remote_command}" ]]; then
-        quoted_command=$(_ssh_screen_quote "${remote_command}")
+    if (( use_screen )); then
+        if [[ -n "${remote_command}" ]]; then
+            quoted_command=$(_ssh_screen_quote "${remote_command}")
+            printf '%s\n' \
+                'if command -v screen >/dev/null 2>&1; then' \
+                '    screen_term=screen' \
+                '    if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then' \
+                '        screen_term=screen-256color' \
+                '    fi' \
+                "    exec screen -U -T \"\${screen_term}\" -S ${quoted_session} -t ${quoted_session} sh -lc ${quoted_command}" \
+                'fi' \
+                "printf '%s\\n' '[WARN] remote screen is unavailable; continuing without it.' >&2" \
+                "exec sh -lc ${quoted_command}"
+            return 0
+        fi
         printf '%s\n' \
             'if command -v screen >/dev/null 2>&1; then' \
             '    screen_term=screen' \
             '    if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then' \
             '        screen_term=screen-256color' \
             '    fi' \
-            "    exec screen -U -T \"\${screen_term}\" -S ${quoted_session} -t ${quoted_session} sh -lc ${quoted_command}" \
+            "    exec screen -U -T \"\${screen_term}\" -S ${quoted_session} -t ${quoted_session}" \
             'fi' \
             "printf '%s\\n' '[WARN] remote screen is unavailable; continuing without it.' >&2" \
-            "exec sh -lc ${quoted_command}"
+            'exec "${SHELL:-/bin/sh}" -l'
         return 0
     fi
-    printf '%s\n' \
-        'if command -v screen >/dev/null 2>&1; then' \
-        '    screen_term=screen' \
-        '    if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then' \
-        '        screen_term=screen-256color' \
-        '    fi' \
-        "    exec screen -U -T \"\${screen_term}\" -S ${quoted_session} -t ${quoted_session}" \
-        'fi' \
-        "printf '%s\\n' '[WARN] remote screen is unavailable; continuing without it.' >&2" \
-        'exec "${SHELL:-/bin/sh}" -l'
+    if [[ -n "${remote_command}" ]]; then
+        quoted_command=$(_ssh_screen_quote "${remote_command}")
+        printf '%s\n' "exec sh -lc ${quoted_command}"
+        return 0
+    fi
+    printf '%s\n' 'exec "${SHELL:-/bin/sh}" -l'
 }
 
 _ssh_screen() {
     if (( $# < 1 )); then
-        printf '用法: _ssh_screen <回退会话名> <ssh 参数...> [-- <远端命令>]\n' >&2
+        printf '用法: _ssh_screen <回退会话名> [--screen|--no-screen] <ssh 参数...> [-- <远端命令>]\n' >&2
         return 64
     fi
 
     local fallback_session_name=$1
     shift
     local -a ssh_args=()
-    local remote_command='' arg has_tty=0
+    local remote_command='' arg has_tty=0 use_screen=0
     while (( $# > 0 )); do
-        if [[ "$1" == '--' ]]; then
-            shift
-            remote_command="$*"
-            break
-        fi
+        case "$1" in
+            --screen) use_screen=1; shift; continue;;
+            --no-screen) use_screen=0; shift; continue;;
+            --) shift; remote_command="$*"; break;;
+        esac
         ssh_args+=("$1")
         shift
     done
@@ -140,6 +165,6 @@ _ssh_screen() {
 
     local session_name remote_script remote_shell=${SSH_REMOTE_SHELL:-posix}
     session_name=$(_ssh_screen_client_hostname "${fallback_session_name}")
-    remote_script=$(_ssh_screen_remote_script "${session_name}" "${remote_command}" "${remote_shell}") || return $?
+    remote_script=$(_ssh_screen_remote_script "${session_name}" "${remote_command}" "${remote_shell}" "${use_screen}") || return $?
     command ssh "${ssh_args[@]}" "${remote_script}"
 }

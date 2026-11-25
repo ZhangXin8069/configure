@@ -1,5 +1,5 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal EnableExtensions
 chcp 65001 >nul
 title SNSC Connect
 if not defined SSH_SCREEN_NAME set "SSH_SCREEN_NAME=%COMPUTERNAME%"
@@ -10,6 +10,11 @@ echo   SNSC Connect
 echo ============================================================
 echo.
 
-ssh -t -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -p 10023 -l zhangxin 222.200.137.16 "if command -v screen >/dev/null 2>&1; then screen_term=screen; if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then screen_term=screen-256color; fi; exec screen -U -T $screen_term -S '%SSH_SCREEN_NAME%' -t '%SSH_SCREEN_NAME%'; fi; printf '%s\n' '[WARN] remote screen is unavailable; continuing without it.' >&2; exec sh -l"
+set "_REMOTE_CMD=exec sh -l"
+if not "%~1"=="--screen" goto run
+set "_REMOTE_CMD=if command -v screen >/dev/null 2>&1; then screen_term=screen; if command -v infocmp >/dev/null 2>&1 && infocmp screen-256color >/dev/null 2>&1; then screen_term=screen-256color; fi; exec screen -U -T $screen_term -S '%SSH_SCREEN_NAME%' -t '%SSH_SCREEN_NAME%'; fi; printf '%s\n' '[WARN] remote screen is unavailable; continuing without it.' >&2; exec sh -l"
+
+:run
+ssh -t -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -p 10023 -l zhangxin 222.200.137.16 "%_REMOTE_CMD%"
 
 exit /b %errorlevel%
