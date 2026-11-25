@@ -1528,3 +1528,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## bin-ssh-screen-toggle - final - 2026-11-25 13:39:26 +0800
+- 主任务: bin SSH screen 默认关闭改造与 _screen-warning.bat 清理
+- 日志文件: logs/v2026-11-25-13.txt
+- 文件大小: 5080 bytes
+- 触发原因: 任务完成
+- 关键内容: SSH 入口 screen 改为默认关闭并可 --screen 开启，删除失效 _screen-warning.bat
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

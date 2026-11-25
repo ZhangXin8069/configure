@@ -1,0 +1,69 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-25 13:39:26 +0800
+批次: bin-ssh-screen-toggle
+主任务: bin SSH screen 默认关闭改造与 _screen-warning.bat 清理
+触发原因: 任务完成
+摘要: SSH 入口 screen 改为默认关闭并可 --screen 开启，删除失效 _screen-warning.bat
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — bin/ SSH 入口的 screen 改为默认关闭并支持 --screen 开启
+- 目标: 取消 SSH 入口默认创建 screen 会话，改为显式 --screen 才启用
+- 命令/操作: 改造 bin/_ssh_screen.sh 的 _ssh_screen/_ssh_screen_remote_script（新增 use_screen 参数与 --screen/--no-screen 解析）；ss.sh、ssnsc.sh、ssjtu.sh、xx99.sh 增加参数解析并透传；ss.ps1 增加 [switch]$Screen，ss.bat 支持 --screen，ssnsc.bat/llingsheng.bat/kkunshan.bat 用 _REMOTE_CMD 二选一
+- 关键输出: 默认远端命令为 exec "${SHELL:-/bin/sh}" -l（POSIX）或交互 PowerShell；--screen 时注入 256 色 screen 脚本
+- 退出码: 0
+- 证据与判断: 默认分支不再包含任何 screen 检测或启动逻辑；对照手工验证 ss 42 与 ss --screen 42 的输出差异
+
+### S2 — 删除 bin/_screen-warning.bat 及其引用
+- 目标: 清理 SSH 本地 screen 检测时代的残留提示脚本
+- 命令/操作: rm -f bin/_screen-warning.bat；修订 bin/ss.test.sh 反向断言，去掉 _screen-warning 关键字
+- 关键输出: 全仓（除历史 logs）_screen-warning 引用数 0
+- 退出码: 0
+- 证据与判断: 该脚本自 b5b73a0（2026-11-03 改为远端建 screen）后已无调用者；保留 bin/_screen-guide.txt，因其仍被 lib/_screen.sh 的 _screen_warn_unavailable 使用
+
+### S3 — 同步文档与测试
+- 目标: 文档与回归测试反映新默认行为
+- 命令/操作: 更新 bin/AGENTS.md 的 SSH 行；扩展 bin/ss.test.sh 覆盖默认无 screen、--screen 注入、PowerShell 两分支、各 .bat 与 xx99.sh 开关
+- 关键输出: 测试新增断言全部通过
+- 退出码: 0
+- 证据与判断: 断言同时覆盖"默认不得出现 screen"与"显式开关必须出现 screen"两个方向
+
+## 验证与证据
+- 测试/检查: bash -n bin/*.sh；bash bin/ss.test.sh；bash bin/agent.test.sh；bash env.test.sh；form-audit.sh --strict --quiet；git diff --check
+- 结果: 语法检查通过；ss.test.sh 通过；agent.test.sh 107 项全 PASS；env.test.sh 12 项通过；audit 退出码 0；diff --check 无问题
+- 未验证项: Windows 端 ss.ps1/.bat 仅做静态契约断言，本机无 pwsh 与 Windows 环境做运行验证
+
+## 变更与产物
+- 文件: bin/AGENTS.md、bin/_ssh_screen.sh、bin/ss.sh、bin/ssnsc.sh、bin/ssjtu.sh、bin/xx99.sh、bin/ss.ps1、bin/ss.bat、bin/ssnsc.bat、bin/llingsheng.bat、bin/kkunshan.bat、bin/ss.test.sh；删除 bin/_screen-warning.bat
+- 产物: 交付提交 + dev67 标签
+- 未改动范围: lib/_screen.sh 与 env.sh 的 scn/scl/scr（在 bin/ 之外，按要求不动）；bin/_screen-guide.txt 保留
+
+## 风险、限制与下一步
+- 风险: Windows 侧改动未经真实运行验证；如需可在 Windows 机器上执行 ss.bat 与 ss.bat --screen 对照
+- 阻塞: 无
+- 下一步: 提交并推送 main，创建 dev67 注释标签
+
+## 用户输入指令
+1. "cm tgo --resume 20261119T184050.kTVJC7",没有调用当前环境变量中的"COMMANDCODE_GOAT_API_KEY"
+2. 去除{bin}中脚本的screen功能
+3. 改为默认停用ssh脚本中的'screen'功能,可以通过指定cli参数开启
+4. "bin/_screen-warning.bat"是干什么的
+5. 删去" _screen-warning.bat"相关的内容
+6. push~tag
+
+## Agent 全文报告
+--- report begin ---
+已完成 bin/ 内 SSH 入口 screen 功能的默认关闭改造，并删除失效的 bin/_screen-warning.bat。
+
+改动内容：
+- bin/_ssh_screen.sh：_ssh_screen 支持 --screen/--no-screen，_ssh_screen_remote_script 新增 use_screen 参数（默认 0）。默认只发送登录 shell（POSIX 为 exec "${SHELL:-/bin/sh}" -l，PowerShell 为交互主机 shell），不注入任何 screen 逻辑。
+- Unix 入口 ss.sh、ssnsc.sh、ssjtu.sh、xx99.sh 增加 --screen/--no-screen/-h 解析并透传。
+- Windows 入口 ss.ps1 新增 [switch]$Screen；ss.bat 支持 --screen；ssnsc.bat、llingsheng.bat、kkunshan.bat 用 _REMOTE_CMD 变量按 --screen 二选一。
+- 删除 bin/_screen-warning.bat（2026-11-02 引入，仅输出 _screen-guide.txt 到 stderr；2026-11-03 架构改为远端建 screen 后即无调用者）。bin/_screen-guide.txt 保留，仍被 lib/_screen.sh 的 _screen_warn_unavailable 使用。
+- bin/AGENTS.md SSH 行同步为 "screen 默认关闭，--screen 开启"；bin/ss.test.sh 增加双向断言（默认不得出现 screen、开关必须出现 screen）。
+
+验证结果：bash -n bin/*.sh 通过；bash bin/ss.test.sh 通过；bash bin/agent.test.sh 107 项全 PASS；bash env.test.sh 12 项通过；form-audit.sh --strict --quiet 退出码 0；git diff --check 无问题。Windows 侧仅做静态断言，未在真实 Windows/pwsh 环境运行。
+
+后续：提交并推送 main，创建 dev67 标签。
+--- report end ---
