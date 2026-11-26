@@ -1,0 +1,71 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-26 16:34:04 +0800
+批次: S1-S4
+主任务: 推送 ss 修复并创建 bug9 标签
+触发原因: 任务完成
+摘要: 提交 58a7c48 推送 main 并创建推送 bug9，标签链 171 个 PASS
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 提交前状态确认
+- 目标: 推送 ss 修复并打版本标签
+- 命令/操作: `git status --short`、`bash skills/tag/tag-baseline.sh --latest`、`bash skills/tag/tag-chain.sh --check --remote origin`
+- 关键输出: 工作区 8 项改动；基线 dev68；Managed tags: 170，PASS
+- 退出码: 0
+- 证据与判断: 最新标签为当日 16:21 的 dev68，修复类改动应使用 bug 类型，下一个编号 bug9
+
+### S2 — 提交与分支推送
+- 目标: 把修复纳入版本历史并同步远程
+- 命令/操作: `git add` 8 个文件 → `git commit` → `bash bin/gpush.sh`
+- 关键输出: `[main 58a7c48] fix(ssh): 20 号 Windows 主机使用 PowerShell 远端脚本`；`e6541a3..58a7c48  main -> main`
+- 退出码: 0
+- 证据与判断: 分支已快进推送到 gitlab.itp.ac.cn（临时远程域名层，未改仓库配置）
+
+### S3 — 标签创建与推送
+- 目标: 创建 bug9 并同步远程
+- 命令/操作: `git tag -a bug9 -m ...` → `git push origin bug9`
+- 关键输出: 首次 push 30s 超时；重试输出 `* [new tag] bug9 -> bug9`；`git ls-remote --tags origin bug9` 返回 `refs/tags/bug9`
+- 退出码: 首次超时；重试实际成功（命令外层 `${PIPESTATUS[0]}` 在 /bin/sh 下报 Bad substitution，非推送失败）
+- 证据与判断: 远程存在 refs/tags/bug9，本地 bug9^{commit} 与 HEAD 均为 58a7c48
+
+### S4 — 复检
+- 命令/操作: `bash skills/tag/tag-chain.sh --check --remote origin`
+- 关键输出: Managed tags: 171，PASS: follow 链、提交祖先关系，远端 origin 对象一致均正常
+- 退出码: 0
+- 证据与判断: 新标签已正确纳入历史链且远程对象一致
+
+## 验证与证据
+- 测试/检查: 标签链自检、ls-remote 核对、本地/远程 commit 比对、git status
+- 结果: 全部通过；工作区干净，main 与 origin/main 同步
+- 未验证项: 未在真实 20 号 Windows 主机运行 ss.bat 20
+
+## 变更与产物
+- 文件: bin/ss.sh、bin/ss.ps1、bin/ss.test.sh、bin/AGENTS.md、lib/_ssh/AGENTS.md、lib/_ssh/setup.md、logs/AGENTS.md、logs/v2026112616.txt
+- 产物: 提交 58a7c48、标签 bug9（已推送）
+- 未改动范围: _ssh_screen.sh 与其他 SSH 入口
+
+## 风险、限制与下一步
+- 风险: 若 20 号主机实为 POSIX 系统，需 SSH_REMOTE_SHELL=posix 覆盖
+- 阻塞: 无
+- 下一步: 在 20 号 Windows 主机执行 ss.bat 20 实测
+
+## 用户输入指令
+push~tag
+
+## Agent 全文报告
+--- report begin ---
+已完成推送与打标签。
+
+基线为当日 16:21 的 dev68；改动属于缺陷修复，故按 bug 类型创建 bug9。
+
+提交：58a7c48 `fix(ssh): 20 号 Windows 主机使用 PowerShell 远端脚本`，包含 ss.sh/ss.ps1 的 19/20 判定、ss.test.sh 回归、三处文档同步与日志归档。
+
+推送：bin/gpush.sh 将 main 快进推送 e6541a3..58a7c48；标签 bug9 已推送，远程 refs/tags/bug9 与本地一致（均指向 58a7c48）。
+
+验证：tag-chain.sh 自检 171 个标签 PASS（follow 链、祖先关系、远程对象一致）；git status 干净，main 与 origin/main 同步。
+
+注：首次 `git push origin bug9` 30 秒超时，重试成功；末尾出现的 `Bad substitution` 来自我命令中的 ${PIPESTATUS[0]} 在 /bin/sh 下不支持，与推送结果无关。
+
+未验证：未在真实 20 号 Windows 主机执行 ss.bat 20。
+--- report end ---
