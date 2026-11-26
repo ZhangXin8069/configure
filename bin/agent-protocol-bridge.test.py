@@ -246,6 +246,120 @@ class BridgeTest(unittest.TestCase):
         self.assertIn('"name":"exec_command"', output)
         self.assertIn('"call_id":"call_probe"', output)
 
+    def test_responses_additional_tools_namespace_and_custom(self):
+        # Codex ≥0.17x 通过 additional_tools 输入项下发工具，且工具可能是 namespace 或
+        # custom（自由文本）。桥须展平为 function 声明，并把 custom 调用还原成
+        # custom_tool_call 项，否则 Codex 会报 unsupported call / incompatible payload。
+        self.upstream.responses.put(
+            self.chat_response(
+                content="",
+                tool_calls=[
+                    {
+                        "id": "call_custom",
+                        "type": "function",
+                        "function": {
+                            "name": "exec",
+                            "arguments": '{"input":"const r = 1;"}',
+                        },
+                    }
+                ],
+                finish="tool_calls",
+            )
+        )
+        output = post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "deepseek-v4.1-flash",
+                "input": [
+                    {
+                        "type": "additional_tools",
+                        "role": "developer",
+                        "id": "tools_1",
+                        "tools": [
+                            {
+                                "type": "namespace",
+                                "name": "functions",
+                                "description": "",
+                                "tools": [
+                                    {
+                                        "type": "custom",
+                                        "name": "exec",
+                                        "description": "run JS",
+                                        "format": {"type": "text"},
+                                    },
+                                    {
+                                        "type": "function",
+                                        "name": "wait",
+                                        "description": "wait",
+                                        "parameters": {"type": "object", "properties": {}},
+                                    },
+                                ],
+                            },
+                            {
+                                "type": "namespace",
+                                "name": "clock",
+                                "description": "",
+                                "tools": [
+                                    {
+                                        "type": "function",
+                                        "name": "sleep",
+                                        "description": "sleep",
+                                        "parameters": {"type": "object", "properties": {}},
+                                    }
+                                ],
+                            },
+                        ],
+                    },
+                    {"type": "message", "role": "user", "content": "run exec"},
+                ],
+                "stream": True,
+            },
+        )
+        sent = self.upstream.requests[-1]["body"]["tools"]
+        self.assertEqual(
+            [tool["function"]["name"] for tool in sent],
+            ["exec", "wait", "sleep"],
+        )
+        self.assertEqual(sent[0]["function"]["parameters"]["required"], ["input"])
+        self.assertIn("custom_tool_call", output)
+        self.assertIn('"name":"exec"', output)
+        self.assertIn("const r = 1;", output)
+        self.assertNotIn("function_call_arguments.delta", output)
+
+    def test_responses_replays_custom_tool_call_and_output(self):
+        self.upstream.responses.put(self.chat_response(content="after-custom"))
+        post_json(
+            self.base_url + "/v1/responses",
+            {
+                "model": "deepseek-v4.1-flash",
+                "input": [
+                    {"type": "message", "role": "user", "content": "run exec"},
+                    {
+                        "type": "custom_tool_call",
+                        "call_id": "call_custom_2",
+                        "name": "exec",
+                        "input": "const r = 2;",
+                    },
+                    {
+                        "type": "custom_tool_call_output",
+                        "call_id": "call_custom_2",
+                        "output": "ok",
+                    },
+                ],
+                "stream": True,
+            },
+        )
+        messages = self.upstream.requests[-1]["body"]["messages"]
+        self.assert_tool_call_adjacency(messages)
+        assistant = next(message for message in messages if message.get("role") == "assistant")
+        self.assertEqual(assistant["tool_calls"][0]["function"]["name"], "exec")
+        self.assertEqual(
+            json.loads(assistant["tool_calls"][0]["function"]["arguments"]),
+            {"input": "const r = 2;"},
+        )
+        tool_message = next(message for message in messages if message.get("role") == "tool")
+        self.assertEqual(tool_message["content"], "ok")
+
     def test_responses_parallel_tool_calls_form_valid_chat_sequence(self):
         self.upstream.responses.put(self.chat_response(content="after-tools"))
         output = post_json(

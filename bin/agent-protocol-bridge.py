@@ -19,6 +19,19 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 # encrypted_content（对 Codex 不透明，仅原样回传），入站时再解回 reasoning_content。
 REASONING_PAYLOAD_PREFIX = b"configure-agent-bridge/reasoning/v1:"
 
+# Codex ≥0.17x 不再把工具放在顶层 tools，而是作为额外输入项 additional_tools 下发，
+# 且工具可以是 namespace（分组）或 custom（自由文本输入）。chat 上游只认扁平 function，
+# 故入站时收集并展平；custom 用具名函数 + input 字符串承载原始文本，回复再还原为
+# custom_tool_call 项（Codex 只接受该形式，function_call 会被判为 payload 不兼容）。
+FREE_FORM_INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "input": {"type": "string", "description": "工具的原始文本输入"},
+    },
+    "required": ["input"],
+}
+FREE_FORM_HINT = "\n\n[输入格式] 该工具接受原始自由文本，请把完整内容放入 input 字符串字段。"
+
 
 def encode_reasoning(text):
     payload = REASONING_PAYLOAD_PREFIX + text.encode("utf-8")
@@ -83,6 +96,91 @@ def content_text(content):
         elif part_type in {"input_image", "image_url"}:
             parts.append("[image]")
     return "\n".join(value for value in parts if value)
+
+
+def iter_declared_tools(payload):
+    """Yield tool declarations from both the top-level list and input items."""
+    for tool in payload.get("tools") or []:
+        yield tool
+    for item in payload.get("input") or []:
+        if not isinstance(item, dict):
+            continue
+        if str(item.get("type") or "") not in {"additional_tools", "tools"}:
+            continue
+        for tool in item.get("tools") or []:
+            yield tool
+
+
+def declared_tools(payload):
+    """Flatten Codex tool declarations into chat-completion function tools.
+
+    Returns (tools, routes):
+    - namespace groups are flattened, but the declared function name stays the bare tool
+      name: Codex routes model replies by that bare name, and namespace-qualified names
+      (e.g. "functions.wait") are mis-routed or rejected;
+    - routes marks which names are Codex "custom" (free-form text) tools so replies can be
+      rebuilt as custom_tool_call items instead of function_call items.
+    """
+    tools = []
+    routes = {}
+    seen = set()
+
+    def emit(name, description, parameters, freeform):
+        name = name.strip()
+        if not name or name in seen:
+            return
+        seen.add(name)
+        routes[name] = {"freeform": freeform}
+        text = str(description or "")
+        if freeform:
+            tools.append(
+                {
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "description": text + FREE_FORM_HINT,
+                        "parameters": FREE_FORM_INPUT_SCHEMA,
+                    },
+                }
+            )
+            return
+        tools.append(
+            {
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "description": text,
+                    "parameters": parameters or {"type": "object", "properties": {}},
+                },
+            }
+        )
+
+    def walk(entries):
+        for tool in entries:
+            if not isinstance(tool, dict):
+                continue
+            kind = str(tool.get("type") or "")
+            name = str(tool.get("name") or "")
+            if kind == "namespace":
+                walk(tool.get("tools") or [])
+            elif kind == "custom":
+                emit(name, tool.get("description"), None, True)
+            elif kind == "function":
+                emit(name, tool.get("description"), tool.get("parameters"), False)
+
+    walk(list(iter_declared_tools(payload)))
+    return tools, routes
+
+
+def custom_call_input(arguments):
+    """Extract the raw free-form text carried by a custom tool call."""
+    try:
+        parsed = json.loads(arguments)
+    except Exception:
+        return arguments
+    if isinstance(parsed, dict) and isinstance(parsed.get("input"), str):
+        return parsed["input"]
+    return arguments
 
 
 def normalize_tool_choice(value):
@@ -205,13 +303,18 @@ def responses_to_chat(payload):
             else:
                 pending_reasoning = None
             messages.append(entry)
-        elif item_type == "function_call":
+        elif item_type in {"function_call", "custom_tool_call"}:
+            if item_type == "custom_tool_call":
+                raw_input = str(item.get("input") or "")
+                arguments = json_text({"input": raw_input})
+            else:
+                arguments = json_text(item.get("arguments"))
             tool_call = {
                 "id": str(item.get("call_id") or item.get("id") or "call_" + uuid.uuid4().hex),
                 "type": "function",
                 "function": {
                     "name": str(item.get("name") or ""),
-                    "arguments": json_text(item.get("arguments")),
+                    "arguments": arguments,
                 },
             }
             # 并行调用的 function_call 在 Responses 输入里连续出现，须合并进同一条
@@ -231,7 +334,7 @@ def responses_to_chat(payload):
                     entry["reasoning_content"] = pending_reasoning
                     pending_reasoning = None
                 messages.append(entry)
-        elif item_type == "function_call_output":
+        elif item_type in {"function_call_output", "custom_tool_call_output"}:
             messages.append(
                 {
                     "role": "tool",
@@ -240,23 +343,7 @@ def responses_to_chat(payload):
                 }
             )
 
-    tools = []
-    for tool in payload.get("tools") or []:
-        if not isinstance(tool, dict) or tool.get("type") != "function":
-            continue
-        name = str(tool.get("name") or "").strip()
-        if not name:
-            continue
-        tools.append(
-            {
-                "type": "function",
-                "function": {
-                    "name": name,
-                    "description": str(tool.get("description") or ""),
-                    "parameters": tool.get("parameters") or {"type": "object", "properties": {}},
-                },
-            }
-        )
+    tools, _routes = declared_tools(payload)
 
     body = {
         "model": str(payload.get("model") or ""),
@@ -561,6 +648,7 @@ def chat_to_response_events(payload, chat):
     tool_calls = message.get("tool_calls") or []
     if not isinstance(tool_calls, list):
         tool_calls = []
+    routes = declared_tools(payload)[1]
     for tool_call in tool_calls:
         if not isinstance(tool_call, dict):
             continue
@@ -569,9 +657,44 @@ def chat_to_response_events(payload, chat):
             function = {}
         item_id = "fc_" + uuid.uuid4().hex
         call_id = str(tool_call.get("id") or "call_" + uuid.uuid4().hex)
-        name = str(function.get("name") or "")
+        flat_name = str(function.get("name") or "")
+        route = routes.get(flat_name) or {}
+        if not route and "." in flat_name:
+            # 模型偶尔沿用 "<namespace>.<name>" 的写法；Codex 只认裸工具名。
+            bare = flat_name.rsplit(".", 1)[1]
+            if bare in routes:
+                flat_name = bare
+                route = routes[bare]
+        name = flat_name
         arguments = json_text(function.get("arguments"))
         output_index = len(output_items)
+        if route.get("freeform"):
+            # Codex 的 custom 工具（如 functions.exec）只接受 custom_tool_call 项，
+            # 用 function_call 回传会被记为 "incompatible payload"。
+            raw_input = custom_call_input(arguments)
+            in_progress = {
+                "id": item_id,
+                "type": "custom_tool_call",
+                "status": "in_progress",
+                "call_id": call_id,
+                "name": name,
+                "input": "",
+            }
+            completed = dict(in_progress)
+            completed["status"] = "completed"
+            completed["input"] = raw_input
+            add("response.output_item.added", {"output_index": output_index, "item": in_progress})
+            add(
+                "response.custom_tool_call_input.delta",
+                {"item_id": item_id, "output_index": output_index, "delta": raw_input},
+            )
+            add(
+                "response.custom_tool_call_input.done",
+                {"item_id": item_id, "output_index": output_index, "input": raw_input},
+            )
+            add("response.output_item.done", {"output_index": output_index, "item": completed})
+            output_items.append(completed)
+            continue
         in_progress = {
             "id": item_id,
             "type": "function_call",
