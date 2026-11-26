@@ -1,0 +1,100 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-26 19:31:29 +0800
+批次: wsl-doc-bridge
+主任务: 修正 _wsl 文档过严限制与顺序，并修复 co dgo 子代理工具派发
+触发原因: 任务完成
+摘要: setup.md 版本/顺序整改 + 桥接 additional_tools 支持
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 审查 _wsl/setup.md 的过严限制与错误顺序
+
+- 目标: 找出限死 WSL 2 的表述与错误操作顺序
+- 命令/操作: 读取 setup.md 全文 701 行；grep 'WSL 2|set-default-version|conda init'
+- 关键输出: 标题与首段把文档限定为 WSL 2；set-default-version 2 与 wsl --update 并列成安装步骤；conda init zsh 出现在 sh_init.sh 一节，早于 Miniforge 与 conda 配置；import-in-place 先 wsl --shutdown 后 Test-Path；压缩段 DistributionName 写死 Ubuntu-New
+- 退出码: 0
+- 证据与判断: 以上均为文档内可复核位置（setup.md:1-23、393-403、456-462、168-177、252-259）
+
+### S2 — 重写基线与升级章节
+
+- 目标: 让新 WSL 产品版本（2.x/3.x）不被文档限制
+- 命令/操作: 编辑 setup.md 标题与首段；新增“产品版本与发行版版本”对照表；把 --set-default-version 2 降为条件步骤；重排 --list --online → --install -d → --manage --move → --set-default
+- 关键输出: 6 处顺序与表述调整，含 wsl --install -d Ubuntu-26.04 --name env_zhangxin 与 wsl --manage <发行版> --move
+- 退出码: 0
+- 证据与判断: git diff lib/_wsl/setup.md 首段与 9-75 行
+
+### S3 — 拆分 conda 章节为有序步骤
+
+- 目标: 修正 conda init zsh 早于 conda 配置的顺序问题
+- 命令/操作: 把 Miniforge 一节改为 7 步编号（安装→工具链→TeX→netwatch→conda init→导出变量→验证）；Shell 一节补 sudo apt install zsh，并给出 sh_init.sh → Miniforge → conda init 的依赖链
+- 关键输出: conda init zsh 移到 install/镜像/工具链之后；补充 sh_init.sh -z 覆盖 ~/.zshrc 会清掉 conda 片段的说明
+- 退出码: 0
+- 证据与判断: setup.md:382-511；sh_init.sh 中 command -v zsh 与 deploy _zshrc 逻辑
+
+### S4 — 顺序与占位符一致性
+
+- 目标: 消除 import-in-place/压缩/GPU 段的顺序错误与写死发行版名
+- 命令/操作: Test-Path 与 list 提到 shutdown 之前；DistributionName 改为 <发行版>；GPU 与 wsl.conf 示例统一 <发行版>；wsl --import 去掉冗余 --version 2 并补说明
+- 关键输出: 6 处替换
+- 退出码: 0
+- 证据与判断: setup.md:148-215、251-288、308-313
+
+### S5 — 定位子代理派发失败的根因
+
+- 目标: 解释 co/cm 子代理“不连续、不自动、无法完整工作”
+- 命令/操作: 读取 data/runs 下 20261126T183122/183706/185703 等 run 的 manifest、agent.log、bridge.log；用 mock 上游抓取桥接出站请求；用追踪桥接抓取 Codex 入站 payload
+- 关键输出: Codex 0.172 把工具放在 input 里的 additional_tools 项（namespace functions/clock/collaboration，functions.exec 是 custom 类型），顶层 tools 为空；桥接只读顶层 tools，转发 0 个工具，模型无工具可用只能回一句“我先执行”
+- 退出码: 0
+- 证据与判断: incoming.jsonl 记录 tools: 0；agent.log 出现 unsupported call: functions.exec / tool exec invoked with incompatible payload
+
+### S6 — 修复桥接并端到端验证
+
+- 目标: 让 co dgo 子代理真正执行工具
+- 命令/操作: 新增 iter_declared_tools/declared_tools/custom_call_input；custom 工具声明为 input 字符串函数；回复还原 custom_tool_call；回放映射 custom_tool_call(_output)
+- 关键输出: mock 上游 exec 脚本实际执行（Script completed, exit_code 0）；真实上游 `co dgo` 子代理返回 REAL-LINK-OK，日志出现 2 条 command_execution
+- 退出码: 0
+- 证据与判断: data/tmp/probe/e2e_bare.log、real3.json；agent.log 事件统计
+
+## 验证与证据
+- 测试/检查: python3 agent-protocol-bridge.test.py（10 tests OK）、bash agent-dispatch.test.sh（PASS）、bash agent.test.sh（12 PASS）、bash tools/configure-check.sh（0 errors）、tag-chain.sh --check（171 标签 PASS）、git diff --check
+- 结果: 全部通过
+- 未验证项: Windows 侧 agent-runtime.ps1 未同步该桥接改动（Windows 明确提示改用 op，不启用桥接）；未在真实 Windows WSL 主机执行文档命令
+
+## 变更与产物
+- 文件: lib/_wsl/setup.md、lib/_wsl/AGENTS.md、bin/agent-protocol-bridge.py、bin/agent-protocol-bridge.test.py、bin/AGENTS.md、logs 本文件
+- 产物: 两个提交 2baf9f9（docs(wsl)）、49a7771（fix(bridge)）
+- 未改动范围: 其他 agent 启动器、Windows 脚本、其他 lib 目录
+
+## 风险、限制与下一步
+- 风险: custom 工具以 input 字符串传递，模型若把自由文本写成非法 JS，Codex 侧会报 Script error（已实测为可见错误而非静默失败）
+- 阻塞: 无
+- 下一步: 可按需把同样的 additional_tools 处理移植到 Windows 侧（当前 Windows 不使用该桥）
+
+## 用户输入指令
+1. 改动本目录下的相关内容：1.有些限制过严，例如“wsl --set-default-version 2”，明明wsl3完美适配wsl2，限死wsl2没有必要；2.有些内容排列顺序有问题，例如“conda init zsh”应在conda配置之后；3.等等其他问题
+2. 同时派发子代理处理‘co dgo’时出现“当前状态：askuserQuestion...这种代理运行错误（不连续，不自动，无法做完整的工作）的问题
+3. 所有任务完成后push~tag
+
+## Agent 全文报告
+--- report begin ---
+改动分三块。
+
+**1. lib/_wsl/setup.md（过严限制与顺序）**
+- 标题去掉“WSL 2”限定，首段区分 WSL 产品版本（`wsl --version`，2.x/3.x）与发行版架构（`VERSION` 只有 1/2），并明确 `--set-default-version 2` 的 2 是架构不是产品版本，安装 WSL 3 也无需改它。
+- 安装顺序改为 `--list --online` → `--install -d` → `--manage --move` → `--set-default` → `-d` 进入；原来 `--set-default Ubuntu` 出现在发行版安装之前。
+- conda 一节拆成 7 个编号步骤，`conda init zsh` 排在 Miniforge 安装、镜像配置、工具链之后，并说明 `sh_init.sh -z` 会用模板覆盖 `~/.zshrc`，因此 `conda init` 必须在其后。
+- Shell 部署补 `sudo apt install zsh`：`sh_init.sh -z` 在缺 zsh 时会静默跳过 `.zshrc`。
+- `import-in-place` 的 `Test-Path`/`--list` 提到 `--shutdown` 之前；压缩段的 `DistributionName`、`/etc/wsl.conf` 与 GPU 示例统一为 `<发行版>` 占位符；去掉冗余 `--version 2` 并说明何时需要。
+
+**2. bin/agent-protocol-bridge.py（子代理跑不动的根因）**
+- 根因：Codex 0.172 不再把工具放顶层 `tools`，而是放进 input 的 `additional_tools` 项，其中 `functions.exec` 是 `custom` 类型。桥接只读顶层 `tools`，转发给上游的工具数为 0，模型只能回“我先执行…”，子代理表现为不连续、无法完成工作。
+- 修复：从 `additional_tools` 收集并展平 namespace/custom 工具，名称保持裸名（`exec`/`wait`/`sleep`，Codex 按裸名路由）；custom 声明为只接受 `input` 字符串的函数，回复还原成 `custom_tool_call` 事件（用 `function_call` 会被判 `incompatible payload`）；回放历史时把 `custom_tool_call`/`custom_tool_call_output` 映射为 assistant `tool_calls` 与 tool 消息。
+- 验证：mock 上游确认 `functions.exec` 脚本真实执行（exit_code 0）；真实 `co dgo` 子代理返回 `REAL-LINK-OK`，日志含 2 条 `command_execution`。`agent-protocol-bridge.test.py` 10 项通过（新增 2 项）。
+
+**3. 回归**
+`agent-dispatch.test.sh`、`agent.test.sh`（12 PASS）、`tools/configure-check.sh`（0 errors）、`tag-chain.sh --check`（171 标签）、`git diff --check` 全部通过。Windows 侧 `agent-runtime.ps1` 未改，因为它不使用该桥（明确提示改用 `op`）。
+
+提交：2baf9f9（docs(wsl)）、49a7771（fix(bridge)）。
+--- report end ---

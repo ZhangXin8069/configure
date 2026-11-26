@@ -1555,3 +1555,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## wsl-doc-bridge - final - 2026-11-26 19:31:29 +0800
+- 主任务: 修正 _wsl 文档过严限制与顺序，并修复 co dgo 子代理工具派发
+- 日志文件: logs/v2026112619.txt
+- 文件大小: 8032 bytes
+- 触发原因: 任务完成
+- 关键内容: setup.md 版本/顺序整改 + 桥接 additional_tools 支持
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
