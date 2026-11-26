@@ -92,8 +92,8 @@ main() {
 
     remote_shell=${SSH_REMOTE_SHELL:-}
     if [[ -z "${remote_shell}" ]]; then
-        case "${user}:${ip}" in
-            kfutfd:19) remote_shell=powershell ;;
+        case "${ip}" in
+            19|20) remote_shell=powershell ;;
             *) remote_shell=posix ;;
         esac
     fi

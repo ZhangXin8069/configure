@@ -1,0 +1,55 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-26 16:30:10 +0800
+批次: S1-S3
+主任务: 修复 ss 系列 20 号 Windows 主机远端 shell 误判
+触发原因: 任务完成
+摘要: 19/20 号主机按 IP 判定为 PowerShell 远端，扩展回归并同步文档
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+### S1 — 复现与根因定位
+- 目标: 修复 ss 系列在 20 号 Windows 主机上发送 POSIX 脚本导致的报错
+- 命令/操作: 读取 bin/ss.sh、bin/ss.ps1、bin/_ssh_screen.sh、bin/ss.test.sh 与文档
+- 关键输出: `exec ${SHELL:-/bin/sh} -l` 被 PowerShell 执行，报 CommandNotFoundException(exec)
+- 证据与判断: ss.sh 判定为 `case "${user}:${ip}" in kfutfd:19) powershell`，ss.ps1 为 `$ipSuffix -eq 19`；20 号与 19 号同属 kfutfd 的 Windows 主机，被误判为 POSIX 远端
+
+### S2 — 最小修复
+- 目标: 让 19/20 号主机默认使用 PowerShell 远端脚本
+- 命令/操作: bin/ss.sh 改为按 IP 判定 `case "${ip}" in 19|20) powershell`；bin/ss.ps1 改为 `$ipSuffix -in @(19, 20)`
+- 证据与判断: 按 IP 而非「用户:IP」判定，避免 ss z20 等组合再次退化
+
+### S3 — 回归扩展
+- 目标: 防止该缺陷再次出现
+- 命令/操作: bin/ss.test.sh 新增 19/20/z20 三个目标的 PowerShell 断言（含禁止 POSIX 登录 shell），新增 ss.ps1 静态断言 `$ipSuffix -in @(19, 20)`
+- 退出码: 0
+- 证据与判断: `bash bin/ss.test.sh` 通过；假 ssh 实测 19/20/z20 均生成 PowerShell 脚本，42 保持 POSIX，`--screen 20` 分支无 POSIX 语法
+
+## 验证与证据
+- 测试/检查: `bash -n bin/ss.sh bin/ss.test.sh`、`bash bin/ss.test.sh`、`git diff --check`、假 ssh 生成脚本实测
+- 结果: 语法检查通过；回归 exit=0；diff --check 无输出
+- 未验证项: 未在真实 20 号 Windows 主机上执行 ss.bat（本机无 Windows 与 pwsh，ss.ps1 仅静态断言）
+
+## 变更与产物
+- 文件: bin/ss.sh、bin/ss.ps1、bin/ss.test.sh、bin/AGENTS.md、lib/_ssh/AGENTS.md、lib/_ssh/setup.md
+- 产物: 无（脚本修复）
+- 未改动范围: _ssh_screen.sh、ssnsc/ssjtu/xx99/llingsheng/kkunshan 入口未改
+
+## 风险、限制与下一步
+- 风险: 若 20 号主机实际为 POSIX 系统，需设 SSH_REMOTE_SHELL=posix 覆盖
+- 阻塞: 无
+- 下一步: 在 20 号主机运行 ss.bat 20 实测；确认后可 gpush.sh 推送
+
+## 用户输入指令
+用户报告：在 C:\Users\zhang 下执行 .\ss.bat 20 报 `exec : 无法将"exec"项识别为 cmdlet、函数、脚本文件或可运行程序的名称`，指出 ss 系列有 bug。
+
+## Agent 全文报告
+--- report begin ---
+修复了 ss 系列在 20 号 Windows 主机上把 POSIX 脚本发给 PowerShell 的缺陷。
+
+根因：bin/ss.sh 用 `kfutfd:19` 判定 PowerShell 远端，bin/ss.ps1 用 `$ipSuffix -eq 19`；20 号主机与 19 号同属 kfutfd 的 Windows 机器，却被误判为 POSIX，于是收到 `exec ${SHELL:-/bin/sh} -l`。
+
+改动：两处判定都改为按主机 IP 末位 19/20 判定（与登录用户无关），并扩展 ss.test.sh 覆盖 19、20、z20 与 ss.ps1 静态断言；同步 bin/AGENTS.md、lib/_ssh/AGENTS.md、lib/_ssh/setup.md 的表述。
+
+验证：bash -n 通过；bash bin/ss.test.sh exit=0；假 ssh 实测 19/20/z20 生成 PowerShell 脚本、42 保持 POSIX、`--screen 20` 无 POSIX 语法；git diff --check 干净。未在真实 Windows 主机验证。
+--- report end ---

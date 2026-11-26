@@ -1537,3 +1537,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## S1-S3 - final - 2026-11-26 16:30:10 +0800
+- 主任务: 修复 ss 系列 20 号 Windows 主机远端 shell 误判
+- 日志文件: logs/v2026112616.txt
+- 文件大小: 3418 bytes
+- 触发原因: 任务完成
+- 关键内容: 19/20 号主机按 IP 判定为 PowerShell 远端，扩展回归并同步文档
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

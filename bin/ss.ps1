@@ -93,7 +93,7 @@ $screenSession = $screenSession -replace '[^A-Za-z0-9_.-]', '_'
 
 $remoteShell = $env:SSH_REMOTE_SHELL
 if ([string]::IsNullOrWhiteSpace($remoteShell)) {
-    $remoteShell = if ($ipSuffix -eq 19) { 'powershell' } else { 'posix' }
+    $remoteShell = if ($ipSuffix -in @(19, 20)) { 'powershell' } else { 'posix' }
 }
 if ($remoteShell -notin @('posix', 'powershell')) {
     [Console]::Error.WriteLine('ERROR: SSH_REMOTE_SHELL must be posix or powershell.')

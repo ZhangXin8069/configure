@@ -74,12 +74,17 @@ main() {
     _assert_target y42 "-t -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -l yang 192.168.188.42"
     _assert_target __NO_ARG__ "-t -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -l kfutfd 192.168.188.19"
 
-    output=$(SSH_SCREEN_NAME='' _run_ss 19 2>/dev/null)
-    grep -Fq '$ErrorActionPreference' <<<"$output" ||
-        _fail "默认 Windows 目标未使用 PowerShell 远端脚本"
-    if grep -Fq 'if command -v screen' <<<"$output"; then
-        _fail "Windows 目标仍收到 PowerShell 无法解析的 POSIX 条件语句"
-    fi
+    for windows_target in 19 20 z20; do
+        output=$(SSH_SCREEN_NAME='' _run_ss "${windows_target}" 2>/dev/null)
+        grep -Fq '$ErrorActionPreference' <<<"$output" ||
+            _fail "${windows_target} 号 Windows 目标未使用 PowerShell 远端脚本"
+        if grep -Fq 'if command -v screen' <<<"$output"; then
+            _fail "${windows_target} 号 Windows 目标仍收到 PowerShell 无法解析的 POSIX 条件语句"
+        fi
+        if grep -Fq 'exec "${SHELL:-/bin/sh}" -l' <<<"$output"; then
+            _fail "${windows_target} 号 Windows 目标仍收到 POSIX 登录 shell"
+        fi
+    done
 
     output=$(SSH_REMOTE_SHELL=powershell SSH_SCREEN_NAME='' _run_ss 42 2>/dev/null)
     grep -Fq 'Get-Process -Id $PID' <<<"$output" ||
@@ -203,6 +208,8 @@ main() {
         _fail "ss.ps1 缺少已登记数字映射优先于默认用户的逻辑"
     grep -Fq '[switch]$Screen' "${ps1_file}" ||
         _fail "ss.ps1 缺少 --screen 对应的 -Screen 开关"
+    grep -Fq '$ipSuffix -in @(19, 20)' "${ps1_file}" ||
+        _fail "ss.ps1 未把 20 号 Windows 主机纳入 PowerShell 远端判定"
 
     local ssh_file
     for ssh_file in \

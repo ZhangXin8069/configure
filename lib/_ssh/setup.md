@@ -194,8 +194,8 @@ xx99.sh -n
 `--screen` 在各入口的写法：Unix `ss`、`ssnsc`、`ssjtu`、`xx99` 直接加 `--screen`（`--no-screen`
 可显式关闭）；Windows `ss.bat` 用 `-Screen`，`ssnsc.bat`、`llingsheng.bat`、`kkunshan.bat` 加 `--screen`。
 
-远端脚本类型由 `SSH_REMOTE_SHELL=posix|powershell` 控制。默认 19 号 Windows 主机和 X99
-使用 PowerShell，其余入口使用 POSIX `sh`；可在调用前显式覆盖。PowerShell 分支只使用
+远端脚本类型由 `SSH_REMOTE_SHELL=posix|powershell` 控制。默认 19、20 号 Windows 主机和 X99
+使用 PowerShell，其余入口使用 POSIX `sh`；按主机 IP 末位判定，与登录用户无关，可在调用前显式覆盖。PowerShell 分支只使用
 PowerShell 原生命令检测 screen，不发送 `if command`、`&&`、`>&2` 或 `exec` 等 POSIX 语法。
 
 `xx99.sh` 的 ddocker 等既有远端命令也会按 PowerShell 语法执行。启用 `--screen` 但远端没有 screen 时
