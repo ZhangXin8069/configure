@@ -1,15 +1,15 @@
 # AGENTS.md — _wsl
 
-Windows Subsystem for Linux（WSL 2）稳定操作入口，无脚本，不部署到 `$HOME`：
+Windows Subsystem for Linux 稳定操作入口，无脚本，不部署到 `$HOME`：
 
-- `setup.md`：WSL 2 安装升级、`.wslconfig`、`/etc/wsl.conf`、发行版导入/克隆/迁移、VHDX 备份与压缩、文件系统/网络/GPU、发行版内开发环境、版本快照参考、故障表与检查清单。
+- `setup.md`：WSL 安装升级（产品版本与发行版版本的区别）、`.wslconfig`、`/etc/wsl.conf`、发行版导入/克隆/迁移、VHDX 备份与压缩、文件系统/网络/GPU、发行版内开发环境、版本快照参考、故障表与检查清单。
 - `AGENTS.md`：本目录契约、边界与破坏性操作确认清单。
 
 ## 边界
 
 | 目录 | 职责 |
 |---|---|
-| `_wsl/` | WSL 2 宿主侧配置、发行版生命周期、VHDX 与发行版内 Linux 开发环境 |
+| `_wsl/` | WSL 宿主侧配置、发行版生命周期、VHDX 与发行版内 Linux 开发环境 |
 | `_docker/` | Docker Desktop、镜像、容器、Compose、GPU 与容器数据；Docker Desktop 自建的 `docker-desktop` 发行版和 VHDX 由 Docker Desktop 管理，不套用本目录的发行版迁移步骤 |
 | `wsl-v20261107/` | 2026-11-07 WSL 机器的版本化环境快照；`env.sh` 是实际加载的环境变量，`setup.md` 是一次性安装命令记录。更新配置时新建当天日期目录，不直接改旧快照 |
 

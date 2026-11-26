@@ -1,57 +1,82 @@
-# WSL 2 配置、迁移与发行版内开发环境
+# WSL 配置、迁移与发行版内开发环境
 
-本文面向 Windows 10/11 + WSL 2，命令以 PowerShell 为主。WSL 发行版维护与 Docker Desktop 数据维护必须分开：Docker Desktop 自建发行版和 VHDX 由 Docker Desktop 管理，不要套用本文的发行版迁移步骤。Docker 与 WSL 的集成边界、容器生命周期见 [`../_docker/setup.md`](../_docker/setup.md)；发行版内开发环境见下文“发行版内开发环境（本库）”。
+本文面向 Windows 10/11 上的 WSL 2 发行版架构（`wsl --list --verbose` 中 `VERSION=2`），命令以 PowerShell 为主。较新的 WSL 产品版本（2.x、3.x 等）仍以 `VERSION=2` 运行发行版，本文命令同样适用；`wsl --version` 显示的是产品版本，不要与发行版版本混淆。WSL 1 已不推荐用于 Docker、GPU 和 systemd 场景，本文只在必要处说明差异。
+
+WSL 发行版维护与 Docker Desktop 数据维护必须分开：Docker Desktop 自建发行版和 VHDX 由 Docker Desktop 管理，不要套用本文的发行版迁移步骤。Docker 与 WSL 的集成边界、容器生命周期见 [`../_docker/setup.md`](../_docker/setup.md)；发行版内开发环境见下文“发行版内开发环境（本库）”。
 
 删除发行版、执行 `wsl --unregister`、覆盖 VHDX、压缩磁盘或修改系统级虚拟化设置都属于需要明确确认的操作。本文只提供步骤，不提供自动执行脚本。
 
 ## 基线与升级
 
-先确认 WSL 版本、默认发行版和虚拟化状态：
+先确认 WSL 产品版本、新建发行版默认架构与已有发行版列表：
 
 ```powershell
 wsl --version
 wsl --status
 wsl --list --verbose
-wsl --list --online
 ```
 
 `wsl --version` 无法识别通常表示仍是较旧的 Windows 内置版本。安装或更新：
 
 ```powershell
 wsl --update
+```
+
+更新后按需设置新建发行版的默认架构：
+
+```powershell
+# 仅当 wsl --status 显示 Default Version: 1，或确实需要新建 WSL 2 发行版时执行。
+# 新版 WSL 默认即为 2；重复执行无副作用，但不是安装 WSL 产品的必要步骤。
 wsl --set-default-version 2
 ```
 
-安装第一个发行版：
+### 产品版本与发行版版本
+
+这两个概念经常被混为一谈：
+
+| 对象 | 查看方式 | 含义 |
+|---|---|---|
+| WSL 产品版本 | `wsl --version` | WSL 应用本身的版本，例如 2.x、3.x |
+| 发行版版本 | `wsl --list --verbose` 的 `VERSION` 列 | 发行版架构，只有 1 和 2 |
+| 新建发行版默认版本 | `wsl --status` 的 `Default Version` | `--set-default-version` 设置的值，只影响之后新建的发行版 |
+
+`wsl --set-default-version 2` 中的 `2` 是发行版架构，不是 WSL 产品版本。安装 WSL 3 不会把该参数变成 3，WSL 3 中运行的发行版仍显示 `VERSION=2`。该命令不改变已安装发行版，也不限制 WSL 产品升级；若未来版本增加新的取值，以 `wsl --set-default-version --help` 为准。确实需要 WSL 1 发行版时可用 `wsl --set-version <发行版> 1`，但 Docker Desktop、GPU、systemd 等能力依赖 `VERSION=2`，本文不推荐。
+
+安装发行版前先列出可用名称：
 
 ```powershell
+wsl --list --online
 wsl --install -d Ubuntu
 ```
 
+`wsl --install` 已包含启用虚拟化组件、安装 WSL 与指定发行版；省略 `-d` 时安装默认发行版。新版 WSL 会把发行版装到 `%LOCALAPPDATA%` 下的默认位置，需要指定名称或落盘位置时见下一段。
+
 安装过程可能要求重启 Windows 或完成首次用户创建。已有 WSL 环境时，不要反复运行完整 `wsl --install` 来“修复”问题；先用 `wsl --status`、`wsl --list --verbose` 和事件日志定位具体组件。
-
-设置默认发行版并进入其默认目录：
-
-```powershell
-wsl --set-default Ubuntu
-wsl -d Ubuntu
-```
 
 `wsl-v20261107` 记录的实际安装顺序如下。`--name` 与 `--move` 会改变发行版名称和 VHDX 位置，执行前确认目标名称未被占用、目标磁盘空间充足：
 
 ```powershell
 wsl --update
 wsl --list --online
-wsl --install Ubuntu-26.04 --name env_zhangxin
+wsl --install -d Ubuntu-26.04 --name env_zhangxin
 wsl --manage env_zhangxin --move "F:\WSL"
 wsl -d env_zhangxin -- cat /etc/os-release
 ```
 
-`wsl --move` 期间不要启动该发行版或 Docker Desktop 中的相关任务；移动失败时先保留原 VHDX，不要手工修改注册表。`wsl --shutdown` 与 `wsl --unregister` 只作为维护步骤列出，执行前必须由用户显式确认。
+`wsl --manage <发行版> --move` 期间不要启动该发行版或 Docker Desktop 中的相关任务；移动失败时先保留原 VHDX，不要手工修改注册表。`wsl --shutdown` 与 `wsl --unregister` 只作为维护步骤列出，执行前必须由用户显式确认。
+
+发行版就绪后再设置默认发行版并进入其默认目录：
+
+```powershell
+wsl --set-default env_zhangxin
+wsl -d env_zhangxin
+```
+
+默认发行版只影响不带 `-d` 的 `wsl` 命令；维护多个发行版时应显式写 `-d <发行版名>`，不要依赖默认值。
 
 ## 全局配置 `.wslconfig`
 
-`%UserProfile%\.wslconfig` 只作用于 WSL 2 虚拟机，对 WSL 1 无效。新版 WSL 优先使用开始菜单中的 **WSL Settings** 图形界面；手工编辑时配置示例：
+`%UserProfile%\.wslconfig` 只作用于 WSL 2 虚拟机，对 `VERSION=1` 的发行版无效。新版 WSL 优先使用开始菜单中的 **WSL Settings** 图形界面；手工编辑时配置示例（数值按宿主内存与 CPU 规模调整，不是固定要求）：
 
 ```ini
 [wsl2]
@@ -113,7 +138,7 @@ mountFsTab=true
 说明：
 
 - `default` 必须对应发行版内已存在的 Linux 用户名。导入完成后首次进入通常是 `root`，确认用户存在后再修改。
-- `systemd=true` 仅适用于支持 systemd 的新版 WSL 2，会增加启动时间。使用 Docker Desktop 集成时，不要再在同一发行版启动第二套 Docker Engine。
+- `systemd=true` 需要发行版本身支持 systemd；开启后启动时间变长，但 Docker Engine、`systemctl` 管理服务等依赖它。使用 Docker Desktop 集成时，不要再在同一发行版启动第二套 Docker Engine。
 - `appendWindowsPath=false` 可减少 Windows 命令遮蔽 Linux 命令，但使用 `code.exe`、`explorer.exe` 等 Windows 程序时仍需完整命令名或显式 PATH。
 - `metadata` 让挂载盘支持部分 Linux 权限元数据，适合需要权限语义的共享目录；启用后应重新验证挂载权限。
 
@@ -123,14 +148,14 @@ mountFsTab=true
 sudoedit /etc/wsl.conf
 ```
 
-保存后退出并重启该发行版：
+保存后退出并重启该发行版（把 `<发行版>` 换成实际名称，例如 `env_zhangxin`）：
 
 ```powershell
-wsl --terminate Ubuntu
-wsl -d Ubuntu -- bash -lc 'id; systemd-detect-virt'
+wsl --terminate <发行版>
+wsl -d <发行版> -- bash -lc 'id; systemd-detect-virt'
 ```
 
-若配置格式错误，WSL 仍可能启动但忽略部分设置。先用 `wsl -d Ubuntu -- cat /etc/wsl.conf` 检查内容，再排查用户、systemd 和挂载设置。
+若配置格式错误，WSL 仍可能启动但忽略部分设置。先用 `wsl -d <发行版> -- cat /etc/wsl.conf` 检查内容，再排查用户、systemd 和挂载设置。
 
 ## `wsl --import-in-place`
 
@@ -140,12 +165,12 @@ wsl -d Ubuntu -- bash -lc 'id; systemd-detect-virt'
 - 从旧机器或备份保留了完整 VHDX，希望直接恢复。
 - 需要把已经准备好的 Linux 根文件系统 VHDX 接入 WSL。
 
-最低验证：
+最低验证（先确认文件与名称，再停 WSL 导入）：
 
 ```powershell
-wsl --shutdown
 Test-Path -LiteralPath 'D:\WSL\Ubuntu-New\ext4.vhdx'
 wsl --list --quiet
+wsl --shutdown
 wsl --import-in-place Ubuntu-New 'D:\WSL\Ubuntu-New\ext4.vhdx'
 wsl --list --verbose
 wsl -d Ubuntu-New -- cat /etc/os-release
@@ -178,15 +203,16 @@ wsl -d Ubuntu-New -- cat /etc/os-release
 
 ### 导入已有的外部 VHDX
 
-用户提供的示例可以写成：
+对外部来源的 VHDX，命令与上面相同，只需替换路径；重点是先确认它没被别的发行版占用：
 
 ```powershell
+Test-Path -LiteralPath 'D:\WSL\Ubuntu-New\ext4.vhdx'
 wsl --shutdown
 wsl --import-in-place Ubuntu-New "D:\WSL\Ubuntu-New\ext4.vhdx"
 wsl --list --verbose
 ```
 
-若 `D:\WSL\Ubuntu-New\ext4.vhdx` 正被另一个已注册发行版使用，应先关闭 WSL，使用 `wsl --export <原发行版> <新路径> --vhd` 复制，而不是让两个发行版共享同一个 VHDX。路径存在不代表 VHDX 未被占用，也不代表文件系统一致。
+若该 VHDX 正被另一个已注册发行版使用，应先关闭 WSL，用 `wsl --export <原发行版> <新路径> --vhd` 复制，而不是让两个发行版共享同一个 VHDX。路径存在不代表 VHDX 未被占用，也不代表文件系统一致。
 
 ## 备份、恢复与迁移
 
@@ -198,9 +224,11 @@ tar 适合可压缩归档和跨机器迁移：
 New-Item -ItemType Directory -Force -Path 'D:\WSL\backup' | Out-Null
 wsl --shutdown
 wsl --export Ubuntu 'D:\WSL\backup\Ubuntu-20261025.tar'
-wsl --import Ubuntu-Restore 'D:\WSL\Ubuntu-Restore' 'D:\WSL\backup\Ubuntu-20261025.tar' --version 2
+wsl --import Ubuntu-Restore 'D:\WSL\Ubuntu-Restore' 'D:\WSL\backup\Ubuntu-20261025.tar'
 wsl -d Ubuntu-Restore -- cat /etc/os-release
 ```
+
+需要显式指定架构时再追加 `--version 2`；新版 WSL 新建发行版默认就是 `VERSION=2`，不必每次都写。
 
 `wsl --export` 不包含 Docker Desktop 的容器、镜像和命名卷。需要迁移 Docker 数据时，另行使用镜像仓库、`docker save`、命名卷归档或 Docker Desktop 提供的备份能力。
 
@@ -222,11 +250,11 @@ wsl --import-in-place Ubuntu-Restore 'D:\WSL\backup\Ubuntu-20261025.vhdx'
 
 ## 磁盘占用与压缩
 
-WSL 2 的 VHDX 会随写入增长，但删除 Linux 文件后通常不会立刻缩小。先确认 VHDX 路径：
+WSL 2 的 VHDX 会随写入增长，但删除 Linux 文件后通常不会立刻缩小。先确认 VHDX 路径（把示例发行版名换成自己的）：
 
 ```powershell
 (Get-ChildItem -Path HKCU:\Software\Microsoft\Windows\CurrentVersion\Lxss |
-  Where-Object { $_.GetValue('DistributionName') -eq 'Ubuntu-New' }
+  Where-Object { $_.GetValue('DistributionName') -eq '<发行版>' }
 ).GetValue('BasePath') + '\ext4.vhdx'
 ```
 
@@ -245,7 +273,7 @@ wsl --shutdown
 diskpart
 ```
 
-在 `DISKPART>` 中：
+在 `DISKPART>` 中（路径替换为上面查到的实际 VHDX）：
 
 ```text
 select vdisk file="D:\WSL\Ubuntu-New\ext4.vhdx"
@@ -254,6 +282,8 @@ compact vdisk
 detach vdisk
 exit
 ```
+
+`attach vdisk readonly` 只是只读挂载以便压缩，`compact vdisk` 才写回宿主；压缩失败或中断时不要重复 `attach`，先 `detach vdisk` 再排查。
 
 不要在 WSL 运行、Docker Desktop 使用该磁盘或文件被同步软件扫描时压缩。`defaultVhdSize` 只控制新建发行版的上限，不改变已有 VHDX，也不能替代文件清理。
 
@@ -278,7 +308,7 @@ WSL 和 Docker Desktop 的 NVIDIA GPU 支持依赖 Windows NVIDIA 驱动、最�
 
 ```powershell
 wsl --update
-wsl -d Ubuntu -- nvidia-smi
+wsl -d <发行版> -- nvidia-smi
 docker run --rm --gpus all nvidia/cuda:12.4.0-base-ubuntu22.04 nvidia-smi
 ```
 
@@ -354,10 +384,14 @@ bash --noprofile --norc -c 'source ~/configure/env.sh; command -v git; printf "%
 来源：`wsl-v20261107`；通用部署见 [`../_shell/setup.md`](../_shell/setup.md)、[`../_vim/setup.md`](../_vim/setup.md)。
 
 ```bash
+sudo apt update
+sudo apt install zsh
 source ~/configure/env.sh
 sh_init.sh -z
 vim_init.sh
 ```
+
+`sh_init.sh -z` 只在 `command -v zsh` 成功时才部署 `.zshrc`，缺 zsh 时会静默跳过。Miniforge 工具链里的 zsh 属于后面 conda 一节，不能作为本步骤的前提；先用系统包装好 zsh，或在 conda 装完 zsh 后再回来执行本步骤。
 
 等价显式路径：
 
@@ -367,15 +401,13 @@ bash ~/configure/bin/vim_init.sh
 ```
 
 - `sh_init.sh -z` 部署 `.zshrc` 与 `oh-my-zsh`；`-a` 同时部署 Bash、Zsh 与 oh-my-zsh，`-b` 只部署 `.bashrc`。重复执行会生成新的时间戳备份，不做原地合并。
-- 快照把 Miniforge 的 zsh 写入 `~/.bashrc` 再执行 `sh_init.sh -z`：
+- 这一节只处理 shell 与 Vim 文件部署。`conda init`、Miniforge zsh 切换等依赖 conda 已安装的动作放到下一节，顺序不能颠倒：
 
-```bash
-printf '%s\n' "$HOME/miniforge3/bin/zsh" > ~/.bashrc
-sh_init.sh -z
-conda init zsh
+```text
+sh_init.sh -z  →  安装 Miniforge  →  conda 镜像与工具链  →  conda init zsh  →  导出 CUDA/HDF5 变量
 ```
 
-  该写法让 Bash 登录会话直接切到 conda zsh，只适合已确定使用 Miniforge zsh 的机器。若需要仓库维护的 `.bashrc`，改用 `sh_init.sh -a`，不要覆盖后再部署。
+  反过来先在 `~/.bashrc` 里写 Miniforge zsh、再跑 `sh_init.sh` 会被新部署的 `.bashrc` 覆盖，`conda init` 写入的片段同样会丢失。
 - `vim_init.sh` 会先备份现有 `~/.vimrc`、`~/.vim`，再复制 `_vimrc` 与 `_vim`。`_vim/plugged` 是未配置 `.gitmodules` 的 gitlink，空目录时需联网执行 `:PlugInstall` 或复制完整插件副本。
 - 部署完成后新开终端，或用 `exec zsh -l` 重新加载。
 
@@ -383,7 +415,19 @@ conda init zsh
 
 来源：`wsl-v20261107`；环境变量取自 [`../wsl-v20261107/env.sh`](../wsl-v20261107/env.sh)。
 
-安装 Miniforge，并切换到清华 conda-forge 镜像：
+按下列顺序执行，后一步依赖前一步的结果：
+
+```text
+1. 安装 Miniforge + 配置镜像
+2. 更新 base、安装工具链（含 zsh、CUDA、HDF5、Python）
+3. 系统包补充 TeX
+4. netwatch 抓包权限（可选）
+5. conda init zsh（此时 conda 已可执行、zsh 已装好）
+6. 导出 CUDA/HDF5 变量（依赖已激活的 base）
+7. 验证
+```
+
+**1. 安装 Miniforge，并切换到清华 conda-forge 镜像：**
 
 ```bash
 wget -O /tmp/Miniforge3-Linux-x86_64.sh \
@@ -397,7 +441,9 @@ conda config --set show_channel_urls yes
 conda clean -i
 ```
 
-更新 base 并安装工具链：
+安装脚本默认把 `conda init` 写进当前 shell 的启动文件；此后的 `conda config` 必须在 `exec bash` 之后执行，否则命令仍不在 `PATH` 中。
+
+**2. 更新 base 并安装工具链：**
 
 ```bash
 mamba update -n base -c conda-forge conda
@@ -406,18 +452,18 @@ mamba install conda-self zsh gfortran gxx make cmake htop btop nvtop netwatch tr
   "cuda-nvvp" "cuda-gdb" "python=3.12.4" "hdf5=2.2.0=mpi_openmpi*" cupy
 ```
 
-TeX 不通过 conda 安装，改用系统包：
+- `cuda-version=12.4.0` 约束 CUDA 运行时与编译器版本；`cuda-nvcc` 提供 `nvcc`，CUDA 头文件位于 `$CONDA_PREFIX/targets/x86_64-linux/include`。
+- `hdf5=2.2.0=mpi_openmpi*` 固定 MPI 变体；mpi4py、h5py、QUDA 必须使用同一 MPI，不能混用系统 OpenMPI 与 conda OpenMPI。
+
+**3. TeX 不通过 conda 安装，改用系统包：**
 
 ```bash
 sudo apt install texlive-xetex
 ```
 
-- `cuda-version=12.4.0` 约束 CUDA 运行时与编译器版本；`cuda-nvcc` 提供 `nvcc`，CUDA 头文件位于 `$CONDA_PREFIX/targets/x86_64-linux/include`。
-- `hdf5=2.2.0=mpi_openmpi*` 固定 MPI 变体；mpi4py、h5py、QUDA 必须使用同一 MPI，不能混用系统 OpenMPI 与 conda OpenMPI。
-- conda-forge 的 `texlive-core` 非常鸡肋：只提供极简 TeX 二进制和少量宏包，缺 XeLaTeX 常用组件，
-  还容易与系统 TeX Live 混用产生 `PATH` 与版本冲突，因此不放入 mamba 列表；XeLaTeX 统一用
-  `sudo apt install texlive-xetex`。
-- `netwatch` 需要抓包权限。安装后执行：
+conda-forge 的 `texlive-core` 非常鸡肋：只提供极简 TeX 二进制和少量宏包，缺 XeLaTeX 常用组件，还容易与系统 TeX Live 混用产生 `PATH` 与版本冲突，因此不放入 mamba 列表。
+
+**4. `netwatch` 需要抓包权限（可选）：**
 
 ```bash
 b=$(readlink -f "$(which netwatch)") &&
@@ -429,15 +475,22 @@ sudo setcap 'cap_net_raw,cap_bpf,cap_perfmon+eip' "$b" &&
 echo '重新登录后 netwatch 才能启动'
 ```
 
-  组变更只对新登录会话生效；完成上述命令后退出并重新进入 WSL。`../wsl-v20261107/env.sh` 保留 `@NETWATCH@` 权限命令的注释块，并定义了 `alias iftop="sudo ${HOME}/miniforge3/bin/netwatch"`；别名在文件加载后即生效，但 `netwatch` 仍需 setcap 权限和重新登录才能运行。
-- 让 zsh 自动加载 conda：
+组变更只对新登录会话生效；完成上述命令后退出并重新进入 WSL。`../wsl-v20261107/env.sh` 保留 `@NETWATCH@` 权限命令的注释块，并定义了 `alias iftop="sudo ${HOME}/miniforge3/bin/netwatch"`；别名在文件加载后即生效，但 `netwatch` 仍需 setcap 权限和重新登录才能运行。
+
+**5. 让 zsh 自动加载 conda：**
 
 ```bash
 conda init zsh
 exec zsh -l
 ```
 
-- 版本快照在 conda base 激活后导出以下变量；`CONDA_PREFIX` 为空时这些路径会退化为 `/targets/...`，执行前先确认已激活 base：
+`conda init zsh` 必须在上面的工具链装好之后执行：它要在 `~/.zshrc` 里写入 `conda` 初始化片段，而 `sh_init.sh -z` 会用仓库模板覆盖 `~/.zshrc`。若使用 Miniforge 自带的 zsh 作为登录 shell，把路径写进 `~/.bashrc` 的动作同样放在 `sh_init.sh` 之后，并且只在确实使用 Miniforge zsh 的机器上做：
+
+```bash
+printf '%s\n' "$HOME/miniforge3/bin/zsh" > ~/.bashrc   # 仅 -z 模式；-a 会被模板覆盖
+```
+
+**6. 版本快照在 conda base 激活后导出以下变量**（写入 `env.sh` 快照，不要只 export 到当前 shell）：
 
 ```bash
 export CUDA_PATH="${CONDA_PREFIX}/targets/x86_64-linux"
@@ -447,7 +500,9 @@ export HDF5_MPI="ON"
 export HDF5_DIR="${CONDA_PREFIX}"
 ```
 
-验证：
+`CONDA_PREFIX` 为空时这些路径会退化为 `/targets/...`，因此变量必须写在 base 激活之后的位置。
+
+**7. 验证：**
 
 ```bash
 conda --version
@@ -462,6 +517,16 @@ nvidia-smi
 
 来源：`wsl-v20261107`；见 [`../wsl-v20261107/setup.md`](../wsl-v20261107/setup.md)。这些包在 conda 环境中源码编译，以匹配 conda 的 MPI、HDF5 与 CUDA。
 
+编译前先确认 `mpicc`、`mpicxx`、`h5cc` 均来自当前 conda 环境，否则后续构建会在中途失败：
+
+```bash
+command -v mpicc mpicxx h5cc
+mpicc -show
+h5cc -showconfig | grep -E 'MPI|Version'
+```
+
+确认无误后再安装：
+
 ```bash
 python -m pip install --upgrade pip
 pip install mpi4py --no-binary=mpi4py --no-cache-dir
@@ -471,15 +536,7 @@ pip install torch torchvision --no-binary=torch --no-cache-dir
 pip install scipy cython seaborn opt_einsum lsqfit
 ```
 
-- 编译前确认 `mpicc`、`mpicxx`、`h5cc` 均来自当前 conda 环境：
-
-```bash
-command -v mpicc mpicxx h5cc
-mpicc -show
-h5cc -showconfig | grep -E 'MPI|Version'
-```
-
-- `mpi4py` 依赖 MPI 头文件和编译器；`h5py` 依赖 `HDF5_MPI=ON` 与 `HDF5_DIR`。变量缺失时会在构建阶段失败，而不是安装完成后才暴露。
+- `mpi4py` 依赖 MPI 头文件和编译器；`h5py` 依赖 `HDF5_MPI=ON` 与 `HDF5_DIR`。这两个变量来自上一节的第 6 步，缺失时会在构建阶段失败，而不是安装完成后才暴露。
 - `torch` 源码编译耗时且占用大量内存和磁盘。WSL 内存不足时先提高 `.wslconfig` 的 `memory`/`swap`，并降低并发编译数；若不需要源码构建，可改用与 CUDA 12.4 匹配的官方 wheel，但不要与源码构建的 `torchvision` 混装。
 - `--no-binary=torch` 只约束 `torch`；`torchvision` 必须与已安装的 `torch` 版本匹配。
 - 验证：
