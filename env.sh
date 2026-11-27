@@ -154,7 +154,7 @@ fi
 # 路径前置到对应开发环境变量；环境缺失时打印安装与换源指南
 _ZDA_GUIDE_PATH="${_configure_env_root}/bin/_zda-guide.txt"
 # zda 注入的环境变量声明（唯一的权威清单，文档与测试都以此为准）：
-#   PATH                  <- bin sbin
+#   PATH                  <- bin sbin nvvm/bin
 #   LD_LIBRARY_PATH       <- lib lib64 targets/*/lib          （_ZDA_SKIP_LIBPATH=1 时跳过）
 #   LIBRARY_PATH          <- lib lib64 targets/*/lib          （_ZDA_SKIP_LIBPATH=1 时跳过）
 #   CPATH                 <- include targets/*/include
@@ -165,9 +165,16 @@ _ZDA_GUIDE_PATH="${_configure_env_root}/bin/_zda-guide.txt"
 #   CMAKE_PREFIX_PATH     <- 前缀根
 #   MANPATH               <- share/man man
 #   ACLOCAL_PATH          <- share/aclocal
-#   CUDA_PATH             <- targets/<arch>（存在 include 时）
-#   HDF5_DIR / HDF5_MPI   <- 前缀根 / ON（存在 include/hdf5.h 或 include/hdf5 时）
-# 规则：目录必须存在；conda 项前置；旧值保留在后；按物理路径去重；可重复执行。
+#   CUDA_PATH / CUDA_HOME / CUDA_ROOT / CUDAToolkit_ROOT <- targets/<arch> 或前缀根
+#   CUDA_INCLUDE_PATH     <- targets/*/include（另有 targets/*/lib/stubs 供链接期占位）
+#   MPI_HOME / OPENMPI_ROOT / OPAL_PREFIX <- 前缀根
+#   MPICC MPICXX MPIF77 MPIF90 MPIFORT    <- 前缀 bin 下的同名包装器
+#   MPI_INCLUDE_PATH / MPI_LIBRARY_PATH   <- include / lib（MPI 头与 libmpi）
+#   OMPI_CC / OMPI_CXX / OMPI_FC          <- 前缀内的 conda 编译器包装
+#   HDF5_DIR / HDF5_ROOT / HDF5_INCLUDE_PATH / HDF5_MPI / HDF5_LIBRARY_PATH
+#   CC CXX CPP FC F77                     <- 前缀内的 conda 编译器（仅当对应可执行存在）
+#   OMPI_ALLOW_RUN_AS_ROOT / OMPI_ALLOW_RUN_AS_ROOT_CONFIRM / MPI_ALLOW_RUN_AS_ROOT
+# 规则：目录/可执行必须存在；conda 项前置；旧值保留在后；按物理路径去重；可重复执行。
 # 1 = 跳过 LD_LIBRARY_PATH / LIBRARY_PATH 注入（HPC 上 conda 的 libstdc++
 # 可能遮蔽系统或 module 提供的版本；其余变量仍会同步）
 _ZDA_SKIP_LIBPATH="${_ZDA_SKIP_LIBPATH:-0}"
@@ -250,7 +257,7 @@ _zda_sync_env() {
         [ -d "${_sp}/lib" ] && _arch_libs+=("${_sp}/lib")
     done
 
-    _zda_prepend_env PATH "${_p}/bin" "${_p}/sbin"
+    _zda_prepend_env PATH "${_p}/bin" "${_p}/sbin" "${_p}/nvvm/bin"
     if [ "${_ZDA_SKIP_LIBPATH}" != 1 ]; then
         _zda_prepend_env LD_LIBRARY_PATH "${_p}/lib" "${_p}/lib64" "${_arch_libs[@]}"
         _zda_prepend_env LIBRARY_PATH "${_p}/lib" "${_p}/lib64" "${_arch_libs[@]}"
@@ -264,14 +271,110 @@ _zda_sync_env() {
     _zda_prepend_env MANPATH "${_p}/share/man" "${_p}/man"
     _zda_prepend_env ACLOCAL_PATH "${_p}/share/aclocal"
 
-    # CUDA / HDF5 派生变量：仅在 base 里确有对应内容时覆盖旧值
+    # --- CUDA：targets/<arch> 是 nvcc 的根，include 与 lib/stubs 都在其下 ---
     if [ -n "${_arch_root}" ] && [ -d "${_arch_root}/include" ]; then
         export CUDA_PATH="${_arch_root}"
+        export CUDA_HOME="${_arch_root}"
+        export CUDA_ROOT="${_arch_root}"
+        export CUDAToolkit_ROOT="${_arch_root}"
+        _zda_prepend_env CUDA_INCLUDE_PATH "${_arch_root}/include"
+        _zda_prepend_env CUDA_LIBRARY_PATH "${_arch_root}/lib" "${_arch_root}/lib/stubs"
     fi
+    [ -x "${_p}/bin/nvcc" ] && export CUDACXX="${_p}/bin/nvcc"
+
+    # --- MPI：conda 的 openmpi/mpich 都有 <prefix>/bin/mpicc 与 <prefix>/include/mpi.h ---
+    if [ -x "${_p}/bin/mpicc" ]; then
+        export MPI_HOME="${_p}"
+        export OPENMPI_ROOT="${_p}"
+        export OPAL_PREFIX="${_p}"
+        [ -x "${_p}/bin/mpicc" ] && export MPICC="${_p}/bin/mpicc"
+        [ -x "${_p}/bin/mpicxx" ] && export MPICXX="${_p}/bin/mpicxx"
+        [ -x "${_p}/bin/mpif77" ] && export MPIF77="${_p}/bin/mpif77"
+        [ -x "${_p}/bin/mpif90" ] && export MPIF90="${_p}/bin/mpif90"
+        [ -x "${_p}/bin/mpifort" ] && export MPIFORT="${_p}/bin/mpifort"
+        _zda_prepend_env MPI_INCLUDE_PATH "${_p}/include"
+        _zda_prepend_env MPI_LIBRARY_PATH "${_p}/lib"
+        # 让 MPI 包装器调用 conda 编译器，而不是系统 gcc
+        if [ -x "${_p}/bin/x86_64-conda-linux-gnu-cc" ]; then
+            export OMPI_CC="${_p}/bin/x86_64-conda-linux-gnu-cc"
+        elif [ -x "${_p}/bin/gcc" ]; then
+            export OMPI_CC="${_p}/bin/gcc"
+        fi
+        if [ -x "${_p}/bin/x86_64-conda-linux-gnu-c++" ]; then
+            export OMPI_CXX="${_p}/bin/x86_64-conda-linux-gnu-c++"
+        elif [ -x "${_p}/bin/g++" ]; then
+            export OMPI_CXX="${_p}/bin/g++"
+        fi
+        if [ -x "${_p}/bin/x86_64-conda-linux-gnu-gfortran" ]; then
+            export OMPI_FC="${_p}/bin/x86_64-conda-linux-gnu-gfortran"
+        elif [ -x "${_p}/bin/gfortran" ]; then
+            export OMPI_FC="${_p}/bin/gfortran"
+        fi
+        # 容器/root 场景下 mpirun 默认拒绝运行；与 docker-* 快照保持一致
+        export OMPI_ALLOW_RUN_AS_ROOT=1
+        export OMPI_ALLOW_RUN_AS_ROOT_CONFIRM=1
+        export MPI_ALLOW_RUN_AS_ROOT=1
+    fi
+
+    # --- HDF5：并行 HDF5 需要与 MPI 同一变体，这里按前缀统一声明 ---
     if [ -d "${_p}/include/hdf5" ] || [ -f "${_p}/include/hdf5.h" ]; then
         export HDF5_DIR="${_p}"
+        export HDF5_ROOT="${_p}"
         export HDF5_MPI="ON"
+        _zda_prepend_env HDF5_INCLUDE_PATH "${_p}/include"
+        _zda_prepend_env HDF5_LIBRARY_PATH "${_p}/lib"
     fi
+
+    # --- 组件根目录（沿用 lib/snsc-v20260817/env.sh 的 *_ROOT 命名）---
+    # conda 把各组件平铺在同一个前缀里，因此这些 ROOT 都指向前缀本身；
+    # 用组件特征文件做门禁，缺哪个就不设哪个，避免给出无效路径。
+    [ -f "${_p}/include/ncurses.h" ] && export NCURSES_ROOT="${_p}"
+    if [ -d "${_p}/lib/python3.12" ] || [ -d "${_p}/lib/python3.11" ] ||
+        [ -d "${_p}/lib/python3.10" ] || [ -d "${_p}/lib/python3.9" ]; then
+        export PYTHON_ROOT="${_p}"
+    fi
+    [ -f "${_p}/include/hwloc.h" ] && export HWLOC_ROOT="${_p}"
+    [ -f "${_p}/include/ucp/api/ucp.h" ] && export UCX_ROOT="${_p}"
+    if [ -d "${_p}/lib/pmix" ] || [ -f "${_p}/include/pmix.h" ]; then
+        export PMIX_ROOT="${_p}"
+    fi
+    [ -f "${_p}/include/event2/event.h" ] && export LIBEVENT_ROOT="${_p}"
+    [ -x "${_p}/bin/gcc" ] && export GCC_ROOT="${_p}"
+    # 真正的查找路径是 CMAKE_PREFIX_PATH；不设 CMAKE_ROOT，它是 cmake 内部变量
+
+    # --- 编译器：conda activate 已设过三前缀编译器时保留，否则补 prefixed/unprefixed ---
+    _zda_set_compiler() {
+        local _var=$1 _bin=$2 _cur
+        [ -x "${_bin}" ] || return 1
+        eval "_cur=\${${_var}:-}"
+        case "${_cur}" in
+        "${_p}"/*) return 0 ;;
+        esac
+        export "${_var}=${_bin}"
+    }
+    if [ -x "${_p}/bin/x86_64-conda-linux-gnu-cc" ]; then
+        _zda_set_compiler CC "${_p}/bin/x86_64-conda-linux-gnu-cc"
+    else
+        _zda_set_compiler CC "${_p}/bin/cc"
+    fi
+    if [ -x "${_p}/bin/x86_64-conda-linux-gnu-c++" ]; then
+        _zda_set_compiler CXX "${_p}/bin/x86_64-conda-linux-gnu-c++"
+    else
+        _zda_set_compiler CXX "${_p}/bin/c++"
+    fi
+    if [ -x "${_p}/bin/x86_64-conda-linux-gnu-cpp" ]; then
+        _zda_set_compiler CPP "${_p}/bin/x86_64-conda-linux-gnu-cpp"
+    else
+        _zda_set_compiler CPP "${_p}/bin/cpp"
+    fi
+    if [ -x "${_p}/bin/x86_64-conda-linux-gnu-gfortran" ]; then
+        _zda_set_compiler FC "${_p}/bin/x86_64-conda-linux-gnu-gfortran"
+        _zda_set_compiler F77 "${_p}/bin/x86_64-conda-linux-gnu-gfortran"
+    else
+        _zda_set_compiler FC "${_p}/bin/gfortran"
+        _zda_set_compiler F77 "${_p}/bin/gfortran"
+    fi
+    unset -f _zda_set_compiler
     return 0
 }
 

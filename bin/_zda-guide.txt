@@ -16,13 +16,25 @@
 以上只是最小可用环境。zda 假定 base 里已装好下面这套开发工具链，缺任一项时
 zda 仍会激活，但路径变量只能覆盖实际存在的目录。
 
-1) 工具链（在 base 中执行）：
+1) 工具链（在 base 中执行；zda 依赖这些组件来决定要注入哪些路径）：
   mamba update -n base -c conda-forge conda
-  mamba install conda-self zsh gfortran gxx make cmake htop btop nvtop netwatch tree nodejs \
+  mamba install conda-self zsh gfortran gxx make cmake pkg-config htop btop nvtop netwatch tree nodejs \
     "cuda-version=12.4.0" "cuda-nvcc" "cuda-libraries-dev" "cuda-nvml-dev" \
     "cuda-nvvp" "cuda-gdb" "python=3.12.4" "hdf5=2.2.0=mpi_openmpi*" cupy
+  说明：pkg-config 是 h5cc/h5pcc/h5fc 包装器的依赖，缺了只有这些包装器会报错，
+        h5py 与 CMake 的 find_package(HDF5) 不受影响。
 
-2) CUDA/HDF5 派生变量（base 激活后写入 env.sh 或 shell 启动文件）：
+2) zda 会自动派生的变量（无需手写；列出以便排查）：
+  CUDA：CUDA_PATH / CUDA_HOME / CUDA_ROOT / CUDAToolkit_ROOT = targets/x86_64-linux
+        CUDA_INCLUDE_PATH、CUDA_LIBRARY_PATH（含 lib/stubs）、CUDACXX=nvcc
+  MPI ：MPI_HOME / OPENMPI_ROOT / OPAL_PREFIX = 前缀根，MPICC/MPICXX/MPIF77/MPIF90/MPIFORT、
+        MPI_INCLUDE_PATH、MPI_LIBRARY_PATH、OMPI_CC/OMPI_CXX/OMPI_FC、
+        OMPI_ALLOW_RUN_AS_ROOT / MPI_ALLOW_RUN_AS_ROOT
+  HDF5：HDF5_DIR / HDF5_ROOT、HDF5_MPI=ON、HDF5_INCLUDE_PATH、HDF5_LIBRARY_PATH
+  编译器：CC / CXX / CPP / FC / F77 指向前缀内 x86_64-conda-linux-gnu-*
+  组件根：GCC_ROOT / NCURSES_ROOT / PYTHON_ROOT / HWLOC_ROOT / UCX_ROOT / PMIX_ROOT /
+          LIBEVENT_ROOT（沿用 lib/snsc-v20260817/env.sh 的命名，指向前缀根）
+  手动补充的等效写法（仅在不用 zda 时需要）：
   export CUDA_PATH="${CONDA_PREFIX}/targets/x86_64-linux"
   export CPLUS_INCLUDE_PATH="${CUDA_PATH}/include":${CPLUS_INCLUDE_PATH}
   export PATH="${CONDA_PREFIX}/nvvm/bin":${PATH}
@@ -44,9 +56,16 @@ zda 仍会激活，但路径变量只能覆盖实际存在的目录。
 5) 验证：
   command -v conda && conda --version
   conda activate base && printf '%s\n' "$CONDA_PREFIX"
-  command -v python pip gcc nvcc h5cc mpicc
+  command -v python pip gcc nvcc h5cc mpicc mpirun
   nvcc --version | tail -2
+  mpicc -show | head -1              # 应显示 conda 的编译器封装
+  ompi_info --version | head -2
   python -c 'import h5py, mpi4py; print(h5py.__version__, mpi4py.__version__)'
+  端到端自检（各 1 条命令，失败即说明对应组件没配好）：
+    mpicc -show
+    echo 'int main(){return 0;}' | mpicc -x c - -o /tmp/_mpi_probe && /tmp/_mpi_probe && echo mpi-ok
+    nvcc --version >/dev/null && echo cuda-toolkit-ok
+    h5dump -V | head -1
 
 完整步骤：lib/_wsl/setup.md 的「Miniforge 与 conda」与「源码编译 pip 依赖」两节
 镜像与换源：lib/_mirror/setup.md

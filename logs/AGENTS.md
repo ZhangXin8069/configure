@@ -1609,3 +1609,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## zda-toolchain - final - 2026-11-27 16:41:08 +0800
+- 主任务: 按 snsc 实例补齐 zda 的 CUDA/MPI/HDF5/编译器变量
+- 日志文件: logs/v2026112716-2.txt
+- 文件大小: 9134 bytes
+- 触发原因: 任务完成
+- 关键内容: zda 变量从 11 类扩展到 51 个，覆盖 CUDA/MPI/HDF5/编译器/组件根，并加声明漂移检查
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

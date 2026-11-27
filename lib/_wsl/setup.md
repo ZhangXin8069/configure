@@ -469,13 +469,14 @@ bash "/tmp/Miniforge3-$ver-Linux-x86_64.sh"
 
 ```bash
 mamba update -n base -c conda-forge conda
-mamba install conda-self zsh gfortran gxx make cmake htop btop nvtop netwatch tree nodejs \
+mamba install conda-self zsh gfortran gxx make cmake pkg-config htop btop nvtop netwatch tree nodejs \
   "cuda-version=12.4.0" "cuda-nvcc" "cuda-libraries-dev" "cuda-nvml-dev" \
   "cuda-nvvp" "cuda-gdb" "python=3.12.4" "hdf5=2.2.0=mpi_openmpi*" cupy
 ```
 
 - `cuda-version=12.4.0` 约束 CUDA 运行时与编译器版本；`cuda-nvcc` 提供 `nvcc`，CUDA 头文件位于 `$CONDA_PREFIX/targets/x86_64-linux/include`。
 - `hdf5=2.2.0=mpi_openmpi*` 固定 MPI 变体；mpi4py、h5py、QUDA 必须使用同一 MPI，不能混用系统 OpenMPI 与 conda OpenMPI。
+- `pkg-config` 是 `h5cc`、`h5pcc`、`h5fc` 等 HDF5 编译器包装器的运行时依赖，缺失时这些包装器会报 `pkg-config: not found`（`h5py` 与 CMake 的 `find_package(HDF5)` 不受影响）；`zda` 也会用 `$CONDA_PREFIX/lib/pkgconfig` 组装 `PKG_CONFIG_PATH`，没有 `pkg-config` 本身时该变量对包装器无效。
 
 **3. TeX 不通过 conda 安装，改用系统包：**
 

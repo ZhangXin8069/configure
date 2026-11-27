@@ -1,0 +1,96 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-27 16:41:08 +0800
+批次: zda-toolchain
+主任务: 按 snsc 实例补齐 zda 的 CUDA/MPI/HDF5/编译器变量
+触发原因: 任务完成
+摘要: zda 变量从 11 类扩展到 51 个，覆盖 CUDA/MPI/HDF5/编译器/组件根，并加声明漂移检查
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 复现"配置不全"的具体缺口
+- 目标: 找出用户所说 CUDA/MPI 等"配置不全"的确切缺项
+- 命令/操作: 在隔离 env 中 `conda activate base` 后逐项打印编译器、CUDA、MPI、HDF5 相关变量；`conda list -n base`；`mpicc -show`；`ls targets/x86_64-linux/{bin,include,lib}`
+- 关键输出: `conda activate` 只设 `CC/CXX/CPP/CFLAGS/CXXFLAGS/CPPFLAGS/LDFLAGS/NVCC_PREPEND_FLAGS/CONDA_BUILD_SYSROOT/HOST/BUILD`；`CUDA_HOME`、`CUDA_ROOT`、`CUDAToolkit_ROOT`、`MPI_HOME`、`OPENMPI_ROOT`、`OPAL_PREFIX`、`MPICC/MPICXX/MPIF90`、`HDF5_ROOT`、`FC/F77` **全部未设**；`bin/git` 不存在
+- 退出码: 0
+- 证据与判断: 缺口在"工具链级变量"与"组件根"，不在路径变量；已装的 OpenMPI 5.0.11、HDF5 2.2.0（Parallel ON）、CUDA 12.4 都没被变量暴露出来
+
+### S2 — 参考本库已有实例（用户两次强调）
+- 目标: 严格对齐本库既有命名，不发明新变量
+- 命令/操作: 全文读 `lib/snsc-v20260817/env.sh`；统计全库 `env.sh` 中各变量出现次数
+- 关键输出: snsc 用 `CC/CXX/FC/F77`、`CUDA_HOME/CUDA_ROOT`、`OPENMPI_ROOT/MPICC/MPICXX/MPIF77/MPIF90`、`GCC_ROOT/NCURSES_ROOT/PYTHON_ROOT/CMAKE_ROOT/GIT_ROOT/HWLOC_ROOT/UCX_ROOT/PMIX_ROOT/LIBEVENT_ROOT`、`OMPI_ALLOW_RUN_AS_ROOT`、`MPI_ALLOW_RUN_AS_ROOT`、`HDF5_DIR/HDF5_MPI`；全库 `MPI_INCLUDE_PATH` 出现 12 次、`HDF5_INCLUDE_PATH` 10 次、`CUDA_INCLUDE_PATH` 4 次；`docker-*` 快照统一用 `alias mpirun='mpirun --allow-run-as-root'` + 三个 root 允许变量
+- 退出码: 0
+- 证据与判断: 采用同一套名字（`*_ROOT`、`MPI_INCLUDE_PATH`、`CUDA_INCLUDE_PATH`、`HDF5_INCLUDE_PATH`、`OMPI_CC`），并把 `CMAKE_ROOT` 排除——实测 `cmake --system-information` 显示 `CMAKE_ROOT` 由二进制位置推导，环境变量无效
+
+### S3 — 逐项核实 conda 前缀里的真实布局
+- 目标: 只注入真实存在的东西
+- 命令/操作: 逐目录探测 `bin/{mpicc,mpicxx,mpifort,mpif77,mpif90,nvcc,cc,c++,cpp,gfortran,cmake}`、`targets/x86_64-linux/{bin,include,lib/stubs}`、`nvvm/bin`、`include/{hdf5.h,ncurses.h,hwloc.h,ucp/api/ucp.h,event2/event.h}`、`lib/{pmix,ucm}`、`sysroot/usr/{include,lib}`
+- 关键输出: 全部 MPI/HDF5/CUDA 组件齐全；**无** `bin/git`、**无** `include/pmix.h`（只有 `lib/pmix` 插件目录）、`include/ucp/api/ucp.h` 存在；`lib64` 不存在
+- 退出码: 0
+- 证据与判断: `PMIX_ROOT` 用 `lib/pmix` 目录做门禁；`GIT_ROOT` 不设（base 无 git）；`CMAKE_ROOT` 不设
+
+### S4 — 扩展 `_zda_sync_env`
+- 目标: 补齐 CUDA / MPI / HDF5 / 编译器 / 组件根
+- 命令/操作: 新增 CUDA 组（`CUDA_{PATH,HOME,ROOT}`、`CUDAToolkit_ROOT`、`CUDA_INCLUDE_PATH`、`CUDA_LIBRARY_PATH` 含 `lib/stubs`、`CUDACXX`）、MPI 组（`MPI_HOME`/`OPENMPI_ROOT`/`OPAL_PREFIX`、五个包装器、`MPI_INCLUDE_PATH`/`MPI_LIBRARY_PATH`、`OMPI_CC/CXX/FC`、三个 root 允许变量）、HDF5 组（`HDF5_DIR/ROOT/MPI/INCLUDE_PATH/LIBRARY_PATH`）、编译器（`_zda_set_compiler`，已有值指向同前缀时不覆盖，函数用完即 `unset -f`）、组件根（7 个 `*_ROOT`，特征文件门禁）；`PATH` 增加 `nvvm/bin`
+- 关键输出: 真实 base 上 51 个变量全部命中，无一缺失
+- 退出码: 0
+- 证据与判断: `mpicc -show` 原本已指向 `x86_64-conda-linux-gnu-cc`，仍显式设 `OMPI_CC` 等，保证换到别的 MPI 安装时也走 conda 编译器
+
+### S5 — 功能验证（不是只看变量）
+- 目标: 证明配置真的能用
+- 命令/操作: `mpicc` 编译并 `mpirun -np 2` 运行；`nvcc` 编译 CUDA 并运行；`h5cc`/`h5pcc` 编译;CMake 探针 `find_package(CUDAToolkit/MPI/HDF5)`
+- 关键输出: `rank 0 of 2` / `rank 1 of 2`；`cuda ok 12040`；CMake 三项全 `FOUND=TRUE`（`CUDAToolkit 12.4.131`、`MPI_C_COMPILER=.../bin/mpicc`、`HDF5_INCLUDE_DIRS=.../include`）；`h5cc` 报 `pkg-config: not found`
+- 退出码: 0
+- 证据与判断: 唯一失败项是 `h5cc`/`h5pcc` 包装器依赖 `pkg-config`，base 未装。这属工具链缺包而非 zda 缺陷：已把 `pkg-config` 加进指南的 `mamba install` 列表，并注明它只影响这几个包装器（`h5py`、`find_package(HDF5)` 不受影响）
+
+### S6 — 测试与声明防漂移
+- 目标: 声明块与实现不能各说各话
+- 命令/操作: `_create_fake_conda` 补齐假目录树与 17 个假可执行；测试新增 CUDA/MPI/HDF5/编译器/ROOT 断言；新增"从 `env.sh` 的声明注释块解析变量名，逐个要求实际被设置"的漂移检查
+- 关键输出: `bash env.test.sh` 14/14 通过、rc=0；`_zda_set_compiler` 在两个 shell 中均无泄漏；重复 `zda` 幂等
+- 退出码: 0
+- 证据与判断: 漂移检查让"文档写了但代码没做"这类问题在 CI 阶段就暴露
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh`/`env.test.sh`、`bash env.test.sh`（14 项 rc=0）、`form-audit --strict`（rc=0）、`git diff --check`（rc=0）、真实 base 51 变量核对、`mpicc+mpirun`、`nvcc` 运行、CMake 三包探测、zsh 对照、幂等、函数泄漏
+- 结果: 全部通过（`h5cc` 因缺 `pkg-config` 失败，已记入指南而非静默）
+- 未验证项: 用户 HPC 节点（`ln01`/`/public/home/zhangxin`）未实机验证；`_ZDA_SKIP_LIBPATH` 仅本机模拟
+
+## 变更与产物
+- 文件: `env.sh`（新增约 130 行）、`env.test.sh`（假前缀与断言扩充）、`bin/_zda-guide.txt`（前置条件与变量清单）、`lib/_env/setup.md`（变量表按 CUDA/MPI/HDF5/编译器分节）
+- 产物: zda 现在声明并设置 51 个变量
+- 未改动范围: `lib/snsc-v20260817/env.sh` 本身（只作参考）、`env.sh` 其他逻辑
+
+## 风险、限制与下一步
+- 风险: 在 HPC 上无条件前置 conda 的 `lib` 可能遮蔽 module 的 `libstdc++`；`_ZDA_SKIP_LIBPATH=1` 可规避。`OMPI_CC` 等显式指定编译器会覆盖 module 的 MPI 编译器选择，仅在使用 conda MPI 时有效
+- 阻塞: 无
+- 下一步: HPC 上先 `export _ZDA_SKIP_LIBPATH=1` 试用；需要 `h5cc` 就补 `mamba install pkg-config`
+
+## 用户输入指令
+许多开发软件的配置还是不全(例如CUDA,MPI等等),参考{./lib/snsc-v20260817/env.sh}继续优化zda
+再次强调:辅助参考本库已有的环境变量配置的实例
+
+## Agent 全文报告
+--- report begin ---
+补的是**工具链级变量**，不是再加路径。之前 11 个变量都是"目录前置"，`conda activate base` 之后 `CUDA_HOME`、`OPENMPI_ROOT`、`MPICC`、`HDF5_ROOT`、`FC` 这些全是空的——你装的 OpenMPI 5.0.11、并行 HDF5 2.2.0、CUDA 12.4 都没通过变量暴露出来。
+
+现在按 `lib/snsc-v20260817/env.sh` 的命名补齐，zda 一共设置 51 个变量：
+
+- CUDA：`CUDA_PATH`/`CUDA_HOME`/`CUDA_ROOT`/`CUDAToolkit_ROOT` = `targets/x86_64-linux`，`CUDA_INCLUDE_PATH`，`CUDA_LIBRARY_PATH`（含 `lib/stubs`，链接期解析设备符号用），`CUDACXX=nvcc`
+- MPI：`MPI_HOME`/`OPENMPI_ROOT`/`OPAL_PREFIX`，五个包装器 `MPICC/MPICXX/MPIF77/MPIF90/MPIFORT`，`MPI_INCLUDE_PATH`/`MPI_LIBRARY_PATH`，`OMPI_CC/OMPI_CXX/OMPI_FC` 指向前缀内 conda 编译器，三个 `*ALLOW_RUN_AS_ROOT`（与 `docker-*` 快照一致）
+- HDF5：`HDF5_DIR`/`HDF5_ROOT`/`HDF5_MPI`/`HDF5_INCLUDE_PATH`/`HDF5_LIBRARY_PATH`
+- 编译器：`CC/CXX/CPP/FC/F77`，已有值指向同前缀时不覆盖
+- 组件根：`GCC_ROOT`/`NCURSES_ROOT`/`PYTHON_ROOT`/`HWLOC_ROOT`/`UCX_ROOT`/`PMIX_ROOT`/`LIBEVENT_ROOT`，各按特征文件门禁
+
+两个刻意的取舍：**不设 `CMAKE_ROOT`**（实测它是 CMake 由二进制位置推导的内部变量，写环境变量无效，真正生效的是 `CMAKE_PREFIX_PATH`）；**不设 `GIT_ROOT`**（base 里没有 git，设了就是假路径）。
+
+功能验证是实跑的，不只是看变量：`mpicc` 编译 + `mpirun -np 2` 输出 `rank 0/1 of 2`；`nvcc` 编译 CUDA 并运行输出 `cuda ok`；CMake 探针 `find_package(CUDAToolkit/MPI/HDF5)` 三项全 TRUE。
+
+一个真实缺口：`h5cc`/`h5pcc` 依赖 `pkg-config`，base 没装，报 `pkg-config: not found`。这是缺包不是配置错——已把 `pkg-config` 写进指南的 `mamba install` 列表，并注明它只影响这几个包装器，`h5py` 和 `find_package(HDF5)` 不受影响。
+
+测试侧加了"防漂移"检查：从 `env.sh` 的声明注释块解析出变量名，逐个断言真的被设置，这样"文档写了代码没做"会直接失败。`bash env.test.sh` 14 项全过，`form-audit --strict`、`git diff --check` 通过，`_zda_set_compiler` 用完即 `unset -f`，两个 shell 都无泄漏。
+
+HPC 那台仍建议先 `export _ZDA_SKIP_LIBPATH=1`，避免 conda 的 libstdc++ 遮蔽 module 版本——这条我在本机只能模拟，没法在 `ln01` 上验证。
+
+未提交。终态：finished。
+--- report end ---

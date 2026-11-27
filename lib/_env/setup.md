@@ -50,29 +50,65 @@ conda base，并把 base 里的开发路径注入对应环境变量，同时清�
 
 ### 环境变量声明
 
-`zda` 同步下列变量，规则是**目录必须真实存在**、**conda 项前置**、**旧值保留在后面**、
-**重复项按物理路径去重**（`lib/python3.1 -> python3.12` 只保留一条），可重复执行：
+`zda` 同步下列变量，规则是**目录/可执行必须真实存在**、**conda 项前置**、**旧值保留在后面**、
+**重复项按物理路径去重**（`lib/python3.1 -> python3.12` 只保留一条），可重复执行。
+唯一权威清单在 `env.sh` 的 `# zda 注入的环境变量声明` 注释块，`env.test.sh` 会解析该块
+逐项核对是否真的被设置，防止声明与实现漂移。
 
-| 变量 | 注入的目录（按顺序） |
+| 变量 | 注入内容 |
 |---|---|
-| `PATH` | `$CONDA_PREFIX/bin`、`$CONDA_PREFIX/sbin` |
-| `LD_LIBRARY_PATH`、`LIBRARY_PATH` | `$CONDA_PREFIX/lib`、`$CONDA_PREFIX/lib64`、`$CONDA_PREFIX/targets/*/lib` |
-| `CPATH`、`CPLUS_INCLUDE_PATH`、`C_INCLUDE_PATH` | `$CONDA_PREFIX/include`、`$CONDA_PREFIX/targets/*/include` |
-| `PYTHONPATH` | `$CONDA_PREFIX/lib/python*/site-packages` |
-| `PKG_CONFIG_PATH` | `$CONDA_PREFIX/lib/pkgconfig`、`$CONDA_PREFIX/share/pkgconfig` |
-| `CMAKE_PREFIX_PATH` | `$CONDA_PREFIX` |
-| `MANPATH` | `$CONDA_PREFIX/share/man`、`$CONDA_PREFIX/man` |
-| `ACLOCAL_PATH` | `$CONDA_PREFIX/share/aclocal` |
-| `CUDA_PATH` | `$CONDA_PREFIX/targets/<arch>`（存在 `include` 时） |
-| `HDF5_DIR`、`HDF5_MPI` | `$CONDA_PREFIX` / `ON`（base 内有 `include/hdf5.h` 或 `include/hdf5/` 时） |
+| `PATH` | `bin`、`sbin`、`nvvm/bin` |
+| `LD_LIBRARY_PATH`、`LIBRARY_PATH` | `lib`、`lib64`、`targets/*/lib`（`_ZDA_SKIP_LIBPATH=1` 时跳过） |
+| `CPATH`、`CPLUS_INCLUDE_PATH`、`C_INCLUDE_PATH` | `include`、`targets/*/include` |
+| `PYTHONPATH` | `lib/python*/site-packages` |
+| `PKG_CONFIG_PATH` | `lib/pkgconfig`、`share/pkgconfig` |
+| `CMAKE_PREFIX_PATH` | 前缀根 |
+| `MANPATH`、`ACLOCAL_PATH` | `share/man`、`man` / `share/aclocal` |
+
+CUDA：
+
+| 变量 | 值 |
+|---|---|
+| `CUDA_PATH`、`CUDA_HOME`、`CUDA_ROOT`、`CUDAToolkit_ROOT` | `targets/<arch>`（CMake ≥3.17 认 `CUDAToolkit_ROOT`，其余工具链各认一个） |
+| `CUDA_INCLUDE_PATH` | `targets/<arch>/include` |
+| `CUDA_LIBRARY_PATH` | `targets/<arch>/lib`、`targets/<arch>/lib/stubs` |
+| `CUDACXX` | `bin/nvcc` |
+
+MPI（存在 `bin/mpicc` 时整体启用）：
+
+| 变量 | 值 |
+|---|---|
+| `MPI_HOME`、`OPENMPI_ROOT`、`OPAL_PREFIX` | 前缀根 |
+| `MPICC`、`MPICXX`、`MPIF77`、`MPIF90`、`MPIFORT` | `bin/` 下的同名包装器（逐个判存在） |
+| `MPI_INCLUDE_PATH`、`MPI_LIBRARY_PATH` | `include`、`lib` |
+| `OMPI_CC`、`OMPI_CXX`、`OMPI_FC` | 前缀里的 conda 编译器包装（`x86_64-conda-linux-gnu-*`，缺失回退 `gcc`/`g++`/`gfortran`） |
+| `OMPI_ALLOW_RUN_AS_ROOT`、`OMPI_ALLOW_RUN_AS_ROOT_CONFIRM`、`MPI_ALLOW_RUN_AS_ROOT` | `1`（与 `docker-*` 快照一致） |
+
+HDF5 与编译器：
+
+| 变量 | 值 |
+|---|---|
+| `HDF5_DIR`、`HDF5_ROOT` | 前缀根（存在 `include/hdf5.h` 或 `include/hdf5/` 时） |
+| `HDF5_MPI`、`HDF5_INCLUDE_PATH`、`HDF5_LIBRARY_PATH` | `ON`、`include`、`lib` |
+| `CC`、`CXX`、`CPP`、`FC`、`F77` | 前缀内的 `x86_64-conda-linux-gnu-*`（不可用时回退 `cc`/`c++`/`cpp`/`gfortran`）；已有值若已指向该前缀则保持不变 |
+| `GCC_ROOT`、`NCURSES_ROOT`、`PYTHON_ROOT`、`HWLOC_ROOT`、`UCX_ROOT`、`PMIX_ROOT`、`LIBEVENT_ROOT` | 前缀根，各自按特征文件/目录做门禁（沿用 `lib/snsc-v20260817/env.sh` 的 `*_ROOT` 命名） |
 
 说明：
 
-- `targets/*` 是按架构目录（如 `x86_64-linux`），`nvcc` 与 CUDA 头/库都在这里；`zda` 把
-  `targets/*/lib` 一并放进库搜索路径，因此 `cuda-cccl`、`cuda-libraries-dev` 的头文件与
-  stub 库能直接被 `gcc`/`g++` 看到。
-- `CUDAToolkit_ROOT`、`CUDA_HOME`、`CUDA_ROOT` 等不覆盖：不同工具链对它们语义不一致，
-  统一以 `CUDA_PATH` 为准（CMake ≥3.17 认这个变量）；需要旧名时在 `~/env.sh` 里自行派生。
+- **不设 `CMAKE_ROOT`**：那是 CMake 自己由二进制位置推导的内部变量，写环境变量没有意义，
+  真正生效的是 `CMAKE_PREFIX_PATH`。
+- `targets/*` 是按架构目录（如 `x86_64-linux`），`nvcc`、CUDA 头与 stub 库都在这里；
+  `CUDA_LIBRARY_PATH` 同时包含 `lib/stubs`，链接期才能在没有驱动的机器上解析 CUDA 符号。
+- `CUDAToolkit_ROOT` 指向 `targets/<arch>` 时 CMake 能直接 `find_package(CUDAToolkit)`；
+  实测 `CUDAToolkit_FOUND=TRUE VER=12.4.131`、`MPI_FOUND=TRUE`、`HDF5_FOUND=TRUE`。
+- `OMPI_CC`/`OMPI_CXX`/`OMPI_FC` 显式指向 conda 编译器，避免 `mpicc` 落到系统 `gcc`
+  造成"MPI 头来自 conda、C++ ABI 来自系统"的混编。
+- `CC`/`CXX`/`FC` 只在当前值不指向该前缀时才改写：`conda activate` 已经设过
+  `x86_64-conda-linux-gnu-cc` 时不会重复覆盖。
+- `h5cc`/`h5pcc`/`h5fc`/`h5c++` 依赖 `pkg-config`；base 未装时它们会报
+  `pkg-config: not found`。该包已列入 [`../_wsl/setup.md`](../_wsl/setup.md) 工具链的
+  `mamba install` 清单，随 base 一起装；手工补装用 `mamba install pkg-config`
+  （这几个是包装器，`h5py`、`find_package(HDF5)` 和 `zda` 都不需要它）。
 - `_ZDA_SKIP_LIBPATH=1` 时跳过 `LD_LIBRARY_PATH`/`LIBRARY_PATH` 注入，其余变量照常。
   HPC 或 module 环境里 conda 的 `libstdc++` 可能遮蔽系统库时使用。
 - 若旧 shell 里 `LD_LIBRARY_PATH` 以 `:` 结尾（空项表示"当前目录"），同步后仍保留该结尾。

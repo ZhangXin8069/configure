@@ -342,9 +342,23 @@ _create_fake_conda() {
 
     mkdir -p "$root/etc/profile.d" "$root/bin" "$root/sbin" "$root/include" \
         "$root/lib/pkgconfig" "$root/lib/python3.12/site-packages" \
-        "$root/share/man" "$root/share/aclocal" \
-        "$root/targets/x86_64-linux/include" "$root/targets/x86_64-linux/lib"
-    touch "$root/include/hdf5.h"
+        "$root/share/man" "$root/share/aclocal" "$root/nvvm/bin" \
+        "$root/include/ucp/api" "$root/include/hwloc" "$root/include/event2" \
+        "$root/lib/pmix" "$root/include/hdf5" \
+        "$root/targets/x86_64-linux/include" "$root/targets/x86_64-linux/lib/stubs"
+    : >"$root/include/hdf5.h"
+    : >"$root/include/ncurses.h"
+    : >"$root/include/hwloc.h"
+    : >"$root/include/ucp/api/ucp.h"
+    : >"$root/include/event2/event.h"
+    for exe in cc c++ cpp gcc g++ gfortran nvcc mpicc mpicxx mpif77 mpif90 mpifort \
+        x86_64-conda-linux-gnu-cc x86_64-conda-linux-gnu-c++ \
+        x86_64-conda-linux-gnu-cpp x86_64-conda-linux-gnu-gfortran cmake; do
+        printf '#!/bin/sh\nexit 0\n' >"$root/bin/$exe"
+        chmod +x "$root/bin/$exe"
+    done
+    printf '#!/bin/sh\nexit 0\n' >"$root/nvvm/bin/cicc"
+    chmod +x "$root/nvvm/bin/cicc"
     {
         printf '%s\n' \
             '# 测试用最小 conda 壳：只支持 activate base / deactivate' \
@@ -369,8 +383,6 @@ _create_fake_conda() {
             '    esac' \
             '}'
     } >"$root/etc/profile.d/conda.sh"
-    printf '#!/bin/sh\nexit 0\n' >"$root/bin/conda"
-    chmod +x "$root/bin/conda"
 }
 
 _check_zda_alias() {
@@ -406,7 +418,15 @@ _check_zda_alias() {
         _zda_activate_base >/dev/null 2>&1
         for v in PATH LD_LIBRARY_PATH LIBRARY_PATH CPATH CPLUS_INCLUDE_PATH \
                  C_INCLUDE_PATH PYTHONPATH PKG_CONFIG_PATH CMAKE_PREFIX_PATH \
-                 MANPATH ACLOCAL_PATH CUDA_PATH HDF5_DIR HDF5_MPI; do
+                 MANPATH ACLOCAL_PATH \
+                 CUDA_PATH CUDA_HOME CUDA_ROOT CUDAToolkit_ROOT CUDA_INCLUDE_PATH \
+                 CUDA_LIBRARY_PATH CUDACXX \
+                 MPI_HOME OPENMPI_ROOT OPAL_PREFIX MPICC MPICXX MPIF77 MPIF90 MPIFORT \
+                 MPI_INCLUDE_PATH MPI_LIBRARY_PATH OMPI_CC OMPI_CXX OMPI_FC \
+                 OMPI_ALLOW_RUN_AS_ROOT OMPI_ALLOW_RUN_AS_ROOT_CONFIRM MPI_ALLOW_RUN_AS_ROOT \
+                 HDF5_DIR HDF5_ROOT HDF5_INCLUDE_PATH HDF5_LIBRARY_PATH HDF5_MPI \
+                 CC CXX CPP FC F77 GCC_ROOT NCURSES_ROOT PYTHON_ROOT HWLOC_ROOT \
+                 UCX_ROOT PMIX_ROOT LIBEVENT_ROOT; do
             eval "printf \"%s=%s\\n\" \"$v\" \"\${$v-<unset>}\""
         done
     ' configure-env-test "$env_file" 2>/dev/null)
@@ -418,6 +438,18 @@ _check_zda_alias() {
         [[ -n "$val" ]] || _fail "$shell_path 的 zda 未设置 $var"
         [[ "$val" == "$fake_root"* ]] ||
             _fail "$shell_path 的 $var 未把 conda 路径前置：$val"
+    done
+
+    # 声明清单里的每个变量都必须真的被设置（防止声明与实现漂移）
+    local declared
+    for declared in $(sed -n '/^# zda 注入的环境变量声明/,/^# 规则/p' "$env_file" |
+        grep -oE '\b(CUDA|MPI|OMPI|HDF5)_[A-Z_]+|\b(CC|CXX|CPP|FC|F77|GCC_ROOT|NCURSES_ROOT|PYTHON_ROOT|HWLOC_ROOT|UCX_ROOT|PMIX_ROOT|LIBEVENT_ROOT|CUDACXX)\b' |
+        sort -u); do
+        case "$declared" in
+        CMAKE_ROOT) continue ;;
+        esac
+        printf '%s\n' "$output" | grep -q "^${declared}=" ||
+            _fail "$shell_path 的 zda 未设置声明中的 $declared"
     done
     # 具体目录映射（前缀匹配：env.sh 自身还会追加仓库 lib 等路径）
     _assert_contains "$output" "LD_LIBRARY_PATH=$fake_root/lib:$fake_root/targets/x86_64-linux/lib"
@@ -431,6 +463,12 @@ _check_zda_alias() {
     _assert_line "$output" "MANPATH=$fake_root/share/man"
     _assert_line "$output" "ACLOCAL_PATH=$fake_root/share/aclocal"
     _assert_line "$output" "CUDA_PATH=$fake_root/targets/x86_64-linux"
+    _assert_line "$output" "CUDA_HOME=$fake_root/targets/x86_64-linux"
+    _assert_line "$output" "CUDA_ROOT=$fake_root/targets/x86_64-linux"
+    _assert_line "$output" "CUDAToolkit_ROOT=$fake_root/targets/x86_64-linux"
+    _assert_line "$output" "CUDA_INCLUDE_PATH=$fake_root/targets/x86_64-linux/include"
+    _assert_contains "$output" "CUDA_LIBRARY_PATH=$fake_root/targets/x86_64-linux/lib:$fake_root/targets/x86_64-linux/lib/stubs"
+    _assert_line "$output" "CUDACXX=$fake_root/bin/nvcc"
     _assert_line "$output" "HDF5_DIR=$fake_root"
     _assert_line "$output" "HDF5_MPI=ON"
 
