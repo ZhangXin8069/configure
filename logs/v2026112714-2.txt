@@ -1,0 +1,83 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-27 14:19:17 +0800
+批次: cleanup-tag-dev69
+主任务: 清理测试残留并 push~tag（dev69）
+触发原因: 任务完成
+摘要: 删除 pip.conf 与 zda-probe-test 环境，复查后推送 main 并创建/推送附注标签 dev69
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 清理测试残留（用户授权）
+- 目标: 删除上一轮遗留的 `~/.config/pip/pip.conf` 与 `zda-probe-test` conda 环境
+- 命令/操作: 先 `cat`/`ls -la`/`stat` 取证，确认 `~/.config/pip` 目录的创建时间（2026-11-27 12:36:34）与 pip.conf 完全一致，判定整个目录都是测试产物；再 `rm -v ~/.config/pip/pip.conf`、`rmdir -v ~/.config/pip`；`conda env remove -n zda-probe-test -y`
+- 关键输出: `removed '/home/zhangxin/.config/pip/pip.conf'`、`rmdir: removing directory, '/home/zhangxin/.config/pip'`；conda 输出事务完成；`conda env list` 只剩 `base`
+- 退出码: 0 / 0
+- 证据与判断: 删除前核对过目录归属，只删测试创建的路径，未触碰 `~/.config/{htop,ubuntu-insights}`
+
+### S2 — 清理后功能复查
+- 目标: 确认删除没有破坏 pip/conda/zda
+- 命令/操作: `pip config debug`、`pip config list`、`conda env list`、`conda --version`；隔离 env 下跑 `eval zda` 与假 HOME 缺失分支
+- 关键输出: `user:` 段为空且 `/home/zhangxin/.config/pip/pip.conf, exists: False`；`pip config list` 无输出（回落官方源）；`conda 26.10.0`、`prefix=/home/zhangxin/miniforge3`；`zda: 已激活 /home/zhangxin/miniforge3（base）`、`P=/home/zhangxin/miniforge3 D=base`；假 HOME 下 `rc=1`
+- 退出码: 0
+- 证据与判断: 清理只移除了镜像配置，pip/conda 回到默认状态；zda 两条主分支仍正常
+
+### S3 — 提交前完整校验
+- 目标: push 前把仓库自带的闸门全部跑一遍
+- 命令/操作: `bash -n env.sh`、`bash -n env.test.sh`、`bash env.test.sh`、`form-audit.sh --strict --quiet`、`form-data-tracking-check.sh --quiet`、`form-large-files-check.sh`、`git diff --check`
+- 关键输出: 语法 ok；测试 `test_rc=0`、`通过：` 14 行；`audit_rc=0`、`data_rc=0`、`large_rc=0`（已检查=0，限制 10000000 字节）、`check_rc=0`
+- 退出码: 全 0
+- 证据与判断: 全部门禁通过，工作区干净（`git status --porcelain` 为空）
+
+### S4 — 确认提交与远端状态
+- 目标: 弄清上一轮改动为何已在 HEAD 中
+- 命令/操作: `git log --oneline`、`git show --stat HEAD`、`git reflog`、`git fetch origin`、`git rev-list --left-right --count origin/main...HEAD`、`git config --get core.hooksPath`
+- 关键输出: HEAD=`3392836`，消息为 `2026-11-27-14-10-40`（gpush 风格自动提交），含本轮全部 19 个文件 +1042/-3；`origin/main` 与之相同（0 0）；无 hooksPath、`.git/hooks` 无自定义钩子
+- 退出码: 0
+- 证据与判断: 提交已由自动提交机制落地并已推送，因此本次只需打标签，不需要再提交内容改动
+
+### S5 — 标签类型判定与历史自检
+- 目标: 确定类型/编号并确认 follow 链完整
+- 命令/操作: `tag-baseline.sh --latest`、按 creatordate 列标签、各类型计数、`tag-chain.sh --check --remote origin`、检查 `stab86`/`stab85_*` 是否占用
+- 关键输出: 基线 `bug10`（2026-11-26）；计数 stab=91/dev=70/bug=11/test=0；最新 tag 依次 bug10/bug9/dev68；`tag-chain.sh` 输出 `PASS: follow 链、提交祖先关系，远端 origin 对象一致均正常。`（172 个受管标签）
+- 退出码: 0
+- 证据与判断: 用户只说 `push~tag` 未指定类型，按 tag 技能「无明确信号 → dev（默认）」取 `dev69`；`stab86` 虽空闲但 stab 上一次是 2026-11-10，本轮属增量交付而非里程碑
+
+### S6 — 推送分支与创建/推送标签
+- 目标: 按用户要求先 push 再 tag
+- 命令/操作: `git push origin main`（Everything up-to-date）；`git tag -a dev69 -m "<follow bug10, 四项变更, [commandcode].>"`；`git push origin dev69`；`git ls-remote --tags origin dev69 dev69^{}`；`tag-chain.sh --check --remote origin`
+- 关键输出: `* [new tag] dev69 -> dev69`；远端 `refs/tags/dev69` = `fb6c4a3`（tag 对象）、`refs/tags/dev69^{}` = `3392836`（peeled commit）；本地 `git cat-file -t dev69` = `tag`，peeled 同为 `3392836`，与 `origin/main` 一致；`tag-chain.sh` 在 173 个受管标签上 `PASS`
+- 退出码: 0
+- 证据与判断: 标签为目标提交的纯附注标签，本地与远端 tag 对象/peeled commit 完全一致，follow 链未破坏
+
+## 验证与证据
+- 测试/检查: `bash env.test.sh`（14 项，rc=0）、`form-audit --strict`（rc=0）、`form-data-tracking-check`（rc=0）、`form-large-files-check`（rc=0）、`git diff --check`（rc=0）、`tag-chain.sh --check --remote origin`（PASS）、`git tag -l dev69`、`git ls-remote --tags origin dev69`
+- 结果: 全部通过；清理后 zda 与 conda/pip 均正常
+- 未验证项: 无（远端标签一致性用 `git ls-remote` 核对）
+
+## 变更与产物
+- 文件: 本次会话未新增仓库改动（清理项均在 `$HOME` 与 conda 目录，不属仓库）；日志文件为本轮新增
+- 产物: 本地与远端标签 `dev69`
+- 未改动范围: `~/.config/{htop,ubuntu-insights}`、conda base 环境
+
+## 风险、限制与下一步
+- 风险: 删除 `~/.config/pip/pip.conf` 后 pip 回落官方源，国内下载会变慢；需要时按 `lib/_mirror/setup.md` 重新配置
+- 阻塞: 无
+- 下一步: 其他机器 `git fetch --tags` 同步 `dev69`
+
+## 用户输入指令
+清除"~/.config/pip/pip.conf"与"zda-probe-test",之后复查无误后push~tag
+
+## Agent 全文报告
+--- report begin ---
+两处测试残留已清：`~/.config/pip/pip.conf`（连同测试时新建的空目录 `~/.config/pip`，先核对过创建时间与 pip.conf 完全一致）和 `~/miniforge3/envs/zda-probe-test`（4.6 GB）。复查 pip 已回落官方源（`pip config list` 无输出、`config debug` 显示 user 段为空），conda 只剩 base，`zda` 的激活分支与缺失分支都仍正常。
+
+push 前把仓库闸门跑了一遍：`bash -n` 两个脚本、`env.test.sh` 14 项全过、`form-audit --strict`、`form-data-tracking-check`、`form-large-files-check`、`git diff --check` 全部 rc=0，工作区干净。
+
+过程中发现上一轮改动其实已经由自动提交机制提交（HEAD `3392836`，消息是时间戳 `2026-11-27-14-10-40`）并已推到 `origin/main`，所以 `git push origin main` 返回 up-to-date，本轮只需打标签。
+
+标签类型你没指定，按 tag 技能「无明确信号 → dev（默认）」取 `dev69`（基线 `bug10`，`tag-chain.sh --check --remote origin` 在 172 个受管标签上 PASS）。如果你想标里程碑而非开发快照，`stab86` 也空闲，说一声我可以改成 stab。
+
+终态：finished。
+--- report end ---

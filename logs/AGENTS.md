@@ -1591,3 +1591,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## cleanup-tag-dev69 - final - 2026-11-27 14:19:17 +0800
+- 主任务: 清理测试残留并 push~tag（dev69）
+- 日志文件: logs/v2026112714-2.txt
+- 文件大小: 6876 bytes
+- 触发原因: 任务完成
+- 关键内容: 删除 pip.conf 与 zda-probe-test 环境，复查后推送 main 并创建/推送附注标签 dev69
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
