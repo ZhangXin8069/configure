@@ -35,28 +35,74 @@ printf '%s\n' "$LD_LIBRARY_PATH"
 
 ## conda base 快捷入口 `zda`
 
-`env.sh` 定义别名 `zda`，指向函数 `_zda_activate_base`，用于激活 `${HOME}/miniforge3` 的 conda base：
+`env.sh` 定义别名 `zda`，指向 `_zda_activate_base`：激活 `${HOME}/miniforge3` 的
+conda base，并把 base 里的开发路径注入对应环境变量，同时清掉会遮蔽 base 的旧别名。
+
+### 激活与失败分支
 
 | 情形 | 行为 |
 |---|---|
-| `$HOME/miniforge3/etc/profile.d/conda.sh` 可读 | source 它并执行 `conda activate base`，成功后打印 `zda: 已激活 <prefix>（base）` |
-| 已在 base（`CONDA_PREFIX` 与 `$HOME/miniforge3` 为同一目录） | 直接返回 0，不重复激活，避免 PATH 前缀层层叠加 |
-| 目录或 `conda.sh` 缺失 | 打印 `[WARN]`，再输出 `bin/_zda-guide.txt` 的安装与换源指南，返回 1 |
+| `$HOME/miniforge3/etc/profile.d/conda.sh` 可读 | source 它并 `conda activate base`，打印 `zda: 已激活 <prefix>（base）` |
+| 已在 base（`CONDA_PREFIX` 与 `$HOME/miniforge3` 同一目录） | 跳过激活，但仍补做变量同步与别名清理，保证旧 shell 生效 |
+| 目录或 `conda.sh` 缺失 | 打印 `[WARN]`，再输出 `bin/_zda-guide.txt` 的安装指南，返回 1 |
 | `conda activate base` 失败 | 打印 `[WARN]` 并返回 1，不中断调用方 shell |
 | 激活后 `CONDA_PREFIX` 不符合预期 | 打印实际值与期望值并返回 1 |
 
-要点：
+### 环境变量声明
+
+`zda` 同步下列变量，规则是**目录必须真实存在**、**conda 项前置**、**旧值保留在后面**、
+**重复项按物理路径去重**（`lib/python3.1 -> python3.12` 只保留一条），可重复执行：
+
+| 变量 | 注入的目录（按顺序） |
+|---|---|
+| `PATH` | `$CONDA_PREFIX/bin`、`$CONDA_PREFIX/sbin` |
+| `LD_LIBRARY_PATH`、`LIBRARY_PATH` | `$CONDA_PREFIX/lib`、`$CONDA_PREFIX/lib64`、`$CONDA_PREFIX/targets/*/lib` |
+| `CPATH`、`CPLUS_INCLUDE_PATH`、`C_INCLUDE_PATH` | `$CONDA_PREFIX/include`、`$CONDA_PREFIX/targets/*/include` |
+| `PYTHONPATH` | `$CONDA_PREFIX/lib/python*/site-packages` |
+| `PKG_CONFIG_PATH` | `$CONDA_PREFIX/lib/pkgconfig`、`$CONDA_PREFIX/share/pkgconfig` |
+| `CMAKE_PREFIX_PATH` | `$CONDA_PREFIX` |
+| `MANPATH` | `$CONDA_PREFIX/share/man`、`$CONDA_PREFIX/man` |
+| `ACLOCAL_PATH` | `$CONDA_PREFIX/share/aclocal` |
+| `CUDA_PATH` | `$CONDA_PREFIX/targets/<arch>`（存在 `include` 时） |
+| `HDF5_DIR`、`HDF5_MPI` | `$CONDA_PREFIX` / `ON`（base 内有 `include/hdf5.h` 或 `include/hdf5/` 时） |
+
+说明：
+
+- `targets/*` 是按架构目录（如 `x86_64-linux`），`nvcc` 与 CUDA 头/库都在这里；`zda` 把
+  `targets/*/lib` 一并放进库搜索路径，因此 `cuda-cccl`、`cuda-libraries-dev` 的头文件与
+  stub 库能直接被 `gcc`/`g++` 看到。
+- `CUDAToolkit_ROOT`、`CUDA_HOME`、`CUDA_ROOT` 等不覆盖：不同工具链对它们语义不一致，
+  统一以 `CUDA_PATH` 为准（CMake ≥3.17 认这个变量）；需要旧名时在 `~/env.sh` 里自行派生。
+- `_ZDA_SKIP_LIBPATH=1` 时跳过 `LD_LIBRARY_PATH`/`LIBRARY_PATH` 注入，其余变量照常。
+  HPC 或 module 环境里 conda 的 `libstdc++` 可能遮蔽系统库时使用。
+- 若旧 shell 里 `LD_LIBRARY_PATH` 以 `:` 结尾（空项表示"当前目录"），同步后仍保留该结尾。
+
+### 别名清理
+
+`zda` 会 `unalias` 下列会遮蔽 base 可执行文件的旧别名，并在有删除时打印名单：
+`python`、`python3`、`pip`、`pip3`、`py`、`ipython`。其他别名（如 `mytool`）不受影响；
+`unalias` 必须在当前 shell 执行，因此实现里没有把这一步放进 `$(...)` 子 shell。
+
+### 前置条件
+
+`zda` 假定 base 里已经装好开发工具链。完整清单（含 `mamba install`、CUDA/HDF5 导出、
+源码编译的 mpi4py/h5py/tilelang/torch、TeX 与验证命令）在
+[`../../bin/_zda-guide.txt`](../../bin/_zda-guide.txt)；环境缺失时 `zda` 会直接打印该文件。
+这些包的安装顺序与 MPI/HDF5 变体约束见 [`../_wsl/setup.md`](../_wsl/setup.md) 的
+「Miniforge 与 conda」和「源码编译 pip 依赖」。镜像地址见 [`../_mirror/setup.md`](../_mirror/setup.md)。
+
+### 其他要点
 
 - 目标路径固定为 `${HOME}/miniforge3`。装在其他位置（如 `/opt/miniforge3`）时 `zda` 会走缺失分支，需改用 `conda activate <路径>`。
-- 别名只在交互式 shell 展开。脚本里直接调函数：`bash -c 'source ./env.sh; _zda_activate_base'`；bash 脚本需 `shopt -s expand_aliases`。
-- 指南文件路径由 `_ZDA_GUIDE_PATH` 给出，默认 `${仓库根}/bin/_zda-guide.txt`，分叉部署或测试可覆盖；文件缺失时会明确报出路径而不是静默跳过。
-- 与 `conda init` 共存：`zda` 只负责把 base 变成可用，不替代 `conda init` 写入的自动加载。重复 source `conda.sh` 不会再次前置 `condabin`（由 `CONDA_SHLVL` 保护），因此已激活其他环境时调用 `zda` 会正常切回 base。
-- 别名与函数都出现在 `@ALIAS@` 段的输出里，冲突预检恢复后会照常把同名的用户自定义 `zda` 报为冲突。
+- 别名只在交互式 shell 展开。脚本里直接调函数：`bash -c 'source ./env.sh; _zda_activate_base'`；bash 脚本需 `shopt -s expand_aliases`，zsh 需 `setopt aliases` 并用 `eval zda`。
+- 指南文件路径由 `_ZDA_GUIDE_PATH` 给出，默认 `${仓库根}/bin/_zda-guide.txt`；文件缺失时会明确报出路径而不是静默跳过。
+- 与 `conda init` 共存：`zda` 只负责激活与变量同步，不替代 `conda init` 写入的自动加载。重复 source `conda.sh` 不会再次前置 `condabin`（由 `CONDA_SHLVL` 保护），已激活其他环境时调用 `zda` 会正常切回 base。
+- 别名与函数都出现在 `@ALIAS@` 段的探测输出里，冲突预检恢复后会照常把用户同名的 `zda` 报为冲突。
 
 验证：
 
 ```bash
-bash --noprofile --norc -c 'source ./env.sh; _zda_activate_base; printf "%s\n" "$CONDA_PREFIX"'
+bash --noprofile --norc -c 'source ./env.sh; _zda_activate_base; printf "%s\n" "$CONDA_PREFIX" "$CUDA_PATH"'
 bash env.test.sh
 ```
 

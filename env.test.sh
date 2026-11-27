@@ -340,7 +340,11 @@ _check_screen_helpers() {
 _create_fake_conda() {
     local root=$1
 
-    mkdir -p "$root/etc/profile.d" "$root/bin"
+    mkdir -p "$root/etc/profile.d" "$root/bin" "$root/sbin" "$root/include" \
+        "$root/lib/pkgconfig" "$root/lib/python3.12/site-packages" \
+        "$root/share/man" "$root/share/aclocal" \
+        "$root/targets/x86_64-linux/include" "$root/targets/x86_64-linux/lib"
+    touch "$root/include/hdf5.h"
     {
         printf '%s\n' \
             '# 测试用最小 conda 壳：只支持 activate base / deactivate' \
@@ -392,6 +396,88 @@ _check_zda_alias() {
     ' configure-env-test "$env_file" 2>"$test_root/zda-activate.err")
     _assert_contains "$output" "prefix=$fake_root default=base"
     _assert_contains "$output" 'zda: 已激活'
+
+    # 路径变量同步：base 的 bin/include/lib 前置，且旧值保留在后面
+    output=$(HOME="$fake_home" "$shell_path" -c '
+        unset LD_LIBRARY_PATH LIBRARY_PATH CPATH CPLUS_INCLUDE_PATH C_INCLUDE_PATH \
+              PYTHONPATH PKG_CONFIG_PATH CMAKE_PREFIX_PATH MANPATH ACLOCAL_PATH
+        export CPATH=/opt/legacy/include PYTHONPATH=/opt/legacy/py
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base >/dev/null 2>&1
+        for v in PATH LD_LIBRARY_PATH LIBRARY_PATH CPATH CPLUS_INCLUDE_PATH \
+                 C_INCLUDE_PATH PYTHONPATH PKG_CONFIG_PATH CMAKE_PREFIX_PATH \
+                 MANPATH ACLOCAL_PATH CUDA_PATH HDF5_DIR HDF5_MPI; do
+            eval "printf \"%s=%s\\n\" \"$v\" \"\${$v-<unset>}\""
+        done
+    ' configure-env-test "$env_file" 2>/dev/null)
+
+    local var val
+    for var in LD_LIBRARY_PATH LIBRARY_PATH CPATH CPLUS_INCLUDE_PATH \
+               C_INCLUDE_PATH PYTHONPATH PKG_CONFIG_PATH MANPATH ACLOCAL_PATH; do
+        val=$(printf '%s\n' "$output" | sed -n "s/^${var}=//p")
+        [[ -n "$val" ]] || _fail "$shell_path 的 zda 未设置 $var"
+        [[ "$val" == "$fake_root"* ]] ||
+            _fail "$shell_path 的 $var 未把 conda 路径前置：$val"
+    done
+    # 具体目录映射（前缀匹配：env.sh 自身还会追加仓库 lib 等路径）
+    _assert_contains "$output" "LD_LIBRARY_PATH=$fake_root/lib:$fake_root/targets/x86_64-linux/lib"
+    _assert_contains "$output" "LIBRARY_PATH=$fake_root/lib:$fake_root/targets/x86_64-linux/lib"
+    _assert_line "$output" "CPATH=$fake_root/include:$fake_root/targets/x86_64-linux/include:/opt/legacy/include"
+    _assert_line "$output" "CPLUS_INCLUDE_PATH=$fake_root/include:$fake_root/targets/x86_64-linux/include"
+    _assert_line "$output" "C_INCLUDE_PATH=$fake_root/include:$fake_root/targets/x86_64-linux/include"
+    _assert_line "$output" "PYTHONPATH=$fake_root/lib/python3.12/site-packages:/opt/legacy/py"
+    _assert_line "$output" "PKG_CONFIG_PATH=$fake_root/lib/pkgconfig"
+    _assert_line "$output" "CMAKE_PREFIX_PATH=$fake_root"
+    _assert_line "$output" "MANPATH=$fake_root/share/man"
+    _assert_line "$output" "ACLOCAL_PATH=$fake_root/share/aclocal"
+    _assert_line "$output" "CUDA_PATH=$fake_root/targets/x86_64-linux"
+    _assert_line "$output" "HDF5_DIR=$fake_root"
+    _assert_line "$output" "HDF5_MPI=ON"
+
+    # 旧值不被丢弃，只降序
+    _assert_contains "$(printf '%s\n' "$output" | sed -n 's/^PATH=//p')" ':/usr/bin'
+
+    # 重复同步不产生重复项
+    output=$(HOME="$fake_home" "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base >/dev/null 2>&1
+        _zda_activate_base >/dev/null 2>&1
+        printf "%s\n" "$PYTHONPATH"
+    ' configure-env-test "$env_file" 2>/dev/null)
+    [[ "$output" == "$fake_root/lib/python3.12/site-packages" ]] ||
+        _fail "$shell_path 的重复 zda 让 PYTHONPATH 出现重复：$output"
+
+    # _ZDA_SKIP_LIBPATH=1 时不注入 conda 的 lib，其他变量照常
+    output=$(HOME="$fake_home" _ZDA_SKIP_LIBPATH=1 "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base >/dev/null 2>&1
+        printf "LD=%s\nLIB=%s\nCPATH=%s\n" \
+            "${LD_LIBRARY_PATH-<unset>}" "${LIBRARY_PATH-<unset>}" "${CPATH-<unset>}"
+    ' configure-env-test "$env_file" 2>/dev/null)
+    if [[ "$output" == *"LD=$fake_root"* ]]; then
+        _fail "$shell_path 在 _ZDA_SKIP_LIBPATH=1 时仍注入了 conda 的 LD_LIBRARY_PATH"
+    fi
+    _assert_line "$output" 'LIB=<unset>'
+    _assert_contains "$output" "CPATH=$fake_root/include"
+
+    # 与 base 冲突的 python/pip 别名应被移除，其他别名保留
+    output=$("$shell_path" -c '
+        shopt -s expand_aliases 2>/dev/null || setopt aliases 2>/dev/null || true
+        source "$1" >/dev/null 2>&1
+        alias python=python3
+        alias pip=pip3
+        alias py=python
+        alias mytool=true
+        eval zda >/dev/null 2>&1
+        for n in python python3 pip pip3 py ipython; do
+            alias "$n" >/dev/null 2>&1 && printf "kept:%s\n" "$n"
+        done
+        alias mytool >/dev/null 2>&1 && printf "mytool-kept\n"
+    ' configure-env-test "$env_file" 2>&1)
+    if [[ "$output" == *kept:* ]]; then
+        _fail "$shell_path 的 zda 未移除冲突别名：$output"
+    fi
+    _assert_contains "$output" 'mytool-kept'
 
     # 重复调用幂等，不重复激活
     output=$(HOME="$fake_home" "$shell_path" -c '

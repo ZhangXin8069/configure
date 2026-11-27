@@ -150,8 +150,143 @@ alias zshconfig='${EDITOR:-vim} ~/.zshrc'
 if [ -n "${ZSH_VERSION}" ]; then
     alias history='omz_history'
 fi
-# zda: 激活 ${HOME}/miniforge3 的 conda base；环境缺失时打印安装与换源指南
+# zda: 激活 ${HOME}/miniforge3 的 conda base，并把 base 的 bin/include/lib 等
+# 路径前置到对应开发环境变量；环境缺失时打印安装与换源指南
 _ZDA_GUIDE_PATH="${_configure_env_root}/bin/_zda-guide.txt"
+# zda 注入的环境变量声明（唯一的权威清单，文档与测试都以此为准）：
+#   PATH                  <- bin sbin
+#   LD_LIBRARY_PATH       <- lib lib64 targets/*/lib          （_ZDA_SKIP_LIBPATH=1 时跳过）
+#   LIBRARY_PATH          <- lib lib64 targets/*/lib          （_ZDA_SKIP_LIBPATH=1 时跳过）
+#   CPATH                 <- include targets/*/include
+#   CPLUS_INCLUDE_PATH    <- include targets/*/include
+#   C_INCLUDE_PATH        <- include targets/*/include
+#   PYTHONPATH            <- lib/python*/site-packages
+#   PKG_CONFIG_PATH       <- lib/pkgconfig share/pkgconfig
+#   CMAKE_PREFIX_PATH     <- 前缀根
+#   MANPATH               <- share/man man
+#   ACLOCAL_PATH          <- share/aclocal
+#   CUDA_PATH             <- targets/<arch>（存在 include 时）
+#   HDF5_DIR / HDF5_MPI   <- 前缀根 / ON（存在 include/hdf5.h 或 include/hdf5 时）
+# 规则：目录必须存在；conda 项前置；旧值保留在后；按物理路径去重；可重复执行。
+# 1 = 跳过 LD_LIBRARY_PATH / LIBRARY_PATH 注入（HPC 上 conda 的 libstdc++
+# 可能遮蔽系统或 module 提供的版本；其余变量仍会同步）
+_ZDA_SKIP_LIBPATH="${_ZDA_SKIP_LIBPATH:-0}"
+
+# 判断 ":" 分隔列表里是否已有某项（POSIX + zsh 通用，不依赖 word splitting）
+_zda_list_has() {
+    case ":${1:-}:" in
+    *":${2:-}:"*) return 0 ;;
+    esac
+    return 1
+}
+
+# 解析目录的物理路径；失败时原样返回。用于合并 python3.1 -> python3.12 这类软链接
+_zda_real_dir() {
+    local _resolved
+    _resolved=$(CDPATH= cd -P -- "$1" 2>/dev/null && pwd -P) || _resolved=''
+    printf '%s' "${_resolved:-$1}"
+}
+
+# 把存在的目录前置到指定变量，已存在的项移到最前（conda 覆盖旧配置），其余保持原序
+_zda_prepend_env() {
+    local _var=$1
+    shift
+    if [ -n "${ZSH_VERSION:-}" ]; then setopt localoptions nonomatch; fi
+    local _cur _dir _real _out='' _seen='' _segs _seg _rest='' _trailing=0
+    eval "_cur=\${${_var}:-}"
+    for _dir in "$@"; do
+        [ -n "${_dir}" ] && [ -d "${_dir}" ] || continue
+        _real=$(_zda_real_dir "${_dir}")
+        _zda_list_has "${_seen}" "${_real}" && continue
+        _seen="${_seen:+${_seen}:}${_real}"
+        _out="${_out:+${_out}:}${_dir}"
+    done
+    [ -n "${_out}" ] || return 0
+    case "${_cur}" in
+    *:) _trailing=1 ;;
+    esac
+    _segs=${_cur}
+    while [ -n "${_segs}" ]; do
+        _seg=${_segs%%:*}
+        case "${_segs}" in
+        *:*) _segs=${_segs#*:} ;;
+        *) _segs='' ;;
+        esac
+        [ -n "${_seg}" ] || continue
+        _real=$(_zda_real_dir "${_seg}")
+        _zda_list_has "${_seen}" "${_real}" && continue
+        _zda_list_has "${_rest}" "${_seg}" && continue
+        _seen="${_seen:+${_seen}:}${_real}"
+        _rest="${_rest:+${_rest}:}${_seg}"
+    done
+    if [ -n "${_rest}" ]; then
+        if [ "${_trailing}" -eq 1 ]; then
+            export "${_var}=${_out}:${_rest}:"
+        else
+            export "${_var}=${_out}:${_rest}"
+        fi
+    elif [ "${_trailing}" -eq 1 ]; then
+        export "${_var}=${_out}:"
+    else
+        export "${_var}=${_out}"
+    fi
+}
+
+# 同步 base 的开发环境变量；幂等，可重复调用
+_zda_sync_env() {
+    local _p=${CONDA_PREFIX:-}
+    [ -n "${_p}" ] && [ -d "${_p}" ] || return 1
+    if [ -n "${ZSH_VERSION:-}" ]; then setopt localoptions nonomatch; fi
+    local -a _arch_dirs=("${_p}"/targets/*)
+    local -a _site_dirs=("${_p}"/lib/python*/site-packages)
+    local _arch_includes=() _arch_libs=() _sp _arch_root=''
+
+    # targets/<arch> 只保留目录本身，供 include/lib/stubs 复用；
+    # 首个架构根单独存成标量，避免 zsh 数组从 1 开始导致 [0] 取空
+    for _sp in "${_arch_dirs[@]}"; do
+        [ -d "${_sp}" ] || continue
+        [ -n "${_arch_root}" ] || _arch_root=${_sp}
+        [ -d "${_sp}/include" ] && _arch_includes+=("${_sp}/include")
+        [ -d "${_sp}/lib" ] && _arch_libs+=("${_sp}/lib")
+    done
+
+    _zda_prepend_env PATH "${_p}/bin" "${_p}/sbin"
+    if [ "${_ZDA_SKIP_LIBPATH}" != 1 ]; then
+        _zda_prepend_env LD_LIBRARY_PATH "${_p}/lib" "${_p}/lib64" "${_arch_libs[@]}"
+        _zda_prepend_env LIBRARY_PATH "${_p}/lib" "${_p}/lib64" "${_arch_libs[@]}"
+    fi
+    _zda_prepend_env CPATH "${_p}/include" "${_arch_includes[@]}"
+    _zda_prepend_env CPLUS_INCLUDE_PATH "${_p}/include" "${_arch_includes[@]}"
+    _zda_prepend_env C_INCLUDE_PATH "${_p}/include" "${_arch_includes[@]}"
+    _zda_prepend_env PYTHONPATH "${_site_dirs[@]}"
+    _zda_prepend_env PKG_CONFIG_PATH "${_p}/lib/pkgconfig" "${_p}/share/pkgconfig"
+    _zda_prepend_env CMAKE_PREFIX_PATH "${_p}"
+    _zda_prepend_env MANPATH "${_p}/share/man" "${_p}/man"
+    _zda_prepend_env ACLOCAL_PATH "${_p}/share/aclocal"
+
+    # CUDA / HDF5 派生变量：仅在 base 里确有对应内容时覆盖旧值
+    if [ -n "${_arch_root}" ] && [ -d "${_arch_root}/include" ]; then
+        export CUDA_PATH="${_arch_root}"
+    fi
+    if [ -d "${_p}/include/hdf5" ] || [ -f "${_p}/include/hdf5.h" ]; then
+        export HDF5_DIR="${_p}"
+        export HDF5_MPI="ON"
+    fi
+    return 0
+}
+
+# 移除会遮蔽 conda base 可执行文件的旧别名（python/pip 系）；结果写入
+# _ZDA_DROPPED_ALIASES。必须在当前 shell 执行，不能用 $(...) 放进子 shell
+_zda_drop_aliases() {
+    local _name
+    _ZDA_DROPPED_ALIASES=''
+    for _name in python python3 pip pip3 py ipython; do
+        alias "${_name}" >/dev/null 2>&1 || continue
+        unalias "${_name}" 2>/dev/null || continue
+        _ZDA_DROPPED_ALIASES="${_ZDA_DROPPED_ALIASES}${_ZDA_DROPPED_ALIASES:+ }${_name}"
+    done
+}
+
 _zda_activate_base() {
     local conda_root="${HOME}/miniforge3"
     local conda_sh="${conda_root}/etc/profile.d/conda.sh"
@@ -166,23 +301,34 @@ _zda_activate_base() {
         fi
         return 1
     fi
-    # 已在该 base 时不重复激活，避免每次 source 后多套 PATH 前缀
+
+    # 已在该 base 时不重复激活，但仍补同步变量与别名，保证旧 shell 也能用
     if [ -n "${CONDA_PREFIX:-}" ] && [ "${CONDA_PREFIX}" -ef "${conda_root}" ]; then
         printf 'zda: 已处于 %s（base）\n' "${CONDA_PREFIX}"
-        return 0
+    else
+        . "${conda_sh}"
+        if ! conda activate base; then
+            printf '[WARN] zda: conda activate base 执行失败。\n' >&2
+            return 1
+        fi
+        if [ -z "${CONDA_PREFIX:-}" ] || [ ! "${CONDA_PREFIX}" -ef "${conda_root}" ]; then
+            printf '[WARN] zda: 激活后 CONDA_PREFIX=%s，与预期 %s 不一致。\n' \
+                "${CONDA_PREFIX:-<空>}" "${conda_root}" >&2
+            return 1
+        fi
+        printf 'zda: 已激活 %s（base）\n' "${CONDA_PREFIX}"
     fi
 
-    . "${conda_sh}"
-    if ! conda activate base; then
-        printf '[WARN] zda: conda activate base 执行失败。\n' >&2
+    _zda_sync_env || {
+        printf '[WARN] zda: 同步 %s 的开发环境变量失败。\n' "${conda_root}" >&2
         return 1
+    }
+    _zda_drop_aliases
+    if [ -n "${_ZDA_DROPPED_ALIASES}" ]; then
+        printf 'zda: 已移除与 base 冲突的别名：%s\n' "${_ZDA_DROPPED_ALIASES}"
     fi
-    if [ -z "${CONDA_PREFIX:-}" ] || [ ! "${CONDA_PREFIX}" -ef "${conda_root}" ]; then
-        printf '[WARN] zda: 激活后 CONDA_PREFIX=%s，与预期 %s 不一致。\n' \
-            "${CONDA_PREFIX:-<空>}" "${conda_root}" >&2
-        return 1
-    fi
-    printf 'zda: 已激活 %s（base）\n' "${CONDA_PREFIX}"
+    printf 'zda: 已同步 PATH/CPATH/LIBRARY_PATH/PKG_CONFIG_PATH/PYTHONPATH/CMAKE_PREFIX_PATH/MANPATH 等变量（base 优先）\n'
+    return 0
 }
 alias zda='_zda_activate_base'
 # @@ZHANGXIN@@

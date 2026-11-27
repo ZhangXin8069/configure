@@ -12,9 +12,45 @@
 让登录 shell 自动加载 conda（按实际 shell 选择，可两条都执行）：
   conda init bash
   conda init zsh
-验证：
+
+以上只是最小可用环境。zda 假定 base 里已装好下面这套开发工具链，缺任一项时
+zda 仍会激活，但路径变量只能覆盖实际存在的目录。
+
+1) 工具链（在 base 中执行）：
+  mamba update -n base -c conda-forge conda
+  mamba install conda-self zsh gfortran gxx make cmake htop btop nvtop netwatch tree nodejs \
+    "cuda-version=12.4.0" "cuda-nvcc" "cuda-libraries-dev" "cuda-nvml-dev" \
+    "cuda-nvvp" "cuda-gdb" "python=3.12.4" "hdf5=2.2.0=mpi_openmpi*" cupy
+
+2) CUDA/HDF5 派生变量（base 激活后写入 env.sh 或 shell 启动文件）：
+  export CUDA_PATH="${CONDA_PREFIX}/targets/x86_64-linux"
+  export CPLUS_INCLUDE_PATH="${CUDA_PATH}/include":${CPLUS_INCLUDE_PATH}
+  export PATH="${CONDA_PREFIX}/nvvm/bin":${PATH}
+  export HDF5_MPI="ON"
+  export HDF5_DIR="${CONDA_PREFIX}"
+
+3) 需要与 conda MPI/HDF5 匹配的 Python 包（源码编译）：
+  python -m pip install --upgrade pip
+  pip install mpi4py --no-binary=mpi4py --no-cache-dir
+  pip install h5py --no-binary=h5py --no-cache-dir
+  pip install tilelang --no-binary=tilelang --no-cache-dir
+  pip install torch torchvision --no-binary=torch --no-cache-dir
+  pip install scipy cython seaborn opt_einsum lsqfit
+  编译前确认 mpicc/mpicxx/h5cc 均来自 base：command -v mpicc mpicxx h5cc
+
+4) TeX 用系统包（conda-forge 的 texlive-core 太简陋）：
+  sudo apt install texlive-xetex
+
+5) 验证：
   command -v conda && conda --version
   conda activate base && printf '%s\n' "$CONDA_PREFIX"
-完整步骤：lib/_wsl/setup.md 的「Miniforge 与 conda」一节
+  command -v python pip gcc nvcc h5cc mpicc
+  nvcc --version | tail -2
+  python -c 'import h5py, mpi4py; print(h5py.__version__, mpi4py.__version__)'
+
+完整步骤：lib/_wsl/setup.md 的「Miniforge 与 conda」与「源码编译 pip 依赖」两节
 镜像与换源：lib/_mirror/setup.md
+环境变量细节：lib/_env/setup.md 的「conda base 快捷入口 zda」一节
 说明：zda 固定激活 $HOME/miniforge3 的 base；安装到其他路径时请自行 conda activate。
+      HPC 或 module 环境里若不想让 conda 的 libstdc++ 遮蔽系统库：
+      export _ZDA_SKIP_LIBPATH=1，再执行 zda（LD_LIBRARY_PATH/LIBRARY_PATH 保持原值）。

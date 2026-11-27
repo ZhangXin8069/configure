@@ -1,0 +1,95 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-27 16:16:09 +0800
+批次: zda-env-vars
+主任务: 修复 zda 未注入 conda base 环境变量并补前置条件指南
+触发原因: 任务完成
+摘要: zda 同步 11 类路径变量与 CUDA/HDF5 派生变量、清理 python/pip 冲突别名，指南补工具链前置条件
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 复现缺陷与基线测量
+- 目标: 验证用户报告的"zda 未注入 bin/include/lib 等路径"
+- 命令/操作: 在隔离 env 中执行 `eval zda`，逐项打印 `PATH/LD_LIBRARY_PATH/PYTHONPATH/CPATH/CPLUS_INCLUDE_PATH/LIBRARY_PATH/PKG_CONFIG_PATH/MANPATH/CUDA_PATH/HDF5_DIR`
+- 关键输出: 激活前 `LD_LIBRARY_PATH` 只含 `configure/lib`、`.local/lib` 等系统项；`CPATH`、`LIBRARY_PATH`、`CPLUS_INCLUDE_PATH`、`C_INCLUDE_PATH`、`PYTHONPATH`、`PKG_CONFIG_PATH`、`CUDA_PATH`、`HDF5_DIR` **全部 unset**；`PYTHONPATH` 未包含 base 的 site-packages
+- 退出码: 0
+- 证据与判断: 缺陷确认。`conda activate base` 只处理 `PATH`/`CONDA_*`，不设置编译期与运行期搜索路径
+
+### S2 — 参考本库既有配置实例
+- 目标: 按用户要求对齐本库已有的环境变量写法
+- 命令/操作: 读 `lib/snsc-v20260817/env.sh` 的 `--- LIBRARY_PATH / LD_LIBRARY_PATH / CPATH / CMAKE_PREFIX_PATH / PKG_CONFIG_PATH / ACLOCAL_PATH / MANPATH / PYTHONPATH` 分节；读 `lib/wsl-v20261107/env.sh` 的 `@EXPORT@`（CUDA_PATH/CPLUS_INCLUDE_PATH/nvvm/HDF5）
+- 关键输出: snsc 用 `export VAR="a:b:${VAR}"` 加 `case ":$VAR:" in *":x:"*` 防重复；wsl 快照直接 `export CUDA_PATH="${CONDA_PREFIX}/targets/x86_64-linux"` 等五条
+- 退出码: 0
+- 证据与判断: 采用同一组变量名（`CPATH`/`LIBRARY_PATH`/`CMAKE_PREFIX_PATH`/`ACLOCAL_PATH`/`PKG_CONFIG_PATH`/`MANPATH`），但把"整串覆盖"升级为"前置 + 去重"，避免 conda 之外的工具链被整体丢弃
+
+### S3 — 目录事实核查
+- 目标: 只注入真实存在的目录
+- 命令/操作: 逐个探测 `~/miniforge3/{bin,sbin,condabin,nvvm/bin,include,lib,lib64,share/man,man,share/aclocal,lib/pkgconfig,share/pkgconfig,targets/*}` 与 `lib/python*/site-packages`、`include/hdf5.h`、`targets/*/lib/stubs`
+- 关键输出: 存在 `bin sbin condabin nvvm/bin include lib share/man man share/aclocal lib/pkgconfig lib/cmake` 与 `targets/x86_64-linux/{include,lib}`（含 `stubs`）；**无** `lib64`、无 `share/pkgconfig`；`lib/python3.1` 是指向 `python3.12` 的软链接
+- 退出码: 0
+- 证据与判断: 必须逐目录判存在，否则会注入死路径；软链接重复需要按物理路径去重
+
+### S4 — 实现 `_zda_prepend_env` / `_zda_sync_env` / `_zda_drop_aliases`
+- 目标: 前置 + 保留旧值 + 去重 + 幂等 + 别名清理
+- 命令/操作: `env.sh` 新增四个辅助函数与变量声明块（`PATH`/`LD_LIBRARY_PATH`/`LIBRARY_PATH`/`CPATH`/`CPLUS_INCLUDE_PATH`/`C_INCLUDE_PATH`/`PYTHONPATH`/`PKG_CONFIG_PATH`/`CMAKE_PREFIX_PATH`/`MANPATH`/`ACLOCAL_PATH`/`CUDA_PATH`/`HDF5_DIR`/`HDF5_MPI`）
+- 关键输出: 去重靠 `_zda_real_dir`（`cd -P` + `pwd -P`）比较物理路径，`lib/python3.1` 与 `python3.12` 只保留一条；`_ZDA_SKIP_LIBPATH=1` 可跳过库路径注入；`unalias` 在**当前 shell**执行（曾误放进 `$(...)` 子 shell，实测无效后修正）
+- 退出码: 0
+- 证据与判断: 首次实现把 `dropped=$(_zda_drop_aliases)` 写在命令替换里，实测别名仍在；改为写全局 `_ZDA_DROPPED_ALIASES` 后生效
+
+### S5 — 规模与边界回归
+- 目标: 双 shell、幂等、HPC 场景、尾冒号
+- 命令/操作: bash/zsh 各跑一遍；重复 `eval zda` 两次比较 `PYTHONPATH`；模拟 `LD_LIBRARY_PATH=/public/soft/gcc/lib` + `_ZDA_SKIP_LIBPATH=1`；构造 `LD_LIBRARY_PATH="/usr/lib:"` 测尾冒号
+- 关键输出: 两 shell 变量集合一致（11 个变量非空）；重复调用 `PYTHONPATH` 段数恒为 1；`_ZDA_SKIP_LIBPATH=1` 时 `LD_LIBRARY_PATH` 不含 base；尾冒号测试**先 FAIL**——`_rest` 非空分支漏发 `_trailing`，补 `export "${_var}=${_out}:${_rest}:"` 后 PASS
+- 退出码: 0
+- 证据与判断: 四个真实缺陷都是实测发现：①别名在子 shell 里 unalias 无效；②zsh 数组下标从 1 起导致 `CUDA_PATH` 取空；③软链接重复未去重；④尾冒号在"有旧值"分支丢失
+
+### S6 — 测试与文档
+- 目标: 把新行为纳入回归并声明变量清单
+- 命令/操作: `_create_fake_conda` 造出完整假目录树（bin/sbin/include/lib/pkgconfig/site-packages/share/{man,aclocal}/targets/*）；`_check_zda_alias` 新增变量前置、逐条目录映射、幂等、`_ZDA_SKIP_LIBPATH`、别名清理 5 组断言；`env.sh` 加变量声明块；`lib/_env/setup.md` 重写 zda 小节（激活分支表 + 变量表 + 别名清理 + 前置条件）；`bin/_zda-guide.txt` 补工具链/pip/CUDA/HDF5 前置条件；`lib/_wsl/setup.md` 同步一句
+- 关键输出: `bash env.test.sh` 14/14 通过、`rc=0`；`form-audit --strict` rc=0；`git diff --check` rc=0
+- 退出码: 0
+- 证据与判断: 测试里两次断言失败也是测试自身问题（env.sh 会额外追加仓库 lib 到 `LD_LIBRARY_PATH`、工具 shell 自带 conda 变量），改断言为前缀匹配/条件判断后通过
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh`、`bash -n env.test.sh`、`bash env.test.sh`（14 项 rc=0）、`form-audit.sh --strict --quiet`（rc=0）、`git diff --check`（rc=0）、真实 base 端到端、zsh 对照、幂等、尾冒号、`_ZDA_SKIP_LIBPATH`、冲突探针
+- 结果: 全部通过
+- 未验证项: 未在用户给出的 HPC 节点（`ln01`、`/public/home/zhangxin`）实机验证；`_ZDA_SKIP_LIBPATH=1` 是针对该场景提供的开关，本机只能模拟
+
+## 变更与产物
+- 文件: `env.sh`（+166/-26 级）、`env.test.sh`（+88）、`bin/_zda-guide.txt`（+40）、`lib/_env/setup.md`（+66/-?）、`lib/_wsl/setup.md`（1 行）
+- 产物: `zda` 现在同步 11 类路径变量 + `CUDA_PATH`/`HDF5_DIR`/`HDF5_MPI`，并清理 6 个 python/pip 别名
+- 未改动范围: `env.sh` 的 PATH/locale/冲突闸门逻辑、`lib/snsc-*` 快照
+
+## 风险、限制与下一步
+- 风险: 在 HPC 上 conda 的 `libstdc++` 可能遮蔽 module 提供的版本；已提供 `_ZDA_SKIP_LIBPATH=1` 并在文档与指南中说明。`LD_LIBRARY_PATH` 全局生效会影响所有进程，属于用户明确要求的"覆盖旧有配置"
+- 阻塞: 无
+- 下一步: 若 HPC 上仍冲突，可把 `_ZDA_SKIP_LIBPATH=1` 写进 `~/env.sh`；需要提交时另行指示
+
+## 用户输入指令
+发现缺陷:zda没有将{"${HOME}/miniforge3"}中的[bin,include,lib,sbin,等等]路径添加到对应的环境变量中(...)，且应默认用户需要执行{mamba update/install ...}、{export CUDA_PATH...}、{pip install ...}等等开发软件的环境变量设置，将其作为前置条件并添加到指南中，同时旧有环境中的[pip,python,pip3,python3]等等可能与zda环境冲突的别名也应unset
+注意添加环境变量配置声明
+辅助参考本库已有的环境变量配置的实例
+
+## Agent 全文报告
+--- report begin ---
+缺陷确认并修复。原来 `zda` 只做了 `conda activate base`，`CPATH`、`LIBRARY_PATH`、`CPLUS_INCLUDE_PATH`、`C_INCLUDE_PATH`、`PYTHONPATH`、`PKG_CONFIG_PATH`、`MANPATH`、`CUDA_PATH`、`HDF5_DIR` 全部是 unset——所以你列的 cuda/mpi/gcc/hdf5 都只靠 `PATH` 里的二进制在跑，头文件和库根本找不到。
+
+现在 `zda` 会同步 11 类变量并派生 `CUDA_PATH`/`HDF5_DIR`/`HDF5_MPI`：`PATH`(bin,sbin)、`LD_LIBRARY_PATH`+`LIBRARY_PATH`(lib,lib64,targets/*/lib)、`CPATH`/`CPLUS_INCLUDE_PATH`/`C_INCLUDE_PATH`(include,targets/*/include)、`PYTHONPATH`(lib/python*/site-packages)、`PKG_CONFIG_PATH`、`CMAKE_PREFIX_PATH`、`MANPATH`、`ACLOCAL_PATH`。规则是只注入真实存在的目录、conda 项前置、旧值保留在后、按物理路径去重、可重复执行。变量清单在 `env.sh` 里以注释块声明，文档与测试都以它为准。
+
+参考了本库 `lib/snsc-v20260817/env.sh` 的变量组（`LIBRARY_PATH`/`CPATH`/`CMAKE_PREFIX_PATH`/`PKG_CONFIG_PATH`/`ACLOCAL_PATH`/`MANPATH`）和 `lib/wsl-v20261107/env.sh` 的 `@EXPORT@`（`CUDA_PATH`/`CPLUS_INCLUDE_PATH`/`HDF5_*`），但把"整串覆盖"改成"前置+去重"，避免把 module 工具链整个丢掉。
+
+别名清理：`python`/`python3`/`pip`/`pip3`/`py`/`ipython` 会 `unalias`，其他别名不动。这里踩了一个坑——最初写成 `dropped=$(_zda_drop_aliases)`，命令替换跑在子 shell 里，`unalias` 对父 shell 无效，实测别名还在；改成写全局变量后生效。
+
+实测发现并修掉的其他问题：zsh 数组下标从 1 起，`${_arch_dirs[0]}` 取空导致 `CUDA_PATH` 在 zsh 下不设置；`lib/python3.1` 是指向 `python3.12` 的软链接，需要按物理路径去重否则 `PYTHONPATH` 重复；尾冒号（`PATH="...:"`）在"有旧值"分支会丢。
+
+前置条件也写进指南了：`mamba install` 工具链、`CUDA_PATH`/`HDF5_*` 导出、源码编译 mpi4py/h5py/tilelang/torch、TeX、验证命令，都在 `bin/_zda-guide.txt`，环境缺失时 `zda` 直接打印它。
+
+**关于你给的 HPC 案例**：那台机器 `LD_LIBRARY_PATH` 里有 module 的 gcc-10/openmpi/cuda。无条件前置 conda 的 `lib` 可能让 conda 的 `libstdc++` 遮蔽 module 版本。我加了 `_ZDA_SKIP_LIBPATH=1`：设置后跳过 `LD_LIBRARY_PATH`/`LIBRARY_PATH` 注入，其余变量照常。本机只能模拟，没法在那台机器上验证。
+
+验证：`bash env.test.sh` 14 项全过（新增变量前置/逐条目录/幂等/跳过库路径/别名清理断言），`form-audit --strict`、`git diff --check` 通过，真机 base 端到端 `command -v python pip gcc g++ nvcc h5cc mpicc cc` 全部指向 miniforge3。
+
+未提交，等你确认。
+
+终态：finished。
+--- report end ---

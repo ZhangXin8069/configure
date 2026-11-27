@@ -1600,3 +1600,12 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## zda-env-vars - final - 2026-11-27 16:16:09 +0800
+- 主任务: 修复 zda 未注入 conda base 环境变量并补前置条件指南
+- 日志文件: logs/v2026112716.txt
+- 文件大小: 9876 bytes
+- 触发原因: 任务完成
+- 关键内容: zda 同步 11 类路径变量与 CUDA/HDF5 派生变量、清理 python/pip 冲突别名，指南补工具链前置条件
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

@@ -445,7 +445,7 @@ conda clean -i
 
 安装脚本默认把 `conda init` 写进当前 shell 的启动文件；此后的 `conda config` 必须在 `exec bash` 之后执行，否则命令仍不在 `PATH` 中。
 
-装好后仓库的 `env.sh` 提供 `zda` 别名，直接激活 `${HOME}/miniforge3` 的 base（未安装时打印本节与 `_mirror` 的指南）：`zda`。它不替代 `conda init`，只是省去 `conda activate base` 的输入。
+装好后仓库的 `env.sh` 提供 `zda` 别名（未安装时打印本节与 `_mirror` 的指南）。它不只执行 `conda activate base`，还会把 base 的 `bin`/`include`/`lib`/`targets/*` 注入 `PATH`、`LD_LIBRARY_PATH`、`LIBRARY_PATH`、`CPATH`、`CPLUS_INCLUDE_PATH`、`C_INCLUDE_PATH`、`PYTHONPATH`、`PKG_CONFIG_PATH`、`CMAKE_PREFIX_PATH`、`MANPATH`、`ACLOCAL_PATH`、`CUDA_PATH`、`HDF5_DIR`/`HDF5_MPI`，并 `unalias` 掉会遮蔽 base 的 `python`/`pip` 旧别名。变量清单与规则见 [`../_env/setup.md`](../_env/setup.md) 的「conda base 快捷入口 `zda`」；它不替代 `conda init`，只在当前 shell 补齐环境。
 
 镜像站行为与校验：
 
