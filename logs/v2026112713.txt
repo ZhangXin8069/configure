@@ -1,0 +1,96 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-27 13:09:09 +0800
+批次: mirror-dir
+主任务: 新建 lib/_mirror 国内镜像源稳定入口
+触发原因: 任务完成
+摘要: 新建 _mirror 目录（setup.md + AGENTS.md），实测各生态镜像端点并接线 _wsl/_docker/_node-js/_clash
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 盘点本库已有镜像内容
+- 目标: 找出本库所有与"换源/镜像"相关的既有写法，作为新目录的输入
+- 命令/操作: grep `tuna|mirror|镜像|index-url|registry|proxy|GOPROXY|HF_ENDPOINT` 于 `lib/`；定向读 `lib/_wsl/setup.md`、`lib/AGENTS.md`、`lib/_package/setup.md`、`lib/_node-js/setup.md`、`lib/_docker/setup.md`、`lib/_clash/setup.md`
+- 关键输出: 既有内容集中在三处——`_wsl/setup.md` 的 Miniforge 安装 + TUNA conda 通道；各 `*-vYYYYMMDD/env.sh` 里注释掉的 `pip install -i https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple`；`_node-js` 只在排障里提"配置 npm 镜像"而无地址
+- 退出码: 0
+- 证据与判断: 本库没有统一的镜像入口，APT/PyPI/npm/Rust/Go/Docker 的地址分散或缺失，这正是新建 `_mirror/` 的必要性
+
+### S2 — 取网络参考文档
+- 目标: 读用户给的 GitLab 参考页
+- 命令/操作: `web_fetch` 失败（额度不足）→ 改用 `curl` 取 raw README
+- 关键输出: `code=200 size=7153`；内容为 2022 年 WSL2 + OpenMC 换源记录：TUNA Ubuntu `focal` 单行源、USTC conda 五条通道、`pip config set global.index-url`、`gitclone.com` 加速 clone
+- 退出码: 0
+- 证据与判断: 该文档可作为"历史做法"来源，但其中 `focal`、USTC anaconda、gitclone 三项已被本次实测证伪，不能照抄
+
+### S3 — 批量实测镜像端点
+- 目标: 每个要写进文档的地址都取到最小可验证证据
+- 命令/操作: 14 轮 `curl` 探测脚本，覆盖 TUNA 主站/`mirrors-i`、USTC、NJU、BFSU、阿里、腾讯、华为、npmmirror、goproxy.cn、rsproxy、hf-mirror、ghproxy.net、ghfast.top
+- 关键输出（节选）: TUNA `ubuntu/dists/noble/Release` 200、`debian/dists/trixie/Release` 200、`anaconda/cloud/conda-forge/noarch/repodata.json` 200、`pypi/web/simple/pip/` 200、`crates.io-index/config.json` 200、`rustup/dist/channel-rust-stable.toml` 206、`nodejs-release/index.json` 206、`docker-ce/linux/ubuntu/dists/noble/Release` 206、`CTAN/systems/texlive/tlnet/tlpkg/texlive.tlpdb` 206、`homebrew-bottles/api/formula.jws.json` 206；npmmirror、goproxy.cn、hf-mirror 200
+- 退出码: 0
+- 证据与判断: 确立了地址清单；同时发现多项"看起来能用实则不行"的端点（见 S4/S5）
+
+### S4 — 证伪与负向验证（重要）
+- 目标: 排除死链与假可用
+- 命令/操作: 逐项探测 + 负向控制（把地址改成不存在的路径，确认工具真的在读配置）
+- 关键输出:
+  - `gitlab-ce/ubuntu/dists/` 404、`mirrors.cloud.tencent.com/npm` 404、`mirrors.aliyun.com/goproxy/` 404（但 `/goproxy/` 下接模块路径是 200）、`goproxy.io` 模块 zip 403、`repo.huaweicloud.com` PyPI 429
+  - `julia/registries/*` 经 302 到 CERNET 后最终 404 → Julia 只有二进制可用
+  - `github-raw/<任意仓库>/README.md` 404（白名单镜像，只有 ros/fpco/opencollab/docker）
+  - `gitclone.com`：`info/refs` 三次 200，但真实 `git clone --depth=1` 超时 `rc=124`，同时刻直连 GitHub 克隆同仓库成功
+  - `anaconda/archive/` 目录页对默认 UA 403，具体 `.sh` 200
+  - `pip` 负向控制：改错 index-url → `No matching distribution found`；`npm` 负向控制：改错 registry → network 错误
+- 退出码: 0（探测）/ 124（gitclone clone 超时，作为证据保留）
+- 证据与判断: 这些结论全部写进文档的"排障"与"实测"列，避免用户踩同样的坑
+
+### S5 — 端到端跑通文档里的命令
+- 目标: 保证文档中的配置片段可直接执行
+- 命令/操作:
+  - pip：隔离 `HOME` 下 `pip config set` → `pip download six` 成功；`pip config unset global.index-url` 确实清空文件
+  - npm：隔离 `HOME` 下 `npm config set registry` → `npm view left-pad version` 得 `1.3.0`、`dist.tarball` 指向 npmmirror；`npm config delete registry` 回落到 `registry.npmjs.org`
+  - conda：`CONDARC`/`HOME` 隔离 + 独立 `CONDA_PKGS_DIRS`，`custom_channels` 生效时 `conda search --info` 的 `url` 变为 TUNA，`default_channels` 生效时 `xz` 的 `url` 变为 TUNA `pkgs/main`；不可达域名作负向控制立刻报 HTTP 错误
+  - APT：`Dir::Etc::sourcelist` + 独立 `Dir::State`/`Dir::Cache` 跑 `apt-get update`，deb822 与单行式两种格式都 `Fetched` 成功（27.9 MB）
+  - uv：装 uv 0.13.10 到隔离目录；实测 `uv.toml` 写 `default-index` 报 `unknown field`，改 `index-url` 后 `-v` 日志显示请求打到 TUNA，负向控制报 `No solution found`
+- 退出码: 0
+- 证据与判断: 文档中 uv 的键名、conda `CONDARC` 文件名规则、pip `PIP_CONFIG_FILE` 只读不写这三条"反直觉"结论都是实测得出，不是推测
+
+### S6 — 新建 `lib/_mirror/` 并接线
+- 目标: 建立稳定入口，格式对齐其他 `_` 目录
+- 命令/操作: 写 `lib/_mirror/AGENTS.md`（契约、边界表、判定规则、破坏性清单、交叉引用）与 `lib/_mirror/setup.md`（APT/第三方源/conda/PyPI+uv/npm+Node/Rust/Go/Docker/GitHub/其他生态/验证回滚/参考）；在 `lib/AGENTS.md` 目录表插入 `_mirror/`；给 `_wsl`、`_docker`、`_node-js`、`_clash` 的 setup/AGENTS 增加指向 `_mirror` 的交叉引用
+- 关键输出: `lib/_mirror/setup.md` 479 行、`AGENTS.md` 45 行；`git diff --stat` 显示 6 个既有文件 +1/-0 量级的小改动
+- 退出码: 0
+- 证据与判断: 边界划分遵循 AGENTS.md 既有契约（`_clash` 管内代理、`_docker` 管容器、`_wsl` 管发行版），`_mirror` 只管"从哪个地址取包"
+
+## 验证与证据
+- 测试/检查: `git diff --check`（rc=0）；`form-audit.sh --root . --strict --quiet`（rc=0）；`form-data-tracking-check.sh --root . --quiet`（rc=0）；新文档相对链接逐个 `os.path.exists` 校验（14/14 OK）；代码围栏偶数校验通过
+- 结果: 全部通过；`lib/_mirror/` 两个文件均为新增未跟踪状态
+- 未验证项: cargo/go/docker 命令未在真机执行（本机无这些工具），文档已用"本次是否实测"列逐行标注；`docs.docker.com` 只解析到 IPv6 且不可达，参考链接按"未实测"标注
+
+## 变更与产物
+- 文件: 新增 `lib/_mirror/setup.md`、`lib/_mirror/AGENTS.md`；修改 `lib/AGENTS.md`、`lib/_wsl/setup.md`、`lib/_wsl/AGENTS.md`、`lib/_docker/setup.md`、`lib/_docker/AGENTS.md`、`lib/_node-js/setup.md`、`lib/_node-js/AGENTS.md`、`lib/_clash/setup.md`
+- 产物: `lib/_mirror/setup.md`（479 行）、`lib/_mirror/AGENTS.md`（45 行）
+- 未改动范围: `lib/wsl-v20261107/*` 历史快照、`lib/requirements/*`、任何脚本与 `env.sh`
+
+## 风险、限制与下一步
+- 风险: 镜像站策略会变，文档已给每条配置配验证命令与"实测日期 2026-11-27"；Docker 公共加速器关停频繁
+- 副作用（需用户决定）: 测试过程中 `pip config set` 在本机生成了 `~/.config/pip/pip.conf`（内容为 TUNA index-url）。该文件是本次新建的测试残留，删除属"删除文件"需用户显式确认
+- 阻塞: 无
+- 下一步: 用户确认后可删除该 pip.conf 或保留为实际配置；需要提交时另行指示（本次未暂存、未提交、未推送）
+
+## 用户输入指令
+参考本库所有有关镜像加速的内容，并补充网络上相关内容（例如{https://gitlab.itp.ac.cn/ZhangXin8069/20210608-20250619/-/tree/main/_2021_/Install-OpenMC-in-Windows-wsl2-and-change-sources-for-Chinese-users?ref_type=heads}），新建{../_mirror},专注于各种开发环境的国内镜像配置,格式参考其他{../}
+
+## Agent 全文报告
+--- report begin ---
+新建了 `lib/_mirror/`（`setup.md` 479 行 + `AGENTS.md` 45 行），把本库分散在 `_wsl`、`_node-js`、各版本快照 `env.sh` 注释里的镜像信息收拢成统一入口，并补上 APT/PyPI/npm/Rust/Go/Docker/GitHub/CTAN/HF 等生态的地址。
+
+关键点不是堆地址，而是逐条实测。发现的坑：TUNA `github-raw`/`github-release` 是白名单镜像、不是通用加速；`gitclone.com` 的 `info/refs` 返回 200 但真实 clone 超时；TUNA 的 crates 索引镜像不改包体 `dl`；`goproxy.io` 列表页 200 而 zip 403；`anaconda/archive/` 目录页 403；conda 26 的 `CONDARC` 只认 `condarc`/`.condarc`/`*.yml`；`uv.toml` 没有 `default-index` 键；`pip config set` 无视 `PIP_CONFIG_FILE`。这些都写成了可复现的排障条目 + 负向验证方法。
+
+同时给 `_wsl`、`_docker`、`_node-js`、`_clash` 加了指向 `_mirror` 的交叉引用，并在 `lib/AGENTS.md` 目录表登记。
+
+验证：`git diff --check` 与 `form-audit --strict` 通过；新文档 14 个相对链接全部存在；文档中的 pip/npm/conda/APT/uv 命令全部端到端跑通（isolated HOME 或独立 apt Dir::）。
+
+一个副作用要说明：测试 `pip config set` 时在本机写出了 `~/.config/pip/pip.conf`（TUNA index-url）。要删除它需要你确认，因为删除文件不在自动授权范围内。
+
+终态：finished（副作用待确认）。
+--- report end ---

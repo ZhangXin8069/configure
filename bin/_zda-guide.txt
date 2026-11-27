@@ -1,0 +1,20 @@
+[WARN] zda: 未找到 miniforge3 的 conda base 环境，无法激活。
+安装 Miniforge（清华 TUNA 镜像，国内比 GitHub 原地址稳定）：
+  base=https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease
+  wget -O /tmp/Miniforge3-Linux-x86_64.sh "$base/Miniforge3-Linux-x86_64.sh"
+  bash /tmp/Miniforge3-Linux-x86_64.sh        # 安装路径保持默认 $HOME/miniforge3
+  exec bash
+切换 conda-forge 镜像并清理索引缓存：
+  conda config --remove channels conda-forge 2>/dev/null || true
+  conda config --add channels https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/
+  conda config --set show_channel_urls yes
+  conda clean -i
+让登录 shell 自动加载 conda（按实际 shell 选择，可两条都执行）：
+  conda init bash
+  conda init zsh
+验证：
+  command -v conda && conda --version
+  conda activate base && printf '%s\n' "$CONDA_PREFIX"
+完整步骤：lib/_wsl/setup.md 的「Miniforge 与 conda」一节
+镜像与换源：lib/_mirror/setup.md
+说明：zda 固定激活 $HOME/miniforge3 的 base；安装到其他路径时请自行 conda activate。

@@ -33,6 +33,33 @@ printf '%s\n' "$LD_LIBRARY_PATH"
 它会避免重复加入仓库 `bin/` 和 `lib/`，但不能阻止机器 `env.sh` 自己重复追加路径。
 在 screen 内加载时还会把继承的基础/哑终端 `TERM` 归一化为可用的 256 色 screen term。
 
+## conda base 快捷入口 `zda`
+
+`env.sh` 定义别名 `zda`，指向函数 `_zda_activate_base`，用于激活 `${HOME}/miniforge3` 的 conda base：
+
+| 情形 | 行为 |
+|---|---|
+| `$HOME/miniforge3/etc/profile.d/conda.sh` 可读 | source 它并执行 `conda activate base`，成功后打印 `zda: 已激活 <prefix>（base）` |
+| 已在 base（`CONDA_PREFIX` 与 `$HOME/miniforge3` 为同一目录） | 直接返回 0，不重复激活，避免 PATH 前缀层层叠加 |
+| 目录或 `conda.sh` 缺失 | 打印 `[WARN]`，再输出 `bin/_zda-guide.txt` 的安装与换源指南，返回 1 |
+| `conda activate base` 失败 | 打印 `[WARN]` 并返回 1，不中断调用方 shell |
+| 激活后 `CONDA_PREFIX` 不符合预期 | 打印实际值与期望值并返回 1 |
+
+要点：
+
+- 目标路径固定为 `${HOME}/miniforge3`。装在其他位置（如 `/opt/miniforge3`）时 `zda` 会走缺失分支，需改用 `conda activate <路径>`。
+- 别名只在交互式 shell 展开。脚本里直接调函数：`bash -c 'source ./env.sh; _zda_activate_base'`；bash 脚本需 `shopt -s expand_aliases`。
+- 指南文件路径由 `_ZDA_GUIDE_PATH` 给出，默认 `${仓库根}/bin/_zda-guide.txt`，分叉部署或测试可覆盖；文件缺失时会明确报出路径而不是静默跳过。
+- 与 `conda init` 共存：`zda` 只负责把 base 变成可用，不替代 `conda init` 写入的自动加载。重复 source `conda.sh` 不会再次前置 `condabin`（由 `CONDA_SHLVL` 保护），因此已激活其他环境时调用 `zda` 会正常切回 base。
+- 别名与函数都出现在 `@ALIAS@` 段的输出里，冲突预检恢复后会照常把同名的用户自定义 `zda` 报为冲突。
+
+验证：
+
+```bash
+bash --noprofile --norc -c 'source ./env.sh; _zda_activate_base; printf "%s\n" "$CONDA_PREFIX"'
+bash env.test.sh
+```
+
 ## 加载前冲突闸门（暂停）
 
 `lib/_env_conflicts.sh` 保留以下检查能力，但 `env.sh` 中的调用与告警已注释暂停：

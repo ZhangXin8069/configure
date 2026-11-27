@@ -41,6 +41,7 @@
 | `_git/` | Git 身份、别名、忽略模板和辅助命令风险 |
 | `_linux/` | Linux 包、Swap、调频、电源和系统入口 |
 | `_mac/` | macOS 更新、Gatekeeper、Keychain、环境快照与维护脚本 |
+| `_mirror/` | 国内镜像源：APT/conda/PyPI/npm/Rust/Go/Docker/GitHub/CTAN/HF 等生态的地址、配置、验证与回滚 |
 | `_node-js/` | Node.js 22+ 安装、版本检查与 Windows 用户级安装 |
 | `_open-code/` | OpenCode 安装、V1/V2 配置分流与插件 |
 | `_package/` | APT/Python 清单和随库可执行资源 |

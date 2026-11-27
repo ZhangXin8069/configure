@@ -100,6 +100,8 @@ docker login
 
 不要将密码写入脚本或命令历史中的明文参数。
 
+国内拉取慢或超时属于 registry 网络问题，处理方式是给 Docker Hub 配 `registry-mirrors`（Docker Desktop 的 Docker Engine 设置或 `/etc/docker/daemon.json`）。镜像加速地址、验证与回滚见 [`../_mirror/setup.md`](../_mirror/setup.md) 的 Docker 小节；`registry-mirrors` 只作用于 `docker.io`，不影响 `ghcr.io`、`quay.io`、`nvcr.io`。
+
 ## 从本地 tar 加载
 
 Windows 文件名不能包含冒号。收到带镜像标签名称的 tar 文件后，应先重命名为合法文件名，例如：

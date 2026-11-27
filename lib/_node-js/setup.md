@@ -204,6 +204,8 @@ Windows 批处理无法在 Unix 主机上真实执行，至少检查 `install.ba
   `module load` 在 PATH 中优先。
 - **npm registry 或 nodejs.org 不可达**：按集群文档配置 `https_proxy` 或 npm 镜像。只有
   `install.bat` 与官方二进制脚本需要访问 nodejs.org；nvm 的 `git` 方式还需要访问 GitHub。
+  国内镜像地址（`registry.npmmirror.com`、`NVM_NODEJS_ORG_MIRROR`、`ELECTRON_MIRROR` 等）与验证方法见
+  [`../_mirror/setup.md`](../_mirror/setup.md) 的 npm 与 Node.js 小节。
 - **`--check` 通过但工具仍报版本过低**：在工具实际运行的 shell 中重新检查，避免登录节点与计算
   节点环境不一致。
 - **Windows 安装后仍是旧版本**：重新打开终端，或用 `where node` 确认 PATH 顺序；不要同时保留

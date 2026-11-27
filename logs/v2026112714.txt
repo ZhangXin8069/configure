@@ -1,0 +1,94 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-27 14:09:41 +0800
+批次: env-zda-alias
+主任务: 在 env.sh 增加 zda 别名（激活 miniforge3 base）
+触发原因: 任务完成
+摘要: 新增 zda 别名与 _zda_activate_base，含缺失指南、幂等与失败降级；补 env.test.sh 回归与文档
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 读取目标文件与既有约定
+- 目标: 在 `env.sh` 增加 `zda` 别名，同时不破坏现有加载链
+- 命令/操作: 读 `env.sh`（603 行）、`env.test.sh`（539 行）、`lib/_screen.sh`、`bin/_screen-guide.txt`、`lib/_env/setup.md`、`lib/_shell/setup.md`、`lib/_env_conflicts.sh`、`lib/_commands/setup.md`、`bin/AGENTS.md`
+- 关键输出: `env.sh` 段标记为 `# @ALIAS@`（通用别名）与 `# @@ZHANGXIN@@`（注释块）；末尾 `unset _configure_env_self _configure_env_root`；`_screen-guide.txt` 是既有"外部指南文件"模式，`_SCREEN_GUIDE_PATH` 同理
+- 退出码: 0
+- 证据与判断: 新增内容放在 `@@ZHANGXIN@@` 注释块之前，紧跟交互别名区；指南沿用 `bin/_*-guide.txt` + 变量指向的既有模式，而非把大段文字内联进 env.sh
+
+### S2 — 关键设计约束实测
+- 目标: 确定 zda 的激活方式与失败分支，避免破坏用户 shell
+- 命令/操作: 隔离 env 下测 `source conda.sh` + `conda activate base`、`eval "$(conda shell.posix activate)"`、`shell.zsh activate`；测 zsh 函数内 source 的可见性；测 `[ a -ef b ]` 在 bash/zsh 下
+- 关键输出: 三种激活路径都成功（prefix=/home/zhangxin/miniforge3, default=base）；zsh 函数内 source 的定义对全局可见；`-ef` 两 shell 都支持
+- 退出码: 0
+- 证据与判断: 选 `source ${HOME}/miniforge3/etc/profile.d/conda.sh` + `conda activate base`——它同时获得 `conda` 函数，用户之后可继续 `conda activate <其他环境>`，而不是只改 import 环境变量
+
+### S3 — 实现 `zda` 与指南文件
+- 目标: 别名 + 幂等 + 缺失/失败降级 + 指南
+- 命令/操作: `env.sh` 新增 `_ZDA_GUIDE_PATH`、`_zda_activate_base()`、`alias zda=...`；新建 `bin/_zda-guide.txt`（TUNA Miniforge 下载、conda 换源、conda init、验证、回指 `lib/_wsl/setup.md` 与 `lib/_mirror/setup.md`）
+- 关键输出: 5 个分支——激活成功 / 已在 base 幂等 / 目录或 conda.sh 缺失（打印指南、返回 1）/ activate 失败（返回 1）/ 激活后 prefix 不符（返回 1）
+- 退出码: 0
+- 证据与判断: 已在 base 时提前返回，防止反复 source 造成 PATH 前缀叠加；`_ZDA_GUIDE_PATH` 在 `_configure_env_root` 被 unset 前赋值，函数运行时仍可用
+
+### S4 — 行为验证（bash/zsh/交互/脚本）
+- 目标: 确认别名在真实 shell 中可用且不误伤
+- 命令/操作: 非交互 bash（`shopt -s expand_aliases` + `eval`）、非交互 zsh（`setopt aliases` + `eval`）、真实交互 bash（stdin 逐行）与交互 zsh（stdin 逐行）
+- 关键输出:
+  - 首次: `zda: 已激活 /home/zhangxin/miniforge3（base）`，`CONDA_PREFIX` 正确
+  - 再次: `zda: 已处于 /home/zhangxin/miniforge3（base）`
+  - 从 `zda-probe-test` 切回 base: `before=.../envs/zda-probe-test` → `after=/home/zhangxin/miniforge3 default=base`
+  - 假 HOME 无 miniforge3: 打印 `[WARN]` + 完整指南，`status=1`
+  - 覆盖 `_ZDA_GUIDE_PATH` 为不存在路径: 打印 `配置指南缺失：<路径>`
+  - 激活后 `conda` 仍是函数且 `conda --version` 输出 `conda 26.10.0`
+- 退出码: 0
+- 证据与判断: 两条 shell 的交互与非交互路径都通过；ignored 分支都有明确提示，不静默
+
+### S5 — 补回归测试 `_check_zda_alias`
+- 目标: 把 zda 纳入 `env.test.sh` 既有的双 shell 回归
+- 命令/操作: 新增 `_create_fake_conda()`（生成只支持 activate base / deactivate 的假 `conda.sh`，按 `FAKE_CONDA_ACTIVATE=fail` 注入失败）；新增 `_check_zda_alias()` 覆盖 8 个断言；在 `main()` 的 shell 循环中调用
+- 关键输出: 首轮失败 3 次并逐个定位修正——① 断言误把 stderr 当 stdout；② 失败分支断言未 `unset CONDA_PREFIX`，继承了本工具 shell 的 conda 变量；③ 指南缺失分支未打印 `$?` 就断言 `status=1`
+- 退出码: 0（修正后）
+- 证据与判断: 三个失败都是测试自身缺陷，不是实现缺陷；修正后 `bash env.test.sh` 输出 14 行 `通过：`，`rc=0`
+
+### S6 — 文档接线
+- 目标: 让 zda 在文档中可被发现
+- 命令/操作: `lib/_env/setup.md` 新增「conda base 快捷入口 `zda`」小节（5 行分支表 + 5 条要点 + 验证命令）；`lib/_commands/setup.md` 日常入口表新增一行；`lib/_wsl/setup.md` Miniforge 小节补一句指向 zda
+- 关键输出: 三处文档都指回 `lib/_env/setup.md`，避免重复描述分支细节
+- 退出码: 0
+- 证据与判断: 文档只描述现有实现，未引入新行为
+
+## 验证与证据
+- 测试/检查: `bash -n env.sh`、`bash -n env.test.sh`、`bash env.test.sh`（14 项、rc=0）、`form-audit.sh --root . --strict --quiet`（rc=0）、`git diff --check`（rc=0）、冲突探针输出含 `zda` 与 `_zda_activate_base`
+- 结果: 全部通过；`zda` 在 bash/zsh 的交互与非交互路径均可用，5 个分支行为与文档一致
+- 未验证项: 未在真实"未安装 miniforge3 的机器"上验证端到端（用假 HOME 模拟目录缺失已覆盖同一分支）
+
+## 变更与产物
+- 文件: `env.sh`（+35 行）、`env.test.sh`（+150 行左右）、`bin/_zda-guide.txt`（新增 17 行）、`lib/_env/setup.md`、`lib/_commands/setup.md`、`lib/_wsl/setup.md`
+- 产物: `zda` 别名与 `_zda_activate_base` 函数；指南 `bin/_zda-guide.txt`
+- 未改动范围: `env.sh` 的 PATH/locale/冲突闸门逻辑、`lib/_screen.sh`、其他别名
+
+## 风险、限制与下一步
+- 风险: `zda` 固定 `${HOME}/miniforge3`，装到其他路径时必然走缺失分支；已在文档与指南中都写明
+- 副作用（需用户确认）: 测试过程中曾执行 `conda create -n zda-probe-test --clone base`，在 `~/miniforge3/envs/zda-probe-test` 留下 4.6 GB 环境；删除目录属需显式确认的操作，未自行清理
+- 阻塞: 无
+- 下一步: 用户确认后可 `conda env remove -n zda-probe-test` 清理；本次改动未暂存、未提交
+
+## 用户输入指令
+在{../../env.sh}中添加别名zda:{自动激活${HOME}/miniforge3下的base环境,没有此环境则警告并附上环境配置指南(参考本目录下的文档)}
+
+## Agent 全文报告
+--- report begin ---
+在 `env.sh` 的通用别名区（`@@ZHANGXIN@@` 注释块之前）新增了 `zda`：一个指向 `_zda_activate_base` 的别名。
+
+行为分五个分支：`$HOME/miniforge3/etc/profile.d/conda.sh` 可读就 source 并 `conda activate base`；已在 base 时直接返回、不重复激活；目录或 `conda.sh` 缺失时打印 `[WARN]` 再输出 `bin/_zda-guide.txt` 的安装与换源指南并返回 1；`activate` 失败返回 1 不中断调用方；激活后 `CONDA_PREFIX` 不符也报错。
+
+关键取舍是**用 source conda.sh 而不是只拼环境变量**。这样 `conda` 也是可用的函数，用户接着能 `conda activate <其他环境>`；实测从 `zda-probe-test` 切回 base 正常（`CONDA_SHLVL` 保护避免重复前置 `condabin`）。指南文件沿用仓库既有的 `bin/_*-guide.txt` + `_ZDA_GUIDE_PATH` 模式，不把大段文字塞进 `env.sh`；文件缺失时会明确报出路径而不是静默。
+
+验证：`bash env.test.sh` 新增 `_check_zda_alias`（假 conda.sh + 8 组断言）后共 14 项全过、`rc=0`；真实交互 bash / 交互 zsh / 非交互两 shell 都实测过；`bash -n`、`form-audit --strict`、`git diff --check` 均通过。冲突探针的输出里也能看到 `zda` 与 `_zda_activate_base`，说明将来的冲突预检能覆盖它。
+
+一件事要说明：测"切换到其他环境再切回"时我执行了 `conda create -n zda-probe-test --clone base`，在 `~/miniforge3/envs/` 留下一个 4.6 GB 的环境。删除目录不在自动授权范围，需要你确认后我再清。
+
+文档侧在 `lib/_env/setup.md` 加了「conda base 快捷入口 `zda`」小节，`lib/_commands/setup.md` 与 `lib/_wsl/setup.md` 各加一行指向它。
+
+终态：finished（一个测试残留环境待确认清理）。
+--- report end ---

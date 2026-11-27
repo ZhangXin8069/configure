@@ -8,4 +8,4 @@ Node.js 22+ 安装与版本检查目录。供 `_command-code` 等 Node.js 工具
 - `install.test.sh` — 隔离 HOME、NVM_DIR 和假 node/npm 的回归测试，覆盖已满足时复用、20→22 升级委派、`v` 前缀、非法参数、`--check`、稳定入口软链、`NODE_BIN_DIR` 覆盖、自指保护与用户自有文件不被覆盖。
 - `setup.md` — 检查、nvm 一键安装、HPC 无 root 官方二进制、module/conda、Windows、npm 全局前缀、验证与回滚。
 
-默认目标是 22（Command Code 的最低要求），需要其他版本时显式传入。nvm 方式会写入 `~/.bashrc`、`~/.zshrc` 等启动文件；不接受修改时使用 `PROFILE=/dev/null`。官方 Node.js 22 二进制要求 glibc 2.28+。
+默认目标是 22（Command Code 的最低要求），需要其他版本时显式传入。nvm 方式会写入 `~/.bashrc`、`~/.zshrc` 等启动文件；不接受修改时使用 `PROFILE=/dev/null`。官方 Node.js 22 二进制要求 glibc 2.28+。国内 registry 与二进制镜像（`registry.npmmirror.com`、`NVM_NODEJS_ORG_MIRROR` 等）见 [`../_mirror/setup.md`](../_mirror/setup.md)。

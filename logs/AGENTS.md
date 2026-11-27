@@ -1564,3 +1564,30 @@
 - 验证: path, size, required sections, conflict markers
 - 批次状态: complete
 
+## wsl-miniforge-mirror - final - 2026-11-27 12:24:26 +0800
+- 主任务: 在 _wsl/setup.md 增加 TUNA Miniforge 镜像推荐
+- 日志文件: logs/v2026112712.txt
+- 文件大小: 4172 bytes
+- 触发原因: 任务完成
+- 关键内容: Miniforge 下载源改为清华 TUNA GitHub Release 镜像并补校验说明
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## mirror-dir - final - 2026-11-27 13:09:09 +0800
+- 主任务: 新建 lib/_mirror 国内镜像源稳定入口
+- 日志文件: logs/v2026112713.txt
+- 文件大小: 9343 bytes
+- 触发原因: 任务完成
+- 关键内容: 新建 _mirror 目录（setup.md + AGENTS.md），实测各生态镜像端点并接线 _wsl/_docker/_node-js/_clash
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+
+## env-zda-alias - final - 2026-11-27 14:09:41 +0800
+- 主任务: 在 env.sh 增加 zda 别名（激活 miniforge3 base）
+- 日志文件: logs/v2026112714.txt
+- 文件大小: 8339 bytes
+- 触发原因: 任务完成
+- 关键内容: 新增 zda 别名与 _zda_activate_base，含缺失指南、幂等与失败降级；补 env.test.sh 回归与文档
+- 验证: path, size, required sections, conflict markers
+- 批次状态: complete
+

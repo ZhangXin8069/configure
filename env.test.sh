@@ -337,6 +337,117 @@ _check_screen_helpers() {
     _assert_line "$output" 'screen'
 }
 
+_create_fake_conda() {
+    local root=$1
+
+    mkdir -p "$root/etc/profile.d" "$root/bin"
+    {
+        printf '%s\n' \
+            '# 测试用最小 conda 壳：只支持 activate base / deactivate' \
+            'conda() {' \
+            '    case "${1:-}" in' \
+            '        activate)' \
+            '            if [ "${FAKE_CONDA_ACTIVATE:-}" = fail ]; then' \
+            '                printf "fake conda: activate 失败\n" >&2' \
+            '                return 1' \
+            '            fi' \
+            '            CONDA_DEFAULT_ENV=${2:-base}' \
+            "            CONDA_PREFIX='${root}'" \
+            '            export CONDA_DEFAULT_ENV CONDA_PREFIX' \
+            '            ;;' \
+            '        deactivate)' \
+            '            unset CONDA_DEFAULT_ENV CONDA_PREFIX' \
+            '            ;;' \
+            '        *)' \
+            '            printf "fake conda: 不支持 %s\n" "${1:-}" >&2' \
+            '            return 2' \
+            '            ;;' \
+            '    esac' \
+            '}'
+    } >"$root/etc/profile.d/conda.sh"
+    printf '#!/bin/sh\nexit 0\n' >"$root/bin/conda"
+    chmod +x "$root/bin/conda"
+}
+
+_check_zda_alias() {
+    local shell_path=$1
+    local fake_home=$2
+    local fake_root=$fake_home/miniforge3
+    local output
+    local status
+
+    output=$("$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        alias zda
+        type _zda_activate_base >/dev/null 2>&1 || exit 1
+    ' configure-env-test "$env_file")
+    _assert_contains "$output" 'zda'
+    _assert_contains "$output" '_zda_activate_base'
+
+    # 首次调用激活 fake base，并写入预期的 CONDA_PREFIX / CONDA_DEFAULT_ENV
+    output=$(HOME="$fake_home" "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base
+        printf "prefix=%s default=%s\n" "$CONDA_PREFIX" "$CONDA_DEFAULT_ENV"
+    ' configure-env-test "$env_file" 2>"$test_root/zda-activate.err")
+    _assert_contains "$output" "prefix=$fake_root default=base"
+    _assert_contains "$output" 'zda: 已激活'
+
+    # 重复调用幂等，不重复激活
+    output=$(HOME="$fake_home" "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base >/dev/null 2>&1
+        _zda_activate_base
+    ' configure-env-test "$env_file" 2>&1)
+    _assert_contains "$output" 'zda: 已处于'
+
+    # conda activate 失败时返回 1 且不中断调用方
+    output=$(HOME="$fake_home" FAKE_CONDA_ACTIVATE=fail "$shell_path" -c '
+        unset CONDA_PREFIX CONDA_DEFAULT_ENV
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base
+        printf "status=%s prefix=%s\n" "$?" "${CONDA_PREFIX:-<empty>}"
+    ' configure-env-test "$env_file" 2>&1)
+    _assert_contains "$output" 'conda activate base 执行失败'
+    _assert_contains "$output" 'status=1 prefix=<empty>'
+
+    # 环境缺失：打印安装/换源指南并返回 1
+    output=$(HOME="$test_root/zda-empty-home" "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base
+        printf "status=%s\n" "$?"
+    ' configure-env-test "$env_file" 2>&1)
+    _assert_contains "$output" '未找到可用的 conda 环境'
+    _assert_contains "$output" '安装 Miniforge'
+    _assert_contains "$output" 'lib/_wsl/setup.md'
+    _assert_contains "$output" 'status=1'
+
+    # 指南文件缺失时明确报出路径，不静默失败
+    output=$(HOME="$test_root/zda-empty-home" "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _ZDA_GUIDE_PATH="$2"
+        _zda_activate_base
+        printf "status=%s\n" "$?"
+    ' configure-env-test "$env_file" "$test_root/zda-missing-guide.txt" 2>&1)
+    _assert_contains "$output" '环境配置指南缺失'
+    _assert_contains "$output" 'status=1'
+
+    # 有目录但缺 conda.sh（半装状态）同样走警告分支
+    mkdir -p "$test_root/zda-partial/miniforge3"
+    output=$(HOME="$test_root/zda-partial" "$shell_path" -c '
+        source "$1" >/dev/null 2>&1
+        _zda_activate_base
+        printf "status=%s\n" "$?"
+    ' configure-env-test "$env_file" 2>&1)
+    _assert_contains "$output" 'status=1'
+
+    # 指南文件本身必须存在且被 env.sh 指向
+    [[ -s ${env_file%/*}/bin/_zda-guide.txt ]] || _fail '缺少 bin/_zda-guide.txt'
+    grep -Fq '_ZDA_GUIDE_PATH="${_configure_env_root}/bin/_zda-guide.txt"' "$env_file" ||
+        _fail 'env.sh 未把 _ZDA_GUIDE_PATH 指向 bin/_zda-guide.txt'
+    [[ -s $fake_root/etc/profile.d/conda.sh ]] || _fail '缺少 zda 测试用的假 conda.sh'
+}
+
 _check_locale_recovery() {
     local shell_path=$1
     local harness_stderr_file=$test_root/locale-harness.err
@@ -495,9 +606,16 @@ main() {
     printf '%s\n' '#!/usr/bin/env bash' 'exit 0' >"$conflict_bin/cl"
     chmod +x "$fake_screen" "$conflict_bin/cl"
 
+    _create_fake_conda "$test_root/home/miniforge3"
+    mkdir -p "$test_root/zda-empty-home"
+    local zda_home=$test_root/home
+
     for shell_path in "${shell_paths[@]}"; do
         _check_env_loading_guard "$shell_path" "$clean_bin" "$conflict_bin"
         printf '通过：%s 的重复 source、marker 撤销与冲突告警暂停加载\n' "$shell_path"
+
+        _check_zda_alias "$shell_path" "$zda_home"
+        printf '通过：%s 的 zda base 激活、幂等、失败与缺失指南\n' "$shell_path"
 
         _check_locale_recovery "$shell_path"
         printf '通过：%s 的失效 LC_ALL 自动恢复\n' "$shell_path"

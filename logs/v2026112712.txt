@@ -1,0 +1,65 @@
+[日志元数据]
+日志类型: final
+生成时间: 2026-11-27 12:24:26 +0800
+批次: wsl-miniforge-mirror
+主任务: 在 _wsl/setup.md 增加 TUNA Miniforge 镜像推荐
+触发原因: 任务完成
+摘要: Miniforge 下载源改为清华 TUNA GitHub Release 镜像并补校验说明
+Git 根目录: /home/zhangxin/configure
+
+## 关键日志
+
+### S1 — 定位 Miniforge 相关段落
+- 目标: 在 `lib/_wsl` 内找到 Miniforge 安装与 conda 镜像的现有写法
+- 命令/操作: read `_wsl/setup.md`；grep `Miniforge|miniforge|conda-forge|tuna` 于 `lib/_wsl` 与 `lib/wsl-v20261107`
+- 关键输出: `_wsl/setup.md:430-444` 的「1. 安装 Miniforge，并切换到清华 conda-forge 镜像」为唯一安装入口；`wsl-v20261107/setup.md:106-112` 保留历史快照，不改
+- 退出码: 0
+- 证据与判断: 只需改稳定入口 `_wsl/setup.md`，版本快照按 AGENTS.md 契约不动
+
+### S2 — 验证镜像 URL
+- 目标: 确认题目给定 URL 可用且与官方 latest 一致
+- 命令/操作: `curl -sIL` 取响应头；目录列表抓取；`curl | sha256sum`
+- 关键输出: HTTP 200，`content-length: 128272241`（约 122 MiB），`last-modified: Fri, 06 Nov 2026 03:25:57 GMT`；目录中存在 `Miniforge3-26.9.4-2-Linux-x86_64.sh(''.sha256'')`、aarch64/ppc64le/riscv64、macOS 与 Windows 安装包；无版本名 `.sha256` → 404
+- 退出码: 0
+- 证据与判断: URL 有效；无版本名没有校验文件，故文档需说明用带版本名地址校验
+
+### S3 — 逐字执行文档中的校验流程
+- 目标: 确保新写的命令块可直接运行
+- 命令/操作: 在 `data/tmp` 执行 `wget` 下载带版本名安装包与 `.sha256`，再 `sha256sum -c`
+- 关键输出: `./Miniforge3-26.9.4-2-Linux-x86_64.sh: OK`；`128272241` bytes；脚本头 `#!/bin/sh` / `Created by constructor 3.17.3`
+- 退出码: 0
+- 证据与判断: 文档命令块与真实文件、真实哈希一致（`bbaf16b3...edbbdf`）
+
+### S4 — 修改 `_wsl/setup.md`
+- 目标: 把 TUNA 镜像设为推荐下载源并补充使用边界
+- 命令/操作: edit 三处：第 1 步下载地址改为 `mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/`；新增「镜像站行为与校验」小节；参考区补一条 TUNA 链接
+- 关键输出: `git diff --stat` → `lib/_wsl/setup.md | 23 ++++++++++++++++++++++-`（+22/-1）
+- 退出码: 0
+- 证据与判断: 改动只落在稳定入口文档，未触碰版本快照
+
+## 验证与证据
+- 测试/检查: `git diff --check`；`git diff --stat`；镜像 HEAD 请求；`sha256sum` 实测与 `sha256sum -c` 复核
+- 结果: `check_exit=0`；哈希 `bbaf16b3897da24c4be50315934ba74848f617b4495982841d6a0a60e0edbbdf` 与镜像 `.sha256` 完全一致
+- 未验证项: 未在本机实际执行 `bash Miniforge3-*.sh` 安装（会写 `~/miniforge3`，超出文档修改范围）
+
+## 变更与产物
+- 文件: `lib/_wsl/setup.md`
+- 产物: 更新后的「Miniforge 与 conda」第 1 步与新增校验说明
+- 未改动范围: `lib/wsl-v20261107/*`（历史快照）、`lib/_wsl/AGENTS.md`
+
+## 风险、限制与下一步
+- 风险: 镜像 `LatestRelease/` 只保留最新版本，文档因此不写死版本号；镜像滞后或下线时按文档给出的 GitHub 原地址回退
+- 阻塞: 无
+- 下一步: 需要提交时由用户明确指示；本次未暂存、未提交、未推送
+
+## 用户输入指令
+在本目录下的相关部分添加“https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-Linux-x86_64.sh”相关推荐
+
+## Agent 全文报告
+--- report begin ---
+已把该 TUNA 镜像写入 `lib/_wsl/setup.md` 的「Miniforge 与 conda」第 1 步，作为首选下载源替换 GitHub 原地址，并新增「镜像站行为与校验」小节（无版本名无 `.sha256`、带版本名可 `sha256sum -c`、GitHub 回退、aarch64 换名），参考区补了 TUNA 链接。
+
+实测：该地址 HTTP 200、122 MiB；与目录中 `Miniforge3-26.9.4-2-Linux-x86_64.sh` 的 sha256 `bbaf16b3...edbbdf` 一致；文档里的下载+校验命令逐条执行通过。`git diff --check` 干净，未提交。
+
+终态：finished。
+--- report end ---

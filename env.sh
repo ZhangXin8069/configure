@@ -150,6 +150,41 @@ alias zshconfig='${EDITOR:-vim} ~/.zshrc'
 if [ -n "${ZSH_VERSION}" ]; then
     alias history='omz_history'
 fi
+# zda: 激活 ${HOME}/miniforge3 的 conda base；环境缺失时打印安装与换源指南
+_ZDA_GUIDE_PATH="${_configure_env_root}/bin/_zda-guide.txt"
+_zda_activate_base() {
+    local conda_root="${HOME}/miniforge3"
+    local conda_sh="${conda_root}/etc/profile.d/conda.sh"
+
+    if [ ! -d "${conda_root}" ] || [ ! -r "${conda_sh}" ]; then
+        printf '[WARN] zda: 未找到可用的 conda 环境 %s（缺少 %s）。\n' \
+            "${conda_root}" "${conda_sh}" >&2
+        if [ -n "${_ZDA_GUIDE_PATH:-}" ] && [ -r "${_ZDA_GUIDE_PATH}" ]; then
+            command cat "${_ZDA_GUIDE_PATH}" >&2
+        else
+            printf 'zda: 环境配置指南缺失：%s\n' "${_ZDA_GUIDE_PATH}" >&2
+        fi
+        return 1
+    fi
+    # 已在该 base 时不重复激活，避免每次 source 后多套 PATH 前缀
+    if [ -n "${CONDA_PREFIX:-}" ] && [ "${CONDA_PREFIX}" -ef "${conda_root}" ]; then
+        printf 'zda: 已处于 %s（base）\n' "${CONDA_PREFIX}"
+        return 0
+    fi
+
+    . "${conda_sh}"
+    if ! conda activate base; then
+        printf '[WARN] zda: conda activate base 执行失败。\n' >&2
+        return 1
+    fi
+    if [ -z "${CONDA_PREFIX:-}" ] || [ ! "${CONDA_PREFIX}" -ef "${conda_root}" ]; then
+        printf '[WARN] zda: 激活后 CONDA_PREFIX=%s，与预期 %s 不一致。\n' \
+            "${CONDA_PREFIX:-<空>}" "${conda_root}" >&2
+        return 1
+    fi
+    printf 'zda: 已激活 %s（base）\n' "${CONDA_PREFIX}"
+}
+alias zda='_zda_activate_base'
 # @@ZHANGXIN@@
 # alias nvvp='nvvp -vm /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java'
 alias nv-smi='nvidia-smi -l 1'

@@ -429,9 +429,11 @@ sh_init.sh -z  →  安装 Miniforge  →  conda 镜像与工具链  →  conda 
 
 **1. 安装 Miniforge，并切换到清华 conda-forge 镜像：**
 
+优先从清华 TUNA 的 GitHub Release 镜像下载，国内网络比 GitHub 原地址稳定：
+
 ```bash
 wget -O /tmp/Miniforge3-Linux-x86_64.sh \
-  https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+  https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/Miniforge3-Linux-x86_64.sh
 bash /tmp/Miniforge3-Linux-x86_64.sh
 exec bash
 
@@ -442,6 +444,26 @@ conda clean -i
 ```
 
 安装脚本默认把 `conda init` 写进当前 shell 的启动文件；此后的 `conda config` 必须在 `exec bash` 之后执行，否则命令仍不在 `PATH` 中。
+
+装好后仓库的 `env.sh` 提供 `zda` 别名，直接激活 `${HOME}/miniforge3` 的 base（未安装时打印本节与 `_mirror` 的指南）：`zda`。它不替代 `conda init`，只是省去 `conda activate base` 的输入。
+
+镜像站行为与校验：
+
+- `LatestRelease/` 只保留当前最新版本，`Miniforge3-Linux-x86_64.sh` 这类不带版本号的文件名始终指向最新安装包（本机验证时对应 `Miniforge3-26.9.4-2`，约 122 MiB），因此不写死版本号。
+- 同一目录下同时提供带版本号的安装包与 `.sha256` 校验文件。需要可复现或归档时改用带版本号的地址，并按校验文件验证：
+
+```bash
+base=https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease
+ver=26.9.4-2    # 换成镜像目录中实际存在的版本
+wget -O "/tmp/Miniforge3-$ver-Linux-x86_64.sh" "$base/Miniforge3-$ver-Linux-x86_64.sh"
+wget -O "/tmp/Miniforge3-$ver-Linux-x86_64.sh.sha256" "$base/Miniforge3-$ver-Linux-x86_64.sh.sha256"
+(cd /tmp && sha256sum -c "Miniforge3-$ver-Linux-x86_64.sh.sha256")
+bash "/tmp/Miniforge3-$ver-Linux-x86_64.sh"
+```
+
+- 不带版本号的文件名没有配套 `.sha256`（该路径返回 404），所以只想校验时只能用带版本号的地址；二者内容是同一个安装包。
+- 镜像不可用或需要官方来源时，回退到 GitHub Release 原地址：`https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh`，安装方式不变。
+- 非 x86_64 机器（如 aarch64）把文件名换成对应的 `Miniforge3-Linux-aarch64.sh`，镜像目录中同时提供该架构及其校验文件。
 
 **2. 更新 base 并安装工具链：**
 
@@ -680,6 +702,7 @@ ss -tlnp | grep ':22'
 | Git 身份、别名与同步命令 | [`../_git/setup.md`](../_git/setup.md) |
 | SSH 密钥、agent 与主机别名 | [`../_ssh/setup.md`](../_ssh/setup.md) |
 | APT/Python 包清单 | [`../_package/setup.md`](../_package/setup.md) |
+| 国内镜像源与换源验证 | [`../_mirror/setup.md`](../_mirror/setup.md) |
 | 用户命令总索引 | [`../_commands/setup.md`](../_commands/setup.md) |
 | Docker Desktop 与容器 | [`../_docker/setup.md`](../_docker/setup.md) |
 | ZeroTier 虚拟网络 | [`../_zerotier/setup.md`](../_zerotier/setup.md) |
@@ -733,3 +756,4 @@ ss -tlnp | grep ':22'
 - Microsoft Learn：[Accessing network applications with WSL](https://learn.microsoft.com/windows/wsl/networking)
 - Docker Docs：[Docker Desktop WSL 2 backend on Windows](https://docs.docker.com/desktop/features/wsl/)
 - Docker Docs：[GPU support in Docker Desktop](https://docs.docker.com/desktop/features/gpu/)
+- 清华大学 TUNA 镜像：[conda-forge/miniforge GitHub Release 镜像](https://mirrors-i.tuna.tsinghua.edu.cn/github-release/conda-forge/miniforge/LatestRelease/)

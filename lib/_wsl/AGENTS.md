@@ -39,5 +39,6 @@ Docker 与 WSL 的集成边界仍以 [`../_docker/setup.md`](../_docker/setup.md
 - Windows 侧入口：[`../_windows/setup.md`](../_windows/setup.md)
 - ZeroTier（含 WSL 段落）：[`../_zerotier/setup.md`](../_zerotier/setup.md)
 - 包清单与可执行资源：[`../_package/setup.md`](../_package/setup.md)
+- 国内镜像源（conda/PyPI/npm/APT 等）：[`../_mirror/setup.md`](../_mirror/setup.md)
 - 用户命令总索引：[`../_commands/setup.md`](../_commands/setup.md)
 - Node.js 与 Command Code：[`../_node-js/setup.md`](../_node-js/setup.md)、[`../_command-code/setup.md`](../_command-code/setup.md)
